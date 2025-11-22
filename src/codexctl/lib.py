@@ -19,6 +19,9 @@ import yaml  # pip install pyyaml
 from importlib import resources
 import shutil
 import getpass
+import time
+import threading
+import select
 
 from .paths import config_root as _config_root_base, state_root as _state_root_base
 
@@ -652,24 +655,43 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    cmd = ["podman", "run", "--rm"]
+    # Run detached and keep the container alive so users can exec into it later
+    cmd = ["podman", "run", "--rm", "-d"]
     cmd += _gpu_run_args(project)
     cmd += [
         "-v", volumes[0],
         "--name", f"{project.id}-cli-{task_id}",
         f"{project.id}:l2",
+        # Ensure init runs and then keep the container alive even without a TTY
+        # init-ssh-and-repo.sh now prints a readiness marker we can watch for
+        "bash", "-lc", "init-ssh-and-repo.sh; echo __CLI_READY__; tail -f /dev/null",
     ]
     print("$", " ".join(map(str, cmd)))
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Run failed: {e}")
 
-    meta["status"] = "completed"
+    # Stream initial logs until ready marker is seen (or timeout), then detach
+    _stream_initial_logs(
+        container_name=f"{project.id}-cli-{task_id}",
+        timeout_sec=60.0,
+        ready_check=lambda line: "__CLI_READY__" in line or ">> init complete" in line,
+    )
+
+    # Mark task as started (not completed) for CLI mode
+    meta["status"] = "running"
     meta["mode"] = "cli"
     meta_path.write_text(yaml.safe_dump(meta))
+
+    print(
+        "\nCLI container is running in the background.\n"
+        f"- Name: {project.id}-cli-{task_id}\n"
+        f"- To enter: podman exec -it {project.id}-cli-{task_id} bash\n"
+        f"- To stop:  podman stop {project.id}-cli-{task_id}\n"
+    )
 
 
 def task_run_ui(project_id: str, task_id: str) -> None:
@@ -689,7 +711,8 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    cmd = ["podman", "run", "--rm", "-p", f"127.0.0.1:{port}:7860"]
+    # Start UI in background and return terminal when it's reachable
+    cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
     cmd += _gpu_run_args(project)
     cmd += [
         "-v", volumes[0],
@@ -698,8 +721,109 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     ]
     print("$", " ".join(map(str, cmd)))
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Run failed: {e}")
+
+    # Stream initial logs while probing the UI port; detach on ready or timeout
+    addr = ("127.0.0.1", int(port))
+    def _ui_ready(_: str) -> bool:
+        try:
+            with socket.create_connection(addr, timeout=0.5):
+                return True
+        except OSError:
+            return False
+
+    ready = _stream_initial_logs(
+        container_name=f"{project.id}-ui-{task_id}",
+        timeout_sec=30.0,
+        ready_check=_ui_ready,
+    )
+
+    if ready:
+        print(f"UI is up: http://127.0.0.1:{port} (container running in background)")
+    else:
+        print(
+            f"UI container started but not reachable on http://127.0.0.1:{port} yet. "
+            "It may still be initializing."
+        )
+
+    print(
+        f"- Name: {project.id}-ui-{task_id}\n"
+        f"- Check logs: podman logs -f {project.id}-ui-{task_id}\n"
+        f"- Stop:       podman stop {project.id}-ui-{task_id}"
+    )
+
+
+def _stream_initial_logs(container_name: str, timeout_sec: float, ready_check) -> bool:
+    """Follow initial container logs and detach when ready or timed out.
+
+    - container_name: podman container name.
+    - timeout_sec: maximum seconds to follow logs.
+    - ready_check: callable(line:str)->bool that returns True when ready. It will
+      be evaluated for each incoming log line; for UI case it may ignore line content
+      and probe external readiness.
+
+    Returns True if a ready condition was met, False on timeout or if logs ended.
+    """
+    try:
+        proc = subprocess.Popen(
+            ["podman", "logs", "-f", container_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+    except Exception:
+        return False
+
+    start = time.time()
+    ready = False
+    try:
+        assert proc.stdout is not None
+        while True:
+            # Stop if timeout
+            if time.time() - start > timeout_sec:
+                break
+            # If process already ended, stop
+            if proc.poll() is not None:
+                break
+            # Wait for a line (non-blocking with select)
+            rlist, _, _ = select.select([proc.stdout], [], [], 0.5)
+            if not rlist:
+                # Even without a new line, allow external readiness checks
+                if ready_check(""):
+                    ready = True
+                    break
+                continue
+            line = proc.stdout.readline()
+            if not line:
+                continue
+            # Echo the line to the user's terminal
+            try:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            except Exception:
+                pass
+            # Check readiness based on the line content
+            try:
+                if ready_check(line):
+                    ready = True
+                    break
+            except Exception:
+                # Ignore errors in readiness checks
+                pass
+    finally:
+        # Stop following logs
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except Exception:
+                    proc.kill()
+        except Exception:
+            pass
+    return ready

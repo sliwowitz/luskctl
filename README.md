@@ -108,6 +108,37 @@ Notes
 - The TUI is optional. Install it with: pip install 'codexctl[tui]'.
 - For system packaging (deb/rpm), install the wheel and create /etc/codexctl and /var/lib/codexctl with suitable permissions; the app will locate them automatically.
 
+Container readiness and initial log streaming (important for developers)
+
+- codexctl shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met (or after a short timeout). This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.
+
+- CLI (task run-cli):
+  - Readiness is determined from log output. The container initialization script emits a marker line:
+    - ">> init complete" (from resources/scripts/init-ssh-and-repo.sh)
+  - Additionally, the run command echoes "__CLI_READY__" just before keeping the container alive. The host follows logs and detaches when either of these markers appears.
+  - If you modify the init script or change its output, ensure that a stable readiness line is preserved, or update the detection in src/codexctl/lib.py (task_run_cli and _stream_initial_logs).
+
+- UI (task run-ui):
+  - Readiness is currently determined by probing the bound localhost port (127.0.0.1:<assigned_port> → container port 7860). The host follows the container logs for a short time and detaches as soon as the TCP port is reachable, or after a timeout.
+  - This implies a dependency on the UI process actually listening on PORT (default 7860) and binding to 0.0.0.0 inside the container. The default entry script is resources/scripts/codexui-entry.sh which runs `node server.js` from the CodexUI repo.
+  - If the UI server changes its port, bind address, or startup behavior (e.g., delays listening until after long asset builds), you may need to adjust:
+    - The exposed/internal port, and the host port mapping in src/codexctl/lib.py (task_run_ui).
+    - The readiness timeout in lib.py.
+    - Optionally, implement log-marker-based readiness if port probing is insufficient, and then add/guarantee a stable log line in the UI server’s startup output.
+
+- Timeouts and detaching behavior:
+  - CLI: detaches after readiness marker or 60s.
+  - UI: detaches after port becomes reachable or 30s.
+  - Even on timeout, containers remain running in the background. Users can continue watching logs with `podman logs -f <container>`.
+
+- Where to change things:
+  - Host-side logic: src/codexctl/lib.py (task_run_cli, task_run_ui, _stream_initial_logs)
+  - CLI init marker: src/codexctl/resources/scripts/init-ssh-and-repo.sh
+  - UI entry: src/codexctl/resources/scripts/codexui-entry.sh (runs the UI server)
+
+- Important dependency note:
+  - Because initial log streaming detaches on a specific readiness condition, changes to the UI or CLI startup output or listening port can affect the host-side readiness detection. When altering the UI server or init scripts, please keep the readiness semantics stable or adjust codexctl’s detection accordingly to avoid regressions where the tool either never detaches or detaches too early.
+
 GPU passthrough configuration (per-project only)
 
 - codexctl can request NVIDIA GPU devices for containers (Podman + nvidia-container-toolkit), but this is a per-project opt-in only. The default is disabled.

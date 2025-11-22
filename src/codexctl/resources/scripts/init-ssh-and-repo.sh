@@ -90,4 +90,6 @@ if command -v nvfortran >/dev/null 2>&1; then
   nvfortran --version || true
 fi
 
+# Signal readiness for host tools that watch initial logs
+echo ">> init complete"
 exec bash
