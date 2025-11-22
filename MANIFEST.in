@@ -1,6 +1,6 @@
 include pyproject.toml
 recursive-include src *.py
-recursive-include src/codexctl/templates *
+recursive-include src/codexctl/resources *
 recursive-include completions *
 recursive-include docs *.md
 recursive-include examples *

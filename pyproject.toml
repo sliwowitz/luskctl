@@ -38,10 +38,17 @@ packages = ["codexctl"]
 "share/bash-completion/completions" = [
   "completions/codexctl",
 ]
+"share/codexctl/templates" = [
+  "src/codexctl/resources/templates/*",
+]
+"share/codexctl/scripts" = [
+  "src/codexctl/resources/scripts/*",
+]
 
 [tool.setuptools.package-data]
 codexctl = [
-  "templates/*",
+  "resources/templates/*",
+  "resources/scripts/*",
 ]
 
 [tool.setuptools.exclude-package-data]

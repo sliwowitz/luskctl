@@ -17,6 +17,8 @@ from typing import Optional
 
 import yaml  # pip install pyyaml
 from importlib import resources
+import shutil
+import getpass
 
 from .paths import config_root as _config_root_base, state_root as _state_root_base
 
@@ -100,16 +102,48 @@ def global_config_path() -> Path:
     return candidates[-1]
 
 
-def share_root() -> Path:
+def _is_root() -> bool:
+    try:
+        return os.geteuid() == 0  # type: ignore[attr-defined]
+    except AttributeError:
+        return getpass.getuser() == "root"
+
+
+def _xdg_data_home() -> Path:
+    x = os.environ.get("XDG_DATA_HOME")
+    return Path(x) if x else Path.home() / ".local" / "share"
+
+
+def _copy_package_tree(package: str, rel_path: str, dest: Path) -> None:
+    """Copy a directory tree from package resources to a filesystem path.
+
+    Uses importlib.resources Traversable API so it works from wheels/zip installs.
     """
-    Deprecated: previously used for external templates. Kept for backward
-    compatibility in case external callers rely on it.
-    Newer code loads templates from package resources (codexctl.templates).
+    root = resources.files(package) / rel_path
+
+    def _recurse(src, dst: Path) -> None:
+        dst.mkdir(parents=True, exist_ok=True)
+        for child in src.iterdir():
+            out = dst / child.name
+            if child.is_dir():
+                _recurse(child, out)
+            else:
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(child.read_bytes())
+
+    _recurse(root, dest)
+
+
+def _stage_scripts_into(dest: Path) -> None:
+    """Stage helper scripts from package resources into dest/scripts.
+
+    Single source of truth: codexctl/resources/scripts bundled in the wheel.
     """
-    env_dir = os.environ.get("CODEXCTL_SHARE_DIR")
-    if env_dir:
-        return Path(env_dir).expanduser().resolve()
-    return Path(sys.prefix) / "share" / "codexctl"
+    pkg_rel = "resources/scripts"
+    # Replace destination directory atomically-ish
+    if dest.exists():
+        shutil.rmtree(dest)
+    _copy_package_tree("codexctl", pkg_rel, dest)
 
 
 def state_root() -> Path:
@@ -315,9 +349,9 @@ def _render_template(template_path: Path, variables: dict) -> str:
 def generate_dockerfiles(project_id: str) -> None:
     project = load_project(project_id)
 
-    # Load templates from package resources (codexctl/templates). Use
+    # Load templates from package resources (codexctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
-    tmpl_pkg = resources.files("codexctl") / "templates"
+    tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
     l1_txt = (tmpl_pkg / "l1.dev.Dockerfile.template").read_text()
     l2_txt = (tmpl_pkg / "l2.codex-agent.Dockerfile.template").read_text()
     l3_txt = (tmpl_pkg / "l3.codexui.Dockerfile.template").read_text()
@@ -325,11 +359,37 @@ def generate_dockerfiles(project_id: str) -> None:
     out_dir = build_root() / project.id
     _ensure_dir(out_dir)
 
+    # Read additional docker-related settings directly from the project.yml
+    docker_cfg: dict = {}
+    try:
+        cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+        docker_cfg = cfg.get("docker", {}) or {}
+    except Exception:
+        docker_cfg = {}
+
+    # Resolve optional user snippet
+    user_snippet = ""
+    us_file = docker_cfg.get("user_snippet_file")
+    if isinstance(us_file, str) and us_file:
+        us_path = Path(us_file)
+        if not us_path.is_absolute():
+            us_path = project.root / us_file
+        try:
+            if us_path.is_file():
+                user_snippet = us_path.read_text()
+        except Exception:
+            user_snippet = ""
+
     variables = {
         "PROJECT_ID": project.id,
         "SECURITY_CLASS": project.security_class,
         "UPSTREAM_URL": project.upstream_url or "",
         "DEFAULT_BRANCH": project.default_branch,
+        # Template-specific extras
+        "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
+        "SSH_KEY_NAME": project.ssh_key_name or "",
+        "CODE_REPO_DEFAULT": project.upstream_url or "",
+        "USER_SNIPPET": user_snippet,
     }
 
     # Apply simple token replacement
@@ -341,6 +401,13 @@ def generate_dockerfiles(project_id: str) -> None:
         for k, v in variables.items():
             content = content.replace(f"{{{{{k}}}}}", str(v))
         (out_dir / name).write_text(content)
+
+    # Stage auxiliary scripts into build context so Dockerfile COPY works.
+    try:
+        _stage_scripts_into(out_dir / "scripts")
+    except Exception:
+        # Non-fatal: some templates may not need scripts
+        pass
 
     print(f"Generated Dockerfiles in {out_dir}")
 
@@ -357,10 +424,12 @@ def build_images(project_id: str) -> None:
         raise SystemExit("Dockerfiles are missing. Run 'codexctl generate <project>' first.")
 
     # Build commands (using podman). Real implementation would pass context and tags.
+    # Build with the project-specific build directory as context so COPY scripts/ works
+    context_dir = str(stage_dir)
     cmds = [
-        ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1"],
-        ["podman", "build", "-f", str(l2), "-t", f"{project.id}:l2"],
-        ["podman", "build", "-f", str(l3), "-t", f"{project.id}:l3"],
+        ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
+        ["podman", "build", "-f", str(l2), "-t", f"{project.id}:l2", context_dir],
+        ["podman", "build", "-f", str(l3), "-t", f"{project.id}:l3", context_dir],
     ]
     for cmd in cmds:
         print("$", " ".join(cmd))

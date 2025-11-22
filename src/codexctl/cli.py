@@ -162,9 +162,9 @@ def main() -> None:
         else:
             print("- Project configs: none found")
 
-        # Templates
+        # Templates (package resources)
         print("Templates (read):")
-        tmpl_pkg = resources.files("codexctl") / "templates"
+        tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
         try:
             names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith('.template')]
         except Exception:
@@ -172,6 +172,17 @@ def main() -> None:
         print(f"- Package templates dir: {tmpl_pkg}")
         if names:
             for n in sorted(names):
+                print(f"  • {n}")
+
+        # Scripts (package resources)
+        scr_pkg = resources.files("codexctl") / "resources" / "scripts"
+        try:
+            scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
+        except Exception:
+            scr_names = []
+        print(f"Scripts (read):\n- Package scripts dir: {scr_pkg}")
+        if scr_names:
+            for n in sorted(scr_names):
                 print(f"  • {n}")
 
         # WRITE PATHS
