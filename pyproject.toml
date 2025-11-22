@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
   "PyYAML>=6.0",
-  "textual>=0.40",
+  "textual>=6.6"
 ]
 
 [project.scripts]

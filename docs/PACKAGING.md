@@ -24,7 +24,7 @@ Recommended best practices (near-term)
   - CODEXCTL_CONFIG_FILE (points directly to a config.yml)
   - CODEXCTL_SHARE_DIR (points to directory holding templates/ and scripts/)
   - CODEXCTL_STATE_DIR (points to writable state root)
-- For distro packages you typically do not need any overrides; files live in /etc and /usr/share and user state goes to ~/.local/state.
+    - For distro packages you typically do not need any overrides; files live in /etc and /usr/share and user state goes to ${XDG_DATA_HOME:-~/.local/share}/codexctl.
 
 Recommended refactor (future improvement)
 - Migrate to a src/ layout and a proper package (e.g., src/codexctl/__init__.py, src/codexctl/cli.py, src/codexctl/lib.py):
@@ -44,7 +44,35 @@ Debian/RPM packaging notes
   - /usr/share/codexctl/templates/**
   - /usr/share/codexctl/scripts/**
   - console scripts are auto-installed to /usr/bin by the distro tooling.
-- For RPM, use %pyproject_buildrequires / %pyproject_wheel / %pyproject_install macros. Map data files into %{buildroot}%{_sysconfdir}/codexctl and %{buildroot}%{_datadir}/codexctl.
+  - For RPM, use %pyproject_buildrequires / %pyproject_wheel / %pyproject_install macros. Map data files into %{buildroot}%{_sysconfdir}/codexctl and %{buildroot}%{_datadir}/codexctl.
+
+pip --prefix on Debian/Ubuntu (posix_local scheme)
+-----------------------------------------------
+
+On Debian/Ubuntu, pip defaults to the "posix_local" installation scheme when installing outside of a virtualenv and without --user. This scheme appends a trailing "/local" segment under the given prefix. As a result, the effective installation targets are:
+
+- Scripts:   {prefix}/local/bin
+- Purelib:   {prefix}/local/lib/pythonX.Y/dist-packages (or site-packages depending on distro)
+
+Implications for custom prefixes:
+
+- If you want everything under /virt/podman/local, pass --prefix=/virt/podman (leave off the trailing /local) and let pip add "/local".
+  - Correct:  python -m pip install --prefix=/virt/podman .
+  - Result:   /virt/podman/local/bin/codexctl and /virt/podman/local/lib/pythonX.Y/dist-packages/codexctl
+
+- Do NOT include "/local" in the prefix yourself, otherwise you will get a nested path like /virt/podman/local/local/...
+  - Wrong:    python -m pip install --prefix=/virt/podman/local .
+  - Result:   /virt/podman/local/local/bin, /virt/podman/local/local/lib/pythonX.Y/...
+
+Optional TUI extra and system packages
+
+- The Textual TUI is an optional extra to avoid forcing upgrades to distro-managed packages like Pygments on Debian/Ubuntu.
+- Base install (no TUI):
+  - python -m pip install --prefix=/virt/podman .
+- With TUI:
+  - python -m pip install --prefix=/virt/podman '.[tui]'
+- If you prefer a venv to avoid system scheme quirks:
+  - python -m venv .venv && . .venv/bin/activate && pip install '.[tui]'
 
 Runtime lookup strategy
 - Config (read-only defaults):
@@ -62,15 +90,26 @@ Runtime lookup strategy
   1) CODEXCTL_SHARE_DIR
   2) sys.prefix/share/codexctl
   3) /usr/share/codexctl
-- Writable state (tasks/cache/stage):
+- Writable state (tasks/cache/build):
   1) CODEXCTL_STATE_DIR
-  2) ${XDG_STATE_HOME:-~/.local/state}/codexctl
+  2) ${XDG_DATA_HOME:-~/.local/share}/codexctl
+
+Build directory
+---------------
+
+- Generated artifacts default to the "build" directory under the writable state root, e.g. ${state_root}/build/<project>/L1.Dockerfile.
+
+FHS note about writability
+--------------------------
+
+- /usr/share/codexctl ("share") must be treated as read-only. Templates are provided via Python package resources or optionally mirrored in /usr/share for distro packages.
+- Writable data belongs under /var/lib/codexctl for system installs or under ${XDG_DATA_HOME:-~/.local/share}/codexctl for users. The application never writes under /usr/share.
 
 Developer workflow
 - For source checkouts, prefer env vars for convenience:
   - CODEXCTL_CONFIG_DIR=$PWD/etc/codexctl
   - CODEXCTL_SHARE_DIR=$PWD/share/codexctl
-  - CODEXCTL_STATE_DIR=$PWD/var/lib/codexctl (or leave to use ~/.local/state/codexctl)
+  - CODEXCTL_STATE_DIR=$PWD/var/lib/codexctl (or leave to use ${XDG_DATA_HOME:-~/.local/share}/codexctl)
   - Optionally place user project overrides under ~/.config/codexctl/projects
 
 Migration checklist (if moving to src/ package)

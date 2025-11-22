@@ -51,7 +51,7 @@ def state_root() -> Path:
     Priority:
       1. CODEXCTL_STATE_DIR
       2. if root   → /var/lib/codexctl
-         else      → ~/.local/share/codexctl
+         else      → ${XDG_DATA_HOME:-~/.local/share}/codexctl
     """
     env = os.getenv("CODEXCTL_STATE_DIR")
     if env:
@@ -62,6 +62,11 @@ def state_root() -> Path:
 
     if _user_data_dir is not None:
         return Path(_user_data_dir(APP_NAME))
+
+    # Fallback without platformdirs: honor XDG_DATA_HOME if set
+    xdg = os.getenv("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / APP_NAME
     return Path.home() / ".local" / "share" / APP_NAME
 
 

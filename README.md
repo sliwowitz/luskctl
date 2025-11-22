@@ -28,13 +28,24 @@ Quick answers to common questions
   - After install, you should have console scripts:
     - codexctl, codexctl-tui, codextui
 
-- How do I install into a custom path, e.g. /usr/local?
+– How do I install into a custom path, e.g. /usr/local?
   - User-local (no root):
     - python -m pip install --user .
     - Binaries go to ~/.local/bin (ensure it’s on PATH).
-  - Custom prefix system-wide (requires appropriate permissions):
-    - python -m pip install --prefix=/usr/local .
-    - Ensure /usr/local/bin is on PATH; site-packages will be under /usr/local/lib/pythonX.Y/site-packages.
+  - Custom prefix (Debian/Ubuntu note about “local”):
+    - On Debian/Ubuntu, pip uses the posix_local install scheme which inserts a
+      trailing "/local" segment under the chosen prefix.
+    - Therefore, pick the parent directory as your prefix and let pip add
+      "/local" for you.
+    - Example (recommended):
+      - python -m pip install --prefix=/virt/podman .
+      - Resulting layout: /virt/podman/local/bin/codexctl and
+        /virt/podman/local/lib/pythonX.Y/dist-packages/...
+    - Do NOT append "/local" yourself, or you’ll get a nested path like
+      /virt/podman/local/local.
+      - Wrong: python -m pip install --prefix=/virt/podman/local .
+    - If you want the TUI as well, install the extra:
+      - python -m pip install --prefix=/virt/podman '.[tui]'
   - Alternatively, use a virtual environment:
     - python -m venv .venv && . .venv/bin/activate && pip install .
 
@@ -44,10 +55,28 @@ Runtime locations (FHS/XDG)
   - Root: /etc/codexctl/projects
   - User: ~/.config/codexctl/projects
   - Override: CODEXCTL_CONFIG_DIR=/path/to/config (if this points directly to a folder containing project subfolders, that’s accepted; if it contains a projects/ subfolder, that is used).
-- State (writable: tasks, stage, cache):
+- State (writable: tasks, build, cache):
   - Root: /var/lib/codexctl
-  - User: ~/.local/share/codexctl
+  - User: ${XDG_DATA_HOME:-~/.local/share}/codexctl
   - Override: CODEXCTL_STATE_DIR=/path/to/state
+
+Global configuration file
+
+- The tool looks for a global config file in this order (first found wins):
+  - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
+  - sys.prefix/etc/codexctl/config.yml (pip/venv installs)
+  - /etc/codexctl/config.yml (system default)
+- An example config is provided at examples/codexctl-config.yml. Copy and edit:
+  - mkdir -p ~/.config/codexctl && cp examples/codexctl-config.yml ~/.config/codexctl/config.yml
+- Minimum global settings include:
+  - ui.base_port: default first task port for UI mode
+  - paths.user_projects_root: per-user projects directory
+  - paths.state_root: writable state root
+  - paths.build_root: directory for generated files (renamed from legacy "stage")
+
+FHS note
+
+- /usr/share is read-only and should not be used for writable data. codexctl writes under /var/lib/codexctl (for root installs) or ~/.local/share/codexctl (for users). Templates are read from the Python package resources; a legacy /usr/share/codexctl can still be pointed to with CODEXCTL_SHARE_DIR for compatibility.
 
 Examples for development
 
@@ -64,5 +93,5 @@ Examples for development
 Notes
 
 - Podman is required at runtime for build/run commands.
-- The TUI depends on textual (declared in pyproject.toml).
+- The TUI is optional. Install it with: pip install 'codexctl[tui]'.
 - For system packaging (deb/rpm), install the wheel and create /etc/codexctl and /var/lib/codexctl with suitable permissions; the app will locate them automatically.

@@ -56,34 +56,48 @@ def config_root() -> Path:
     return proj_dir if proj_dir.is_dir() else base
 
 
-def global_config_path() -> Path:
-    """Global config file path.
+def global_config_search_paths() -> list[Path]:
+    """Return the ordered list of paths that will be checked for global config.
 
-    Resolution order (first existing wins):
-    - CODEXCTL_CONFIG_FILE env
+    Behavior matches global_config_path():
+    - If CODEXCTL_CONFIG_FILE is set, only that single path is considered.
+    - Otherwise, check in order:
+        1) ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml
+        2) sys.prefix/etc/codexctl/config.yml
+        3) /etc/codexctl/config.yml
+    """
+    env_file = os.environ.get("CODEXCTL_CONFIG_FILE")
+    if env_file:
+        return [Path(env_file).expanduser().resolve()]
+
+    xdg_home = os.environ.get("XDG_CONFIG_HOME")
+    user_cfg = (Path(xdg_home) if xdg_home else Path.home() / ".config") / "codexctl" / "config.yml"
+    sp_cfg = Path(sys.prefix) / "etc" / "codexctl" / "config.yml"
+    etc_cfg = Path("/etc/codexctl/config.yml")
+    return [user_cfg, sp_cfg, etc_cfg]
+
+
+def global_config_path() -> Path:
+    """Global config file path (resolved based on search paths).
+
+    Resolution order (first existing wins, except explicit override is returned even
+    if missing to make intent visible to the user):
+    - CODEXCTL_CONFIG_FILE env (returned as-is)
     - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
     - sys.prefix/etc/codexctl/config.yml (pip wheels)
     - /etc/codexctl/config.yml (system default)
     If none exist, return the last path (/etc/codexctl/config.yml).
     """
-    # explicit override
-    env_file = os.environ.get("CODEXCTL_CONFIG_FILE")
-    if env_file:
-        return Path(env_file).expanduser().resolve()
+    candidates = global_config_search_paths()
+    # If CODEXCTL_CONFIG_FILE is set, candidates has a single element and we
+    # want to return it even if it doesn't exist.
+    if len(candidates) == 1:
+        return candidates[0]
 
-    # user config (XDG)
-    xdg_home = os.environ.get("XDG_CONFIG_HOME")
-    user_cfg = (Path(xdg_home) if xdg_home else Path.home() / ".config") / "codexctl" / "config.yml"
-    if user_cfg.is_file():
-        return user_cfg.resolve()
-
-    # pip/venv data-files location
-    sp_cfg = Path(sys.prefix) / "etc" / "codexctl" / "config.yml"
-    if sp_cfg.is_file():
-        return sp_cfg.resolve()
-
-    # system default
-    return Path("/etc/codexctl/config.yml")
+    for c in candidates:
+        if c.is_file():
+            return c.resolve()
+    return candidates[-1]
 
 
 def share_root() -> Path:
@@ -99,15 +113,65 @@ def share_root() -> Path:
 
 
 def state_root() -> Path:
-    """Writable state directory for tasks/cache/stage (from codexctl.paths)."""
+    """Writable state directory for tasks/cache/build.
+
+    Precedence:
+    - Environment variable CODEXCTL_STATE_DIR (handled first)
+    - If set in global config (paths.state_root), use it.
+    - Otherwise, use codexctl.paths.state_root() (FHS/XDG handling).
+    """
+    # Environment override should always win
+    env = os.environ.get("CODEXCTL_STATE_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+
+    try:
+        cfg = load_global_config()
+        cfg_path = (cfg.get("paths", {}) or {}).get("state_root")
+        if cfg_path:
+            return Path(cfg_path).expanduser().resolve()
+    except Exception:
+        # Be resilient to any config read error
+        pass
     return _state_root_base().resolve()
 
 
 def user_projects_root() -> Path:
+    # Global config override
+    try:
+        cfg = load_global_config()
+        up = (cfg.get("paths", {}) or {}).get("user_projects_root")
+        if up:
+            return Path(up).expanduser().resolve()
+    except Exception:
+        pass
+
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
         return Path(xdg) / "codexctl" / "projects"
     return Path.home() / ".config" / "codexctl" / "projects"
+
+
+def build_root() -> Path:
+    """
+    Directory for build artifacts (generated Dockerfiles, etc.).
+
+    Resolution order:
+    - Global config: paths.build_root
+    - Otherwise: state_root()/build
+    """
+    # Global config preferred
+    try:
+        cfg = load_global_config()
+        paths_cfg = cfg.get("paths", {}) or {}
+        br = paths_cfg.get("build_root")
+        if br:
+            return Path(br).expanduser().resolve()
+    except Exception:
+        pass
+
+    sr = state_root()
+    return (sr / "build").resolve()
 
 
 # ---------- Global config (UI base port) ----------
@@ -207,7 +271,8 @@ def load_project(project_id: str) -> Project:
 
     staging_root: Optional[Path] = None
     if sec == "gatekept":
-        staging_root = Path(gate_cfg.get("staging_root", sr / "stage" / pid)).resolve()
+        # Default to build_root unless explicitly configured in project.yml
+        staging_root = Path(gate_cfg.get("staging_root", build_root() / pid)).resolve()
 
     upstream_url = git_cfg.get("upstream_url")
     default_branch = git_cfg.get("default_branch", "main")
@@ -257,8 +322,7 @@ def generate_dockerfiles(project_id: str) -> None:
     l2_txt = (tmpl_pkg / "l2.codex-agent.Dockerfile.template").read_text()
     l3_txt = (tmpl_pkg / "l3.codexui.Dockerfile.template").read_text()
 
-    sr = state_root()
-    out_dir = sr / "stage" / project.id
+    out_dir = build_root() / project.id
     _ensure_dir(out_dir)
 
     variables = {
@@ -283,8 +347,7 @@ def generate_dockerfiles(project_id: str) -> None:
 
 def build_images(project_id: str) -> None:
     project = load_project(project_id)
-    sr = state_root()
-    stage_dir = sr / "stage" / project.id
+    stage_dir = build_root() / project.id
 
     l1 = stage_dir / "L1.Dockerfile"
     l2 = stage_dir / "L2.Dockerfile"

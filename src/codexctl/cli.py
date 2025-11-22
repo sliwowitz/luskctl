@@ -6,12 +6,23 @@ import argparse
 from .lib import (
     generate_dockerfiles,
     build_images,
+    config_root as _config_root,
+    global_config_path as _global_config_path,
+    global_config_search_paths as _global_config_search_paths,
+    share_root as _share_root,
+    state_root as _state_root,
+    user_projects_root as _user_projects_root,
+    build_root as _build_root,
+    get_ui_base_port as _get_ui_base_port,
     task_new,
     task_list,
     task_run_cli,
     task_run_ui,
     list_projects,
 )
+import os
+from importlib import resources
+from pathlib import Path
 
 
 def main() -> None:
@@ -20,6 +31,9 @@ def main() -> None:
 
     # projects
     sub.add_parser("projects", help="List all known projects")
+
+    # config overview
+    sub.add_parser("config", help="Show configuration, template and output paths")
 
     # generate
     p_gen = sub.add_parser("generate", help="Generate Dockerfiles for a project")
@@ -53,6 +67,75 @@ def main() -> None:
         generate_dockerfiles(args.project_id)
     elif args.cmd == "build":
         build_images(args.project_id)
+    elif args.cmd == "config":
+        # READ PATHS
+        print("Configuration (read):")
+        gcfg = _global_config_path()
+        print(f"- Global config file: {gcfg} (exists: {'yes' if Path(gcfg).is_file() else 'no'})")
+        paths = _global_config_search_paths()
+        if paths:
+            print("- Global config search order:")
+            for p in paths:
+                exists = 'yes' if Path(p).is_file() else 'no'
+                print(f"  • {p} (exists: {exists})")
+        print(f"- UI base port: {_get_ui_base_port()}")
+
+        uproj = _user_projects_root()
+        sproj = _config_root()
+        print(f"- User projects root: {uproj} (exists: {'yes' if Path(uproj).is_dir() else 'no'})")
+        print(f"- System projects root: {sproj} (exists: {'yes' if Path(sproj).is_dir() else 'no'})")
+
+        # Project configs discovered
+        projs = list_projects()
+        if projs:
+            print("- Project configs:")
+            for p in projs:
+                print(f"  • {p.id}: {p.root / 'project.yml'}")
+        else:
+            print("- Project configs: none found")
+
+        # Templates
+        print("Templates (read):")
+        tmpl_pkg = resources.files("codexctl") / "templates"
+        try:
+            names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith('.template')]
+        except Exception:
+            names = []
+        print(f"- Package templates dir: {tmpl_pkg}")
+        if names:
+            for n in sorted(names):
+                print(f"  • {n}")
+        legacy = _share_root()
+        print(f"- Legacy share dir (compat): {legacy}")
+
+        # WRITE PATHS
+        print("Writable locations (write):")
+        sroot = _state_root()
+        print(f"- State root: {sroot} (exists: {'yes' if Path(sroot).is_dir() else 'no'})")
+        build_root = _build_root()
+        print(f"- Build root for generated files: {build_root}")
+        if projs:
+            print("- Expected generated files per project:")
+            for p in projs:
+                base = build_root / p.id
+                for fname in ("L1.Dockerfile", "L2.Dockerfile", "L3.Dockerfile"):
+                    path = base / fname
+                    print(f"  • {p.id}: {path} (exists: {'yes' if path.is_file() else 'no'})")
+
+        # ENVIRONMENT
+        print("Environment overrides (if set):")
+        for var in (
+            "CODEXCTL_CONFIG_FILE",
+            "CODEXCTL_CONFIG_DIR",
+            "CODEXCTL_STATE_DIR",
+            "CODEXCTL_SHARE_DIR",
+            "CODEXCTL_RUNTIME_DIR",
+            "XDG_DATA_HOME",
+            "XDG_CONFIG_HOME",
+        ):
+            val = os.environ.get(var)
+            if val is not None:
+                print(f"- {var}={val}")
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:

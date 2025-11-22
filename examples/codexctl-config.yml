@@ -1,0 +1,28 @@
+# Example codexctl configuration file
+#
+# Copy this file to one of the following locations (first existing wins):
+#  - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
+#  - /etc/codexctl/config.yml (system-wide default)
+#
+# Notes:
+#  - The CLI command `codexctl config` shows which paths and files are used.
+
+ui:
+  # Default first task port for UI mode (subsequent tasks will auto-increment
+  # from this base if the port is busy).
+  base_port: 7860
+
+paths:
+  # User projects root (per-user overlays). Each project is a subdirectory
+  # containing a project.yml, e.g. ${user_projects_root}/myproj/project.yml
+  # Default: ${XDG_CONFIG_HOME:-~/.config}/codexctl/projects
+  # user_projects_root: ~/.config/codexctl/projects
+
+  # Writable state root (tasks, caches, etc.).
+  # System default (root): /var/lib/codexctl
+  # User default:          ${XDG_DATA_HOME:-~/.local/share}/codexctl
+  # state_root: ~/.local/share/codexctl
+
+  # Build artifacts root for generated files.
+  # If not set, defaults to: <state_root>/build
+  # build_root: ~/.local/share/codexctl/build
