@@ -9,7 +9,7 @@ ENV HOME="/home/dev" \
     CODEXUI_REPO="https://github.com/sliwowitz/codex-in-podman.git"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git ssh ca-certificates python3 \
+      git ssh ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/codexui-entry.sh /usr/local/bin/codexui-entry.sh

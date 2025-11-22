@@ -26,3 +26,7 @@ paths:
   # Build artifacts root for generated files.
   # If not set, defaults to: <state_root>/build
   # build_root: ~/.local/share/codexctl/build
+
+# Note: GPU passthrough is a per-project opt-in only. Configure it in
+# <project>/project.yml under `run.gpus` (true or "all"). There is no
+# global or environment switch.

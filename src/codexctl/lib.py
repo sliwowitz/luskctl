@@ -426,10 +426,34 @@ def build_images(project_id: str) -> None:
     # Build commands (using podman). Real implementation would pass context and tags.
     # Build with the project-specific build directory as context so COPY scripts/ works
     context_dir = str(stage_dir)
+
+    # Read docker.base_image from project.yml so we can pass it as a build-arg
+    # for stages that rely on ARG BASE_IMAGE before FROM (L2/L3 templates).
+    base_image = "ubuntu:24.04"
+    try:
+        cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+        docker_cfg = cfg.get("docker", {}) or {}
+        base_image = str(docker_cfg.get("base_image", base_image))
+    except Exception:
+        pass
+
     cmds = [
         ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
-        ["podman", "build", "-f", str(l2), "-t", f"{project.id}:l2", context_dir],
-        ["podman", "build", "-f", str(l3), "-t", f"{project.id}:l3", context_dir],
+        # L2 and L3 use ARG BASE_IMAGE before FROM, so we must pass --build-arg
+        [
+            "podman", "build",
+            "-f", str(l2),
+            "--build-arg", f"BASE_IMAGE={base_image}",
+            "-t", f"{project.id}:l2",
+            context_dir,
+        ],
+        [
+            "podman", "build",
+            "-f", str(l3),
+            "--build-arg", f"BASE_IMAGE={base_image}",
+            "-t", f"{project.id}:l3",
+            context_dir,
+        ],
     ]
     for cmd in cmds:
         print("$", " ".join(cmd))
@@ -567,6 +591,50 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     return env, volumes
 
 
+def _gpu_run_args(project: Project) -> list[str]:
+    """Return additional podman run args to enable NVIDIA GPU if configured.
+
+    Per-project only: GPUs are enabled exclusively by the project's project.yml.
+    Default is disabled. Global config and environment variables are ignored.
+
+    project.yml example:
+      run:
+        gpus: all   # or true
+
+    When enabled, we pass a combination that works with Podman +
+    nvidia-container-toolkit (recent versions):
+      --device nvidia.com/gpu=all
+      -e NVIDIA_VISIBLE_DEVICES=all
+      -e NVIDIA_DRIVER_CAPABILITIES=all
+      (optional) --hooks-dir=/usr/share/containers/oci/hooks.d if it exists
+    """
+    # Project-level setting from project.yml (only source of truth)
+    enabled = False
+    try:
+        proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+        run_cfg = (proj_cfg.get("run", {}) or {})
+        gpus = run_cfg.get("gpus", run_cfg.get("gpu"))
+        if isinstance(gpus, str):
+            enabled = gpus.lower() == "all"
+        elif isinstance(gpus, bool):
+            enabled = gpus
+    except Exception:
+        enabled = False
+
+    if not enabled:
+        return []
+
+    args: list[str] = [
+        "--device", "nvidia.com/gpu=all",
+        "-e", "NVIDIA_VISIBLE_DEVICES=all",
+        "-e", "NVIDIA_DRIVER_CAPABILITIES=all",
+    ]
+    hooks_dir = Path("/usr/share/containers/oci/hooks.d")
+    if hooks_dir.is_dir():
+        args.extend(["--hooks-dir", str(hooks_dir)])
+    return args
+
+
 def _check_mode(meta: dict, expected: str) -> None:
     mode = meta.get("mode")
     if mode and mode != expected:
@@ -584,8 +652,9 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    cmd = [
-        "podman", "run", "--rm",
+    cmd = ["podman", "run", "--rm"]
+    cmd += _gpu_run_args(project)
+    cmd += [
         "-v", volumes[0],
         "--name", f"{project.id}-cli-{task_id}",
         f"{project.id}:l2",
@@ -620,8 +689,9 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    cmd = [
-        "podman", "run", "--rm", "-p", f"127.0.0.1:{port}:7860",
+    cmd = ["podman", "run", "--rm", "-p", f"127.0.0.1:{port}:7860"]
+    cmd += _gpu_run_args(project)
+    cmd += [
         "-v", volumes[0],
         "--name", f"{project.id}-ui-{task_id}",
         f"{project.id}:l3",

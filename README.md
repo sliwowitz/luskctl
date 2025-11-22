@@ -107,3 +107,12 @@ Notes
 - Podman is required at runtime for build/run commands.
 - The TUI is optional. Install it with: pip install 'codexctl[tui]'.
 - For system packaging (deb/rpm), install the wheel and create /etc/codexctl and /var/lib/codexctl with suitable permissions; the app will locate them automatically.
+
+GPU passthrough configuration (per-project only)
+
+- codexctl can request NVIDIA GPU devices for containers (Podman + nvidia-container-toolkit), but this is a per-project opt-in only. The default is disabled.
+- To enable for a project, edit <project>/project.yml and add:
+  run:
+    gpus: all   # or true
+- Important: GPU-enabled projects often require a CUDA/NVIDIA-capable base image (e.g., images built with NVIDIA HPC SDK or CUDA). Choose an appropriate base image in the project's docker.base_image.
+- When enabled, codexctl adds flags like --device nvidia.com/gpu=all and NVIDIA_* env vars; ensure the host has NVIDIA drivers and nvidia-container-toolkit with Podman integration.

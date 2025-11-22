@@ -20,3 +20,11 @@ codex:
   ui:
     enabled: true
     port: 7860
+
+# Runtime settings for this project
+run:
+  # Enable GPU passthrough for this project (per-project only). Default is disabled.
+  # Accepts boolean true or string "all" to enable; omitted/false disables.
+  # Note: GPU-enabled projects typically require a CUDA/NVIDIA-capable base image.
+  # Configure under docker.base_image accordingly.
+  # gpus: all
