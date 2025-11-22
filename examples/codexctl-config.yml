@@ -12,6 +12,15 @@ ui:
   # from this base if the port is busy).
   base_port: 7860
 
+envs:
+  # Shared persistent host directory for credentials/config that are mounted
+  # into Codex-enabled containers (CLI and UI):
+  #   - <base_dir>/_codex-config         → /home/dev/.codex (rw)
+  #   - <base_dir>/_ssh-config-<project> → /home/dev/.ssh   (ro)
+  # Default for system-wide installs: /var/lib/codexctl/envs
+  # You can override per user or system by editing this file.
+  # base_dir: /var/lib/codexctl/envs
+
 paths:
   # User projects root (per-user overlays). Each project is a subdirectory
   # containing a project.yml, e.g. ${user_projects_root}/myproj/project.yml

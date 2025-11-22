@@ -27,5 +27,11 @@ else
   npm install --omit=dev --no-fund --no-audit --progress=false
 fi
 
+# If a task workspace repository exists, prefer that as working directory
+if [[ -n "${REPO_ROOT:-}" && -d "${REPO_ROOT}" ]]; then
+  echo ">> switching to repo root: ${REPO_ROOT}"
+  cd "${REPO_ROOT}"
+fi
+
 echo ">> starting UI on ${HOST}:${PORT}"
 exec node server.js

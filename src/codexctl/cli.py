@@ -148,6 +148,13 @@ def main() -> None:
                 print(f"  • {p} (exists: {exists})")
         print(f"- UI base port: {_get_ui_base_port()}")
 
+        # Envs base dir
+        try:
+            from .lib import get_envs_base_dir as _get_envs_base_dir  # lazy import to avoid cycles
+            print(f"- Envs base dir (for mounts): {_get_envs_base_dir()}")
+        except Exception:
+            pass
+
         uproj = _user_projects_root()
         sproj = _config_root()
         print(f"- User projects root: {uproj} (exists: {'yes' if Path(uproj).is_dir() else 'no'})")

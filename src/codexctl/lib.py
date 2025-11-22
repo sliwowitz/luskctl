@@ -226,6 +226,21 @@ def get_ui_base_port() -> int:
     return int(ui_cfg.get("base_port", 7860))
 
 
+def get_envs_base_dir() -> Path:
+    """Return the base directory for shared env mounts (codex/ssh).
+
+    Global config (codexctl-config.yml):
+      envs:
+        base_dir: /var/lib/codexctl/envs
+
+    Default: /var/lib/codexctl/envs
+    """
+    cfg = load_global_config()
+    envs_cfg = cfg.get("envs", {}) or {}
+    base = envs_cfg.get("base_dir", "/var/lib/codexctl/envs")
+    return Path(str(base)).expanduser().resolve()
+
+
 # ---------- Project model ----------
 
 @dataclass
@@ -430,15 +445,11 @@ def build_images(project_id: str) -> None:
     # Build with the project-specific build directory as context so COPY scripts/ works
     context_dir = str(stage_dir)
 
-    # Read docker.base_image from project.yml so we can pass it as a build-arg
-    # for stages that rely on ARG BASE_IMAGE before FROM (L2/L3 templates).
-    base_image = "ubuntu:24.04"
-    try:
-        cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
-        docker_cfg = cfg.get("docker", {}) or {}
-        base_image = str(docker_cfg.get("base_image", base_image))
-    except Exception:
-        pass
+    # Read docker.base_image from project.yml for L1 only (handled in templates
+    # at generation time). For L2/L3 we must base FROM the just-built L1 image
+    # so that init-ssh-and-repo.sh (and other assets) are available at runtime.
+    # Therefore, we always pass BASE_IMAGE="<project_id>:l1" when building L2/L3.
+    l2l3_base_image = f"{project.id}:l1"
 
     cmds = [
         ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
@@ -446,14 +457,14 @@ def build_images(project_id: str) -> None:
         [
             "podman", "build",
             "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={base_image}",
+            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
             "-t", f"{project.id}:l2",
             context_dir,
         ],
         [
             "podman", "build",
             "-f", str(l3),
-            "--build-arg", f"BASE_IMAGE={base_image}",
+            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
             "-t", f"{project.id}:l3",
             context_dir,
         ],
@@ -580,17 +591,48 @@ def _assign_ui_port() -> int:
 
 
 def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
+    """Compose environment and volume mounts for a task container.
+
+    - Mount per-task workspace subdir to /workspace (host-explorable).
+    - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
+    - Provide REPO_ROOT and git info for the init script.
+    """
+    # Per-task workspace directory as a subdirectory of the task dir
+    task_dir = project.tasks_root / str(task_id)
+    repo_dir = task_dir / "workspace"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+
+    # Shared env mounts
+    envs_base = get_envs_base_dir()
+    codex_host_dir = envs_base / "_codex-config"
+    ssh_host_dir = envs_base / f"_ssh-config-{project.id}"
+    # Ensure codex dir exists so the mount works
+    codex_host_dir.mkdir(parents=True, exist_ok=True)
+
     env = {
         "PROJECT_ID": project.id,
         "TASK_ID": task_id,
+        # Tell init script where to clone/sync the repo
+        "REPO_ROOT": "/workspace",
     }
-    volumes = [
-        f"{project.tasks_root}:/workspace:z",
-    ]
-    if project.ssh_host_dir and project.ssh_key_name:
-        host_key = project.ssh_host_dir / project.ssh_key_name
-        if host_key.exists():
-            volumes.append(f"{host_key}:/root/.ssh/id_ed25519:ro,z")
+    if project.upstream_url:
+        env["CODE_REPO"] = project.upstream_url
+        env["GIT_BRANCH"] = project.default_branch or "main"
+        # Default reset mode is none; allow overriding via container env if needed
+        env["GIT_RESET_MODE"] = os.environ.get("CODEXCTL_GIT_RESET_MODE", "none")
+
+    volumes: list[str] = []
+    # Per-task workspace mount
+    volumes.append(f"{repo_dir}:/workspace:Z")
+
+    # Shared codex credentials/config
+    volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
+
+    # Optional SSH config (read-only) if present
+    if ssh_host_dir.is_dir():
+        volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z,ro")
+
     return env, volumes
 
 
@@ -658,9 +700,16 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
     cmd += _gpu_run_args(project)
+    # Volumes
+    for v in volumes:
+        cmd += ["-v", v]
+    # Environment
+    for k, v in env.items():
+        cmd += ["-e", f"{k}={v}"]
+    # Name, workdir, image and command
     cmd += [
-        "-v", volumes[0],
         "--name", f"{project.id}-cli-{task_id}",
+        "-w", "/workspace",
         f"{project.id}:l2",
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
@@ -714,9 +763,15 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
     cmd += _gpu_run_args(project)
+    # Volumes
+    for v in volumes:
+        cmd += ["-v", v]
+    # Environment
+    for k, v in env.items():
+        cmd += ["-e", f"{k}={v}"]
     cmd += [
-        "-v", volumes[0],
         "--name", f"{project.id}-ui-{task_id}",
+        "-w", "/workspace",
         f"{project.id}:l3",
     ]
     print("$", " ".join(map(str, cmd)))
