@@ -22,7 +22,6 @@ Recommended best practices (near-term)
 - Use environment overrides when running from non-standard layouts:
   - CODEXCTL_CONFIG_DIR (points to a directory that contains config.yml and projects/)
   - CODEXCTL_CONFIG_FILE (points directly to a config.yml)
-  - CODEXCTL_SHARE_DIR (points to directory holding templates/ and scripts/)
   - CODEXCTL_STATE_DIR (points to writable state root)
     - For distro packages you typically do not need any overrides; files live in /etc and /usr/share and user state goes to ${XDG_DATA_HOME:-~/.local/share}/codexctl.
 
@@ -87,9 +86,7 @@ Runtime lookup strategy
 - Projects directory (user):
   - ${XDG_CONFIG_HOME:-~/.config}/codexctl/projects
 - Shared data (templates/scripts):
-  1) CODEXCTL_SHARE_DIR
-  2) sys.prefix/share/codexctl
-  3) /usr/share/codexctl
+  - Loaded from Python package resources bundled with the wheel/install.
 - Writable state (tasks/cache/build):
   1) CODEXCTL_STATE_DIR
   2) ${XDG_DATA_HOME:-~/.local/share}/codexctl
@@ -108,7 +105,6 @@ FHS note about writability
 Developer workflow
 - For source checkouts, prefer env vars for convenience:
   - CODEXCTL_CONFIG_DIR=$PWD/etc/codexctl
-  - CODEXCTL_SHARE_DIR=$PWD/share/codexctl
   - CODEXCTL_STATE_DIR=$PWD/var/lib/codexctl (or leave to use ${XDG_DATA_HOME:-~/.local/share}/codexctl)
   - Optionally place user project overrides under ~/.config/codexctl/projects
 

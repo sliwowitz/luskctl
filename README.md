@@ -25,8 +25,20 @@ Quick answers to common questions
     - python -m pip install -e .
   - Or install the built wheel:
     - python -m pip install dist/codexctl-<ver>-py3-none-any.whl
-  - After install, you should have console scripts:
-    - codexctl, codexctl-tui, codextui
+    - After install, you should have console scripts:
+      - codexctl, codexctl-tui, codextui
+
+- How do I enable Bash completion for codexctl?
+  - Bash completion is powered by argcomplete.
+  - If your system has bash-completion installed (common on most distros), completion is enabled automatically after installing codexctl: the package ships a loader at share/bash-completion/completions/codexctl that Bash autoloads.
+  - If completion does not work (e.g., custom env/venv or no bash-completion package), you can enable it manually:
+    - One-time system-wide: sudo activate-global-python-argcomplete
+    - Per-shell (current session): eval "$(register-python-argcomplete codexctl)"
+    - Per-user (all new shells): add to ~/.bashrc
+      - eval "$(register-python-argcomplete codexctl)"
+  - Zsh users can use bashcompinit:
+    - autoload -U bashcompinit && bashcompinit
+    - eval "$(register-python-argcomplete --shell zsh codexctl)"
 
 – How do I install into a custom path, e.g. /usr/local?
   - User-local (no root):
@@ -76,7 +88,7 @@ Global configuration file
 
 FHS note
 
-- /usr/share is read-only and should not be used for writable data. codexctl writes under /var/lib/codexctl (for root installs) or ~/.local/share/codexctl (for users). Templates are read from the Python package resources; a legacy /usr/share/codexctl can still be pointed to with CODEXCTL_SHARE_DIR for compatibility.
+- /usr/share is read-only and should not be used for writable data. codexctl writes under /var/lib/codexctl (for root installs) or ~/.local/share/codexctl (for users). Templates are read from the Python package resources.
 
 Examples for development
 

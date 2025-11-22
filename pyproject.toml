@@ -22,7 +22,8 @@ classifiers = [
 ]
 dependencies = [
   "PyYAML>=6.0",
-  "textual>=6.6"
+  "textual>=6.6",
+  "argcomplete>=3.1"
 ]
 
 [project.scripts]
@@ -32,6 +33,11 @@ codexctl-tui = "codexctl.tui:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["codexctl"]
+
+[tool.setuptools.data-files]
+"share/bash-completion/completions" = [
+  "completions/codexctl",
+]
 
 [tool.setuptools.package-data]
 codexctl = [

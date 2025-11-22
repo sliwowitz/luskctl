@@ -9,7 +9,6 @@ from .lib import (
     config_root as _config_root,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
-    share_root as _share_root,
     state_root as _state_root,
     user_projects_root as _user_projects_root,
     build_root as _build_root,
@@ -19,10 +18,40 @@ from .lib import (
     task_run_cli,
     task_run_ui,
     list_projects,
+    get_tasks as _get_tasks,
 )
 import os
 from importlib import resources
 from pathlib import Path
+
+# Optional: bash completion via argcomplete
+try:
+    import argcomplete  # type: ignore
+except Exception:  # pragma: no cover - optional dep
+    argcomplete = None  # type: ignore
+
+
+def _complete_project_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover - shell integration
+    try:
+        ids = [p.id for p in list_projects()]
+    except Exception:
+        return []
+    if prefix:
+        ids = [i for i in ids if str(i).startswith(prefix)]
+    return ids
+
+
+def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover - shell integration
+    project_id = getattr(parsed_args, "project_id", None)
+    if not project_id:
+        return []
+    try:
+        tids = [str(t.get("task_id", "")) for t in _get_tasks(project_id) if t.get("task_id")]
+    except Exception:
+        return []
+    if prefix:
+        tids = [t for t in tids if t.startswith(prefix)]
+    return tids
 
 
 def main() -> None:
@@ -37,29 +66,68 @@ def main() -> None:
 
     # generate
     p_gen = sub.add_parser("generate", help="Generate Dockerfiles for a project")
-    p_gen.add_argument("project_id")
+    _a = p_gen.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     # build
     p_build = sub.add_parser("build", help="Build images for a project")
-    p_build.add_argument("project_id")
+    _a = p_build.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
 
     t_new = tsub.add_parser("new", help="Create a new task")
-    t_new.add_argument("project_id")
+    _a = t_new.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     t_list = tsub.add_parser("list", help="List tasks")
-    t_list.add_argument("project_id")
+    _a = t_list.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     t_run_cli = tsub.add_parser("run-cli", help="Run task in CLI (codex agent) mode")
-    t_run_cli.add_argument("project_id")
-    t_run_cli.add_argument("task_id")
+    _a = t_run_cli.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_run_cli.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     t_run_ui = tsub.add_parser("run-ui", help="Run task in UI (web) mode")
-    t_run_ui.add_argument("project_id")
-    t_run_ui.add_argument("task_id")
+    _a = t_run_ui.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_run_ui.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    # Enable bash completion if argcomplete is present and activated
+    if argcomplete is not None:  # pragma: no cover - shell integration
+        try:
+            argcomplete.autocomplete(parser)  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
     args = parser.parse_args()
 
@@ -105,8 +173,6 @@ def main() -> None:
         if names:
             for n in sorted(names):
                 print(f"  • {n}")
-        legacy = _share_root()
-        print(f"- Legacy share dir (compat): {legacy}")
 
         # WRITE PATHS
         print("Writable locations (write):")
@@ -128,7 +194,6 @@ def main() -> None:
             "CODEXCTL_CONFIG_FILE",
             "CODEXCTL_CONFIG_DIR",
             "CODEXCTL_STATE_DIR",
-            "CODEXCTL_SHARE_DIR",
             "CODEXCTL_RUNTIME_DIR",
             "XDG_DATA_HOME",
             "XDG_CONFIG_HOME",
