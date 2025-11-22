@@ -1,0 +1,503 @@
+#!/usr/bin/env python3
+# Moved from bin/codexctl_lib.py into package module codexctl.lib
+
+from __future__ import annotations
+
+# Keep the file content identical to the previous implementation for minimal diff.
+# The original bin/codexctl_lib.py is retained for developers running from the
+# repo, but packaging and entry points now import this module.
+
+import os
+import sys
+import socket
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import yaml  # pip install pyyaml
+from importlib import resources
+
+from .paths import config_root as _config_root_base, state_root as _state_root_base
+
+
+# ---------- Prefix & roots ----------
+
+def get_prefix() -> Path:
+    """
+    Minimal prefix helper used primarily for pip/venv installs.
+
+    Order:
+    - If CODEXCTL_PREFIX is set, use it.
+    - Otherwise, use sys.prefix.
+
+    Note: Do not use this for config/data discovery – see the dedicated
+    helpers below which follow common Linux/XDG conventions.
+    """
+    env = os.environ.get("CODEXCTL_PREFIX")
+    if env:
+        return Path(env).expanduser().resolve()
+    return Path(sys.prefix).resolve()
+
+
+def config_root() -> Path:
+    """
+    System projects directory. Uses FHS/XDG via codexctl.paths.
+
+    Behavior:
+    - If the base config directory contains a 'projects' subdirectory, use it.
+    - Otherwise, treat the base config directory itself as the projects root.
+
+    This makes development convenient when CODEXCTL_CONFIG_DIR points directly
+    to a folder that already contains per-project subdirectories (like ./examples).
+    """
+    base = _config_root_base().resolve()
+    proj_dir = base / "projects"
+    return proj_dir if proj_dir.is_dir() else base
+
+
+def global_config_path() -> Path:
+    """Global config file path.
+
+    Resolution order (first existing wins):
+    - CODEXCTL_CONFIG_FILE env
+    - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
+    - sys.prefix/etc/codexctl/config.yml (pip wheels)
+    - /etc/codexctl/config.yml (system default)
+    If none exist, return the last path (/etc/codexctl/config.yml).
+    """
+    # explicit override
+    env_file = os.environ.get("CODEXCTL_CONFIG_FILE")
+    if env_file:
+        return Path(env_file).expanduser().resolve()
+
+    # user config (XDG)
+    xdg_home = os.environ.get("XDG_CONFIG_HOME")
+    user_cfg = (Path(xdg_home) if xdg_home else Path.home() / ".config") / "codexctl" / "config.yml"
+    if user_cfg.is_file():
+        return user_cfg.resolve()
+
+    # pip/venv data-files location
+    sp_cfg = Path(sys.prefix) / "etc" / "codexctl" / "config.yml"
+    if sp_cfg.is_file():
+        return sp_cfg.resolve()
+
+    # system default
+    return Path("/etc/codexctl/config.yml")
+
+
+def share_root() -> Path:
+    """
+    Deprecated: previously used for external templates. Kept for backward
+    compatibility in case external callers rely on it.
+    Newer code loads templates from package resources (codexctl.templates).
+    """
+    env_dir = os.environ.get("CODEXCTL_SHARE_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser().resolve()
+    return Path(sys.prefix) / "share" / "codexctl"
+
+
+def state_root() -> Path:
+    """Writable state directory for tasks/cache/stage (from codexctl.paths)."""
+    return _state_root_base().resolve()
+
+
+def user_projects_root() -> Path:
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        return Path(xdg) / "codexctl" / "projects"
+    return Path.home() / ".config" / "codexctl" / "projects"
+
+
+# ---------- Global config (UI base port) ----------
+
+def load_global_config() -> dict:
+    cfg_path = global_config_path()
+    if not cfg_path.is_file():
+        return {}
+    return yaml.safe_load(cfg_path.read_text()) or {}
+
+
+def get_ui_base_port() -> int:
+    cfg = load_global_config()
+    ui_cfg = cfg.get("ui", {}) or {}
+    return int(ui_cfg.get("base_port", 7860))
+
+
+# ---------- Project model ----------
+
+@dataclass
+class Project:
+    id: str
+    security_class: str          # "online" | "gatekept"
+    upstream_url: Optional[str]
+    default_branch: str
+    root: Path
+
+    tasks_root: Path             # workspace dirs
+    cache_path: Path             # future cache
+    staging_root: Optional[Path] # gatekept only
+
+    ssh_key_name: Optional[str]
+    ssh_host_dir: Optional[Path]
+    codex_config_dir: Optional[Path]
+
+
+def _find_project_root(project_id: str) -> Path:
+    user_root = user_projects_root() / project_id
+    sys_root = config_root() / project_id
+    if (user_root / "project.yml").is_file():
+        return user_root
+    if (sys_root / "project.yml").is_file():
+        return sys_root
+    raise SystemExit(f"Project '{project_id}' not found in {user_root} or {sys_root}")
+
+
+# ---------- Project listing ----------
+def list_projects() -> list[Project]:
+    """
+    Discover all projects (user + system) and return them as Project objects.
+    User projects override system ones with the same id.
+    """
+    ids: set[str] = set()
+
+    # Collect IDs from user and system project dirs
+    for root in (user_projects_root(), config_root()):
+        if not root.is_dir():
+            continue
+        for d in root.iterdir():
+            if not d.is_dir():
+                continue
+            if (d / "project.yml").is_file():
+                ids.add(d.name)
+
+    projects: list[Project] = []
+    for pid in sorted(ids):
+        # load_project will automatically prefer user over system config
+        try:
+            projects.append(load_project(pid))
+        except SystemExit:
+            # if a project is broken, skip it rather than crashing the listing
+            continue
+    return projects
+
+
+def load_project(project_id: str) -> Project:
+    root = _find_project_root(project_id)
+    cfg_path = root / "project.yml"
+    if not cfg_path.is_file():
+        raise SystemExit(f"Missing project.yml in {root}")
+    cfg = yaml.safe_load(cfg_path.read_text()) or {}
+
+    proj_cfg = cfg.get("project", {}) or {}
+    git_cfg = cfg.get("git", {}) or {}
+    ssh_cfg = cfg.get("ssh", {}) or {}
+    codex_cfg = cfg.get("codex", {}) or {}
+    tasks_cfg = cfg.get("tasks", {}) or {}
+    cache_cfg = cfg.get("cache", {}) or {}
+    gate_cfg = cfg.get("gatekeeping", {}) or {}
+
+    pid = proj_cfg.get("id", project_id)
+    sec = proj_cfg.get("security_class", "online")
+
+    sr = state_root()
+    tasks_root = Path(tasks_cfg.get("root", sr / "tasks" / pid)).resolve()
+    cache_path = Path(cache_cfg.get("path", sr / "cache" / f"{pid}.git")).resolve()
+
+    staging_root: Optional[Path] = None
+    if sec == "gatekept":
+        staging_root = Path(gate_cfg.get("staging_root", sr / "stage" / pid)).resolve()
+
+    upstream_url = git_cfg.get("upstream_url")
+    default_branch = git_cfg.get("default_branch", "main")
+
+    ssh_key_name = ssh_cfg.get("key_name")
+    ssh_host_dir = Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
+
+    codex_config_dir = Path(codex_cfg.get("config_dir")).expanduser().resolve() if codex_cfg.get("config_dir") else None
+
+    p = Project(
+        id=pid,
+        security_class=sec,
+        upstream_url=upstream_url,
+        default_branch=default_branch,
+        root=root.resolve(),
+        tasks_root=tasks_root,
+        cache_path=cache_path,
+        staging_root=staging_root,
+        ssh_key_name=ssh_key_name,
+        ssh_host_dir=ssh_host_dir,
+        codex_config_dir=codex_config_dir,
+    )
+    return p
+
+
+# ---------- Dockerfile gen & build ----------
+
+def _ensure_dir(d: Path) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+
+
+def _render_template(template_path: Path, variables: dict) -> str:
+    content = template_path.read_text()
+    # Extremely simple token replacement: {{VAR}} → variables["VAR"]
+    for k, v in variables.items():
+        content = content.replace(f"{{{{{k}}}}}", str(v))
+    return content
+
+
+def generate_dockerfiles(project_id: str) -> None:
+    project = load_project(project_id)
+
+    # Load templates from package resources (codexctl/templates). Use
+    # importlib.resources Traversable API so it works from wheels/zip too.
+    tmpl_pkg = resources.files("codexctl") / "templates"
+    l1_txt = (tmpl_pkg / "l1.dev.Dockerfile.template").read_text()
+    l2_txt = (tmpl_pkg / "l2.codex-agent.Dockerfile.template").read_text()
+    l3_txt = (tmpl_pkg / "l3.codexui.Dockerfile.template").read_text()
+
+    sr = state_root()
+    out_dir = sr / "stage" / project.id
+    _ensure_dir(out_dir)
+
+    variables = {
+        "PROJECT_ID": project.id,
+        "SECURITY_CLASS": project.security_class,
+        "UPSTREAM_URL": project.upstream_url or "",
+        "DEFAULT_BRANCH": project.default_branch,
+    }
+
+    # Apply simple token replacement
+    for name, content in (
+        ("L1.Dockerfile", l1_txt),
+        ("L2.Dockerfile", l2_txt),
+        ("L3.Dockerfile", l3_txt),
+    ):
+        for k, v in variables.items():
+            content = content.replace(f"{{{{{k}}}}}", str(v))
+        (out_dir / name).write_text(content)
+
+    print(f"Generated Dockerfiles in {out_dir}")
+
+
+def build_images(project_id: str) -> None:
+    project = load_project(project_id)
+    sr = state_root()
+    stage_dir = sr / "stage" / project.id
+
+    l1 = stage_dir / "L1.Dockerfile"
+    l2 = stage_dir / "L2.Dockerfile"
+    l3 = stage_dir / "L3.Dockerfile"
+
+    if not l1.is_file() or not l2.is_file() or not l3.is_file():
+        raise SystemExit("Dockerfiles are missing. Run 'codexctl generate <project>' first.")
+
+    # Build commands (using podman). Real implementation would pass context and tags.
+    cmds = [
+        ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1"],
+        ["podman", "build", "-f", str(l2), "-t", f"{project.id}:l2"],
+        ["podman", "build", "-f", str(l3), "-t", f"{project.id}:l3"],
+    ]
+    for cmd in cmds:
+        print("$", " ".join(cmd))
+        try:
+            subprocess.run(cmd, check=True)
+        except FileNotFoundError:
+            raise SystemExit("podman not found; please install podman")
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"Build failed: {e}")
+
+
+# ---------- Tasks ----------
+
+def _tasks_meta_dir(project_id: str) -> Path:
+    return state_root() / "projects" / project_id / "tasks"
+
+
+def task_new(project_id: str) -> None:
+    project = load_project(project_id)
+    tasks_root = project.tasks_root
+    _ensure_dir(tasks_root)
+    meta_dir = _tasks_meta_dir(project.id)
+    _ensure_dir(meta_dir)
+
+    # Simple ID: numeric increment
+    existing = sorted([p.stem for p in meta_dir.glob("*.yml") if p.stem.isdigit()], key=int)
+    next_id = str(int(existing[-1]) + 1 if existing else 1)
+
+    ws = tasks_root / next_id
+    _ensure_dir(ws)
+
+    meta = {
+        "task_id": next_id,
+        "status": "created",
+        "mode": None,
+        "workspace": str(ws),
+        "ui_port": None,
+    }
+    (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
+    print(f"Created task {next_id} in {ws}")
+
+
+def get_tasks(project_id: str, reverse: bool = False) -> list[dict]:
+    meta_dir = _tasks_meta_dir(project_id)
+    tasks: list[dict] = []
+    if not meta_dir.is_dir():
+        return tasks
+    for f in meta_dir.glob("*.yml"):
+        try:
+            tasks.append(yaml.safe_load(f.read_text()) or {})
+        except Exception:
+            continue
+    tasks.sort(key=lambda d: int(d.get("task_id", 0)), reverse=reverse)
+    return tasks
+
+
+def task_list(project_id: str) -> None:
+    tasks = get_tasks(project_id)
+    if not tasks:
+        print("No tasks found")
+        return
+    for t in tasks:
+        tid = t.get("task_id", "?")
+        status = t.get("status", "unknown")
+        mode = t.get("mode")
+        port = t.get("ui_port")
+        extra = []
+        if mode:
+            extra.append(f"mode={mode}")
+        if port:
+            extra.append(f"port={port}")
+        extra_s = f" [{'; '.join(extra)}]" if extra else ""
+        print(f"- {tid}: {status}{extra_s}")
+
+
+# ---------- Pod/port helpers ----------
+
+def _is_port_free(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def _collect_all_ui_ports() -> set[int]:
+    # Scan all task metas for any project
+    root = state_root() / "projects"
+    ports: set[int] = set()
+    if not root.is_dir():
+        return ports
+    for proj_dir in root.iterdir():
+        tdir = proj_dir / "tasks"
+        if not tdir.is_dir():
+            continue
+        for f in tdir.glob("*.yml"):
+            try:
+                meta = yaml.safe_load(f.read_text()) or {}
+            except Exception:
+                continue
+            port = meta.get("ui_port")
+            if isinstance(port, int):
+                ports.add(port)
+    return ports
+
+
+def _assign_ui_port() -> int:
+    used = _collect_all_ui_ports()
+    base = get_ui_base_port()
+    port = base
+    max_tries = 200
+    tries = 0
+    while tries < max_tries:
+        if port not in used and _is_port_free(port):
+            return port
+        port += 1
+        tries += 1
+    raise SystemExit("No free UI ports available")
+
+
+def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
+    env = {
+        "PROJECT_ID": project.id,
+        "TASK_ID": task_id,
+    }
+    volumes = [
+        f"{project.tasks_root}:/workspace:z",
+    ]
+    if project.ssh_host_dir and project.ssh_key_name:
+        host_key = project.ssh_host_dir / project.ssh_key_name
+        if host_key.exists():
+            volumes.append(f"{host_key}:/root/.ssh/id_ed25519:ro,z")
+    return env, volumes
+
+
+def _check_mode(meta: dict, expected: str) -> None:
+    mode = meta.get("mode")
+    if mode and mode != expected:
+        raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
+
+
+def task_run_cli(project_id: str, task_id: str) -> None:
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    _check_mode(meta, "cli")
+
+    env, volumes = _build_task_env_and_volumes(project, task_id)
+
+    cmd = [
+        "podman", "run", "--rm",
+        "-v", volumes[0],
+        "--name", f"{project.id}-cli-{task_id}",
+        f"{project.id}:l2",
+    ]
+    print("$", " ".join(map(str, cmd)))
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Run failed: {e}")
+
+    meta["status"] = "completed"
+    meta["mode"] = "cli"
+    meta_path.write_text(yaml.safe_dump(meta))
+
+
+def task_run_ui(project_id: str, task_id: str) -> None:
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    _check_mode(meta, "ui")
+
+    port = meta.get("ui_port")
+    if not isinstance(port, int):
+        port = _assign_ui_port()
+        meta["ui_port"] = port
+        meta_path.write_text(yaml.safe_dump(meta))
+
+    env, volumes = _build_task_env_and_volumes(project, task_id)
+
+    cmd = [
+        "podman", "run", "--rm", "-p", f"127.0.0.1:{port}:7860",
+        "-v", volumes[0],
+        "--name", f"{project.id}-ui-{task_id}",
+        f"{project.id}:l3",
+    ]
+    print("$", " ".join(map(str, cmd)))
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Run failed: {e}")

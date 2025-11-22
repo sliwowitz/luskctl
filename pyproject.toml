@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codexctl"
+version = "0.1.0"
+description = "Prefix-aware tool to manage containerized projects and per-run tasks with Podman"
+readme = { text = "codexctl: manage containerized projects and per-run tasks (Podman)", content-type = "text/plain" }
+requires-python = ">=3.9"
+license = { text = "Apache-2.0 OR MIT" }
+authors = [
+  { name = "codexctl maintainers" }
+]
+keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "PyYAML>=6.0",
+  "textual>=0.40",
+]
+
+[project.scripts]
+codexctl = "codexctl.cli:main"
+codexctl-tui = "codexctl.tui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["codexctl"]
+
+[tool.setuptools.package-data]
+codexctl = [
+  "templates/*",
+]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "__pycache__"]

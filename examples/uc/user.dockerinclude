@@ -1,0 +1,44 @@
+# Base dev stack
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg lsb-release software-properties-common \
+      build-essential git pkg-config ninja-build openssh-client \
+      gcc-14 g++-14 libhdf5-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 140 \
+ && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 140
+
+# CMake (Kitware)
+RUN set -eux; \
+    . /etc/os-release; \
+    install -d -m0755 /usr/share/keyrings; \
+    curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc \
+      | gpg --dearmor >/usr/share/keyrings/kitware-archive-keyring.gpg; \
+    echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/${ID} ${VERSION_CODENAME} main" \
+      >/etc/apt/sources.list.d/kitware.list; \
+    apt-get update && apt-get install -y --no-install-recommends cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# clang-format-20
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+ && curl -fsSL https://apt.llvm.org/llvm.sh | bash -s -- 20 \
+ && apt-get install -y --no-install-recommends clang-format-20 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Catch2
+ARG CATCH2_FALLBACK_VERSION="v3.9.0"
+RUN set -eux; \
+    TAG="$(curl -s https://api.github.com/repos/catchorg/Catch2/releases/latest \
+           | grep -Po '"tag_name":\s*"\K[^"]+' || true)"; \
+    TAG="${TAG:-$CATCH2_FALLBACK_VERSION}"; \
+    mkdir -p /tmp/Catch2; \
+    curl -fsSL "https://github.com/catchorg/Catch2/archive/refs/tags/${TAG}.tar.gz" \
+      | tar -xz -C /tmp/Catch2 --strip-components=1; \
+    cmake -S /tmp/Catch2 -B /tmp/c2 -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr; \
+    cmake --build /tmp/c2 -j $(nproc); \
+    cmake --install /tmp/c2; \
+    rm -rf /tmp/Catch2 /tmp/c2
+
+# ccache + mold
+RUN apt-get update && apt-get install -y --no-install-recommends ccache mold \
+    && rm -rf /var/lib/apt/lists/*

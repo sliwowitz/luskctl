@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ENV HOME="/home/dev" \
+    HOST="0.0.0.0" \
+    PORT="7860" \
+    CODEXUI_DIR="/opt/codexui" \
+    CODEXUI_REPO="https://github.com/sliwowitz/codex-in-podman.git"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git ssh ca-certificates python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/codexui-entry.sh /usr/local/bin/codexui-entry.sh
+RUN chmod +x /usr/local/bin/codexui-entry.sh
+
+EXPOSE 7860
+CMD ["codexui-entry.sh"]

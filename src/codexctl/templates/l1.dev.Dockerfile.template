@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+FROM {{BASE_IMAGE}}
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    REPO_ROOT="/workspace" \
+    CODE_REPO="{{CODE_REPO_DEFAULT}}" \
+    SSH_KEY_NAME="{{SSH_KEY_NAME}}" \
+    GIT_BRANCH="{{DEFAULT_BRANCH}}" \
+    GIT_RESET_MODE="none"
+
+# Basic dev tooling common to all projects
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg git openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- BEGIN USER SNIPPET ---
+{{USER_SNIPPET}}
+# --- END USER SNIPPET ---
+
+RUN mkdir -p /home/dev /workspace && chmod 0777 /home/dev /workspace
+WORKDIR /workspace
+
+COPY scripts/init-ssh-and-repo.sh /usr/local/bin/init-ssh-and-repo.sh
+RUN chmod +x /usr/local/bin/init-ssh-and-repo.sh
+
+CMD ["init-ssh-and-repo.sh"]

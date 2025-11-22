@@ -1,0 +1,22 @@
+project:
+  id: "uc"
+  name: "Ultimate Container"
+  security_class: "online"      # agent can push directly to upstream
+
+git:
+  upstream_url: "https://gitlab.com/electric-sheep/ultimate-container.git"
+  default_branch: "main"
+
+docker:
+  base_image: "ubuntu:24.04"
+  user_snippet_file: "user.dockerinclude"
+
+ssh:
+  key_name: "id_ed25519_uc"
+  host_key_dir: "/virt/podman/envs/_ssh-config-uc"
+
+codex:
+  host_config_dir: "/virt/podman/envs/_codex-config"
+  ui:
+    enabled: true
+    port: 7860

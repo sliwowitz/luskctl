@@ -1,0 +1,5 @@
+# Ignore local runtime/state and temporary folders
+tmp/
+__pycache__/
+*.py[cod]
+

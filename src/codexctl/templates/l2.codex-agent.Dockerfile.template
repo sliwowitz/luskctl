@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates gnupg; \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
+    apt-get install -y --no-install-recommends nodejs ripgrep; \
+    npm install -g @openai/codex; \
+    npm cache clean --force; \
+    rm -rf /var/lib/apt/lists/*
+
+# No CMD: reuse init-ssh-and-repo.sh from base image
