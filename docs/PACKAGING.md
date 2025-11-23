@@ -1,30 +1,30 @@
-### Packaging codexctl for both pip (Python) and FHS (deb/rpm)
+### Packaging codexctl for both pip (Python) and distro packages (deb/rpm)
 
-This repository is set up to support two installation modes:
+This repository is set up to support two installation modes, both of which share the **same single source of truth** for templates and scripts:
 
-1) Python packaging (pip install codexctl)
+1) Python packaging (pip / Poetry installs)
 - Provides console scripts `codexctl` and `codexctl-tui`.
 - Ships templates and helper scripts as package resources bundled inside the wheel (single source of truth under `src/codexctl/resources/`).
-- Runtime loads these resources via `importlib.resources` and does not depend on external paths.
+- Runtime loads these resources via `importlib.resources` and does not depend on external paths such as `/usr/share`.
 
-2) Distribution packages (deb/rpm) following FHS
-- Install configuration under /etc/codexctl and mirror shared assets under /usr/share/codexctl.
-- Binaries are standard Python console entry points placed under /usr/bin.
+2) Distribution packages (deb/rpm) following FHS for config/state/binaries
+- Install configuration under `/etc/codexctl`.
+- Install binaries as standard Python console entry points under `/usr/bin`.
+- Writable state still lives under `/var/lib/codexctl` for system-wide installs (or the XDG data dir for user installs).
 
 The code follows simple Linux/XDG conventions with small environment overrides. No complex prefix probing is used.
 
 Key points implemented
 - Single source of truth for runtime assets (templates and scripts) lives under the Python package: `src/codexctl/resources/{templates,scripts}`.
-- Runtime loads assets exclusively via `importlib.resources` from the installed package; no external probing.
-- For distro/FHS packages, the same assets are mirrored to `/usr/share/codexctl/{templates,scripts}` at install time for host tools that expect files on disk.
-- MANIFEST.in includes all resource assets for sdist builds; pyproject includes them as package-data in wheels.
+- Runtime loads assets exclusively via `importlib.resources` from the installed package; it does **not** read from `/usr/share/codexctl`.
+- MANIFEST.in includes all resource assets for sdist builds; `pyproject.toml` includes them as package-data in wheels.
 
 Recommended best practices (near-term)
 - Use environment overrides when running from non-standard layouts:
-  - CODEXCTL_CONFIG_DIR (points to a directory that contains config.yml and projects/)
-  - CODEXCTL_CONFIG_FILE (points directly to a config.yml)
-  - CODEXCTL_STATE_DIR (points to writable state root)
-    - For distro packages you typically do not need any overrides; files live in /etc and /usr/share and user state goes to ${XDG_DATA_HOME:-~/.local/share}/codexctl.
+  - `CODEXCTL_CONFIG_DIR` (points to a directory that contains `config.yml` and `projects/`)
+  - `CODEXCTL_CONFIG_FILE` (points directly to a `config.yml`)
+  - `CODEXCTL_STATE_DIR` (points to writable state root)
+    - For distro packages you typically do not need any overrides; config lives in `/etc/codexctl`, binaries under `/usr/bin`, and user state goes to `${XDG_DATA_HOME:-~/.local/share}/codexctl`.
 
 Current layout (implemented)
 - `src/codexctl/resources/templates/` — Dockerfile templates used to generate images.
@@ -33,13 +33,12 @@ Current layout (implemented)
 
 Debian/RPM packaging notes
 - Use the Python build backend to produce artifacts:
-  - python -m build  # produces sdist and wheel
-- For Debian, dh-sequence-python3 can use the sdist/wheel; install data files to FHS targets (as mirrors):
-  - /etc/codexctl/** (config.yml, projects/*/project.yml)
-  - /usr/share/codexctl/templates/**
-  - /usr/share/codexctl/scripts/**
-  - console scripts are auto-installed to /usr/bin by the distro tooling.
-  - For RPM, use %pyproject_buildrequires / %pyproject_wheel / %pyproject_install macros. Map data files into %{buildroot}%{_sysconfdir}/codexctl and %{buildroot}%{_datadir}/codexctl.
+  - `python -m build`  # produces sdist and wheel
+- For Debian, `dh-sequence-python3` can use the sdist/wheel; install configuration and binaries to FHS targets:
+  - `/etc/codexctl/**` (config.yml, projects/*/project.yml)
+  - console scripts are auto-installed to `/usr/bin` by the distro tooling.
+  - templates and scripts are consumed directly from the installed Python package resources (no `/usr/share/codexctl` mirror required).
+- For RPM, use `%pyproject_buildrequires` / `%pyproject_wheel` / `%pyproject_install` macros. Map configuration files into `%{buildroot}%{_sysconfdir}/codexctl`. Runtime templates/scripts are read from the Python package.
 
 pip --prefix on Debian/Ubuntu (posix_local scheme)
 -----------------------------------------------
@@ -71,22 +70,21 @@ Optional TUI extra and system packages
 
 Runtime lookup strategy
 - Config (read-only defaults):
-  1) CODEXCTL_CONFIG_FILE (explicit file)
-  2) ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
-  3) sys.prefix/etc/codexctl/config.yml (pip/venv data-files)
-  4) /etc/codexctl/config.yml (system default)
+  1) `CODEXCTL_CONFIG_FILE` (explicit file)
+  2) `${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml` (user override)
+  3) `sys.prefix/etc/codexctl/config.yml` (pip/venv data-files)
+  4) `/etc/codexctl/config.yml` (system default)
 - Projects directory (system):
-  1) CODEXCTL_CONFIG_DIR/projects
-  2) sys.prefix/etc/codexctl/projects (pip/venv data-files)
-  3) /etc/codexctl/projects
+  1) `CODEXCTL_CONFIG_DIR/projects`
+  2) `sys.prefix/etc/codexctl/projects` (pip/venv data-files)
+  3) `/etc/codexctl/projects`
 - Projects directory (user):
-  - ${XDG_CONFIG_HOME:-~/.config}/codexctl/projects
+  - `${XDG_CONFIG_HOME:-~/.config}/codexctl/projects`
 - Shared data (templates/scripts):
-  - Loaded from Python package resources bundled with the wheel/install (single source of truth).
-  - For system packages, identical copies are installed under `/usr/share/codexctl/{templates,scripts}` for host tools that are not Python-aware.
+  - Loaded from Python package resources bundled with the wheel/install (single source of truth under `codexctl/resources/{templates,scripts}`).
 - Writable state (tasks/cache/build):
-  1) CODEXCTL_STATE_DIR
-  2) ${XDG_DATA_HOME:-~/.local/share}/codexctl
+  1) `CODEXCTL_STATE_DIR`
+  2) `${XDG_DATA_HOME:-~/.local/share}/codexctl`
 
 Build directory
 ---------------
@@ -96,8 +94,8 @@ Build directory
 FHS note about writability
 --------------------------
 
-- `/usr/share/codexctl` ("share") must be treated as read-only. Templates/scripts are provided via Python package resources; `/usr/share/codexctl` is a mirror for distro packages.
-- Writable data belongs under /var/lib/codexctl for system installs or under ${XDG_DATA_HOME:-~/.local/share}/codexctl for users. The application never writes under /usr/share.
+- Writable data belongs under `/var/lib/codexctl` for system installs or under `${XDG_DATA_HOME:-~/.local/share}/codexctl` for users.
+- The application never writes under `/usr/share` and does not read templates/scripts from there; instead it always uses its packaged resources.
 
 Developer workflow
 - For source checkouts, you can run `codexctl config` to see which package resources are available.
@@ -107,4 +105,4 @@ Developer workflow
   - User overrides live in `${XDG_CONFIG_HOME:-~/.config}/codexctl`.
 
 Notes
-- The application does not attempt to read from `/usr/share/codexctl` at runtime; it always uses its packaged resources to avoid ambiguity. System packages may still install mirrors under `/usr/share/codexctl` for non-Python consumers.
+- The application does not attempt to read from `/usr/share/codexctl` at runtime; it always uses its packaged resources to avoid ambiguity.

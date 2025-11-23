@@ -1,55 +1,44 @@
-[build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+ [build-system]
+ requires = ["poetry-core>=1.9.0"]
+ build-backend = "poetry.core.masonry.api"
 
-[project]
-name = "codexctl"
-version = "0.1.0"
-description = "Prefix-aware tool to manage containerized projects and per-run tasks with Podman"
-readme = { text = "codexctl: manage containerized projects and per-run tasks (Podman)", content-type = "text/plain" }
-requires-python = ">=3.9"
-license = { text = "Apache-2.0 OR MIT" }
-authors = [
-  { name = "codexctl maintainers" }
-]
-keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
-classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Environment :: Console",
-  "Operating System :: POSIX :: Linux",
-  "Topic :: System :: Systems Administration",
-]
-dependencies = [
-  "PyYAML>=6.0",
-  "textual>=6.6",
-  "argcomplete>=3.1"
-]
+ [tool.poetry]
+ name = "codexctl"
+ version = "0.1.0"
+ description = "Manage containerized projects and per-run tasks with Podman"
+ readme = "README.md"
+ license = "Apache-2.0 OR MIT"
+ authors = ["codexctl maintainers"]
+ keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
+ classifiers = [
+   "Programming Language :: Python :: 3",
+   "License :: OSI Approved :: MIT License",
+   "Environment :: Console",
+   "Operating System :: POSIX :: Linux",
+   "Topic :: System :: Systems Administration",
+ ]
 
-[project.scripts]
-codexctl = "codexctl.cli:main"
-codexctl-tui = "codexctl.tui:main"
+ # Use the src/ layout
+ packages = [
+   { include = "codexctl", from = "src" },
+ ]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["codexctl"]
+ # Extra files to ship alongside the package (similar to the old MANIFEST.in
+ # and setuptools data-files). These will be present in the sdist and wheel,
+ # but note that Poetry does not support installing them under /usr/share;
+ # they will live under the installed distribution instead.
+ include = [
+   { path = "completions/codexctl" },
+   { path = "docs/*.md" },
+   { path = "examples/**" },
+ ]
 
-[tool.setuptools.data-files]
-"share/bash-completion/completions" = [
-  "completions/codexctl",
-]
-"share/codexctl/templates" = [
-  "src/codexctl/resources/templates/*",
-]
-"share/codexctl/scripts" = [
-  "src/codexctl/resources/scripts/*",
-]
+ [tool.poetry.dependencies]
+ python = ">=3.9,<4.0"
+ PyYAML = ">=6.0"
+ textual = ">=6.6"
+ argcomplete = ">=3.1"
 
-[tool.setuptools.package-data]
-codexctl = [
-  "resources/templates/*",
-  "resources/scripts/*",
-]
-
-[tool.setuptools.exclude-package-data]
-"*" = ["*.pyc", "__pycache__"]
+ [tool.poetry.scripts]
+ codexctl = "codexctl.cli:main"
+ codexctl-tui = "codexctl.tui:main"
