@@ -394,9 +394,7 @@ def init_project_ssh(
 
         config_text: Optional[str] = None
         variables = {
-            "IDENTITY_FILE": str(priv_path),
             "KEY_NAME": key_name,
-            "PROJECT_ID": project.id,
         }
         # Prefer user template if provided
         if user_template_path is not None:
@@ -441,9 +439,14 @@ def init_project_ssh(
                 print(f"  {pub_key_text}")
     except Exception:
         pass
+    # When ssh.key_name is omitted in project.yml, we still derive a stable
+    # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
+    # Containers receive only this bare filename via SSH_KEY_NAME and mount
+    # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
+    # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
-        print("Note: project.yml does not define ssh.key_name; containers will rely on .ssh/config IdentityFile entries.")
-        print(f"      If you prefer explicit key selection, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
+        print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
+        print(f"      To pin the SSH key filename explicitly, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
 
     return {
         "dir": str(target_dir),
