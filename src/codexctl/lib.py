@@ -427,6 +427,17 @@ def init_project_ssh(
     print(f"  private key: {priv_path}")
     print(f"  public key:  {pub_path}")
     print(f"  config:      {cfg_path}")
+
+    # Also echo the actual public key contents for easy copy-paste.
+    # Best-effort: if reading fails, continue without raising.
+    try:
+        if pub_path.exists():
+            pub_key_text = pub_path.read_text(encoding="utf-8", errors="ignore").strip()
+            if pub_key_text:
+                print("Public key:")
+                print(f"  {pub_key_text}")
+    except Exception:
+        pass
     if not project.ssh_key_name:
         print("Note: project.yml does not define ssh.key_name; containers will rely on .ssh/config IdentityFile entries.")
         print(f"      If you prefer explicit key selection, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
@@ -707,6 +718,29 @@ def build_images(project_id: str) -> None:
 
 def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
+
+
+def _log_debug(message: str) -> None:
+    """Append a simple debug line to the codexctl library log.
+
+    This is intentionally very small and best-effort so it never interferes
+    with normal CLI or TUI behavior. It can be used to compare behavior
+    between different frontends (e.g. CLI vs TUI) when calling the shared
+    helpers in this module.
+    """
+
+    try:
+        from datetime import datetime as _dt
+        from pathlib import Path as _Path
+
+        log_path = _Path("/tmp/codexctl-lib.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        ts = _dt.now().isoformat(timespec="seconds")
+        with log_path.open("a", encoding="utf-8") as _f:
+            _f.write(f"[codexctl DEBUG] {ts} {message}\n")
+    except Exception:
+        # Logging must never change behavior of library code.
+        pass
 
 
 def task_new(project_id: str) -> None:
@@ -1035,6 +1069,88 @@ def _check_mode(meta: dict, expected: str) -> None:
     mode = meta.get("mode")
     if mode and mode != expected:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
+
+
+def _stop_task_containers(project: "Project", task_id: str) -> None:
+    """Best-effort removal of any containers associated with a task.
+
+    We intentionally ignore most errors here: task deletion should succeed
+    even if podman isn't installed, the containers are already gone, or the
+    container names never existed. This helper is used when deleting a
+    task's workspace/metadata to avoid leaving behind containers that would
+    later conflict with a new task reusing the same ID.
+
+    We use ``podman rm -f`` rather than ``podman stop`` to make teardown
+    deterministic and avoid hangs waiting for graceful shutdown inside the
+    container. The task itself is already being deleted at this point, so
+    a forceful remove is acceptable and keeps state consistent.
+    """
+
+    # The naming scheme is kept in sync with task_run_cli/task_run_ui.
+    names = [
+        f"{project.id}-cli-{task_id}",
+        f"{project.id}-ui-{task_id}",
+    ]
+
+    for name in names:
+        try:
+            _log_debug(f"stop_containers: podman rm -f {name} (start)")
+            # "podman rm -f" force-removes the container even if it is
+            # currently running. If the container does not exist this will
+            # fail, but we treat that as a non-fatal condition and simply
+            # continue.
+            subprocess.run(
+                ["podman", "rm", "-f", name],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _log_debug(f"stop_containers: podman rm -f {name} (done)")
+        except FileNotFoundError:
+            # podman not installed; nothing we can do here.
+            _log_debug("stop_containers: podman not found; skipping all")
+            break
+
+
+def task_delete(project_id: str, task_id: str) -> None:
+    """Delete a task's workspace, metadata, and any associated containers.
+
+    This mirrors the behavior used by the TUI when deleting a task, but is
+    exposed here so both CLI and TUI share the same logic. Containers are
+    stopped best-effort via podman using the naming scheme
+    "<project.id>-<mode>-<task_id>".
+    """
+
+    _log_debug(f"task_delete: start project_id={project_id} task_id={task_id}")
+
+    project = load_project(project_id)
+    _log_debug("task_delete: loaded project")
+
+    # Workspace lives under the project's tasks_root using the numeric ID.
+    workspace = project.tasks_root / str(task_id)
+
+    # Metadata lives in the per-project tasks state dir.
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
+
+    # Stop any matching containers first to avoid name conflicts if a new
+    # task is later created with the same ID.
+    _log_debug("task_delete: calling _stop_task_containers")
+    _stop_task_containers(project, str(task_id))
+    _log_debug("task_delete: _stop_task_containers returned")
+
+    if workspace.is_dir():
+        _log_debug("task_delete: removing workspace directory")
+        shutil.rmtree(workspace)
+        _log_debug("task_delete: workspace directory removed")
+
+    if meta_path.is_file():
+        _log_debug("task_delete: removing metadata file")
+        meta_path.unlink()
+        _log_debug("task_delete: metadata file removed")
+
+    _log_debug("task_delete: finished")
 
 
 def task_run_cli(project_id: str, task_id: str) -> None:

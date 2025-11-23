@@ -21,6 +21,7 @@ from .lib import (
     task_run_ui,
     list_projects,
     get_tasks as _get_tasks,
+    task_delete,
 )
 import os
 from importlib import resources
@@ -160,6 +161,18 @@ def main() -> None:
     except Exception:
         pass
 
+    t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
+    _a = t_delete.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_delete.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
@@ -285,6 +298,8 @@ def main() -> None:
             task_run_cli(args.project_id, args.task_id)
         elif args.task_cmd == "run-ui":
             task_run_ui(args.project_id, args.task_id)
+        elif args.task_cmd == "delete":
+            task_delete(args.project_id, args.task_id)
         else:
             parser.error("Unknown task subcommand")
     else:
