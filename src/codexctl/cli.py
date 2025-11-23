@@ -13,6 +13,8 @@ from .lib import (
     user_projects_root as _user_projects_root,
     build_root as _build_root,
     get_ui_base_port as _get_ui_base_port,
+    init_project_ssh,
+    init_project_cache,
     task_new,
     task_list,
     task_run_cli,
@@ -55,7 +57,17 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="codexctl")
+    parser = argparse.ArgumentParser(
+        prog="codexctl",
+        description="codexctl – generate/build images and run per-project task containers",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Quick start (order of operations):\n"
+            "- Online (HTTPS): generate → build → cache-init (optional) → task new → task run-*\n"
+            "- Online (SSH):   generate → build → ssh-init → cache-init (recommended) → task new → task run-*\n"
+            "- Gatekept:       generate → build → ssh-init → cache-init (required) →  task new → task run-*\n"
+        ),
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # projects
@@ -79,6 +91,32 @@ def main() -> None:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
         pass
+
+    # ssh-init
+    p_ssh = sub.add_parser("ssh-init", help="Initialize shared SSH dir and generate a keypair for a project")
+    _a = p_ssh.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_ssh.add_argument("--key-type", choices=["ed25519", "rsa"], default="ed25519", help="Key algorithm (default: ed25519)")
+    p_ssh.add_argument("--key-name", default=None, help="Key file name (without .pub). Default: id_<type>_<project>")
+    p_ssh.add_argument("--force", action="store_true", help="Overwrite existing key and config")
+
+    # cache-init
+    p_cache = sub.add_parser(
+        "cache-init",
+        help=(
+            "Initialize or update the host-side git cache for a project. "
+            "For SSH upstreams this uses ONLY the project's ssh dir created by 'ssh-init' (not ~/.ssh)."
+        ),
+    )
+    _a = p_cache.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_cache.add_argument("--force", action="store_true", help="Recreate the mirror from scratch")
 
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
@@ -135,6 +173,16 @@ def main() -> None:
         generate_dockerfiles(args.project_id)
     elif args.cmd == "build":
         build_images(args.project_id)
+    elif args.cmd == "ssh-init":
+        init_project_ssh(
+            args.project_id,
+            key_type=getattr(args, "key_type", "ed25519"),
+            key_name=getattr(args, "key_name", None),
+            force=getattr(args, "force", False),
+        )
+    elif args.cmd == "cache-init":
+        res = init_project_cache(args.project_id, force=getattr(args, "force", False))
+        print(f"Cache ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})")
     elif args.cmd == "config":
         # READ PATHS
         print("Configuration (read):")

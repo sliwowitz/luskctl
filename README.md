@@ -102,6 +102,87 @@ Examples for development
     - python -m codexctl.cli generate uc
     - python -m codexctl.cli build uc
 
+From zero to first run (new project)
+
+This is the end‑to‑end sequence to start a new project from a user‑provided directory that contains a project.yml and, optionally, a Docker include snippet.
+
+Prerequisites
+- Podman installed and working.
+- OpenSSH client tools (ssh, ssh-keygen) if you plan to use private Git over SSH.
+
+1) Create your per‑user projects root (once)
+- mkdir -p ~/.config/codexctl/projects
+
+2) Create your project directory and project.yml
+- Example layout:
+  - ~/.config/codexctl/projects/myproj/project.yml
+  - Optional snippet: ~/.config/codexctl/projects/myproj/user.dockerinclude
+
+Minimal project.yml example
+```yaml
+project:
+  id: myproj
+  security_class: online
+git:
+  upstream_url: git@github.com:yourorg/yourrepo.git   # or https://... for public
+  default_branch: main
+# Optional SSH hints for containers (recommended):
+ssh:
+  key_name: id_ed25519_myproj  # matches the key created by ssh-init
+# Optional: reference your Docker include snippet used at image build time
+docker:
+  user_snippet_file: user.dockerinclude
+```
+
+Optional Docker include snippet (user.dockerinclude)
+- This text is pasted near the end of your base image (L1) Dockerfile.
+- Example lines you might add:
+```
+RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists/*
+```
+
+3) Generate Dockerfiles
+- codexctl generate myproj
+
+4) Build images
+- codexctl build myproj
+
+5) Initialize the shared SSH directory and generate a keypair (only if using private Git over SSH)
+- codexctl ssh-init myproj
+  - By default creates an ed25519 keypair named id_ed25519_myproj and a default SSH config with:
+    - Global defaults:
+      - IdentitiesOnly yes
+      - StrictHostKeyChecking accept-new (avoids interactive prompts in agents)
+      - IdentityFile <generated_private_key> (applies to all hosts by default)
+    - Host github.com section with User git (inherits IdentityFile)
+  - If your project.yml contains ssh.host_dir, that directory is used; otherwise the default path is <envs_base>/_ssh-config-myproj.
+  - Use the printed .pub key to add a deploy key or authorize it on your Git host.
+  - Advanced: You can customize the SSH config via a template. In project.yml set:
+    ```yaml
+    ssh:
+      config_template: ssh_config.template  # path relative to the project root or absolute
+    ```
+    The template supports tokens: {{IDENTITY_FILE}}, {{KEY_NAME}}, {{PROJECT_ID}}.
+    If not set, a built‑in template is used (see src/codexctl/resources/templates/ssh_config.template).
+
+6) Create a task (per‑run workspace)
+- codexctl task new myproj
+  - The command prints the new task ID. You can list tasks with: codexctl task list myproj
+
+7) Run the task
+- CLI agent mode (headless):
+  - codexctl task run-cli myproj <task_id>
+- UI (web) mode:
+  - codexctl task run-ui myproj <task_id>
+
+Tips
+- Show resolved paths and configuration:
+  - codexctl config
+- Where envs (SSH and codex config) live by default:
+  - /var/lib/codexctl/envs (root) or as configured in examples/codexctl-config.yml under envs.base_dir
+- Details on shared directories and SSH mounts:
+  - docs/SHARED_DIRS.md
+
 Notes
 
 - Podman is required at runtime for build/run commands.

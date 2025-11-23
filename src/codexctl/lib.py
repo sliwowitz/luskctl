@@ -241,6 +241,139 @@ def get_envs_base_dir() -> Path:
     return Path(str(base)).expanduser().resolve()
 
 
+# ---------- SSH shared dir initialization ----------
+
+def init_project_ssh(
+    project_id: str,
+    key_type: str = "ed25519",
+    key_name: Optional[str] = None,
+    force: bool = False,
+) -> dict:
+    """Initialize the shared SSH directory for a project and generate a keypair.
+
+    This prepares the host directory that containers mount read-only at /home/dev/.ssh
+    and creates an SSH keypair plus a minimal config file if missing.
+
+    Location resolution:
+      - If project.yml defines ssh.host_dir, use that path.
+      - Otherwise: <envs_base>/_ssh-config-<project_id>
+
+    Key name:
+      - Defaults to id_<type>_<project_id> (e.g. id_ed25519_proj)
+
+    Returns a dict with keys: dir, private_key, public_key, config_path, key_name.
+    """
+    if key_type not in ("ed25519", "rsa"):
+        raise SystemExit("Unsupported --key-type. Use 'ed25519' or 'rsa'.")
+
+    project = load_project(project_id)
+
+    target_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    target_dir = Path(target_dir).expanduser().resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    if not key_name:
+        key_name = f"id_{'ed25519' if key_type=='ed25519' else 'rsa'}_{project.id}"
+
+    priv_path = target_dir / key_name
+    pub_path = target_dir / f"{key_name}.pub"
+    cfg_path = target_dir / "config"
+
+    # Generate keypair if needed (or forced)
+    need_generate = force or (not priv_path.exists() or not pub_path.exists())
+    if need_generate:
+        # Remove existing when forced to avoid ssh-keygen prompt
+        if force:
+            try:
+                if priv_path.exists():
+                    priv_path.unlink()
+                if pub_path.exists():
+                    pub_path.unlink()
+            except Exception:
+                pass
+
+        cmd = ["ssh-keygen", "-t", key_type, "-f", str(priv_path), "-N", "", "-C", f"codexctl {project.id} {getpass.getuser()}@{socket.gethostname()}"]
+        try:
+            subprocess.run(cmd, check=True)
+        except FileNotFoundError:
+            raise SystemExit("ssh-keygen not found. Please install OpenSSH client tools.")
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"ssh-keygen failed: {e}")
+
+        # Best-effort permissions
+        try:
+            os.chmod(priv_path, 0o600)
+            os.chmod(pub_path, 0o644)
+        except Exception:
+            pass
+
+    # Ensure config exists and references the key. Render from user or packaged template.
+    if (force and cfg_path.exists()) or (not cfg_path.exists()):
+        # If force, overwrite; otherwise create if missing
+        # Prefer project-provided template; else use packaged default.
+        user_template_path: Optional[Path] = None
+        if getattr(project, "ssh_config_template", None):
+            tp: Path = project.ssh_config_template  # type: ignore[assignment]
+            if tp.is_file():
+                user_template_path = tp
+        # Packaged template (importlib.resources Traversable)
+        packaged_template = None
+        try:
+            packaged_template = resources.files("codexctl") / "resources" / "templates" / "ssh_config.template"
+        except Exception:
+            packaged_template = None
+
+        config_text: Optional[str] = None
+        variables = {
+            "IDENTITY_FILE": str(priv_path),
+            "KEY_NAME": key_name,
+            "PROJECT_ID": project.id,
+        }
+        # Prefer user template if provided
+        if user_template_path is not None:
+            try:
+                config_text = _render_template(user_template_path, variables)
+            except Exception:
+                config_text = None
+        # Otherwise use packaged template (works from wheels/zip)
+        if not config_text and packaged_template is not None:
+            try:
+                raw = packaged_template.read_text()
+                for k, v in variables.items():
+                    raw = raw.replace(f"{{{{{k}}}}}", str(v))
+                config_text = raw
+            except Exception:
+                config_text = None
+
+        if not config_text:
+            raise SystemExit(
+                "Failed to render SSH config: no valid template. "
+                "Ensure a project ssh.config_template is set or the packaged template exists."
+            )
+
+        try:
+            cfg_path.write_text(config_text)
+        except Exception as e:
+            raise SystemExit(f"Failed to write SSH config at {cfg_path}: {e}")
+
+    print("SSH directory initialized:")
+    print(f"  dir:         {target_dir}")
+    print(f"  private key: {priv_path}")
+    print(f"  public key:  {pub_path}")
+    print(f"  config:      {cfg_path}")
+    if not project.ssh_key_name:
+        print("Note: project.yml does not define ssh.key_name; containers will rely on .ssh/config IdentityFile entries.")
+        print(f"      If you prefer explicit key selection, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
+
+    return {
+        "dir": str(target_dir),
+        "private_key": str(priv_path),
+        "public_key": str(pub_path),
+        "config_path": str(cfg_path),
+        "key_name": key_name,
+    }
+
+
 # ---------- Project model ----------
 
 @dataclass
@@ -258,6 +391,14 @@ class Project:
     ssh_key_name: Optional[str]
     ssh_host_dir: Optional[Path]
     codex_config_dir: Optional[Path]
+    # Optional path to an SSH config template (user-provided). If set, ssh-init
+    # will render this template to the shared .ssh/config. Tokens supported:
+    #   {{IDENTITY_FILE}}  → absolute path of the generated private key
+    #   {{KEY_NAME}}       → filename of the generated key (no .pub)
+    #   {{PROJECT_ID}}     → project id
+    ssh_config_template: Optional[Path] = None
+    # Whether to mount SSH credentials inside online containers. Default: True.
+    ssh_mount_in_online: bool = True
 
 
 def _find_project_root(project_id: str) -> Path:
@@ -334,6 +475,17 @@ def load_project(project_id: str) -> Project:
 
     codex_config_dir = Path(codex_cfg.get("config_dir")).expanduser().resolve() if codex_cfg.get("config_dir") else None
 
+    # Optional: ssh.config_template (path to a template file). If relative, it's relative to the project root.
+    ssh_cfg_template_path: Optional[Path] = None
+    if ssh_cfg.get("config_template"):
+        cfg_t = Path(str(ssh_cfg.get("config_template")))
+        if not cfg_t.is_absolute():
+            cfg_t = (root / cfg_t)
+        ssh_cfg_template_path = cfg_t.expanduser().resolve()
+
+    # Optional flag: ssh.mount_in_online (default true)
+    ssh_mount_in_online = bool(ssh_cfg.get("mount_in_online", True))
+
     p = Project(
         id=pid,
         security_class=sec,
@@ -346,6 +498,8 @@ def load_project(project_id: str) -> Project:
         ssh_key_name=ssh_key_name,
         ssh_host_dir=ssh_host_dir,
         codex_config_dir=codex_config_dir,
+        ssh_config_template=ssh_cfg_template_path,
+        ssh_mount_in_online=ssh_mount_in_online,
     )
     return p
 
@@ -385,18 +539,22 @@ def generate_dockerfiles(project_id: str) -> None:
     except Exception:
         docker_cfg = {}
 
-    # Resolve optional user snippet
+    # Resolve optional user snippet: prefer inline over file
     user_snippet = ""
-    us_file = docker_cfg.get("user_snippet_file")
-    if isinstance(us_file, str) and us_file:
-        us_path = Path(us_file)
-        if not us_path.is_absolute():
-            us_path = project.root / us_file
-        try:
-            if us_path.is_file():
-                user_snippet = us_path.read_text()
-        except Exception:
-            user_snippet = ""
+    us_inline = docker_cfg.get("user_snippet_inline")
+    if isinstance(us_inline, str) and us_inline.strip():
+        user_snippet = us_inline
+    else:
+        us_file = docker_cfg.get("user_snippet_file")
+        if isinstance(us_file, str) and us_file:
+            us_path = Path(us_file)
+            if not us_path.is_absolute():
+                us_path = project.root / us_file
+            try:
+                if us_path.is_file():
+                    user_snippet = us_path.read_text()
+            except Exception:
+                user_snippet = ""
 
     variables = {
         "PROJECT_ID": project.id,
@@ -606,7 +764,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Shared env mounts
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
-    ssh_host_dir = envs_base / f"_ssh-config-{project.id}"
+    # Prefer project-configured SSH host dir if set
+    ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
     # Ensure codex dir exists so the mount works
     codex_host_dir.mkdir(parents=True, exist_ok=True)
 
@@ -615,12 +774,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         "TASK_ID": task_id,
         # Tell init script where to clone/sync the repo
         "REPO_ROOT": "/workspace",
-    }
-    if project.upstream_url:
-        env["CODE_REPO"] = project.upstream_url
-        env["GIT_BRANCH"] = project.default_branch or "main"
         # Default reset mode is none; allow overriding via container env if needed
-        env["GIT_RESET_MODE"] = os.environ.get("CODEXCTL_GIT_RESET_MODE", "none")
+        "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
+    }
 
     volumes: list[str] = []
     # Per-task workspace mount
@@ -629,11 +785,140 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Shared codex credentials/config
     volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
 
-    # Optional SSH config (read-only) if present
-    if ssh_host_dir.is_dir():
-        volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z,ro")
+    # Security mode specific wiring
+    cache_repo = project.cache_path
+    cache_parent = cache_repo.parent
+    # Mount point inside container for the cache
+    cache_mount_inside = "/git-cache/cache.git"
+
+    if project.security_class == "gatekept":
+        # In gatekept mode, hide upstream and SSH. Use the host cache as the only remote.
+        if not cache_repo.exists():
+            raise SystemExit(
+                f"Git cache missing for project '{project.id}'.\n"
+                f"Expected at: {cache_repo}\n"
+                f"Run 'codexctl cache-init {project.id}' to create/update the local mirror."
+            )
+
+        # Ensure parent exists for mount consistency (cache should already exist)
+        cache_parent.mkdir(parents=True, exist_ok=True)
+        # Mount cache read-write so tasks can push branches for review
+        volumes.append(f"{cache_repo}:{cache_mount_inside}:Z")
+        env["CODE_REPO"] = f"file://{cache_mount_inside}"
+        env["GIT_BRANCH"] = project.default_branch or "main"
+        # No SSH mount in gatekept
+    else:
+        # Online mode: clone from cache if present, then set upstream to real URL
+        if cache_repo.exists():
+            cache_parent.mkdir(parents=True, exist_ok=True)
+            # Mount cache read-only
+            volumes.append(f"{cache_repo}:{cache_mount_inside}:Z,ro")
+            env["CLONE_FROM"] = f"file://{cache_mount_inside}"
+        if project.upstream_url:
+            env["CODE_REPO"] = project.upstream_url
+            env["GIT_BRANCH"] = project.default_branch or "main"
+        # Optional SSH config mount in online mode (configurable)
+        if project.ssh_mount_in_online and ssh_host_dir.is_dir():
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z,ro")
 
     return env, volumes
+
+
+# ---------- Git cache initialization (host-side) ----------
+
+def _git_env_with_ssh(project: Project) -> dict:
+    """Return an env that forces git to use the project's SSH config only.
+
+    - Sets GIT_SSH_COMMAND to use the per-project ssh config via `-F <config>`.
+    - Adds `-o IdentitiesOnly=yes` to prevent fallback to keys in ~/.ssh or agent.
+    - If a specific private key exists in the project ssh dir (derived from
+      project.ssh_key_name), also adds `-o IdentityFile=<that key>` explicitly.
+
+    If the ssh host dir or config is missing, we return the current env.
+    """
+    env = os.environ.copy()
+    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    cfg = Path(ssh_dir) / "config"
+    if cfg.is_file():
+        ssh_cmd = ["ssh", "-F", str(cfg), "-o", "IdentitiesOnly=yes"]
+        # Prefer explicit IdentityFile if we can resolve it
+        if project.ssh_key_name:
+            key_path = Path(ssh_dir) / project.ssh_key_name
+            if key_path.is_file():
+                ssh_cmd += ["-o", f"IdentityFile={key_path}"]
+        env["GIT_SSH_COMMAND"] = " ".join(map(str, ssh_cmd))
+        # Also clear SSH_AUTH_SOCK so agent identities are not considered
+        env["SSH_AUTH_SOCK"] = ""
+    return env
+
+
+def init_project_cache(project_id: str, force: bool = False) -> dict:
+    """Create or update a host-side git mirror cache for a project.
+
+    - Uses the project's SSH configuration (from ssh-init) via GIT_SSH_COMMAND.
+    - If cache doesn't exist or --force is given, performs a fresh `git clone --mirror`.
+    - Otherwise, runs `git remote update --prune` to sync.
+
+    Returns a dict with keys: path, upstream_url, created (bool).
+    """
+    project = load_project(project_id)
+    if not project.upstream_url:
+        raise SystemExit("Project has no git.upstream_url configured")
+
+    cache_dir = project.cache_path
+    cache_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    # Determine if upstream requires SSH and ensure we only use the project's SSH dir
+    upstream = project.upstream_url
+    is_ssh_upstream = False
+    try:
+        is_ssh_upstream = upstream.startswith("git@") or upstream.startswith("ssh://")
+    except Exception:
+        is_ssh_upstream = False
+
+    # Resolve the project's ssh dir and config path (created by ssh-init)
+    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    ssh_cfg_path = Path(ssh_dir) / "config"
+
+    if is_ssh_upstream:
+        # For SSH upstreams, require the project-specific config; do NOT fall back to ~/.ssh
+        if not ssh_cfg_path.is_file():
+            raise SystemExit(
+                "SSH upstream detected but project SSH config is missing.\n"
+                f"Expected SSH config at: {ssh_cfg_path}\n"
+                f"Run 'codexctl ssh-init {project.id}' first to generate keys and config."
+            )
+
+    # Build git environment that forces use of the project's SSH config (if present)
+    env = _git_env_with_ssh(project)
+
+    created = False
+    if force and cache_dir.exists():
+        # Remove to ensure clean mirror
+        try:
+            if cache_dir.is_dir():
+                shutil.rmtree(cache_dir)
+        except Exception:
+            pass
+
+    if not cache_dir.exists():
+        # Create a mirror clone
+        cmd = ["git", "clone", "--mirror", project.upstream_url, str(cache_dir)]
+        try:
+            subprocess.run(cmd, check=True, env=env)
+        except FileNotFoundError:
+            raise SystemExit("git not found on host; please install git")
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"git clone --mirror failed: {e}")
+        created = True
+    else:
+        # Update existing mirror
+        try:
+            subprocess.run(["git", "-C", str(cache_dir), "remote", "update", "--prune"], check=True, env=env)
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"git remote update failed: {e}")
+
+    return {"path": str(cache_dir), "upstream_url": project.upstream_url, "created": created}
 
 
 def _gpu_run_args(project: Project) -> list[str]:

@@ -1,0 +1,41 @@
+project:
+  id: "alpaka3"
+  name: "Alpaka3"
+  # Gatekept: tasks can only push to a host-side staging repo, not upstream
+  security_class: "gatekept"
+
+git:
+  # Upstream is intentionally SSH to exercise SSH init when used in online mode.
+  # In gatekept mode we do NOT expose this inside the container.
+  upstream_url: "git@github.com:sliwowitz/alpaka3.git"
+  default_branch: "main"
+
+docker:
+  # GPU-capable base image (NVIDIA HPC SDK, CUDA 13, Ubuntu 24.04)
+  base_image: "nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04"
+  # This is executed when building the L1 image
+  user_snippet_inline: |
+    set -eux
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg lsb-release software-properties-common \
+      build-essential git pkg-config ninja-build openssh-client \
+      gcc-14 g++-14
+    rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 140
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 140
+
+# No SSH exposure for gatekept projects inside the container.
+# You may still generate keys on the host for mirroring/promotions.
+ssh:
+  key_name: "id_ed25519_alpaka3"
+
+codex:
+  ui:
+    enabled: true
+
+# Runtime settings for this project
+run:
+  # Enable GPUs for this project
+  gpus: all

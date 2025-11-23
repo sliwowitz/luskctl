@@ -30,8 +30,28 @@ Expected contents of the optional SSH config directory
 - Files:
   - Private/public key pair for the project (e.g. id_ed25519_<project>, id_ed25519_<project>.pub)
   - config file with host definitions and IdentityFile entries
-- Permissions: The directory is mounted read‑only to /home/dev/.ssh in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com.
+- Permissions: The directory is mounted read‑only to /home/dev/.ssh in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
 - Key selection: The init script relies on SSH_KEY_NAME if provided in the image/env, but your config file can also refer to the correct IdentityFile.
+
+How to create this directory automatically
+- Use the helper command:
+  - codexctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--force]
+- What it does:
+  - Resolves the target directory for <project_id> as:
+    - If <project>/project.yml sets ssh.host_dir → use it; otherwise
+    - <envs_base>/_ssh-config-<project_id>
+  - Generates an SSH keypair (default: ed25519) and writes a default SSH config:
+    - A global section applied to all hosts:
+      - Host *
+      -   IdentitiesOnly yes
+      -   StrictHostKeyChecking accept-new
+      -   IdentityFile <generated_private_key>
+      - This prevents interactive host‑key prompts (agents are non‑interactive) and ensures the same key is used by default for all hosts.
+    - A host section for github.com with User git (inherits IdentityFile from Host *).
+  - The SSH config is rendered from a template. You can provide your own template via project.yml → ssh.config_template.
+    - Supported tokens in the template: {{IDENTITY_FILE}}, {{KEY_NAME}}, {{PROJECT_ID}}
+    - If not provided, a built-in template is used (see src/codexctl/resources/templates/ssh_config.template).
+  - Prints the resulting paths. Use the .pub key to register a deploy key or add it to your Git host.
 
 SELinux and mount flags
 - codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z,ro to enforce read‑only access.
@@ -57,3 +77,6 @@ Notes
 - The SSH directory is optional. Public HTTPS repos do not require it.
 - The .codex directory is mounted read‑write and should contain any credentials/config required by Codex tooling.
 - Both CLI and UI containers mount the same paths and start with the working directory set to /workspace.
+
+See also
+- Run `codexctl config` to see the resolved envs base dir and other important paths.

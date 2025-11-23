@@ -19,7 +19,6 @@ codex:
   host_config_dir: "/virt/podman/envs/_codex-config"
   ui:
     enabled: true
-    port: 7860
 
 # Runtime settings for this project
 run:

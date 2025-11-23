@@ -7,30 +7,34 @@ set -euo pipefail
 #   CODE_REPO       - git URL (https:// or git@)
 #   GIT_BRANCH      - optional, e.g. "main" or "master"
 #   GIT_RESET_MODE  - "none" (default), "hard", or "soft"
+#   CLONE_FROM      - optional alternate source to seed the repo (e.g. file:///git-cache/cache.git)
 
 : "${GIT_RESET_MODE:=none}"
 
 SSH_DIR=/home/dev/.ssh
 
 if [[ -n "${SSH_KEY_NAME:-}" ]]; then
-  echo ">> SSH: verifying ${SSH_KEY_NAME} in ${SSH_DIR}"
-  test -f "${SSH_DIR}/${SSH_KEY_NAME}"       || { echo "missing ${SSH_KEY_NAME}"; exit 1; }
-  test -f "${SSH_DIR}/${SSH_KEY_NAME}.pub"   || { echo "missing ${SSH_KEY_NAME}.pub"; exit 1; }
-  test -f "${SSH_DIR}/config"                || { echo 'missing .ssh/config'; exit 1; }
+  echo ">> SSH: checking ${SSH_KEY_NAME} in ${SSH_DIR}"
+  if [[ -f "${SSH_DIR}/${SSH_KEY_NAME}" && -f "${SSH_DIR}/${SSH_KEY_NAME}.pub" && -f "${SSH_DIR}/config" ]]; then
+    install -d -m 700 /root/.ssh
+    cp -f "${SSH_DIR}/${SSH_KEY_NAME}" /root/.ssh/
+    chmod 600 "/root/.ssh/${SSH_KEY_NAME}"
+    cp -f "${SSH_DIR}/${SSH_KEY_NAME}.pub" /root/.ssh/
+    chmod 644 "/root/.ssh/${SSH_KEY_NAME}.pub"
+    cp -f "${SSH_DIR}/config" /root/.ssh/config
+    chmod 644 /root/.ssh/config
 
-  install -d -m 700 /root/.ssh
-  cp -f "${SSH_DIR}/${SSH_KEY_NAME}" /root/.ssh/
-  chmod 600 "/root/.ssh/${SSH_KEY_NAME}"
-  cp -f "${SSH_DIR}/${SSH_KEY_NAME}.pub" /root/.ssh/
-  chmod 644 "/root/.ssh/${SSH_KEY_NAME}.pub"
-  cp -f "${SSH_DIR}/config" /root/.ssh/config
-  chmod 644 /root/.ssh/config
-
-  if command -v ssh >/dev/null 2>&1; then
-    echo '>> warm github known_hosts (best-effort)'
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR git@github.com || true
+    if command -v ssh >/dev/null 2>&1; then
+      # Only warm GitHub known_hosts if the project's code repo uses github.com
+      if [[ -n "${CODE_REPO:-}" && "${CODE_REPO}" == *"github.com"* ]]; then
+        echo '>> warm github known_hosts (best-effort)'
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR git@github.com || true
+      fi
+    else
+      echo 'SSH not installed'
+    fi
   else
-    echo 'SSH not installed'
+    echo ">> SSH not fully configured (missing key or config); continuing without SSH"
   fi
 fi
 
@@ -43,7 +47,16 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
   fi
 
   if [[ ! -d "${REPO_ROOT}/.git" ]]; then
-    git clone --recurse-submodules "${CODE_REPO}" "${REPO_ROOT}"
+    SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
+    echo ">> initial clone from ${SRC_REPO}"
+    git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
+    # If we cloned from a cache, repoint origin to the canonical repo for future updates
+    if [[ -n "${CLONE_FROM:-}" && "${CLONE_FROM}" != "${CODE_REPO}" ]]; then
+      git -C "${REPO_ROOT}" remote set-url origin "${CODE_REPO}" || true
+      git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
+      # Optionally fetch latest from upstream right away
+      git -C "${REPO_ROOT}" fetch --all --prune || true
+    fi
   else
     git -C "${REPO_ROOT}" fetch --all --prune
     if [[ -n "${GIT_BRANCH:-}" && "${GIT_RESET_MODE}" != "none" ]]; then
