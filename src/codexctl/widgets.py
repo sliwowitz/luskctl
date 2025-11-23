@@ -59,18 +59,36 @@ class ProjectList(ListView):
 
 class ProjectActions(Static):
     """Single-row action bar for project + task actions."""
-
     def compose(self) -> ComposeResult:
-        # Short labels so they comfortably fit in 80 columns.
+        # Short labels so they comfortably fit in 80 columns.  We arrange
+        # the buttons in two horizontal rows so they don't form a single
+        # over-wide line in the right-hand pane on narrower terminals.
+        #
+        # Textual 0.6.x doesn't support Horizontal(wrap=...), so we use
+        # two Horizontal containers stacked vertically instead of relying
+        # on automatic wrapping.
+
+        # First row of actions (project-level).
+        #
+        # Textual buttons support markup in their labels, so we use markup
+        # to highlight the shortcut character instead of literal square
+        # brackets (which are reserved for markup tags).
         with Horizontal():
-            yield Button("Gen", id="btn-generate", compact=True)          # generate Dockerfiles
-            yield Button("Build", id="btn-build", compact=True)           # build images
-            yield Button("SSH", id="btn-ssh-init", compact=True)          # init SSH dir
-            yield Button("Cache", id="btn-cache-init", compact=True)      # init git cache
-            yield Button("New", id="btn-new-task", compact=True)          # new task
-            yield Button("CLI", id="btn-task-run-cli", compact=True)      # run CLI for current task
-            yield Button("UI", id="btn-task-run-ui", compact=True)        # run UI for current task
-            yield Button("Del", id="btn-task-delete", compact=True)       # delete current task
+            # Color the shortcut letter yellow; the rest uses the button's
+            # normal style (which is already bold by default in Textual's
+            # theme). Avoid additional [bold] tags so only the color
+            # distinguishes the shortcut.
+            yield Button("[yellow]g[/yellow]en", id="btn-generate", compact=True)          # generate Dockerfiles (g)
+            yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)           # build images (b)
+            yield Button("[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True)          # init SSH dir (s)
+            yield Button("[yellow]c[/yellow]ache", id="btn-cache-init", compact=True)      # init git cache (c)
+
+        # Second row of actions (task-level).
+        with Horizontal():
+            yield Button("[yellow]t[/yellow] new", id="btn-new-task", compact=True)        # new task (t)
+            yield Button("[yellow]r[/yellow] cli", id="btn-task-run-cli", compact=True)    # run CLI for current task (r)
+            yield Button("[yellow]u[/yellow] ui", id="btn-task-run-ui", compact=True)      # run UI for current task (u)
+            yield Button("[yellow]d[/yellow]el", id="btn-task-delete", compact=True)       # delete current task (d)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
         btn_id = event.button.id
@@ -197,9 +215,11 @@ class ProjectState(Static):
         else:
             tasks_line = f"Tasks:     {task_count}"
 
+        upstream = project.upstream_url or "-"
+
         lines = [
             f"Project:   {project.id} [{project.security_class}]",
-            f"Upstream:  {project.upstream_url or '-'}",
+            upstream,
             "",
             f"Dockerfiles: {docker_s}",
             f"Images:      {images_s}",

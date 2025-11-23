@@ -56,8 +56,15 @@ if _HAS_TEXTUAL:
         # Layout rules to ensure both left and right panes, and especially
         # the task list and task details on the right, are always visible.
         CSS = """
-        #left-pane, #right-pane {
+        #left-pane {
+            /* Left pane: roughly one third of total width */
             width: 1fr;
+            height: 1fr;
+        }
+
+        #right-pane {
+            /* Right pane: roughly two thirds of total width */
+            width: 2fr;
             height: 1fr;
         }
 
@@ -69,9 +76,9 @@ if _HAS_TEXTUAL:
             max-height: 3;
         }
 
-        /* Make action buttons compact: single-line, minimal padding. */
+        /* Make action buttons very compact: single-line, minimal padding. */
         ProjectActions Button {
-            padding: 0 1;
+            padding: 0 0;
         }
 
         #task-list {
