@@ -63,12 +63,14 @@ class ProjectActions(Static):
     def compose(self) -> ComposeResult:
         # Short labels so they comfortably fit in 80 columns.
         with Horizontal():
-            yield Button("Gen", id="btn-generate")         # generate dockerfiles
-            yield Button("Build", id="btn-build")          # build images
-            yield Button("New", id="btn-new-task")         # new task
-            yield Button("CLI", id="btn-task-run-cli")     # run CLI for current task
-            yield Button("UI", id="btn-task-run-ui")       # run UI for current task
-            yield Button("Del", id="btn-task-delete")      # delete current task
+            yield Button("Gen", id="btn-generate")          # generate Dockerfiles
+            yield Button("Build", id="btn-build")           # build images
+            yield Button("SSH", id="btn-ssh-init")          # init SSH dir
+            yield Button("Cache", id="btn-cache-init")      # init git cache
+            yield Button("New", id="btn-new-task")          # new task
+            yield Button("CLI", id="btn-task-run-cli")      # run CLI for current task
+            yield Button("UI", id="btn-task-run-ui")        # run UI for current task
+            yield Button("Del", id="btn-task-delete")       # delete current task
 
     def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
         btn_id = event.button.id
@@ -80,6 +82,8 @@ class ProjectActions(Static):
         mapping = {
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
+            "btn-ssh-init": "action_init_ssh",
+            "btn-cache-init": "action_init_cache",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
             "btn-task-run-ui": "action_run_ui",
@@ -166,5 +170,42 @@ class TaskDetails(Static):
         ]
         if task.ui_port:
             lines.append(f"UI URL:    http://127.0.0.1:{task.ui_port}/")
+
+        self.update("\n".join(lines))
+
+
+class ProjectState(Static):
+    """Small panel summarizing infrastructure state for the active project."""
+
+    def set_state(
+        self,
+        project: Optional[CodexProject],
+        state: Optional[dict],
+        task_count: Optional[int] = None,
+    ) -> None:
+        if project is None or state is None:
+            self.update("No project selected.")
+            return
+
+        docker_s = "yes" if state.get("dockerfiles") else "no"
+        images_s = "yes" if state.get("images") else "no"
+        ssh_s = "yes" if state.get("ssh") else "no"
+        cache_s = "yes" if state.get("cache") else "no"
+
+        if task_count is None:
+            tasks_line = "Tasks:     unknown"
+        else:
+            tasks_line = f"Tasks:     {task_count}"
+
+        lines = [
+            f"Project:   {project.id} [{project.security_class}]",
+            f"Upstream:  {project.upstream_url or '-'}",
+            "",
+            f"Dockerfiles: {docker_s}",
+            f"Images:      {images_s}",
+            f"SSH dir:     {ssh_s}",
+            f"Git cache:   {cache_s}",
+            tasks_line,
+        ]
 
         self.update("\n".join(lines))

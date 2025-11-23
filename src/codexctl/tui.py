@@ -35,8 +35,18 @@ if _HAS_TEXTUAL:
         build_images,
         load_project,
         state_root,
+        init_project_ssh,
+        init_project_cache,
+        get_project_state,
     )
-    from .widgets import ProjectList, ProjectActions, TaskList, TaskDetails, TaskMeta
+    from .widgets import (
+        ProjectList,
+        ProjectActions,
+        TaskList,
+        TaskDetails,
+        TaskMeta,
+        ProjectState,
+    )
 
     class CodexTUI(App):
         """Minimal TUI frontend for codexctl.lib."""
@@ -47,6 +57,8 @@ if _HAS_TEXTUAL:
             ("q", "quit", "Quit"),
             ("g", "generate_dockerfiles", "Generate Dockerfiles"),
             ("b", "build_images", "Build images"),
+            ("s", "init_ssh", "Init SSH"),
+            ("c", "init_cache", "Init cache"),
             ("t", "new_task", "New task"),
             ("r", "run_cli", "Run CLI"),
             ("u", "run_ui", "Run UI"),
@@ -63,9 +75,11 @@ if _HAS_TEXTUAL:
         def compose(self) -> ComposeResult:
             yield Header()
             with Horizontal():
-                # Left: project list
-                yield ProjectList(id="project-list")
-                # Right: actions + tasks + details
+                # Left pane: project list (top) + selected project info (bottom)
+                with Vertical():
+                    yield ProjectList(id="project-list")
+                    yield ProjectState(id="project-state")
+                # Right pane: action bar + tasks + task details
                 with Vertical():
                     yield ProjectActions(id="project-actions")
                     yield TaskList(id="task-list")
@@ -93,6 +107,9 @@ if _HAS_TEXTUAL:
                 task_list.set_tasks("", [])
                 task_details = self.query_one("#task-details", TaskDetails)
                 task_details.set_task(None)
+                # No projects means no meaningful project state.
+                state_widget = self.query_one("#project-state", ProjectState)
+                state_widget.set_state(None, None, None)
 
         async def refresh_tasks(self) -> None:
             if not self.current_project_id:
@@ -108,7 +125,39 @@ if _HAS_TEXTUAL:
                 self.current_task = None
 
             task_details = self.query_one("#task-details", TaskDetails)
-            task_details.set_task(self.current_task)
+            if self.current_task is None:
+                # Be explicit so users understand why the right side is empty.
+                task_details.update(
+                    "No tasks for this project yet.\n"
+                    "Press 't' to create a new task."
+                )
+            else:
+                task_details.set_task(self.current_task)
+
+            # Update project state panel (Dockerfiles/images/SSH/cache + task count)
+            self._refresh_project_state(task_count=len(task_list.tasks))
+
+        def _refresh_project_state(self, task_count: Optional[int] = None) -> None:
+            """Update the small project state summary panel.
+
+            This is called whenever the current project changes or when actions
+            that affect infrastructure state (generate/build/ssh/cache) finish.
+            """
+            state_widget = self.query_one("#project-state", ProjectState)
+
+            if not self.current_project_id:
+                state_widget.set_state(None, None, None)
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+                state = get_project_state(self.current_project_id)
+            except SystemExit as e:
+                # Surface configuration/state problems directly in the TUI.
+                state_widget.update(f"Project state error: {e}")
+                return
+
+            state_widget.set_state(project, state, task_count)
 
         # ---------- Selection handlers (from widgets) ----------
 
@@ -117,6 +166,10 @@ if _HAS_TEXTUAL:
             """Called when user activates a project in the list."""
             self.current_project_id = message.project_id
             await self.refresh_tasks()
+            # After activating a project, move focus to the task list so the user
+            # can immediately navigate and run tasks.
+            task_list = self.query_one("#task-list", TaskList)
+            self.set_focus(task_list)
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
@@ -149,6 +202,7 @@ if _HAS_TEXTUAL:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to CodexTUI] ")
             self.notify(f"Generated Dockerfiles for {self.current_project_id}")
+            self._refresh_project_state()
 
         async def action_build_images(self) -> None:
             if not self.current_project_id:
@@ -161,6 +215,43 @@ if _HAS_TEXTUAL:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to CodexTUI] ")
             self.notify(f"Built images for {self.current_project_id}")
+            self._refresh_project_state()
+
+        async def action_init_ssh(self) -> None:
+            """Initialize the per-project SSH directory and keypair."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+
+            with self.suspend():
+                try:
+                    init_project_ssh(self.current_project_id)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to CodexTUI] ")
+
+            self.notify(f"Initialized SSH dir for {self.current_project_id}")
+            self._refresh_project_state()
+
+        async def action_init_cache(self) -> None:
+            """Initialize or update the git cache mirror for the project."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+
+            with self.suspend():
+                try:
+                    res = init_project_cache(self.current_project_id)
+                    print(
+                        f"Cache ready at {res['path']} "
+                        f"(upstream: {res['upstream_url']}; created: {res['created']})"
+                    )
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to CodexTUI] ")
+
+            self.notify(f"Git cache initialized for {self.current_project_id}")
+            self._refresh_project_state()
 
         async def action_new_task(self) -> None:
             if not self.current_project_id:

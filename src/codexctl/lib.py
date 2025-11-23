@@ -241,6 +241,72 @@ def get_envs_base_dir() -> Path:
     return Path(str(base)).expanduser().resolve()
 
 
+# ---------- Project state helpers ----------
+
+def get_project_state(project_id: str) -> dict:
+    """Return a summary of per-project infrastructure state.
+
+    The resulting dict contains boolean flags that can be used by UIs
+    (including the TUI) to give a quick overview of the project:
+
+    - ``dockerfiles`` – True if all three Dockerfiles (L1/L2/L3) exist
+      under the build root for this project.
+    - ``images`` – True if podman reports that images ``<id>:l1``,
+      ``<id>:l2`` and ``<id>:l3`` exist.
+    - ``ssh`` – True if the project SSH directory exists and contains
+      a ``config`` file.
+    - ``cache`` – True if the project's cache directory exists.
+    """
+
+    project = load_project(project_id)
+
+    # Dockerfiles: look in the same location generate_dockerfiles writes to.
+    stage_dir = build_root() / project.id
+    dockerfiles = [
+        stage_dir / "L1.Dockerfile",
+        stage_dir / "L2.Dockerfile",
+        stage_dir / "L3.Dockerfile",
+    ]
+    has_dockerfiles = all(p.is_file() for p in dockerfiles)
+
+    # Images: rely on podman image tags created by build_images().
+    has_images = False
+    try:
+        required_tags = [f"{project.id}:l1", f"{project.id}:l2", f"{project.id}:l3"]
+        ok = True
+        for tag in required_tags:
+            # ``podman image exists`` exits with 0 when the image is present.
+            result = subprocess.run(
+                ["podman", "image", "exists", tag],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode != 0:
+                ok = False
+                break
+        has_images = ok
+    except (FileNotFoundError, OSError):  # podman missing or not usable
+        has_images = False
+
+    # SSH: same resolution logic as init_project_ssh(). Consider SSH
+    # "ready" when the directory and its config file exist.
+    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    ssh_dir = Path(ssh_dir).expanduser().resolve()
+    has_ssh = ssh_dir.is_dir() and (ssh_dir / "config").is_file()
+
+    # Cache: a mirror bare repo initialized by init_project_cache(). We
+    # treat existence of the directory as "cache present".
+    cache_dir = project.cache_path
+    has_cache = cache_dir.is_dir()
+
+    return {
+        "dockerfiles": has_dockerfiles,
+        "images": has_images,
+        "ssh": has_ssh,
+        "cache": has_cache,
+    }
+
+
 # ---------- SSH shared dir initialization ----------
 
 def init_project_ssh(
