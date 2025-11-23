@@ -33,5 +33,9 @@ if [[ -n "${REPO_ROOT:-}" && -d "${REPO_ROOT}" ]]; then
   cd "${REPO_ROOT}"
 fi
 
-echo ">> starting UI on ${HOST}:${PORT}"
-exec node server.js
+# Always run the UI server from the CodexUI repo, even if the working
+# directory is the task workspace. This ensures that server.js is resolved
+# from CODEXUI_DIR while allowing the UI to treat the workspace as its
+# current directory (for project-specific files, etc.).
+echo ">> starting UI on ${HOST}:${PORT} (server: ${CODEXUI_DIR}/server.js)"
+exec node "${CODEXUI_DIR}/server.js"

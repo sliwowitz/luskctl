@@ -1045,6 +1045,8 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
+    container_name = f"{project.id}-ui-{task_id}"
+
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
     cmd += _gpu_run_args(project)
@@ -1055,7 +1057,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     for k, v in env.items():
         cmd += ["-e", f"{k}={v}"]
     cmd += [
-        "--name", f"{project.id}-ui-{task_id}",
+        "--name", container_name,
         "-w", "/workspace",
         f"{project.id}:l3",
     ]
@@ -1067,46 +1069,102 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Run failed: {e}")
 
-    # Stream initial logs while probing the UI port; detach on ready or timeout
-    addr = ("127.0.0.1", int(port))
-    def _ui_ready(_: str) -> bool:
-        try:
-            with socket.create_connection(addr, timeout=0.5):
-                return True
-        except OSError:
+    # Stream initial logs and detach once the Codex UI server reports that it
+    # is actually running. We intentionally rely on a *log marker* here
+    # instead of just probing the TCP port, because podman exposes the host port
+    # regardless of the state of the routed guest port.
+    #
+    # Codex UI currently prints stable lines when the server is ready, e.g.:
+    #   "Logging Codex UI activity to /var/log/codexui.log"
+    #   "Codex UI (SDK streaming) on http://0.0.0.0:7860 — repo /workspace"
+    #
+    # We treat the appearance of either of these as the readiness signal.
+    def _ui_ready(line: str) -> bool:
+        line = line.strip()
+        if not line:
             return False
 
+        # Primary marker: the main startup banner emitted by Codex UI when
+        # the HTTP server is ready to accept connections.
+        if "Codex UI (" in line:
+            return True
+
+        # Secondary marker: log redirection message that currently appears at
+        # roughly the same time as the banner above.
+        if "Logging Codex UI activity" in line:
+            return True
+
+        return False
+
+    # Follow logs until either the Codex UI readiness marker is seen or the
+    # container exits. We deliberately do *not* time out here: as long as the
+    # init script keeps making progress, the user sees the live logs and can
+    # decide to Ctrl+C if it hangs.
     ready = _stream_initial_logs(
-        container_name=f"{project.id}-ui-{task_id}",
-        timeout_sec=30.0,
+        container_name=container_name,
+        timeout_sec=None,
         ready_check=_ui_ready,
     )
 
-    if ready:
-        print(f"UI is up: http://127.0.0.1:{port} (container running in background)")
-    else:
+    # After log streaming stops, check whether the container is actually
+    # still running. This prevents false "UI is up" messages in cases where
+    # the UI process failed to start (e.g. Node error) and the container
+    # exited before emitting the readiness marker.
+    running = _is_container_running(container_name)
+
+    if ready and running:
+        print("\n\n>> codexctl: ")
+        print(f"UI container is up, routed to: http://127.0.0.1:{port}")
+    elif not running:
         print(
-            f"UI container started but not reachable on http://127.0.0.1:{port} yet. "
-            "It may still be initializing."
+            "UI container exited before the web UI became reachable. "
+            "Check the container logs for errors."
         )
+        print(
+            f"- Last known name: {container_name}\n"
+            f"- Check logs (if still available): podman logs {container_name}\n"
+            f"- You may need to re-run: codexctl task run-ui {project.id} {task_id}"
+        )
+        # Exit with non-zero status to signal that the UI did not start.
+        raise SystemExit(1)
 
     print(
-        f"- Name: {project.id}-ui-{task_id}\n"
-        f"- Check logs: podman logs -f {project.id}-ui-{task_id}\n"
-        f"- Stop:       podman stop {project.id}-ui-{task_id}"
+        f"- Name: {container_name}\n"
+        f"- Check logs: podman logs -f {container_name}\n"
+        f"- Stop:       podman stop {container_name}"
     )
 
 
-def _stream_initial_logs(container_name: str, timeout_sec: float, ready_check) -> bool:
-    """Follow initial container logs and detach when ready or timed out.
+def _is_container_running(container_name: str) -> bool:
+    """Return True if a podman container with the given name is running.
+
+    This uses `podman inspect` and treats missing containers or any
+    inspection error as "not running".
+    """
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.Running}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    return out.lower() == "true"
+
+
+def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], ready_check) -> bool:
+    """Follow container logs and detach when ready, timed out, or container exits.
 
     - container_name: podman container name.
-    - timeout_sec: maximum seconds to follow logs.
+    - timeout_sec: maximum seconds to follow logs. If ``None``, there is no
+      time-based cutoff and we only stop when either the ready condition is
+      met or the container exits.
     - ready_check: callable(line:str)->bool that returns True when ready. It will
-      be evaluated for each incoming log line; for UI case it may ignore line content
-      and probe external readiness.
+      be evaluated for each incoming log line; for UI case it may ignore line
+      content and probe external readiness.
 
-    Returns True if a ready condition was met, False on timeout or if logs ended.
+    Returns True if a ready condition was met, False on timeout or if logs
+    ended without ever becoming ready.
     """
     try:
         proc = subprocess.Popen(
@@ -1124,8 +1182,8 @@ def _stream_initial_logs(container_name: str, timeout_sec: float, ready_check) -
     try:
         assert proc.stdout is not None
         while True:
-            # Stop if timeout
-            if time.time() - start > timeout_sec:
+            # Stop if timeout (when enabled)
+            if timeout_sec is not None and (time.time() - start > timeout_sec):
                 break
             # If process already ended, stop
             if proc.poll() is not None:
