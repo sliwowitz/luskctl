@@ -338,8 +338,11 @@ def init_project_ssh(
     target_dir = Path(target_dir).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
+    # If caller did not supply an explicit key_name, derive it from project
+    # configuration using the shared helper so ssh-init, containers and git
+    # helpers all agree on the filename.
     if not key_name:
-        key_name = f"id_{'ed25519' if key_type=='ed25519' else 'rsa'}_{project.id}"
+        key_name = _effective_ssh_key_name(project, key_type=key_type)
 
     priv_path = target_dir / key_name
     pub_path = target_dir / f"{key_name}.pub"
@@ -476,6 +479,23 @@ class Project:
     ssh_config_template: Optional[Path] = None
     # Whether to mount SSH credentials inside online containers. Default: True.
     ssh_mount_in_online: bool = True
+
+
+def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
+    """Return the SSH key filename that should be used for this project.
+
+    Precedence:
+      1. Explicit `ssh.key_name` from project.yml (project.ssh_key_name)
+      2. Derived default: id_<type>_<project_id>, e.g. id_ed25519_myproj
+
+    This helper centralizes the default so ssh-init, container env (SSH_KEY_NAME)
+    and host-side git helpers all agree even when project.yml omits ssh.key_name.
+    """
+
+    if project.ssh_key_name:
+        return project.ssh_key_name
+    algo = "ed25519" if key_type == "ed25519" else "rsa"
+    return f"id_{algo}_{project.id}"
 
 
 def _find_project_root(project_id: str) -> Path:
@@ -633,6 +653,11 @@ def generate_dockerfiles(project_id: str) -> None:
             except Exception:
                 user_snippet = ""
 
+    # SSH_KEY_NAME inside containers should mirror the filename that ssh-init
+    # generated (or will generate) for this project. We assume the default
+    # key_type (ed25519) here, which matches init_project_ssh's default.
+    effective_ssh_key_name = _effective_ssh_key_name(project, key_type="ed25519")
+
     variables = {
         "PROJECT_ID": project.id,
         "SECURITY_CLASS": project.security_class,
@@ -640,7 +665,7 @@ def generate_dockerfiles(project_id: str) -> None:
         "DEFAULT_BRANCH": project.default_branch,
         # Template-specific extras
         "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
-        "SSH_KEY_NAME": project.ssh_key_name or "",
+        "SSH_KEY_NAME": effective_ssh_key_name,
         "CODE_REPO_DEFAULT": project.upstream_url or "",
         "USER_SNIPPET": user_snippet,
     }
@@ -941,11 +966,14 @@ def _git_env_with_ssh(project: Project) -> dict:
     cfg = Path(ssh_dir) / "config"
     if cfg.is_file():
         ssh_cmd = ["ssh", "-F", str(cfg), "-o", "IdentitiesOnly=yes"]
-        # Prefer explicit IdentityFile if we can resolve it
-        if project.ssh_key_name:
-            key_path = Path(ssh_dir) / project.ssh_key_name
-            if key_path.is_file():
-                ssh_cmd += ["-o", f"IdentityFile={key_path}"]
+        # Prefer explicit IdentityFile if we can resolve it. Use the same
+        # effective key name logic as ssh-init / containers so that even when
+        # ssh.key_name is omitted we still look for the derived default
+        # (id_<type>_<project_id>), while keeping this best-effort.
+        effective_name = _effective_ssh_key_name(project, key_type="ed25519")
+        key_path = Path(ssh_dir) / effective_name
+        if key_path.is_file():
+            ssh_cmd += ["-o", f"IdentityFile={key_path}"]
         env["GIT_SSH_COMMAND"] = " ".join(map(str, ssh_cmd))
         # Also clear SSH_AUTH_SOCK so agent identities are not considered
         env["SSH_AUTH_SOCK"] = ""
