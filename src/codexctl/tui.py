@@ -265,7 +265,19 @@ if _HAS_TEXTUAL:
         # ---------- Actions (keys + called from buttons) ----------
 
         async def action_quit(self) -> None:
-            await self.shutdown()
+            """Exit the TUI cleanly.
+
+            Older versions of this file attempted to call ``self.shutdown()``,
+            but ``App`` in modern Textual does not expose such a method. The
+            supported way to terminate the application programmatically is to
+            call ``self.exit()``. Using ``exit()`` here avoids an
+            ``AttributeError`` on quit while still delegating to Textual's
+            normal shutdown/cleanup logic.
+            """
+
+            # Textual's ``App`` provides ``exit()`` rather than ``shutdown()``;
+            # calling the latter would raise ``AttributeError``.
+            self.exit()
 
         async def action_generate_dockerfiles(self) -> None:
             if not self.current_project_id:
