@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Reuse SSH + project repo init (if script exists)
-if command -v init-ssh-and-repo.sh >/dev/null 2>&1; then
-  init-ssh-and-repo.sh || exit $?
+if command -v /usr/local/bin/init-ssh-and-repo.sh >/dev/null 2>&1; then
+  /usr/local/bin/init-ssh-and-repo.sh || exit $?
 fi
 
 : "${CODEXUI_DIR:=/opt/codexui}"
