@@ -7,11 +7,13 @@
 
 Host *
   IdentitiesOnly yes
-  StrictHostKeyChecking accept-new
+  StrictHostKeyChecking no
   IdentityFile {{IDENTITY_FILE}}
 
 # Common Git host (kept explicit; inherits Host * defaults)
 Host github.com
   HostName github.com
   User git
+  IdentitiesOnly yes
+  StrictHostKeyChecking no
   IdentityFile {{IDENTITY_FILE}}
