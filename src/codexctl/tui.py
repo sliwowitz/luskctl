@@ -53,34 +53,35 @@ if _HAS_TEXTUAL:
 
         CSS_PATH = None
 
-        # Layout rules to ensure the right-hand task list and task details
-        # panels are always visible. Without explicit heights, Textual may
-        # give all vertical space to the header / buttons and footer, causing
-        # the middle widgets to collapse to zero height on some terminals.
+        # Layout rules to ensure both left and right panes, and especially
+        # the task list and task details on the right, are always visible.
         CSS = """
         #left-pane, #right-pane {
+            width: 1fr;
             height: 1fr;
         }
 
         #project-actions {
-            height: auto;
+            /* Force the action bar to a small fixed height so it doesn't
+             * consume the entire right pane and push the task list and
+             * details off-screen. */
+            height: 3;
+            max-height: 3;
         }
 
-        /*
-         * Ensure the task list and task details always occupy visible
-         * vertical space, and make their background slightly distinct so
-         * it's obvious where they are even before any text is drawn.
-         */
+        /* Make action buttons compact: single-line, minimal padding. */
+        ProjectActions Button {
+            padding: 0 1;
+        }
+
         #task-list {
-            height: 1fr;
-            min-height: 3;
-            background: $surface;
+            height: 3fr;
+            min-height: 6;
         }
 
         #task-details {
-            height: 1fr;
-            min-height: 3;
-            background: $boost;
+            height: 2fr;
+            min-height: 4;
         }
         """
 
@@ -119,6 +120,44 @@ if _HAS_TEXTUAL:
 
         async def on_mount(self) -> None:
             await self.refresh_projects()
+            # Defer layout logging until after the first refresh cycle so
+            # widgets have real sizes. This will help compare left vs right
+            # panes and confirm whether the task list/details get space.
+            try:
+                self.call_after_refresh(self._log_layout_debug)
+            except Exception:
+                # call_after_refresh may not exist on very old Textual; in
+                # that case we simply skip this extra logging.
+                pass
+
+        def _log_layout_debug(self) -> None:
+            """Write a one-shot snapshot of key widget sizes to /tmp.
+
+            This is for debugging why the right-hand task list/details may
+            not be visible even though the widgets exist.
+            """
+            try:
+                from pathlib import Path as _Path
+                log_path = _Path("/tmp/codexctl-tui.log")
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                left_pane = self.query_one("#left-pane")
+                right_pane = self.query_one("#right-pane")
+                project_list = self.query_one("#project-list", ProjectList)
+                project_state = self.query_one("#project-state", ProjectState)
+                task_list = self.query_one("#task-list", TaskList)
+                task_details = self.query_one("#task-details", TaskDetails)
+
+                with log_path.open("a", encoding="utf-8") as _f:
+                    _f.write("[codexctl DEBUG] layout snapshot after refresh:\n")
+                    _f.write(f"  left-pane   size={left_pane.size} region={left_pane.region}\n")
+                    _f.write(f"  right-pane  size={right_pane.size} region={right_pane.region}\n")
+                    _f.write(f"  proj-list   size={project_list.size} region={project_list.region}\n")
+                    _f.write(f"  proj-state  size={project_state.size} region={project_state.region}\n")
+                    _f.write(f"  task-list   size={task_list.size} region={task_list.region}\n")
+                    _f.write(f"  task-det    size={task_details.size} region={task_details.region}\n")
+            except Exception:
+                pass
 
         # ---------- Helpers ----------
 
