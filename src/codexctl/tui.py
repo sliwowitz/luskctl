@@ -53,6 +53,37 @@ if _HAS_TEXTUAL:
 
         CSS_PATH = None
 
+        # Layout rules to ensure the right-hand task list and task details
+        # panels are always visible. Without explicit heights, Textual may
+        # give all vertical space to the header / buttons and footer, causing
+        # the middle widgets to collapse to zero height on some terminals.
+        CSS = """
+        #left-pane, #right-pane {
+            height: 1fr;
+        }
+
+        #project-actions {
+            height: auto;
+        }
+
+        /*
+         * Ensure the task list and task details always occupy visible
+         * vertical space, and make their background slightly distinct so
+         * it's obvious where they are even before any text is drawn.
+         */
+        #task-list {
+            height: 1fr;
+            min-height: 3;
+            background: $surface;
+        }
+
+        #task-details {
+            height: 1fr;
+            min-height: 3;
+            background: $boost;
+        }
+        """
+
         BINDINGS = [
             ("q", "quit", "Quit"),
             ("g", "generate_dockerfiles", "Generate Dockerfiles"),
@@ -76,11 +107,11 @@ if _HAS_TEXTUAL:
             yield Header()
             with Horizontal():
                 # Left pane: project list (top) + selected project info (bottom)
-                with Vertical():
+                with Vertical(id="left-pane"):
                     yield ProjectList(id="project-list")
                     yield ProjectState(id="project-state")
                 # Right pane: action bar + tasks + task details
-                with Vertical():
+                with Vertical(id="right-pane"):
                     yield ProjectActions(id="project-actions")
                     yield TaskList(id="task-list")
                     yield TaskDetails(id="task-details")

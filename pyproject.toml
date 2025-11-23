@@ -4,7 +4,7 @@
 
  [tool.poetry]
  name = "codexctl"
- version = "0.1.0"
+ version = "0.1.1"
  description = "Manage containerized projects and per-run tasks with Podman"
  readme = "README.md"
  license = "Apache-2.0 OR MIT"

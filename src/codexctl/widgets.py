@@ -63,14 +63,14 @@ class ProjectActions(Static):
     def compose(self) -> ComposeResult:
         # Short labels so they comfortably fit in 80 columns.
         with Horizontal():
-            yield Button("Gen", id="btn-generate")          # generate Dockerfiles
-            yield Button("Build", id="btn-build")           # build images
-            yield Button("SSH", id="btn-ssh-init")          # init SSH dir
-            yield Button("Cache", id="btn-cache-init")      # init git cache
-            yield Button("New", id="btn-new-task")          # new task
-            yield Button("CLI", id="btn-task-run-cli")      # run CLI for current task
-            yield Button("UI", id="btn-task-run-ui")        # run UI for current task
-            yield Button("Del", id="btn-task-delete")       # delete current task
+            yield Button("Gen", id="btn-generate", compact=True)          # generate Dockerfiles
+            yield Button("Build", id="btn-build", compact=True)           # build images
+            yield Button("SSH", id="btn-ssh-init", compact=True)          # init SSH dir
+            yield Button("Cache", id="btn-cache-init", compact=True)      # init git cache
+            yield Button("New", id="btn-new-task", compact=True)          # new task
+            yield Button("CLI", id="btn-task-run-cli", compact=True)      # run CLI for current task
+            yield Button("UI", id="btn-task-run-ui", compact=True)        # run UI for current task
+            yield Button("Del", id="btn-task-delete", compact=True)       # delete current task
 
     def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
         btn_id = event.button.id
