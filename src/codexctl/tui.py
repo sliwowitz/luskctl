@@ -321,10 +321,7 @@ if _HAS_TEXTUAL:
             """Called when user activates a project in the list."""
             self.current_project_id = message.project_id
             await self.refresh_tasks()
-            # After activating a project, move focus to the task list so the user
-            # can immediately navigate and run tasks.
-            task_list = self.query_one("#task-list", TaskList)
-            self.set_focus(task_list)
+
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
