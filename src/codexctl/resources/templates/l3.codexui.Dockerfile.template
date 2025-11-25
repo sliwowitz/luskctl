@@ -2,8 +2,7 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
-ENV HOME="/home/dev" \
-    HOST="0.0.0.0" \
+ENV HOST="0.0.0.0" \
     PORT="7860" \
     CODEXUI_DIR="/opt/codexui" \
     CODEXUI_REPO="https://github.com/sliwowitz/codex-in-podman.git"

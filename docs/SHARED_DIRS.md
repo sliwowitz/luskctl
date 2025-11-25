@@ -3,8 +3,8 @@ Shared directories and mounts used by codexctl tasks
 Overview
 - When you run a task (CLI or UI), codexctl starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (/workspace)
-  - Shared credentials/config for Codex under /home/dev/.codex
-  - Optional per‑project SSH configuration under /home/dev/.ssh (read‑only)
+  - Shared credentials/config for Codex under /root/.codex
+  - Optional per‑project SSH configuration under /tmp/ssh-config-ro (read‑only)
 
 Per‑task workspace (required)
 - Host path: <state_root>/tasks/<project_id>/<task_id>/workspace
@@ -19,10 +19,10 @@ Shared envs base directory (configurable)
       base_dir: /var/lib/codexctl/envs
 - Under this base, two subdirectories may be used:
   1) _codex-config (required; created automatically if missing)
-     - Mounted as: <base_dir>/_codex-config → /home/dev/.codex:Z (read‑write)
+     - Mounted as: <base_dir>/_codex-config → /root/.codex:Z (read‑write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
   2) _ssh-config-<project_id> (optional)
-     - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z,ro (read‑only)
+     - Mounted as: <base_dir>/_ssh-config-<project_id> → /tmp/ssh-config-ro:Z,ro (read‑only)
      - Purpose: If your project uses private git URLs (e.g. git@github.com:...), provide SSH keys and config here so the container can fetch the repository.
 
 Expected contents of the optional SSH config directory
@@ -30,7 +30,7 @@ Expected contents of the optional SSH config directory
 - Files:
   - Private/public key pair for the project (e.g. id_ed25519_<project>, id_ed25519_<project>.pub)
   - config file with host definitions and IdentityFile entries
-- Permissions: The directory is mounted read‑only to /home/dev/.ssh in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
+- Permissions: The directory is mounted read‑only to /tmp/ssh-config-ro in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
 - Key selection: The init script relies on SSH_KEY_NAME if provided in the image/env, but your config file can also refer to the correct IdentityFile.
 
 How to create this directory automatically
@@ -58,8 +58,8 @@ SELinux and mount flags
 
 Quick reference (runtime mounts)
 - /workspace              ← <state_root>/tasks/<project>/<task>/workspace:Z
-- /home/dev/.codex        ← <envs_base>/_codex-config:Z
-- /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
+- /root/.codex            ← <envs_base>/_codex-config:Z
+- /tmp/ssh-config-ro (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
 
 How codexctl discovers these paths
 - state_root: Determined by CODEXCTL_STATE_DIR or defaults (root: /var/lib/codexctl; user: ${XDG_DATA_HOME:-~/.local/share}/codexctl).

@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 {{USER_SNIPPET}}
 # --- END USER SNIPPET ---
 
-RUN mkdir -p /home/dev /workspace && chmod 0777 /home/dev /workspace
+RUN mkdir -p /workspace && chmod 0777 /workspace
 WORKDIR /workspace
 
 COPY scripts/init-ssh-and-repo.sh /usr/local/bin/init-ssh-and-repo.sh
