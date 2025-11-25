@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Expected env:
-#   SSH_KEY_NAME    - private key name in /tmp/.ssh-config (without .pub)
+#   SSH_KEY_NAME    - private key name in /tmp/ssh-config-ro (without .pub)
 #   REPO_ROOT       - target repo dir (e.g. /workspace/ultimate-container)
 #   CODE_REPO       - git URL (https:// or git@)
 #   GIT_BRANCH      - optional, e.g. "main" or "master"
@@ -11,7 +11,7 @@ set -euo pipefail
 
 : "${GIT_RESET_MODE:=none}"
 
-SSH_DIR=/tmp/.ssh-config
+SSH_DIR=/tmp/ssh-config-ro
 
 if [[ -n "${SSH_KEY_NAME:-}" ]]; then
   echo ">> SSH: checking ${SSH_KEY_NAME} in ${SSH_DIR}"

@@ -317,7 +317,7 @@ def init_project_ssh(
 ) -> dict:
     """Initialize the shared SSH directory for a project and generate a keypair.
 
-    This prepares the host directory that containers mount read-only at /tmp/.ssh-config
+    This prepares the host directory that containers mount read-only at /tmp/ssh-config-ro
     and creates an SSH keypair plus a minimal config file if missing.
 
     Location resolution:
@@ -442,7 +442,7 @@ def init_project_ssh(
     # When ssh.key_name is omitted in project.yml, we still derive a stable
     # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
     # Containers receive only this bare filename via SSH_KEY_NAME and mount
-    # the host ssh_host_dir at /tmp/.ssh-config, so path handling remains
+    # the host ssh_host_dir at /tmp/ssh-config-ro, so path handling remains
     # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
         print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
@@ -881,7 +881,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
     - Mount shared codex config dir to /root/.codex (read-write).
-    - Optionally mount per-project SSH config dir to /tmp/.ssh-config (read-only).
+    - Optionally mount per-project SSH config dir to /tmp/ssh-config-ro (read-only).
     - Provide REPO_ROOT and git info for the init script.
     """
     # Per-task workspace directory as a subdirectory of the task dir
@@ -947,7 +947,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            volumes.append(f"{ssh_host_dir}:/tmp/.ssh-config:Z,ro")
+            volumes.append(f"{ssh_host_dir}:/tmp/ssh-config-ro:Z,ro")
 
     return env, volumes
 

@@ -253,7 +253,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str, meta: dict):
     # SSH (only online projects get upstream keys)
     if project.security_class == "online":
         if project.ssh_host_dir and project.ssh_host_dir.is_dir():
-            vols += ["-v", f"{project.ssh_host_dir}:/tmp/.ssh-config:Z,ro"]
+            vols += ["-v", f"{project.ssh_host_dir}:/tmp/ssh-config-ro:Z,ro"]
         if project.ssh_key_name:
             env.append(f"SSH_KEY_NAME={project.ssh_key_name}")
 

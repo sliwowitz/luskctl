@@ -43,7 +43,7 @@ Runtime behavior (tasks)
 - Both modes:
   - Mount a per‑task workspace directory from the host to /workspace.
   - Mount a shared codex config directory to /root/.codex (rw).
-  - Optionally mount a per‑project SSH config directory to /tmp/.ssh-config (ro) if it exists.
+  - Optionally mount a per‑project SSH config directory to /tmp/ssh-config-ro (ro) if it exists.
   - Set working directory to /workspace.
   - Provide env vars to the init script: REPO_ROOT, CODE_REPO, GIT_BRANCH, GIT_RESET_MODE.
 - The init script clones or syncs the project repository into /workspace and, if configured, warms up SSH known_hosts.
