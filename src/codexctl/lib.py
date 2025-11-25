@@ -1454,6 +1454,10 @@ def codex_auth(project_id: str) -> None:
 
     The user can press Ctrl+C to stop the container after authentication is complete.
     """
+    # Verify podman is available before proceeding
+    if shutil.which("podman") is None:
+        raise SystemExit("podman not found; please install podman")
+
     project = load_project(project_id)
 
     # Shared env mounts - we only need the codex config directory
@@ -1465,25 +1469,22 @@ def codex_auth(project_id: str) -> None:
     container_name = f"{project.id}-auth"
 
     # Check if a container with the same name is already running
-    try:
-        result = subprocess.run(
-            ["podman", "container", "exists", container_name],
+    result = subprocess.run(
+        ["podman", "container", "exists", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode == 0:
+        print(f"Removing existing auth container: {container_name}")
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        if result.returncode == 0:
-            print(f"Removing existing auth container: {container_name}")
-            subprocess.run(
-                ["podman", "rm", "-f", container_name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
 
     # Build the podman run command
     # - Interactive with TTY for codex login
-    # - Port 1455 forwarded for OAuth callback
+    # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
     # - Use L3 image (which has codex installed)
     cmd = [
@@ -1507,8 +1508,6 @@ def codex_auth(project_id: str) -> None:
 
     try:
         subprocess.run(cmd, check=True)
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         # Exit code 130 is typically Ctrl+C (SIGINT), which is expected
         if e.returncode == 130:
@@ -1518,11 +1517,9 @@ def codex_auth(project_id: str) -> None:
     except KeyboardInterrupt:
         print("\nAuthentication interrupted.")
         # Best-effort cleanup
-        try:
-            subprocess.run(
-                ["podman", "rm", "-f", container_name],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
