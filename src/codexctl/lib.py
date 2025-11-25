@@ -1443,10 +1443,10 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
 # ---------- Codex authentication ----------
 
 def codex_auth(project_id: str) -> None:
-    """Run codex login inside the L3 container to authenticate the Codex CLI.
+    """Run codex login inside the L2 container to authenticate the Codex CLI.
 
     This command:
-    - Spins up a temporary L3 container for the project
+    - Spins up a temporary L2 container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/root/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Runs `codex login` interactively
@@ -1486,7 +1486,7 @@ def codex_auth(project_id: str) -> None:
     # - Interactive with TTY for codex login
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
-    # - Use L3 image (which has codex installed)
+    # - Use L2 image (which has the codex CLI installed)
     cmd = [
         "podman", "run",
         "--rm",
@@ -1494,7 +1494,7 @@ def codex_auth(project_id: str) -> None:
         "-p", "127.0.0.1:1455:1455",
         "-v", f"{codex_host_dir}:/root/.codex:Z",
         "--name", container_name,
-        f"{project.id}:l3",
+        f"{project.id}:l2",
         "codex", "login",
     ]
 
