@@ -709,26 +709,25 @@ def build_images(project_id: str) -> None:
     context_dir = str(stage_dir)
 
     # Read docker.base_image from project.yml for L1 only (handled in templates
-    # at generation time). L2 builds on top of L1 to add the codex CLI.
-    # L3 builds on top of L2 so it inherits the codex CLI and can run `codex login`.
-    l2_base_image = f"{project.id}:l1"
-    l3_base_image = f"{project.id}:l2"
+    # at generation time). For L2/L3 we must base FROM the just-built L1 image
+    # so that init-ssh-and-repo.sh (and other assets) are available at runtime.
+    # Therefore, we always pass BASE_IMAGE="<project_id>:l1" when building L2/L3.
+    l2l3_base_image = f"{project.id}:l1"
 
     cmds = [
         ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
-        # L2 uses L1 as base (has init-ssh-and-repo.sh and basic dev tools)
+        # L2 and L3 use ARG BASE_IMAGE before FROM, so we must pass --build-arg
         [
             "podman", "build",
             "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={l2_base_image}",
+            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
             "-t", f"{project.id}:l2",
             context_dir,
         ],
-        # L3 uses L2 as base (inherits codex CLI for `codex login` and other commands)
         [
             "podman", "build",
             "-f", str(l3),
-            "--build-arg", f"BASE_IMAGE={l3_base_image}",
+            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
             "-t", f"{project.id}:l3",
             context_dir,
         ],
@@ -1444,10 +1443,10 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
 # ---------- Codex authentication ----------
 
 def codex_auth(project_id: str) -> None:
-    """Run codex login inside the L3 container to authenticate the Codex CLI.
+    """Run codex login inside the L2 container to authenticate the Codex CLI.
 
     This command:
-    - Spins up a temporary L3 container for the project
+    - Spins up a temporary L2 container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/root/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Runs `codex login` interactively
@@ -1487,7 +1486,7 @@ def codex_auth(project_id: str) -> None:
     # - Interactive with TTY for codex login
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
-    # - Use L3 image (which has codex installed)
+    # - Use L2 image (which has the codex CLI installed)
     cmd = [
         "podman", "run",
         "--rm",
@@ -1495,7 +1494,7 @@ def codex_auth(project_id: str) -> None:
         "-p", "127.0.0.1:1455:1455",
         "-v", f"{codex_host_dir}:/root/.codex:Z",
         "--name", container_name,
-        f"{project.id}:l3",
+        f"{project.id}:l2",
         "codex", "login",
     ]
 
