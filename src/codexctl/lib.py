@@ -1438,3 +1438,88 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
         except Exception:
             pass
     return ready
+
+
+# ---------- Codex authentication ----------
+
+def codex_auth(project_id: str) -> None:
+    """Run codex login inside the L3 container to authenticate the Codex CLI.
+
+    This command:
+    - Spins up a temporary L3 container for the project
+    - Mounts the shared codex config directory (/root/.codex)
+    - Forwards port 1455 from the container to localhost for OAuth callback
+    - Runs `codex login` interactively
+    - The authentication persists in the shared .codex folder
+
+    The user can press Ctrl+C to stop the container after authentication is complete.
+    """
+    # Verify podman is available before proceeding
+    if shutil.which("podman") is None:
+        raise SystemExit("podman not found; please install podman")
+
+    project = load_project(project_id)
+
+    # Shared env mounts - we only need the codex config directory
+    envs_base = get_envs_base_dir()
+    codex_host_dir = envs_base / "_codex-config"
+    # Ensure codex dir exists so the mount works
+    codex_host_dir.mkdir(parents=True, exist_ok=True)
+
+    container_name = f"{project.id}-auth"
+
+    # Check if a container with the same name is already running
+    result = subprocess.run(
+        ["podman", "container", "exists", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode == 0:
+        print(f"Removing existing auth container: {container_name}")
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Build the podman run command
+    # - Interactive with TTY for codex login
+    # - Port 1455 is the default port used by `codex login` for OAuth callback
+    # - Mount codex config dir for persistent auth
+    # - Use L3 image (which has codex installed)
+    cmd = [
+        "podman", "run",
+        "--rm",
+        "-it",
+        "-p", "127.0.0.1:1455:1455",
+        "-v", f"{codex_host_dir}:/root/.codex:Z",
+        "--name", container_name,
+        f"{project.id}:l3",
+        "codex", "login",
+    ]
+
+    print("Authenticating Codex for project:", project.id)
+    print()
+    print("This will open a browser for authentication.")
+    print("After completing authentication, press Ctrl+C to stop the container.")
+    print()
+    print("$", " ".join(map(str, cmd)))
+    print()
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        # Exit code 130 is typically Ctrl+C (SIGINT), which is expected
+        if e.returncode == 130:
+            print("\nAuthentication container stopped.")
+        else:
+            raise SystemExit(f"Auth failed: {e}")
+    except KeyboardInterrupt:
+        print("\nAuthentication interrupted.")
+        # Best-effort cleanup
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
