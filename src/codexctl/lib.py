@@ -709,25 +709,26 @@ def build_images(project_id: str) -> None:
     context_dir = str(stage_dir)
 
     # Read docker.base_image from project.yml for L1 only (handled in templates
-    # at generation time). For L2/L3 we must base FROM the just-built L1 image
-    # so that init-ssh-and-repo.sh (and other assets) are available at runtime.
-    # Therefore, we always pass BASE_IMAGE="<project_id>:l1" when building L2/L3.
-    l2l3_base_image = f"{project.id}:l1"
+    # at generation time). L2 builds on top of L1 to add the codex CLI.
+    # L3 builds on top of L2 so it inherits the codex CLI and can run `codex login`.
+    l2_base_image = f"{project.id}:l1"
+    l3_base_image = f"{project.id}:l2"
 
     cmds = [
         ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
-        # L2 and L3 use ARG BASE_IMAGE before FROM, so we must pass --build-arg
+        # L2 uses L1 as base (has init-ssh-and-repo.sh and basic dev tools)
         [
             "podman", "build",
             "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
+            "--build-arg", f"BASE_IMAGE={l2_base_image}",
             "-t", f"{project.id}:l2",
             context_dir,
         ],
+        # L3 uses L2 as base (inherits codex CLI for `codex login` and other commands)
         [
             "podman", "build",
             "-f", str(l3),
-            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
+            "--build-arg", f"BASE_IMAGE={l3_base_image}",
             "-t", f"{project.id}:l3",
             context_dir,
         ],
