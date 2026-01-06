@@ -5,11 +5,12 @@ FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -eux; \
-    apt-get update && apt-get install -y --no-install-recommends \
-      curl ca-certificates gnupg; \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs ripgrep; \
-    npm install -g @openai/codex @anthropic-ai/claude-code; \
+    npm install -g @openai/codex; \
+    npm install -g @anthropic-ai/claude-code; \
     npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 

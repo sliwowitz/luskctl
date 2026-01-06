@@ -1508,7 +1508,7 @@ def codex_auth(project_id: str) -> None:
     print("Authenticating Codex for project:", project.id)
     print()
     print("This will open a browser for authentication.")
-    print("After completing authentication, press Ctrl+C to stop the container.") conflicts 
+    print("After completing authentication, press Ctrl+C to stop the container.")
     print()
     print("$", " ".join(map(str, cmd)))
     print()
