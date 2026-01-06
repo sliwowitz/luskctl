@@ -3,8 +3,9 @@ Shared directories and mounts used by codexctl tasks
 Overview
 - When you run a task (CLI or UI), codexctl starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (/workspace)
-  - Shared credentials/config for Codex under /root/.codex
-  - Optional per‑project SSH configuration under /tmp/ssh-config-ro (read‑only)
+  - Shared credentials/config for Codex under /home/dev/.codex
+  - Shared credentials/config for Claude Code under /home/dev/.claude
+  - Optional per‑project SSH configuration under /home/dev/.ssh (read‑only)
 
 Per‑task workspace (required)
 - Host path: <state_root>/tasks/<project_id>/<task_id>/workspace
@@ -17,12 +18,16 @@ Shared envs base directory (configurable)
   - Can be overridden in the global config file (codexctl-config.yml):
     envs:
       base_dir: /var/lib/codexctl/envs
-- Under this base, two subdirectories may be used:
+- Under this base, three subdirectories may be used:
   1) _codex-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_codex-config → /root/.codex:Z (read‑write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
-  2) _ssh-config-<project_id> (optional)
-     - Mounted as: <base_dir>/_ssh-config-<project_id> → /tmp/ssh-config-ro:Z,ro (read‑only)
+  2) _claude-config (required; created automatically if missing)
+     - Mounted as: <base_dir>/_claude-config → /home/dev/.claude:Z (read‑write)
+     - Purpose: Shared credentials/config used by Claude Code in CLI mode.
+     - Note: codexctl sets CLAUDE_CONFIG_DIR=/home/dev/.claude inside containers.
+  3) _ssh-config-<project_id> (optional)
+     - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z,ro (read‑only)
      - Purpose: If your project uses private git URLs (e.g. git@github.com:...), provide SSH keys and config here so the container can fetch the repository.
 
 Expected contents of the optional SSH config directory
@@ -58,8 +63,9 @@ SELinux and mount flags
 
 Quick reference (runtime mounts)
 - /workspace              ← <state_root>/tasks/<project>/<task>/workspace:Z
-- /root/.codex            ← <envs_base>/_codex-config:Z
-- /tmp/ssh-config-ro (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
+- /home/dev/.codex        ← <envs_base>/_codex-config:Z
+- /home/dev/.claude       ← <envs_base>/_claude-config:Z
+- /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
 
 How codexctl discovers these paths
 - state_root: Determined by CODEXCTL_STATE_DIR or defaults (root: /var/lib/codexctl; user: ${XDG_DATA_HOME:-~/.local/share}/codexctl).
@@ -67,8 +73,9 @@ How codexctl discovers these paths
 
 Minimal setup to run tasks
 1) Ensure codexctl can write to the state root (or set CODEXCTL_STATE_DIR accordingly).
-2) Optionally create the envs base dir (codexctl will create _codex-config automatically if missing):
+2) Optionally create the envs base dir (codexctl will create _codex-config and _claude-config automatically if missing):
    - sudo mkdir -p /var/lib/codexctl/envs/_codex-config
+   - sudo mkdir -p /var/lib/codexctl/envs/_claude-config
 3) If using private git repositories for a project <proj>:
    - sudo mkdir -p /var/lib/codexctl/envs/_ssh-config-<proj>
    - Place SSH keys and config there (see above). Keys must match your repo host.
@@ -76,6 +83,7 @@ Minimal setup to run tasks
 Notes
 - The SSH directory is optional. Public HTTPS repos do not require it.
 - The .codex directory is mounted read‑write and should contain any credentials/config required by Codex tooling.
+- The .claude directory is mounted read‑write and should contain any credentials/config required by Claude Code (CLI only).
 - Both CLI and UI containers mount the same paths and start with the working directory set to /workspace.
 
 See also

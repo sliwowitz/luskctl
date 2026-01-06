@@ -9,7 +9,7 @@ RUN set -eux; \
       curl ca-certificates gnupg; \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
     apt-get install -y --no-install-recommends nodejs ripgrep; \
-    npm install -g @openai/codex; \
+    npm install -g @openai/codex @anthropic-ai/claude-code; \
     npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 
