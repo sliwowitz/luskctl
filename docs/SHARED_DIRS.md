@@ -3,8 +3,8 @@ Shared directories and mounts used by codexctl tasks
 Overview
 - When you run a task (CLI or UI), codexctl starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (/workspace)
-  - Shared credentials/config for Codex under /home/dev/.codex
-  - Shared credentials/config for Claude Code under /home/dev/.claude
+  - Shared credentials/config for Codex under /root/.codex
+  - Shared credentials/config for Claude Code under /root/.claude
   - Optional per‑project SSH configuration under /home/dev/.ssh (read‑only)
 
 Per‑task workspace (required)
@@ -23,9 +23,9 @@ Shared envs base directory (configurable)
      - Mounted as: <base_dir>/_codex-config → /root/.codex:Z (read‑write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
   2) _claude-config (required; created automatically if missing)
-     - Mounted as: <base_dir>/_claude-config → /home/dev/.claude:Z (read‑write)
+     - Mounted as: <base_dir>/_claude-config → /root/claude:Z (read‑write)
      - Purpose: Shared credentials/config used by Claude Code in CLI mode.
-     - Note: codexctl sets CLAUDE_CONFIG_DIR=/home/dev/.claude inside containers.
+     - Note: codexctl sets CLAUDE_CONFIG_DIR=/root/.claude inside containers.
   3) _ssh-config-<project_id> (optional)
      - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z,ro (read‑only)
      - Purpose: If your project uses private git URLs (e.g. git@github.com:...), provide SSH keys and config here so the container can fetch the repository.
@@ -62,9 +62,9 @@ SELinux and mount flags
 - codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z,ro to enforce read‑only access.
 
 Quick reference (runtime mounts)
-- /workspace              ← <state_root>/tasks/<project>/<task>/workspace:Z
-- /home/dev/.codex        ← <envs_base>/_codex-config:Z
-- /home/dev/.claude       ← <envs_base>/_claude-config:Z
+- /workspace          ← <state_root>/tasks/<project>/<task>/workspace:Z
+- /root/.codex        ← <envs_base>/_codex-config:Z
+- /root/.claude       ← <envs_base>/_claude-config:Z
 - /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
 
 How codexctl discovers these paths
