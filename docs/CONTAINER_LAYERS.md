@@ -43,8 +43,8 @@ Runtime behavior (tasks)
 - codexctl task run-cli starts project:l2; codexctl task run-ui starts project:l3.
 - Both modes:
   - Mount a per‑task workspace directory from the host to /workspace.
-  - Mount a shared codex config directory to /home/dev/.codex (rw).
-  - Mount a shared Claude config directory to /home/dev/.claude (rw) and set CLAUDE_CONFIG_DIR=/home/dev/.claude.
+  - Mount a shared codex config directory to /root/.codex (rw).
+  - Mount a shared Claude config directory to /root/.claude (rw) and set CLAUDE_CONFIG_DIR=/root/.claude.
   - Optionally mount a per‑project SSH config directory to /home/dev/.ssh (ro) if it exists.
   - Set working directory to /workspace.
   - Provide env vars to the init script: REPO_ROOT, CODE_REPO, GIT_BRANCH, GIT_RESET_MODE.
