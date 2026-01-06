@@ -178,7 +178,7 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
 Tips
 - Show resolved paths and configuration:
   - codexctl config
-- Where envs (SSH and codex config) live by default:
+- Where envs (SSH, Codex, and Claude config) live by default:
   - /var/lib/codexctl/envs (root) or as configured in examples/codexctl-config.yml under envs.base_dir
 - Details on shared directories and SSH mounts:
   - docs/SHARED_DIRS.md

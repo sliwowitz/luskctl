@@ -18,7 +18,7 @@ Layers
 
 2. L2 — Codex agent (project:l2)
    - Built FROM the freshly built L1 image (enforced by build_images()).
-   - Installs the CLI Codex agent and supporting tools (nodejs, ripgrep).
+   - Installs the CLI Codex agent, Claude Code CLI, and supporting tools (nodejs, ripgrep).
    - Does not override CMD: it reuses init-ssh-and-repo.sh from L1, so the container can self-initialize the repo and SSH when it starts.
    - At runtime, codexctl runs the container detached and keeps it alive after init so you can exec into it.
 
@@ -47,6 +47,9 @@ Runtime behavior (tasks)
   - Set working directory to /workspace.
   - Provide env vars to the init script: REPO_ROOT, CODE_REPO, GIT_BRANCH, GIT_RESET_MODE.
 - The init script clones or syncs the project repository into /workspace and, if configured, warms up SSH known_hosts.
+- CLI mode only:
+  - Mount a shared Claude Code config directory to /home/dev/.claude (rw).
+  - Set CLAUDE_CONFIG_DIR=/home/dev/.claude.
 
 GPU support
 - GPU passthrough is opt‑in per project (run.gpus in project.yml). When enabled, codexctl adds the necessary Podman flags for NVIDIA GPUs.

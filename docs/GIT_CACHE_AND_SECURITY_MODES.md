@@ -357,7 +357,7 @@ Again, **all** of the security / caching semantics boil down to how `_build_task
 * env `CODE_REPO` → upstream vs staging,
 * volumes:
 
-  * only workspace & codex config,
+  * workspace, codex config, and (CLI) Claude config,
   * plus SSH keys for **online**,
   * plus **staging repo** for **gatekept**.
 

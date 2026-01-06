@@ -814,11 +814,12 @@ def _assign_ui_port() -> int:
     raise SystemExit("No free UI ports available")
 
 
-def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
+def _build_task_env_and_volumes(project: Project, task_id: str, *, mode: str) -> tuple[dict, list[str]]:
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
     - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Mount shared Claude config dir to /home/dev/.claude (read-write) for CLI tasks.
     - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
     - Provide REPO_ROOT and git info for the init script.
     """
@@ -830,10 +831,13 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Shared env mounts
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
+    claude_host_dir = envs_base / "_claude-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
     # Ensure codex dir exists so the mount works
     codex_host_dir.mkdir(parents=True, exist_ok=True)
+    if mode == "cli":
+        claude_host_dir.mkdir(parents=True, exist_ok=True)
 
     env = {
         "PROJECT_ID": project.id,
@@ -843,6 +847,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Default reset mode is none; allow overriding via container env if needed
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
     }
+    if mode == "cli":
+        env["CLAUDE_CONFIG_DIR"] = "/home/dev/.claude"
 
     volumes: list[str] = []
     # Per-task workspace mount
@@ -850,6 +856,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
 
     # Shared codex credentials/config
     volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
+    if mode == "cli":
+        volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path
@@ -1046,7 +1054,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "cli")
 
-    env, volumes = _build_task_env_and_volumes(project, task_id)
+    env, volumes = _build_task_env_and_volumes(project, task_id, mode="cli")
 
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
@@ -1109,7 +1117,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
         meta["ui_port"] = port
         meta_path.write_text(yaml.safe_dump(meta))
 
-    env, volumes = _build_task_env_and_volumes(project, task_id)
+    env, volumes = _build_task_env_and_volumes(project, task_id, mode="ui")
 
     container_name = f"{project.id}-ui-{task_id}"
 

@@ -14,8 +14,9 @@ ui:
 
 envs:
   # Shared persistent host directory for credentials/config that are mounted
-  # into Codex-enabled containers (CLI and UI):
+  # into task containers (CLI and UI):
   #   - <base_dir>/_codex-config         → /home/dev/.codex (rw)
+  #   - <base_dir>/_claude-config        → /home/dev/.claude (rw, CLI only)
   #   - <base_dir>/_ssh-config-<project> → /home/dev/.ssh   (ro)
   # Default for system-wide installs: /var/lib/codexctl/envs
   # You can override per user or system by editing this file.
