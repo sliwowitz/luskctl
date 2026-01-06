@@ -819,6 +819,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
     - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Mount shared Claude config dir to /home/dev/.claude (read-write).
     - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
     - Provide REPO_ROOT and git info for the init script.
     """
@@ -830,10 +831,12 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Shared env mounts
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
+    claude_host_dir = envs_base / "_claude-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
     # Ensure codex dir exists so the mount works
     codex_host_dir.mkdir(parents=True, exist_ok=True)
+    claude_host_dir.mkdir(parents=True, exist_ok=True)
 
     env = {
         "PROJECT_ID": project.id,
@@ -842,6 +845,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         "REPO_ROOT": "/workspace",
         # Default reset mode is none; allow overriding via container env if needed
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
+        # Keep Claude Code config under the shared mount regardless of HOME.
+        "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     }
 
     volumes: list[str] = []
@@ -850,6 +855,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
 
     # Shared codex credentials/config
     volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
+    # Shared Claude credentials/config
+    volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path

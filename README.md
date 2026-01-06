@@ -170,15 +170,15 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
   - The command prints the new task ID. You can list tasks with: codexctl task list myproj
 
 7) Run the task
-- CLI agent mode (headless):
+- CLI agent mode (headless; Codex or Claude Code):
   - codexctl task run-cli myproj <task_id>
-- UI (web) mode:
+- UI (web) mode (Codex UI only):
   - codexctl task run-ui myproj <task_id>
 
 Tips
 - Show resolved paths and configuration:
   - codexctl config
-- Where envs (SSH and codex config) live by default:
+- Where envs (SSH, Codex, and Claude config) live by default:
   - /var/lib/codexctl/envs (root) or as configured in examples/codexctl-config.yml under envs.base_dir
 - Details on shared directories and SSH mounts:
   - docs/SHARED_DIRS.md
