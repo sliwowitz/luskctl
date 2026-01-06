@@ -38,6 +38,9 @@
  PyYAML = ">=6.0"
  textual = ">=6.6"
  argcomplete = ">=3.1"
+ 
+ [tool.poetry.group.dev.dependencies]
+ pydevd-pycharm = "^253.28294.166"
 
  [tool.poetry.scripts]
  codexctl = "codexctl.cli:main"

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+import inspect
 
 from textual.app import ComposeResult
 from textual.widgets import ListView, ListItem, Static, Button
@@ -59,6 +60,7 @@ class ProjectList(ListView):
 
 class ProjectActions(Static):
     """Single-row action bar for project + task actions."""
+
     def compose(self) -> ComposeResult:
         # Short labels so they comfortably fit in 80 columns.  We arrange
         # the buttons in two horizontal rows so they don't form a single
@@ -90,7 +92,7 @@ class ProjectActions(Static):
             yield Button("[yellow]u[/yellow] ui", id="btn-task-run-ui", compact=True)      # run UI for current task (u)
             yield Button("[yellow]d[/yellow]el", id="btn-task-delete", compact=True)       # delete current task (d)
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
+    async def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
         btn_id = event.button.id
         app = self.app
         if not app or not btn_id:
@@ -108,8 +110,13 @@ class ProjectActions(Static):
             "btn-task-delete": "action_delete_task",
         }
         method_name = mapping.get(btn_id)
-        if method_name and hasattr(app, method_name):
-            getattr(app, method_name)()  # type: ignore[misc]
+        if not method_name or not hasattr(app, method_name):
+            return
+
+        method = getattr(app, method_name)
+        result = method()  # type: ignore[misc]
+        if inspect.isawaitable(result):
+            await result
 
 
 class TaskList(ListView):
@@ -229,3 +236,44 @@ class ProjectState(Static):
         ]
 
         self.update("\n".join(lines))
+
+
+class StatusBar(Static):
+    """Bottom status bar showing minimal key hints plus status text.
+
+    This replaces Textual's default Footer so we can free horizontal space
+    for real status messages instead of a long list of shortcuts. The
+    shortcut hints are kept very small here because the primary shortcut
+    hints already live in the ProjectActions button bar.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        # Initialize with an empty message; the App will populate this.
+        self.message: str = ""
+        self._update_content()
+
+    def set_message(self, message: str) -> None:
+        """Update the status message area.
+
+        The left side of the bar is reserved for a couple of always-on
+        shortcut hints ("q Quit" and "^P Palette"); the rest of the line is
+        dedicated to this message text.
+        """
+
+        self.message = message
+        self._update_content()
+
+    def _update_content(self) -> None:
+        # Keep the key hints very compact and leave most of the space for
+        # the dynamic status message.
+        #
+        # We use simple markup only for the shortcut keys themselves.  The
+        # message text is interpolated directly; our messages don't use
+        # Rich markup, so this is safe.
+        key_hints = "[bold]q[/bold] Quit  [bold]^P[/bold] Palette"
+        if self.message:
+            text = f"{key_hints} | {self.message}"
+        else:
+            text = key_hints
+        self.update(text)

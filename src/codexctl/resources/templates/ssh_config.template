@@ -1,17 +1,20 @@
 # Default SSH config template used by `codexctl ssh-init` when no project-specific
 # template is provided. You can copy this file and point project.yml → ssh.config_template
 # to your customized version. Supported tokens:
-#   {{IDENTITY_FILE}}  → absolute path to the generated private key
-#   {{KEY_NAME}}       → key filename (without .pub)
-#   {{PROJECT_ID}}     → project id
+#   {{KEY_NAME}}       → key filename (without .pub), expected to live in ~/.ssh
 
 Host *
   IdentitiesOnly yes
-  StrictHostKeyChecking accept-new
-  IdentityFile {{IDENTITY_FILE}}
+  StrictHostKeyChecking no
+  # Use only the key filename so this config works both on the host (when
+  # combined with an explicit IdentityFile override) and inside containers,
+  # where the key is copied into /root/.ssh/{{KEY_NAME}}.
+  IdentityFile ~/.ssh/{{KEY_NAME}}
 
 # Common Git host (kept explicit; inherits Host * defaults)
 Host github.com
   HostName github.com
   User git
-  IdentityFile {{IDENTITY_FILE}}
+  IdentitiesOnly yes
+  StrictHostKeyChecking no
+  IdentityFile ~/.ssh/{{KEY_NAME}}

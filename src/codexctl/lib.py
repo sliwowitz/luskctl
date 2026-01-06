@@ -317,7 +317,7 @@ def init_project_ssh(
 ) -> dict:
     """Initialize the shared SSH directory for a project and generate a keypair.
 
-    This prepares the host directory that containers mount read-only at /home/dev/.ssh
+    This prepares the host directory that containers mount read-only at /tmp/ssh-config-ro
     and creates an SSH keypair plus a minimal config file if missing.
 
     Location resolution:
@@ -338,8 +338,11 @@ def init_project_ssh(
     target_dir = Path(target_dir).expanduser().resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
 
+    # If caller did not supply an explicit key_name, derive it from project
+    # configuration using the shared helper so ssh-init, containers and git
+    # helpers all agree on the filename.
     if not key_name:
-        key_name = f"id_{'ed25519' if key_type=='ed25519' else 'rsa'}_{project.id}"
+        key_name = _effective_ssh_key_name(project, key_type=key_type)
 
     priv_path = target_dir / key_name
     pub_path = target_dir / f"{key_name}.pub"
@@ -391,9 +394,7 @@ def init_project_ssh(
 
         config_text: Optional[str] = None
         variables = {
-            "IDENTITY_FILE": str(priv_path),
             "KEY_NAME": key_name,
-            "PROJECT_ID": project.id,
         }
         # Prefer user template if provided
         if user_template_path is not None:
@@ -427,9 +428,25 @@ def init_project_ssh(
     print(f"  private key: {priv_path}")
     print(f"  public key:  {pub_path}")
     print(f"  config:      {cfg_path}")
+
+    # Also echo the actual public key contents for easy copy-paste.
+    # Best-effort: if reading fails, continue without raising.
+    try:
+        if pub_path.exists():
+            pub_key_text = pub_path.read_text(encoding="utf-8", errors="ignore").strip()
+            if pub_key_text:
+                print("Public key:")
+                print(f"  {pub_key_text}")
+    except Exception:
+        pass
+    # When ssh.key_name is omitted in project.yml, we still derive a stable
+    # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
+    # Containers receive only this bare filename via SSH_KEY_NAME and mount
+    # the host ssh_host_dir at /tmp/ssh-config-ro, so path handling remains
+    # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
-        print("Note: project.yml does not define ssh.key_name; containers will rely on .ssh/config IdentityFile entries.")
-        print(f"      If you prefer explicit key selection, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
+        print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
+        print(f"      To pin the SSH key filename explicitly, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
 
     return {
         "dir": str(target_dir),
@@ -465,6 +482,23 @@ class Project:
     ssh_config_template: Optional[Path] = None
     # Whether to mount SSH credentials inside online containers. Default: True.
     ssh_mount_in_online: bool = True
+
+
+def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
+    """Return the SSH key filename that should be used for this project.
+
+    Precedence:
+      1. Explicit `ssh.key_name` from project.yml (project.ssh_key_name)
+      2. Derived default: id_<type>_<project_id>, e.g. id_ed25519_myproj
+
+    This helper centralizes the default so ssh-init, container env (SSH_KEY_NAME)
+    and host-side git helpers all agree even when project.yml omits ssh.key_name.
+    """
+
+    if project.ssh_key_name:
+        return project.ssh_key_name
+    algo = "ed25519" if key_type == "ed25519" else "rsa"
+    return f"id_{algo}_{project.id}"
 
 
 def _find_project_root(project_id: str) -> Path:
@@ -622,6 +656,11 @@ def generate_dockerfiles(project_id: str) -> None:
             except Exception:
                 user_snippet = ""
 
+    # SSH_KEY_NAME inside containers should mirror the filename that ssh-init
+    # generated (or will generate) for this project. We assume the default
+    # key_type (ed25519) here, which matches init_project_ssh's default.
+    effective_ssh_key_name = _effective_ssh_key_name(project, key_type="ed25519")
+
     variables = {
         "PROJECT_ID": project.id,
         "SECURITY_CLASS": project.security_class,
@@ -629,7 +668,7 @@ def generate_dockerfiles(project_id: str) -> None:
         "DEFAULT_BRANCH": project.default_branch,
         # Template-specific extras
         "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
-        "SSH_KEY_NAME": project.ssh_key_name or "",
+        "SSH_KEY_NAME": effective_ssh_key_name,
         "CODE_REPO_DEFAULT": project.upstream_url or "",
         "USER_SNIPPET": user_snippet,
     }
@@ -707,6 +746,29 @@ def build_images(project_id: str) -> None:
 
 def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
+
+
+def _log_debug(message: str) -> None:
+    """Append a simple debug line to the codexctl library log.
+
+    This is intentionally very small and best-effort so it never interferes
+    with normal CLI or TUI behavior. It can be used to compare behavior
+    between different frontends (e.g. CLI vs TUI) when calling the shared
+    helpers in this module.
+    """
+
+    try:
+        from datetime import datetime as _dt
+        from pathlib import Path as _Path
+
+        log_path = _Path("/tmp/codexctl-lib.log")
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        ts = _dt.now().isoformat(timespec="seconds")
+        with log_path.open("a", encoding="utf-8") as _f:
+            _f.write(f"[codexctl DEBUG] {ts} {message}\n")
+    except Exception:
+        # Logging must never change behavior of library code.
+        pass
 
 
 def task_new(project_id: str) -> None:
@@ -892,7 +954,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z,ro")
+            volumes.append(f"{ssh_host_dir}:/tmp/ssh-config-ro:Z,ro")
 
     return env, volumes
 
@@ -914,11 +976,14 @@ def _git_env_with_ssh(project: Project) -> dict:
     cfg = Path(ssh_dir) / "config"
     if cfg.is_file():
         ssh_cmd = ["ssh", "-F", str(cfg), "-o", "IdentitiesOnly=yes"]
-        # Prefer explicit IdentityFile if we can resolve it
-        if project.ssh_key_name:
-            key_path = Path(ssh_dir) / project.ssh_key_name
-            if key_path.is_file():
-                ssh_cmd += ["-o", f"IdentityFile={key_path}"]
+        # Prefer explicit IdentityFile if we can resolve it. Use the same
+        # effective key name logic as ssh-init / containers so that even when
+        # ssh.key_name is omitted we still look for the derived default
+        # (id_<type>_<project_id>), while keeping this best-effort.
+        effective_name = _effective_ssh_key_name(project, key_type="ed25519")
+        key_path = Path(ssh_dir) / effective_name
+        if key_path.is_file():
+            ssh_cmd += ["-o", f"IdentityFile={key_path}"]
         env["GIT_SSH_COMMAND"] = " ".join(map(str, ssh_cmd))
         # Also clear SSH_AUTH_SOCK so agent identities are not considered
         env["SSH_AUTH_SOCK"] = ""
@@ -1044,6 +1109,88 @@ def _check_mode(meta: dict, expected: str) -> None:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
 
 
+def _stop_task_containers(project: "Project", task_id: str) -> None:
+    """Best-effort removal of any containers associated with a task.
+
+    We intentionally ignore most errors here: task deletion should succeed
+    even if podman isn't installed, the containers are already gone, or the
+    container names never existed. This helper is used when deleting a
+    task's workspace/metadata to avoid leaving behind containers that would
+    later conflict with a new task reusing the same ID.
+
+    We use ``podman rm -f`` rather than ``podman stop`` to make teardown
+    deterministic and avoid hangs waiting for graceful shutdown inside the
+    container. The task itself is already being deleted at this point, so
+    a forceful remove is acceptable and keeps state consistent.
+    """
+
+    # The naming scheme is kept in sync with task_run_cli/task_run_ui.
+    names = [
+        f"{project.id}-cli-{task_id}",
+        f"{project.id}-ui-{task_id}",
+    ]
+
+    for name in names:
+        try:
+            _log_debug(f"stop_containers: podman rm -f {name} (start)")
+            # "podman rm -f" force-removes the container even if it is
+            # currently running. If the container does not exist this will
+            # fail, but we treat that as a non-fatal condition and simply
+            # continue.
+            subprocess.run(
+                ["podman", "rm", "-f", name],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _log_debug(f"stop_containers: podman rm -f {name} (done)")
+        except FileNotFoundError:
+            # podman not installed; nothing we can do here.
+            _log_debug("stop_containers: podman not found; skipping all")
+            break
+
+
+def task_delete(project_id: str, task_id: str) -> None:
+    """Delete a task's workspace, metadata, and any associated containers.
+
+    This mirrors the behavior used by the TUI when deleting a task, but is
+    exposed here so both CLI and TUI share the same logic. Containers are
+    stopped best-effort via podman using the naming scheme
+    "<project.id>-<mode>-<task_id>".
+    """
+
+    _log_debug(f"task_delete: start project_id={project_id} task_id={task_id}")
+
+    project = load_project(project_id)
+    _log_debug("task_delete: loaded project")
+
+    # Workspace lives under the project's tasks_root using the numeric ID.
+    workspace = project.tasks_root / str(task_id)
+
+    # Metadata lives in the per-project tasks state dir.
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
+
+    # Stop any matching containers first to avoid name conflicts if a new
+    # task is later created with the same ID.
+    _log_debug("task_delete: calling _stop_task_containers")
+    _stop_task_containers(project, str(task_id))
+    _log_debug("task_delete: _stop_task_containers returned")
+
+    if workspace.is_dir():
+        _log_debug("task_delete: removing workspace directory")
+        shutil.rmtree(workspace)
+        _log_debug("task_delete: workspace directory removed")
+
+    if meta_path.is_file():
+        _log_debug("task_delete: removing metadata file")
+        meta_path.unlink()
+        _log_debug("task_delete: metadata file removed")
+
+    _log_debug("task_delete: finished")
+
+
 def task_run_cli(project_id: str, task_id: str) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
@@ -1146,7 +1293,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     # is actually running. We intentionally rely on a *log marker* here
     # instead of just probing the TCP port, because podman exposes the host port
     # regardless of the state of the routed guest port.
-    #
+    # conflicts 
     # Codex UI currently prints stable lines when the server is ready, e.g.:
     #   "Logging Codex UI activity to /var/log/codexui.log"
     #   "Codex UI (SDK streaming) on http://0.0.0.0:7860 — repo /workspace"
@@ -1298,3 +1445,88 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
         except Exception:
             pass
     return ready
+
+
+# ---------- Codex authentication ----------
+
+def codex_auth(project_id: str) -> None:
+    """Run codex login inside the L2 container to authenticate the Codex CLI.
+
+    This command:
+    - Spins up a temporary L2 container for the project (L2 has the codex CLI)
+    - Mounts the shared codex config directory (/root/.codex)
+    - Forwards port 1455 from the container to localhost for OAuth callback
+    - Runs `codex login` interactively
+    - The authentication persists in the shared .codex folder
+
+    The user can press Ctrl+C to stop the container after authentication is complete.
+    """
+    # Verify podman is available before proceeding
+    if shutil.which("podman") is None:
+        raise SystemExit("podman not found; please install podman")
+
+    project = load_project(project_id)
+
+    # Shared env mounts - we only need the codex config directory
+    envs_base = get_envs_base_dir()
+    codex_host_dir = envs_base / "_codex-config"
+    # Ensure codex dir exists so the mount works
+    codex_host_dir.mkdir(parents=True, exist_ok=True)
+
+    container_name = f"{project.id}-auth"
+
+    # Check if a container with the same name is already running
+    result = subprocess.run(
+        ["podman", "container", "exists", container_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode == 0:
+        print(f"Removing existing auth container: {container_name}")
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Build the podman run command
+    # - Interactive with TTY for codex login
+    # - Port 1455 is the default port used by `codex login` for OAuth callback
+    # - Mount codex config dir for persistent auth
+    # - Use L2 image (which has the codex CLI installed)
+    cmd = [
+        "podman", "run",
+        "--rm",
+        "-it",
+        "-p", "127.0.0.1:1455:1455",
+        "-v", f"{codex_host_dir}:/root/.codex:Z",
+        "--name", container_name,
+        f"{project.id}:l2",
+        "codex", "login",
+    ]
+
+    print("Authenticating Codex for project:", project.id)
+    print()
+    print("This will open a browser for authentication.")
+    print("After completing authentication, press Ctrl+C to stop the container.") conflicts 
+    print()
+    print("$", " ".join(map(str, cmd)))
+    print()
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        # Exit code 130 is typically Ctrl+C (SIGINT), which is expected
+        if e.returncode == 130:
+            print("\nAuthentication container stopped.")
+        else:
+            raise SystemExit(f"Auth failed: {e}")
+    except KeyboardInterrupt:
+        print("\nAuthentication interrupted.")
+        # Best-effort cleanup
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )

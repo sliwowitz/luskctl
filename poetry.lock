@@ -106,6 +106,16 @@ test = ["appdirs (==1.4.4)", "covdefaults (>=2.3)", "pytest (>=8.3.4)", "pytest-
 type = ["mypy (>=1.14.1)"]
 
 [[package]]
+name = "pydevd-pycharm"
+version = "253.28294.166"
+description = "PyCharm Debugger (used in PyCharm and PyDev)"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pydevd_pycharm-253.28294.166.tar.gz", hash = "sha256:d15a2420e8f5e769eb58714c067beb97a503453a986306584770925664f09465"},
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 description = "Pygments is a syntax highlighting package written in Python."
@@ -269,4 +279,4 @@ test = ["coverage", "pytest", "pytest-cov"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0"
-content-hash = "1043e9d6385f2109df8535e549a8d68c5cef7971b595b2358d48dfdf7225a469"
+content-hash = "721cc0886b1904ed1b69b57528336f6851ce64f7e81d4435613b8c224adb7b41"

@@ -1,24 +1,5 @@
-# Quick start
-
- * pre-requisites
-   * set up podman (e.g. `~/.config/containers/storage.conf`)
- * install to venv
-   * clone the repo `git clone git@github.com:sliwowitz/codexctl.git`
-   * create a venv `mkvirtualenv codexctl`
-   * in the venv, install from the repo clone `pip install ./codexctl/`
- * configure codexctl
-   * set up codexctl (e.g. `~/.config/codexctl/config.yml`)
- * start a project
-   * check paths `codexctl config`
-   * copy example project into *User projects root*
-   * initialize project
-     * generate dockerfile
-     * build images
-     * initialize ssh keys
-     * initialize cache
- * run a project
-   * create a task
-   * assign task to cli or ui
+codexctl
+Simple, prefix-/XDG-aware tool to manage containerized projects and per-run tasks using Podman. Provides a CLI (codexctl) and a Textual TUI (codexctl-tui / codextui).
 
 Quick answers to common questions
 
@@ -189,15 +170,15 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
   - The command prints the new task ID. You can list tasks with: codexctl task list myproj
 
 7) Run the task
-- CLI agent mode (headless; Codex or Claude Code):
+- CLI agent mode (headless):
   - codexctl task run-cli myproj <task_id>
-- UI (web) mode (Codex UI only):
+- UI (web) mode:
   - codexctl task run-ui myproj <task_id>
 
 Tips
 - Show resolved paths and configuration:
   - codexctl config
-- Where envs (SSH, Codex, and Claude config) live by default:
+- Where envs (SSH and codex config) live by default:
   - /var/lib/codexctl/envs (root) or as configured in examples/codexctl-config.yml under envs.base_dir
 - Details on shared directories and SSH mounts:
   - docs/SHARED_DIRS.md

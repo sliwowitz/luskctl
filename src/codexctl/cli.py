@@ -21,6 +21,8 @@ from .lib import (
     task_run_ui,
     list_projects,
     get_tasks as _get_tasks,
+    task_delete,
+    codex_auth,
 )
 import os
 from importlib import resources
@@ -118,6 +120,17 @@ def main() -> None:
         pass
     p_cache.add_argument("--force", action="store_true", help="Recreate the mirror from scratch")
 
+    # auth
+    p_auth = sub.add_parser(
+        "auth",
+        help="Authenticate Codex CLI by running 'codex login' inside an L3 container with port forwarding",
+    )
+    _a = p_auth.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -160,6 +173,18 @@ def main() -> None:
     except Exception:
         pass
 
+    t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
+    _a = t_delete.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_delete.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
@@ -183,6 +208,8 @@ def main() -> None:
     elif args.cmd == "cache-init":
         res = init_project_cache(args.project_id, force=getattr(args, "force", False))
         print(f"Cache ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})")
+    elif args.cmd == "auth":
+        codex_auth(args.project_id)
     elif args.cmd == "config":
         # READ PATHS
         print("Configuration (read):")
@@ -285,6 +312,8 @@ def main() -> None:
             task_run_cli(args.project_id, args.task_id)
         elif args.task_cmd == "run-ui":
             task_run_ui(args.project_id, args.task_id)
+        elif args.task_cmd == "delete":
+            task_delete(args.project_id, args.task_id)
         else:
             parser.error("Unknown task subcommand")
     else:

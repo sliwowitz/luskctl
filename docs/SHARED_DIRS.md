@@ -20,7 +20,7 @@ Shared envs base directory (configurable)
       base_dir: /var/lib/codexctl/envs
 - Under this base, three subdirectories may be used:
   1) _codex-config (required; created automatically if missing)
-     - Mounted as: <base_dir>/_codex-config → /home/dev/.codex:Z (read‑write)
+     - Mounted as: <base_dir>/_codex-config → /root/.codex:Z (read‑write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
   2) _claude-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_claude-config → /home/dev/.claude:Z (read‑write)
@@ -35,7 +35,7 @@ Expected contents of the optional SSH config directory
 - Files:
   - Private/public key pair for the project (e.g. id_ed25519_<project>, id_ed25519_<project>.pub)
   - config file with host definitions and IdentityFile entries
-- Permissions: The directory is mounted read‑only to /home/dev/.ssh in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
+- Permissions: The directory is mounted read‑only to /tmp/ssh-config-ro in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
 - Key selection: The init script relies on SSH_KEY_NAME if provided in the image/env, but your config file can also refer to the correct IdentityFile.
 
 How to create this directory automatically

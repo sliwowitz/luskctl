@@ -7,6 +7,18 @@ from pathlib import Path
 from typing import Optional
 
 
+def enable_pycharm_debugger():
+    import os
+    if os.getenv("PYCHARM_DEBUG"):
+        import pydevd_pycharm
+        pydevd_pycharm.settrace(
+            host='localhost',
+            port=5678,
+            suspend=False,   # or True if you want it to break immediately
+        )
+
+
+
 # Try to detect whether 'textual' is available. We avoid importing it or the
 # widgets module at import time so the package can be installed without the
 # optional TUI dependencies.
@@ -21,7 +33,7 @@ except Exception:  # pragma: no cover - textual not installed
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
     from textual.app import App, ComposeResult
-    from textual.widgets import Header, Footer, Button
+    from textual.widgets import Header, Button
     from textual.containers import Horizontal, Vertical
     from textual import on
 
@@ -38,6 +50,7 @@ if _HAS_TEXTUAL:
         init_project_ssh,
         init_project_cache,
         get_project_state,
+        task_delete,
     )
     from .widgets import (
         ProjectList,
@@ -46,6 +59,7 @@ if _HAS_TEXTUAL:
         TaskDetails,
         TaskMeta,
         ProjectState,
+        StatusBar,
     )
 
     class CodexTUI(App):
@@ -108,6 +122,8 @@ if _HAS_TEXTUAL:
             super().__init__()
             self.current_project_id: Optional[str] = None
             self.current_task: Optional[TaskMeta] = None
+            # Set on mount; used to display status / notifications.
+            self._status_bar: Optional[StatusBar] = None
 
         # ---------- Layout ----------
 
@@ -123,9 +139,20 @@ if _HAS_TEXTUAL:
                     yield ProjectActions(id="project-actions")
                     yield TaskList(id="task-list")
                     yield TaskDetails(id="task-details")
-            yield Footer()
+            # Custom status bar replaces Textual's default Footer so the
+            # bottom line can be used for real status messages instead of
+            # a long list of shortcuts (those are already shown in the
+            # ProjectActions button bar).
+            yield StatusBar(id="status-bar")
 
         async def on_mount(self) -> None:
+            # Cache a reference to the status bar widget so we can update it
+            # from notify() and other helpers.
+            try:
+                self._status_bar = self.query_one("#status-bar", StatusBar)
+            except Exception:
+                self._status_bar = None
+
             await self.refresh_projects()
             # Defer layout logging until after the first refresh cycle so
             # widgets have real sizes. This will help compare left vs right
@@ -164,6 +191,27 @@ if _HAS_TEXTUAL:
                     _f.write(f"  task-list   size={task_list.size} region={task_list.region}\n")
                     _f.write(f"  task-det    size={task_details.size} region={task_details.region}\n")
             except Exception:
+                pass
+
+        def _log_debug(self, message: str) -> None:
+            """Append a simple debug line to the TUI log file.
+
+            This is intentionally very small and best-effort so it never
+            interferes with normal TUI behavior. It shares the same log
+            path as `_log_layout_debug` for easier inspection.
+            """
+
+            try:
+                from datetime import datetime as _dt
+                from pathlib import Path as _Path
+
+                log_path = _Path("/tmp/codexctl-tui.log")
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                ts = _dt.now().isoformat(timespec="seconds")
+                with log_path.open("a", encoding="utf-8") as _f:
+                    _f.write(f"[codexctl DEBUG] {ts} {message}\n")
+            except Exception:
+                # Logging must never break the TUI.
                 pass
 
         # ---------- Helpers ----------
@@ -214,6 +262,36 @@ if _HAS_TEXTUAL:
             # Update project state panel (Dockerfiles/images/SSH/cache + task count)
             self._refresh_project_state(task_count=len(task_list.tasks))
 
+        # ---------- Status / notifications ----------
+
+        def _set_status(self, message: str) -> None:
+            """Update the bottom status bar if available."""
+
+            if self._status_bar is not None:
+                try:
+                    self._status_bar.set_message(message)
+                except Exception:
+                    # Never let status updates break the TUI.
+                    pass
+
+        def notify(self, message: str, *args, **kwargs) -> None:  # type: ignore[override]
+            """Display a notification/status message.
+
+            We override Textual's App.notify so that notifications are
+            mirrored into our custom bottom status bar while still delegating
+            to the framework's native notification system when present.
+            """
+
+            self._set_status(message)
+
+            # Best-effort delegation to the base implementation (for pop-up
+            # notifications etc.). On older/newer Textual versions notify()
+            # might not exist or have a different signature, so we guard it.
+            try:
+                super().notify(message, *args, **kwargs)  # type: ignore[misc,attr-defined]
+            except Exception:
+                pass
+
         def _refresh_project_state(self, task_count: Optional[int] = None) -> None:
             """Update the small project state summary panel.
 
@@ -243,10 +321,7 @@ if _HAS_TEXTUAL:
             """Called when user activates a project in the list."""
             self.current_project_id = message.project_id
             await self.refresh_tasks()
-            # After activating a project, move focus to the task list so the user
-            # can immediately navigate and run tasks.
-            task_list = self.query_one("#task-list", TaskList)
-            self.set_focus(task_list)
+
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
@@ -388,24 +463,48 @@ if _HAS_TEXTUAL:
                 self.notify("No task selected.")
                 return
 
-            project = load_project(self.current_project_id)
             tid = self.current_task.task_id
-
-            workspace = Path(self.current_task.workspace)
-            meta_dir = state_root() / "projects" / project.id / "tasks"
-            meta_path = meta_dir / f"{tid}.yml"
-
             try:
-                if workspace.is_dir():
-                    shutil.rmtree(workspace)
-                if meta_path.is_file():
-                    meta_path.unlink()
+                self._log_debug(
+                    f"delete: start project_id={self.current_project_id} task_id={tid}"
+                )
+                # Let the user know we're working, since stopping containers
+                # and cleaning up state can take a little while and the TUI
+                # will be blocked during this operation. We keep the logic
+                # simple and synchronous, but yield once to the event loop so
+                # the status bar has a chance to render the message before
+                # the blocking work starts.
+                self.notify(f"Deleting task {tid}...")
+
+                try:
+                    import asyncio as _asyncio
+
+                    # Yield control so Textual can process the notify() and
+                    # redraw the status bar before we start the blocking
+                    # delete operation.
+                    await _asyncio.sleep(0)
+                except Exception:
+                    # If asyncio isn't available for some reason, we just
+                    # proceed synchronously.
+                    pass
+
+                # Use shared library helper so containers and metadata are
+                # cleaned up consistently with the CLI. This call is
+                # synchronous and may take a little while if container
+                # teardown or filesystem cleanup is slow, but both
+                # frontends share the exact same logic here.
+                self._log_debug("delete: calling task_delete()")
+                task_delete(self.current_project_id, tid)
+                self._log_debug("delete: task_delete() returned")
                 self.notify(f"Deleted task {tid}")
             except Exception as e:
+                self._log_debug(f"delete: error {e!r}")
                 self.notify(f"Delete error: {e}")
 
             self.current_task = None
+            self._log_debug("delete: refreshing tasks")
             await self.refresh_tasks()
+            self._log_debug("delete: refresh_tasks() finished")
 
     def main() -> None:
         CodexTUI().run()
@@ -421,4 +520,5 @@ else:
 
 
 if __name__ == "__main__":
+    enable_pycharm_debugger()
     main()
