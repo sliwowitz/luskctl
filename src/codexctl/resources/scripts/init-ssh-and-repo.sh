@@ -8,6 +8,11 @@ set -euo pipefail
 #   GIT_BRANCH      - optional, e.g. "main" or "master"
 #   GIT_RESET_MODE  - "none" (default), "hard", or "soft"
 #   CLONE_FROM      - optional alternate source to seed the repo (e.g. file:///git-cache/cache.git)
+#   NEW_TASK        - "1" if this is a new task spawn (vs container restart on existing task)
+#                     When NEW_TASK=1:
+#                       - If .git exists: hard reset to origin/GIT_BRANCH
+#                       - If .git missing: clear workspace and clone fresh
+#                     When NEW_TASK unset/0 (container restart): don't modify working tree
 
 : "${GIT_RESET_MODE:=none}"
 
@@ -46,7 +51,16 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     git config --global --add safe.directory "${REPO_ROOT}" || true
   fi
 
+  # Determine if this is a new task spawn or a container restart
+  is_new_task="${NEW_TASK:-0}"
+
   if [[ ! -d "${REPO_ROOT}/.git" ]]; then
+    # No .git directory - need to clone
+    if [[ "${is_new_task}" == "1" && -d "${REPO_ROOT}" ]]; then
+      # New task: clear any stale files (e.g. marker files) so clone succeeds
+      echo ">> new task: clearing workspace for fresh clone"
+      find "${REPO_ROOT}" -mindepth 1 -delete 2>/dev/null || true
+    fi
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
     echo ">> initial clone from ${SRC_REPO}"
     git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
@@ -58,17 +72,29 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
       git -C "${REPO_ROOT}" fetch --all --prune || true
     fi
   else
-    git -C "${REPO_ROOT}" fetch --all --prune
-    if [[ -n "${GIT_BRANCH:-}" && "${GIT_RESET_MODE}" != "none" ]]; then
-      echo ">> git reset (${GIT_RESET_MODE}) to origin/${GIT_BRANCH}"
-      case "${GIT_RESET_MODE}" in
-        hard)
-          git -C "${REPO_ROOT}" reset --hard "origin/${GIT_BRANCH}" || true
-          ;;
-        soft)
-          git -C "${REPO_ROOT}" reset "origin/${GIT_BRANCH}" || true
-          ;;
-      esac
+    # .git exists - repo already cloned
+    if [[ "${is_new_task}" == "1" ]]; then
+      # New task on existing repo mount: hard reset to latest upstream
+      git -C "${REPO_ROOT}" fetch --all --prune
+      if [[ -n "${GIT_BRANCH:-}" ]]; then
+        echo ">> new task: hard reset to origin/${GIT_BRANCH}"
+        git -C "${REPO_ROOT}" reset --hard "origin/${GIT_BRANCH}" || true
+        git -C "${REPO_ROOT}" clean -fdx || true
+      fi
+    else
+      # Container restart: fetch but don't modify working tree
+      git -C "${REPO_ROOT}" fetch --all --prune
+      if [[ -n "${GIT_BRANCH:-}" && "${GIT_RESET_MODE}" != "none" ]]; then
+        echo ">> git reset (${GIT_RESET_MODE}) to origin/${GIT_BRANCH}"
+        case "${GIT_RESET_MODE}" in
+          hard)
+            git -C "${REPO_ROOT}" reset --hard "origin/${GIT_BRANCH}" || true
+            ;;
+          soft)
+            git -C "${REPO_ROOT}" reset "origin/${GIT_BRANCH}" || true
+            ;;
+        esac
+      fi
     fi
   fi
 fi

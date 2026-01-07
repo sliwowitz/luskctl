@@ -791,6 +791,9 @@ def task_new(project_id: str) -> None:
         "mode": None,
         "workspace": str(ws),
         "ui_port": None,
+        # Flag for init script: when True, do hard reset (new task) vs preserve working tree (restart)
+        # Cleared by task_run_cli/task_run_ui after successful container start
+        "needs_reset": True,
     }
     (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
     print(f"Created task {next_id} in {ws}")
@@ -1200,7 +1203,13 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "cli")
 
+    # Check if this task needs a fresh clone/reset (new task vs container restart)
+    # The needs_reset flag is set by task_new() and cleared after successful start
+    needs_reset = meta.get("needs_reset", False)
+
     env, volumes = _build_task_env_and_volumes(project, task_id)
+    if needs_reset:
+        env["NEW_TASK"] = "1"
 
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
@@ -1218,7 +1227,8 @@ def task_run_cli(project_id: str, task_id: str) -> None:
         f"{project.id}:l2",
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
-        "bash", "-lc", "init-ssh-and-repo.sh; echo __CLI_READY__; tail -f /dev/null",
+        # Use && so __CLI_READY__ only prints if init succeeds
+        "bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
     ]
     print("$", " ".join(map(str, cmd)))
     try:
@@ -1235,9 +1245,10 @@ def task_run_cli(project_id: str, task_id: str) -> None:
         ready_check=lambda line: "__CLI_READY__" in line or ">> init complete" in line,
     )
 
-    # Mark task as started (not completed) for CLI mode
+    # Mark task as started (not completed) for CLI mode and clear the reset flag
     meta["status"] = "running"
     meta["mode"] = "cli"
+    meta["needs_reset"] = False  # Clear so container restarts don't reset the repo
     meta_path.write_text(yaml.safe_dump(meta))
 
     print(
@@ -1257,6 +1268,10 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "ui")
 
+    # Check if this task needs a fresh clone/reset (new task vs container restart)
+    # The needs_reset flag is set by task_new() and cleared after successful start
+    needs_reset = meta.get("needs_reset", False)
+
     port = meta.get("ui_port")
     if not isinstance(port, int):
         port = _assign_ui_port()
@@ -1264,6 +1279,8 @@ def task_run_ui(project_id: str, task_id: str) -> None:
         meta_path.write_text(yaml.safe_dump(meta))
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
+    if needs_reset:
+        env["NEW_TASK"] = "1"
 
     container_name = f"{project.id}-ui-{task_id}"
 
@@ -1333,6 +1350,12 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     running = _is_container_running(container_name)
 
     if ready and running:
+        # Mark task as started and clear the reset flag
+        meta["status"] = "running"
+        meta["mode"] = "ui"
+        meta["needs_reset"] = False  # Clear so container restarts don't reset the repo
+        meta_path.write_text(yaml.safe_dump(meta))
+
         print("\n\n>> codexctl: ")
         print(f"UI container is up, routed to: http://127.0.0.1:{port}")
     elif not running:
