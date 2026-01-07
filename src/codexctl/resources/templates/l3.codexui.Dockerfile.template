@@ -12,6 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git ssh ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
+RUN set -eux; \
+    printf '%s\n' \
+      'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' \
+      'alias claude="claude --dangerously-skip-permissions"' \
+      > /etc/profile.d/codexctl-agent-aliases.sh; \
+    if [ -f /etc/bash.bashrc ]; then \
+      printf '\n# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
+    else \
+      printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
+    fi
+
 COPY scripts/codexui-entry.sh /usr/local/bin/codexui-entry.sh
 RUN chmod +x /usr/local/bin/codexui-entry.sh
 

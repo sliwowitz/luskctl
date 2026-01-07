@@ -13,4 +13,15 @@ RUN set -eux; \
     npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 
+RUN set -eux; \
+    printf '%s\n' \
+      'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' \
+      'alias claude="claude --dangerously-skip-permissions"' \
+      > /etc/profile.d/codexctl-agent-aliases.sh; \
+    if [ -f /etc/bash.bashrc ]; then \
+      printf '\n# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
+    else \
+      printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
+    fi
+
 # No CMD: reuse init-ssh-and-repo.sh from base image
