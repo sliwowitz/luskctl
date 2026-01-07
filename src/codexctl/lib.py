@@ -336,7 +336,7 @@ def init_project_ssh(
 
     target_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
     target_dir = Path(target_dir).expanduser().resolve()
-    target_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir_writable(target_dir, "SSH host dir")
 
     # If caller did not supply an explicit key_name, derive it from project
     # configuration using the shared helper so ssh-init, containers and git
@@ -423,7 +423,7 @@ def init_project_ssh(
         except Exception as e:
             raise SystemExit(f"Failed to write SSH config at {cfg_path}: {e}")
 
-    # Best-effort permissions and ownership for container dev user access.
+    # Best-effort permissions for container dev user access.
     try:
         os.chmod(target_dir, 0o700)
         if priv_path.exists():
@@ -432,15 +432,6 @@ def init_project_ssh(
             os.chmod(pub_path, 0o644)
         if cfg_path.exists():
             os.chmod(cfg_path, 0o644)
-    except Exception:
-        pass
-    try:
-        dev_uid = 1000
-        dev_gid = 1000
-        os.chown(target_dir, dev_uid, dev_gid)
-        for p in (priv_path, pub_path, cfg_path):
-            if p.exists():
-                os.chown(p, dev_uid, dev_gid)
     except Exception:
         pass
 
@@ -631,26 +622,21 @@ def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_dev_ownership(path: Path) -> None:
-    """Best-effort chown to dev (uid/gid 1000) for shared mounts."""
-    uid = 1000
-    gid = 1000
-    chown = getattr(os, "lchown", os.chown)
+def _ensure_dir_writable(path: Path, label: str) -> None:
     try:
-        chown(path, uid, gid)
-    except Exception:
-        return
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise SystemExit(f"{label} directory is not writable: {path} ({e})")
     if not path.is_dir():
-        return
-    try:
-        for root, dirs, files in os.walk(path):
-            for name in dirs + files:
-                try:
-                    chown(Path(root) / name, uid, gid)
-                except Exception:
-                    continue
-    except Exception:
-        pass
+        raise SystemExit(f"{label} path is not a directory: {path}")
+    if not os.access(path, os.W_OK | os.X_OK):
+        uid = os.getuid()
+        gid = os.getgid()
+        raise SystemExit(
+            f"{label} directory is not writable: {path}\n"
+            f"Fix permissions for the user running codexctl (uid={uid}, gid={gid}). "
+            f"Example: sudo chown -R {uid}:{gid} {path}"
+        )
 
 
 def _render_template(template_path: Path, variables: dict) -> str:
@@ -939,11 +925,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     claude_host_dir = envs_base / "_claude-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
-    claude_host_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_dev_ownership(codex_host_dir)
-    _ensure_dev_ownership(claude_host_dir)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
+    _ensure_dir_writable(claude_host_dir, "Claude config")
 
     env = {
         "PROJECT_ID": project.id,
@@ -999,7 +982,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            _ensure_dev_ownership(ssh_host_dir)
+            _ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
@@ -1516,9 +1499,7 @@ def codex_auth(project_id: str) -> None:
     # Shared env mounts - we only need the codex config directory
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_dev_ownership(codex_host_dir)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
 
     container_name = f"{project.id}-auth"
 
