@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 from .config import get_envs_base_dir
 from .projects import _effective_ssh_key_name, load_project
@@ -38,6 +39,52 @@ def _git_env_with_ssh(project) -> dict:
         # Also clear SSH_AUTH_SOCK so agent identities are not considered
         env["SSH_AUTH_SOCK"] = ""
     return env
+
+
+def get_cache_last_commit(project_id: str) -> Optional[dict]:
+    """Get information about the last commit in the cached repository.
+    
+    Returns a dict with keys: commit_hash, commit_date, commit_message, commit_author,
+    or None if the cache doesn't exist or is not accessible.
+    
+    This is a cheap operation that doesn't update the cache.
+    """
+    try:
+        project = load_project(project_id)
+        cache_dir = project.cache_path
+        
+        if not cache_dir.exists() or not cache_dir.is_dir():
+            return None
+            
+        # Build git environment that forces use of the project's SSH config (if present)
+        env = _git_env_with_ssh(project)
+        
+        # Get the last commit info from the default branch
+        # We use git log with specific format to get structured data
+        cmd = [
+            "git", "-C", str(cache_dir), "log", 
+            "-1", "--pretty=format:%H|%ad|%s|%an", 
+            "--date=iso"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        if result.returncode != 0:
+            return None
+            
+        # Parse the output: hash|date|subject|author
+        parts = result.stdout.strip().split("|", 3)
+        if len(parts) == 4:
+            return {
+                "commit_hash": parts[0],
+                "commit_date": parts[1],
+                "commit_message": parts[2],
+                "commit_author": parts[3]
+            }
+        return None
+        
+    except Exception:
+        # If anything goes wrong, return None - this is a best-effort operation
+        return None
 
 
 def init_project_cache(project_id: str, force: bool = False) -> dict:

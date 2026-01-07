@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 import yaml  # pip install pyyaml
 
@@ -173,6 +173,7 @@ def get_project_state(project_id: str) -> dict:
     - ``ssh`` - True if the project SSH directory exists and contains
       a ``config`` file.
     - ``cache`` - True if the project's cache directory exists.
+    - ``cache_last_commit`` - Dict with commit info if cache exists, None otherwise.
     """
 
     project = load_project(project_id)
@@ -215,10 +216,18 @@ def get_project_state(project_id: str) -> dict:
     # treat existence of the directory as "cache present".
     cache_dir = project.cache_path
     has_cache = cache_dir.is_dir()
+    
+    # Get cache commit info if cache exists
+    cache_last_commit = None
+    if has_cache:
+        # Import here to avoid circular import
+        from .git_cache import get_cache_last_commit
+        cache_last_commit = get_cache_last_commit(project_id)
 
     return {
         "dockerfiles": has_dockerfiles,
         "images": has_images,
         "ssh": has_ssh,
         "cache": has_cache,
+        "cache_last_commit": cache_last_commit,
     }
