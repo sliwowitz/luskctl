@@ -14,6 +14,7 @@ import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
 from .fs import _ensure_dir_writable
+from .podman import _podman_userns_args
 from .projects import Project, load_project
 
 
@@ -383,6 +384,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:
@@ -448,6 +450,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:

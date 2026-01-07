@@ -1,0 +1,10 @@
+from __future__ import annotations
+
+import os
+
+
+def _podman_userns_args() -> list[str]:
+    """Return user namespace args for rootless podman so UID 1000 maps correctly."""
+    if os.geteuid() == 0:
+        return []
+    return ["--userns=keep-id:uid=1000,gid=1000"]

@@ -5,6 +5,7 @@ import subprocess
 
 from .config import get_envs_base_dir
 from .fs import _ensure_dir_writable
+from .podman import _podman_userns_args
 from .projects import load_project
 
 
@@ -64,6 +65,7 @@ def codex_auth(project_id: str) -> None:
         f"{project.id}:l2",
         "codex", "login",
     ]
+    cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()
