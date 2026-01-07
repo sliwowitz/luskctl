@@ -13,7 +13,7 @@ from typing import Optional
 import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
-from .fs import _ensure_dev_ownership
+from .fs import _ensure_dir_writable
 from .projects import Project, load_project
 
 
@@ -175,11 +175,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     claude_host_dir = envs_base / "_claude-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
-    claude_host_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_dev_ownership(codex_host_dir)
-    _ensure_dev_ownership(claude_host_dir)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
+    _ensure_dir_writable(claude_host_dir, "Claude config")
 
     env = {
         "PROJECT_ID": project.id,
@@ -235,7 +232,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            _ensure_dev_ownership(ssh_host_dir)
+            _ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes

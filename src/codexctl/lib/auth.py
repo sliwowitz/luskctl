@@ -4,7 +4,7 @@ import shutil
 import subprocess
 
 from .config import get_envs_base_dir
-from .fs import _ensure_dev_ownership
+from .fs import _ensure_dir_writable
 from .projects import load_project
 
 
@@ -31,9 +31,7 @@ def codex_auth(project_id: str) -> None:
     # Shared env mounts - we only need the codex config directory
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_dev_ownership(codex_host_dir)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
 
     container_name = f"{project.id}-auth"
 

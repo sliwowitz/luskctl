@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import get_envs_base_dir
+from .fs import _ensure_dir_writable
 from .projects import _effective_ssh_key_name, load_project
 from .template_utils import render_template
 
@@ -41,7 +42,7 @@ def init_project_ssh(
 
     target_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
     target_dir = Path(target_dir).expanduser().resolve()
-    target_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir_writable(target_dir, "SSH host dir")
 
     # If caller did not supply an explicit key_name, derive it from project
     # configuration using the shared helper so ssh-init, containers and git
@@ -130,7 +131,7 @@ def init_project_ssh(
         except Exception as e:
             raise SystemExit(f"Failed to write SSH config at {cfg_path}: {e}")
 
-    # Best-effort permissions and ownership for container dev user access.
+    # Best-effort permissions for container dev user access.
     try:
         os.chmod(target_dir, 0o700)
         if priv_path.exists():
@@ -141,16 +142,6 @@ def init_project_ssh(
             os.chmod(cfg_path, 0o644)
     except Exception:
         # Permission adjustments are best-effort.
-        pass
-    try:
-        dev_uid = 1000
-        dev_gid = 1000
-        os.chown(target_dir, dev_uid, dev_gid)
-        for p in (priv_path, pub_path, cfg_path):
-            if p.exists():
-                os.chown(p, dev_uid, dev_gid)
-    except Exception:
-        # Ownership adjustments are best-effort.
         pass
 
     print("SSH directory initialized:")
