@@ -317,7 +317,7 @@ def init_project_ssh(
 ) -> dict:
     """Initialize the shared SSH directory for a project and generate a keypair.
 
-    This prepares the host directory that containers mount read-only at /tmp/ssh-config-ro
+    This prepares the host directory that containers mount read-write at /home/dev/.ssh
     and creates an SSH keypair plus a minimal config file if missing.
 
     Location resolution:
@@ -423,6 +423,27 @@ def init_project_ssh(
         except Exception as e:
             raise SystemExit(f"Failed to write SSH config at {cfg_path}: {e}")
 
+    # Best-effort permissions and ownership for container dev user access.
+    try:
+        os.chmod(target_dir, 0o700)
+        if priv_path.exists():
+            os.chmod(priv_path, 0o600)
+        if pub_path.exists():
+            os.chmod(pub_path, 0o644)
+        if cfg_path.exists():
+            os.chmod(cfg_path, 0o644)
+    except Exception:
+        pass
+    try:
+        dev_uid = 1000
+        dev_gid = 1000
+        os.chown(target_dir, dev_uid, dev_gid)
+        for p in (priv_path, pub_path, cfg_path):
+            if p.exists():
+                os.chown(p, dev_uid, dev_gid)
+    except Exception:
+        pass
+
     print("SSH directory initialized:")
     print(f"  dir:         {target_dir}")
     print(f"  private key: {priv_path}")
@@ -442,7 +463,7 @@ def init_project_ssh(
     # When ssh.key_name is omitted in project.yml, we still derive a stable
     # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
     # Containers receive only this bare filename via SSH_KEY_NAME and mount
-    # the host ssh_host_dir at /tmp/ssh-config-ro, so path handling remains
+    # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
     # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
         print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
@@ -880,9 +901,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
-    - Mount shared codex config dir to /root/.codex (read-write).
-    - Mount shared Claude config dir to /root/.claude (read-write).
-    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
+    - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Mount shared Claude config dir to /home/dev/.claude (read-write).
+    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-write).
     - Provide REPO_ROOT and git info for the init script.
     """
     # Per-task workspace directory as a subdirectory of the task dir
@@ -908,7 +929,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Default reset mode is none; allow overriding via container env if needed
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
-        "CLAUDE_CONFIG_DIR": "/root/.claude",
+        "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     }
 
     volumes: list[str] = []
@@ -916,9 +937,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{repo_dir}:/workspace:Z")
 
     # Shared codex credentials/config
-    volumes.append(f"{codex_host_dir}:/root/.codex:Z")
+    volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
     # Shared Claude credentials/config
-    volumes.append(f"{claude_host_dir}:/root/.claude:Z")
+    volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path
@@ -954,7 +975,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            volumes.append(f"{ssh_host_dir}:/tmp/ssh-config-ro:Z,ro")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
 
@@ -1454,7 +1475,7 @@ def codex_auth(project_id: str) -> None:
 
     This command:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
-    - Mounts the shared codex config directory (/root/.codex)
+    - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
@@ -1499,7 +1520,7 @@ def codex_auth(project_id: str) -> None:
         "--rm",
         "-it",
         "-p", "127.0.0.1:1455:1455",
-        "-v", f"{codex_host_dir}:/root/.codex:Z",
+        "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
         "codex", "login",

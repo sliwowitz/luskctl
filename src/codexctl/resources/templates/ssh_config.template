@@ -8,7 +8,7 @@ Host *
   StrictHostKeyChecking no
   # Use only the key filename so this config works both on the host (when
   # combined with an explicit IdentityFile override) and inside containers,
-  # where the key is copied into /root/.ssh/{{KEY_NAME}}.
+  # where the key lives in ~/.ssh/{{KEY_NAME}}.
   IdentityFile ~/.ssh/{{KEY_NAME}}
 
 # Common Git host (kept explicit; inherits Host * defaults)
