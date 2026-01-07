@@ -4,6 +4,8 @@ import shutil
 import subprocess
 
 from .config import get_envs_base_dir
+from .fs import _ensure_dir_writable
+from .podman import _podman_userns_args
 from .projects import load_project
 
 
@@ -14,7 +16,7 @@ def codex_auth(project_id: str) -> None:
 
     This command:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
-    - Mounts the shared codex config directory (/root/.codex)
+    - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
@@ -30,8 +32,7 @@ def codex_auth(project_id: str) -> None:
     # Shared env mounts - we only need the codex config directory
     envs_base = get_envs_base_dir()
     codex_host_dir = envs_base / "_codex-config"
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
 
     container_name = f"{project.id}-auth"
 
@@ -59,11 +60,12 @@ def codex_auth(project_id: str) -> None:
         "--rm",
         "-it",
         "-p", "127.0.0.1:1455:1455",
-        "-v", f"{codex_host_dir}:/root/.codex:Z",
+        "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
         "codex", "login",
     ]
+    cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()

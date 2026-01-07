@@ -248,12 +248,12 @@ def _build_task_env_and_volumes(project: Project, task_id: str, meta: dict):
 
     # Codex config
     if project.codex_config_dir and project.codex_config_dir.is_dir():
-        vols += ["-v", f"{project.codex_config_dir}:/root/.codex:Z"]
+        vols += ["-v", f"{project.codex_config_dir}:/home/dev/.codex:Z"]
 
     # SSH (only online projects get upstream keys)
     if project.security_class == "online":
         if project.ssh_host_dir and project.ssh_host_dir.is_dir():
-            vols += ["-v", f"{project.ssh_host_dir}:/tmp/ssh-config-ro:Z,ro"]
+            vols += ["-v", f"{project.ssh_host_dir}:/home/dev/.ssh:Z"]
         if project.ssh_key_name:
             env.append(f"SSH_KEY_NAME={project.ssh_key_name}")
 

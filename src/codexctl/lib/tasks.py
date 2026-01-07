@@ -13,6 +13,8 @@ from typing import Optional
 import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
+from .fs import _ensure_dir_writable
+from .podman import _podman_userns_args
 from .projects import Project, load_project
 
 
@@ -158,9 +160,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
-    - Mount shared codex config dir to /root/.codex (read-write).
-    - Mount shared Claude config dir to /root/.claude (read-write).
-    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
+    - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Mount shared Claude config dir to /home/dev/.claude (read-write).
+    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-write).
     - Provide REPO_ROOT and git info for the init script.
     """
     # Per-task workspace directory as a subdirectory of the task dir
@@ -174,9 +176,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     claude_host_dir = envs_base / "_claude-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
-    # Ensure codex dir exists so the mount works
-    codex_host_dir.mkdir(parents=True, exist_ok=True)
-    claude_host_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dir_writable(codex_host_dir, "Codex config")
+    _ensure_dir_writable(claude_host_dir, "Claude config")
 
     env = {
         "PROJECT_ID": project.id,
@@ -186,7 +187,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Default reset mode is none; allow overriding via container env if needed
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
-        "CLAUDE_CONFIG_DIR": "/root/.claude",
+        "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     }
 
     volumes: list[str] = []
@@ -194,9 +195,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{repo_dir}:/workspace:Z")
 
     # Shared codex credentials/config
-    volumes.append(f"{codex_host_dir}:/root/.codex:Z")
+    volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
     # Shared Claude credentials/config
-    volumes.append(f"{claude_host_dir}:/root/.claude:Z")
+    volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path
@@ -232,7 +233,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            volumes.append(f"{ssh_host_dir}:/tmp/ssh-config-ro:Z,ro")
+            _ensure_dir_writable(ssh_host_dir, "SSH config")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
 
@@ -382,6 +384,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:
@@ -447,6 +450,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:

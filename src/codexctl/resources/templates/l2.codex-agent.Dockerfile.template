@@ -4,6 +4,7 @@ FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+USER root
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends curl ca-certificates gnupg; \
@@ -25,4 +26,5 @@ RUN set -eux; \
       printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
     fi
 
+USER dev
 # No CMD: reuse init-ssh-and-repo.sh from base image

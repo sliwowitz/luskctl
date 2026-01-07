@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Expected env:
-#   SSH_KEY_NAME    - private key name in /tmp/ssh-config-ro (without .pub)
+#   SSH_KEY_NAME    - private key name in ~/.ssh (without .pub)
 #   REPO_ROOT       - target repo dir (e.g. /workspace/ultimate-container)
 #   CODE_REPO       - git URL (https:// or git@)
 #   GIT_BRANCH      - optional, e.g. "main" or "master"
@@ -11,18 +11,17 @@ set -euo pipefail
 
 : "${GIT_RESET_MODE:=none}"
 
-SSH_DIR=/tmp/ssh-config-ro
+: "${HOME:=/home/dev}"
+SSH_DIR="${HOME}/.ssh"
 
 if [[ -n "${SSH_KEY_NAME:-}" ]]; then
   echo ">> SSH: checking ${SSH_KEY_NAME} in ${SSH_DIR}"
   if [[ -f "${SSH_DIR}/${SSH_KEY_NAME}" && -f "${SSH_DIR}/${SSH_KEY_NAME}.pub" && -f "${SSH_DIR}/config" ]]; then
-    install -d -m 700 /root/.ssh
-    cp -f "${SSH_DIR}/${SSH_KEY_NAME}" /root/.ssh/
-    chmod 600 "/root/.ssh/${SSH_KEY_NAME}"
-    cp -f "${SSH_DIR}/${SSH_KEY_NAME}.pub" /root/.ssh/
-    chmod 644 "/root/.ssh/${SSH_KEY_NAME}.pub"
-    cp -f "${SSH_DIR}/config" /root/.ssh/config
-    chmod 644 /root/.ssh/config
+    install -d -m 700 "${SSH_DIR}" || true
+    chmod 700 "${SSH_DIR}" || true
+    chmod 600 "${SSH_DIR}/${SSH_KEY_NAME}" || true
+    chmod 644 "${SSH_DIR}/${SSH_KEY_NAME}.pub" || true
+    chmod 644 "${SSH_DIR}/config" || true
 
     if command -v ssh >/dev/null 2>&1; then
       # Only warm GitHub known_hosts if the project's code repo uses github.com
