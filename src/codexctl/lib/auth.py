@@ -54,7 +54,7 @@ def codex_auth(project_id: str) -> None:
     codex_host_dir = envs_base / "_codex-config"
     _ensure_dir_writable(codex_host_dir, "Codex config")
 
-    container_name = f"{project.id}-codex-auth"
+    container_name = f"{project.id}-auth-codex"
     _cleanup_existing_container(container_name)
 
     # Build the podman run command
@@ -101,6 +101,78 @@ def codex_auth(project_id: str) -> None:
         )
 
 
+# ---------- Claude authentication ----------
+
+
+def claude_auth(project_id: str) -> None:
+    """Set up Claude API key for CLI inside the L2 container.
+
+    This command:
+    - Spins up a temporary L2 container for the project (L2 has the claude CLI)
+    - Mounts the shared claude config directory (/home/dev/.claude)
+    - Runs an interactive shell where the user can enter their Claude API key
+    - The API key persists in the shared .claude folder
+
+    Claude stores the API key in ~/.claude/config.json or similar configuration.
+    """
+    _check_podman()
+
+    project = load_project(project_id)
+
+    # Shared env mounts - we only need the claude config directory
+    envs_base = get_envs_base_dir()
+    claude_host_dir = envs_base / "_claude-config"
+    _ensure_dir_writable(claude_host_dir, "Claude config")
+
+    container_name = f"{project.id}-auth-claude"
+    _cleanup_existing_container(container_name)
+
+    # Build the podman run command
+    # - Interactive with TTY for API key entry
+    # - Mount claude config dir for persistent auth
+    # - Use L2 image (which has claude CLI installed)
+    cmd = [
+        "podman", "run",
+        "--rm",
+        "-it",
+        "-v", f"{claude_host_dir}:/home/dev/.claude:Z",
+        "--name", container_name,
+        f"{project.id}:l2",
+        "bash", "-c",
+        "echo 'Enter your Claude API key (get one at https://console.anthropic.com/settings/keys):' && "
+        "read -r -p 'ANTHROPIC_API_KEY=' api_key && "
+        "mkdir -p ~/.claude && "
+        "echo '{\"api_key\": \"$api_key\"}' > ~/.claude/config.json && "
+        "echo && echo 'API key saved to ~/.claude/config.json' && "
+        "echo 'You can now use claude in task containers.'",
+    ]
+    cmd[3:3] = _podman_userns_args()
+
+    print("Authenticating Claude for project:", project.id)
+    print()
+    print("You will be prompted to enter your Claude API key.")
+    print("Get your API key at: https://console.anthropic.com/settings/keys")
+    print()
+    print("$", " ".join(map(str, cmd)))
+    print()
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 130:
+            print("\nAuthentication container stopped.")
+        else:
+            raise SystemExit(f"Auth failed: {e}")
+    except KeyboardInterrupt:
+        print("\nAuthentication interrupted.")
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+
+
 # ---------- Mistral Vibe authentication ----------
 
 def mistral_auth(project_id: str) -> None:
@@ -124,7 +196,7 @@ def mistral_auth(project_id: str) -> None:
     vibe_host_dir = envs_base / "_vibe-config"
     _ensure_dir_writable(vibe_host_dir, "Vibe config")
 
-    container_name = f"{project.id}-mistral-auth"
+    container_name = f"{project.id}-auth-mistral"
     _cleanup_existing_container(container_name)
 
     # Build the podman run command
