@@ -65,6 +65,8 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
 
   if [[ ! -d "${REPO_ROOT}/.git" ]]; then
     # No .git directory - perform initial clone
+    # Remove marker first so the directory is empty for git clone
+    rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
     echo ">> initial clone from ${SRC_REPO}"
     git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
@@ -74,9 +76,16 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
       # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
+      # Hard reset to latest HEAD since cache may be stale
+      TARGET_BRANCH="${GIT_BRANCH:-main}"
+      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+        echo ">> resetting to origin/${TARGET_BRANCH}"
+        git -C "${REPO_ROOT}" reset --hard "origin/${TARGET_BRANCH}"
+      else
+        echo ">> resetting to origin/HEAD"
+        git -C "${REPO_ROOT}" reset --hard "origin/HEAD"
+      fi
     fi
-    # Remove marker after successful clone (new task is now initialized)
-    rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
 
   elif [[ "${IS_NEW_TASK}" == "true" ]]; then
     # .git exists but this is a new task (marker present)

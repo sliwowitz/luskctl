@@ -440,7 +440,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
         f"{project.id}:l2",
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
-        "bash", "-lc", "init-ssh-and-repo.sh; echo __CLI_READY__; tail -f /dev/null",
+        "bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
     ]
     print("$", " ".join(map(str, cmd)))
     try:
