@@ -42,6 +42,6 @@
  [tool.poetry.group.dev.dependencies]
  pydevd-pycharm = "^253.28294.166"
 
- [tool.poetry.scripts]
- codexctl = "codexctl.cli:main"
- codexctl-tui = "codexctl.tui:main"
+[tool.poetry.scripts]
+codexctl = "codexctl.cli.main:main"
+codexctl-tui = "codexctl.tui.app:main"

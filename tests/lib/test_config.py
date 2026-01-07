@@ -6,7 +6,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl import config as cfg
+from codexctl.lib import config as cfg
 
 
 class ConfigTests(unittest.TestCase):

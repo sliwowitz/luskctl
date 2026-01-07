@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import argparse
 
-from .auth import codex_auth
-from .config import (
+from ..lib.auth import codex_auth
+from ..lib.config import (
     build_root as _build_root,
     config_root as _config_root,
     get_envs_base_dir as _get_envs_base_dir,
@@ -14,11 +14,11 @@ from .config import (
     state_root as _state_root,
     user_projects_root as _user_projects_root,
 )
-from .docker import build_images, generate_dockerfiles
-from .git_cache import init_project_cache
-from .projects import list_projects
-from .ssh import init_project_ssh
-from .tasks import get_tasks as _get_tasks, task_delete, task_list, task_new, task_run_cli, task_run_ui
+from ..lib.docker import build_images, generate_dockerfiles
+from ..lib.git_cache import init_project_cache
+from ..lib.projects import list_projects
+from ..lib.ssh import init_project_ssh
+from ..lib.tasks import get_tasks as _get_tasks, task_delete, task_list, task_new, task_run_cli, task_run_ui
 import os
 from importlib import resources
 from pathlib import Path

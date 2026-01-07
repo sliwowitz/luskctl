@@ -30,7 +30,7 @@ def get_prefix() -> Path:
 
 def config_root() -> Path:
     """
-    System projects directory. Uses FHS/XDG via codexctl.paths.
+    System projects directory. Uses FHS/XDG via codexctl.lib.paths.
 
     Behavior:
     - If the base config directory contains a 'projects' subdirectory, use it.
@@ -103,7 +103,7 @@ def state_root() -> Path:
     Precedence:
     - Environment variable CODEXCTL_STATE_DIR (handled first)
     - If set in global config (paths.state_root), use it.
-    - Otherwise, use codexctl.paths.state_root() (FHS/XDG handling).
+    - Otherwise, use codexctl.lib.paths.state_root() (FHS/XDG handling).
     """
     # Environment override should always win
     env = os.environ.get("CODEXCTL_STATE_DIR")

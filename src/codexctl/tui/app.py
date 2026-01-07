@@ -37,12 +37,12 @@ if _HAS_TEXTUAL:
     from textual.containers import Horizontal, Vertical
     from textual import on
 
-    from .config import state_root
-    from .docker import build_images, generate_dockerfiles
-    from .git_cache import init_project_cache
-    from .projects import get_project_state, list_projects, load_project
-    from .ssh import init_project_ssh
-    from .tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui
+    from ..lib.config import state_root
+    from ..lib.docker import build_images, generate_dockerfiles
+    from ..lib.git_cache import init_project_cache
+    from ..lib.projects import get_project_state, list_projects, load_project
+    from ..lib.ssh import init_project_ssh
+    from ..lib.tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui
     from .widgets import (
         ProjectList,
         ProjectActions,

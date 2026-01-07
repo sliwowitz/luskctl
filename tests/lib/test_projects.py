@@ -6,8 +6,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.config import build_root, state_root
-from codexctl.projects import get_project_state, list_projects, load_project
+from codexctl.lib.config import build_root, state_root
+from codexctl.lib.projects import get_project_state, list_projects, load_project
 from test_utils import write_project
 
 
@@ -110,7 +110,7 @@ class ProjectTests(unittest.TestCase):
                 cache_dir = state_root() / "cache" / f"{project_id}.git"
                 cache_dir.mkdir(parents=True, exist_ok=True)
 
-                with unittest.mock.patch("codexctl.projects.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.lib.projects.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     state = get_project_state(project_id)
 

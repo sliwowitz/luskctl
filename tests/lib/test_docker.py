@@ -6,8 +6,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.config import build_root
-from codexctl.docker import generate_dockerfiles
+from codexctl.lib.config import build_root
+from codexctl.lib.docker import generate_dockerfiles
 from test_utils import write_project
 
 

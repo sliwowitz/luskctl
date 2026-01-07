@@ -1,29 +1,15 @@
 """codexctl package.
 
 Modules:
-- codexctl.cli: CLI entry point (codexctl)
-- codexctl.tui: Text UI entry point (codexctl-tui / codextui)
-- codexctl.lib: Compatibility shim (legacy core library)
-- codexctl.config: Config + path helpers
-- codexctl.projects: Project model + loading
-- codexctl.docker: Dockerfile generation + image build
-- codexctl.tasks: Task management + podman run helpers
-- codexctl.ssh: SSH init helpers
-- codexctl.git_cache: Git mirror cache helpers
-- codexctl.auth: Codex auth helper
-- codexctl.widgets: TUI widgets
+- codexctl.cli: CLI entry point package (codexctl)
+- codexctl.tui: Text UI entry point package (codexctl-tui / codextui)
+- codexctl.tui.widgets: TUI widgets
+- codexctl.lib: Core library package (auth, config, docker, git_cache, projects, ssh, tasks)
+- codexctl.lib.paths: Base path helpers
 """
 
 __all__ = [
-    "auth",
     "cli",
-    "config",
-    "docker",
-    "git_cache",
     "lib",
-    "projects",
-    "ssh",
-    "tasks",
     "tui",
-    "widgets",
 ]

@@ -6,7 +6,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.git_cache import init_project_cache
+from codexctl.lib.git_cache import init_project_cache
 from test_utils import write_project
 
 
@@ -59,7 +59,7 @@ class GitCacheTests(unittest.TestCase):
                     "CODEXCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                with unittest.mock.patch("codexctl.git_cache.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.lib.git_cache.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     result = init_project_cache(project_id)
 
