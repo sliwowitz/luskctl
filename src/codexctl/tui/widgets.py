@@ -235,6 +235,16 @@ class ProjectState(Static):
             tasks_line,
         ]
 
+        # Add cache commit info if available
+        cache_commit = state.get("cache_last_commit")
+        if cache_commit:
+            lines.append("")
+            lines.append("Cache info:")
+            lines.append(f"  Commit:   {cache_commit.get('commit_hash', 'unknown')[:8]}")
+            lines.append(f"  Date:     {cache_commit.get('commit_date', 'unknown')}")
+            lines.append(f"  Author:   {cache_commit.get('commit_author', 'unknown')}")
+            lines.append(f"  Message:  {cache_commit.get('commit_message', 'unknown')[:50]}{'...' if len(cache_commit.get('commit_message', '')) > 50 else ''}")
+
         self.update("\n".join(lines))
 
 

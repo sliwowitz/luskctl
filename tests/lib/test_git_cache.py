@@ -6,7 +6,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.git_cache import init_project_cache
+from codexctl.lib.git_cache import init_project_cache, get_cache_last_commit
 from test_utils import write_project
 
 
@@ -72,3 +72,77 @@ class GitCacheTests(unittest.TestCase):
                 args, kwargs = call
                 self.assertEqual(args[0][:3], ["git", "clone", "--mirror"])
                 self.assertIn("env", kwargs)
+
+    def test_get_cache_last_commit_no_cache(self) -> None:
+        """Test get_cache_last_commit when cache doesn't exist."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj8"
+            write_project(
+                config_root,
+                project_id,
+                f"""
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                },
+            ):
+                result = get_cache_last_commit(project_id)
+                self.assertIsNone(result)
+
+    def test_get_cache_last_commit_with_cache(self) -> None:
+        """Test get_cache_last_commit when cache exists."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+            state_dir.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj9"
+            write_project(
+                config_root,
+                project_id,
+                f"""
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+""".lstrip(),
+            )
+
+            # Create a fake cache directory
+            cache_dir = state_dir / "cache" / f"{project_id}.git"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                # Mock the git log command to return sample commit data
+                mock_result = unittest.mock.Mock()
+                mock_result.returncode = 0
+                mock_result.stdout = "abc123def456|2023-01-01 12:00:00 +0000|Test commit message|John Doe\n"
+                
+                with unittest.mock.patch("codexctl.lib.git_cache.subprocess.run", return_value=mock_result):
+                    result = get_cache_last_commit(project_id)
+                    
+                self.assertIsNotNone(result)
+                self.assertEqual(result["commit_hash"], "abc123def456")
+                self.assertEqual(result["commit_date"], "2023-01-01 12:00:00 +0000")
+                self.assertEqual(result["commit_message"], "Test commit message")
+                self.assertEqual(result["commit_author"], "John Doe")
