@@ -7,18 +7,30 @@ ENV DEBIAN_FRONTEND=noninteractive
 USER root
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends curl ca-certificates gnupg; \
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg python3 python3-pip python3-venv; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs ripgrep; \
     npm install -g @openai/codex; \
     npm install -g @anthropic-ai/claude-code; \
     npm cache clean --force; \
+    pip3 install --break-system-packages mistral-vibe; \
     rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
     printf '%s\n' \
       'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' \
       'alias claude="claude --dangerously-skip-permissions"' \
+      'alias vibe="vibe --yes"' \
+      '' \
+      '# Print available agents on interactive login' \
+      'if [ -t 1 ] && [ -z "$_CODEXCTL_AGENTS_SHOWN" ]; then' \
+      '  export _CODEXCTL_AGENTS_SHOWN=1' \
+      '  printf "\\n\\033[1mAvailable AI agents:\\033[0m\\n"' \
+      '  printf "  \\033[36mcodex\\033[0m  - OpenAI Codex CLI (auto-approve enabled)\\n"' \
+      '  printf "  \\033[36mclaude\\033[0m - Claude Code CLI (permissions skipped)\\n"' \
+      '  printf "  \\033[36mvibe\\033[0m   - Mistral Vibe CLI (auto-approve enabled)\\n"' \
+      '  printf "\\n"' \
+      'fi' \
       > /etc/profile.d/codexctl-agent-aliases.sh; \
     if [ -f /etc/bash.bashrc ]; then \
       printf '\n# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
