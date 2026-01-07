@@ -6,8 +6,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.projects import load_project
-from codexctl.tasks import _build_task_env_and_volumes, task_delete, task_new
+from codexctl.lib.projects import load_project
+from codexctl.lib.tasks import _build_task_env_and_volumes, task_delete, task_new
 from test_utils import parse_meta_value, write_project
 
 
@@ -43,7 +43,7 @@ class TaskTests(unittest.TestCase):
                 workspace = Path(parse_meta_value(meta_text, "workspace") or "")
                 self.assertTrue(workspace.is_dir())
 
-                with unittest.mock.patch("codexctl.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     task_delete(project_id, "1")
 
