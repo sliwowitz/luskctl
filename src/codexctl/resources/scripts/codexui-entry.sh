@@ -43,13 +43,18 @@ fi
 # directory is the task workspace. This ensures that server.ts is resolved
 # from CODEXUI_DIR while allowing the UI to treat the workspace as its
 # current directory (for project-specific files, etc.).
+ui_args=()
 if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
   ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
 elif [[ -x "${CODEXUI_DIR}/node_modules/.bin/ts-node" ]]; then
   ui_runner="${CODEXUI_DIR}/node_modules/.bin/ts-node"
+  ui_args+=(--esm)
+  if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
+    ui_args+=(--project "${CODEXUI_DIR}/tsconfig.json")
+  fi
 else
   echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
   exit 1
 fi
 echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry_ts})"
-exec "${ui_runner}" "${ui_entry_ts}"
+exec "${ui_runner}" "${ui_args[@]}" "${ui_entry_ts}"
