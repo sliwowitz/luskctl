@@ -201,7 +201,7 @@ Container readiness and initial log streaming (important for developers)
 
 - UI (task run-ui):
   - Readiness is currently determined by probing the bound localhost port (127.0.0.1:<assigned_port> → container port 7860). The host follows the container logs for a short time and detaches as soon as the TCP port is reachable, or after a timeout.
-  - This implies a dependency on the UI process actually listening on PORT (default 7860) and binding to 0.0.0.0 inside the container. The default entry script is resources/scripts/codexui-entry.sh which runs `node server.js` from the CodexUI repo.
+  - This implies a dependency on the UI process actually listening on PORT (default 7860) and binding to 0.0.0.0 inside the container. The default entry script is resources/scripts/codexui-entry.sh which runs `server.ts` via `tsx` or `ts-node` from the CodexUI repo.
   - If the UI server changes its port, bind address, or startup behavior (e.g., delays listening until after long asset builds), you may need to adjust:
     - The exposed/internal port, and the host port mapping in src/codexctl/lib/tasks.py (task_run_ui).
     - The readiness timeout in src/codexctl/lib/tasks.py.
