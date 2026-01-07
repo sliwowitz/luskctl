@@ -52,6 +52,30 @@ def _ensure_dir(d: Path) -> None:
 
 
 def task_new(project_id: str) -> None:
+    """Create a new task with a fresh workspace for a project.
+
+    Workspace Initialization Protocol:
+    ----------------------------------
+    Each task gets its own workspace directory that persists across container
+    runs. When a container starts, the init script (init-ssh-and-repo.sh) needs
+    to know whether this is:
+
+    1. A NEW task that should be reset to the latest remote HEAD
+    2. A RESTARTED task where local changes should be preserved
+
+    We use a marker file (.new-task-marker) to signal intent:
+
+    - task_new() creates the marker in the workspace directory
+    - init-ssh-and-repo.sh checks for the marker:
+      - If marker exists: reset to origin/HEAD, then delete marker
+      - If no marker: fetch only, preserve local state
+    - Subsequent container runs on the same task won't see the marker,
+      so local work is preserved
+
+    This handles edge cases like:
+    - Stale workspace from incompletely deleted previous task with same ID
+    - Ensuring new tasks always start with latest code
+    """
     project = load_project(project_id)
     tasks_root = project.tasks_root
     _ensure_dir(tasks_root)
@@ -64,6 +88,19 @@ def task_new(project_id: str) -> None:
 
     ws = tasks_root / next_id
     _ensure_dir(ws)
+
+    # Create the workspace subdirectory and place a marker file to signal
+    # that this is a fresh task. The init script will reset to latest HEAD
+    # when it sees this marker, then remove it. See docstring above.
+    workspace_dir = ws / "workspace"
+    _ensure_dir(workspace_dir)
+    marker_path = workspace_dir / ".new-task-marker"
+    marker_path.write_text(
+        "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
+        "# It is created by 'codexctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
+        "# If you see this file in an initialized workspace, something went wrong.\n",
+        encoding="utf-8"
+    )
 
     meta = {
         "task_id": next_id,

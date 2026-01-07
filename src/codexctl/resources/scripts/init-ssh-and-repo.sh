@@ -45,7 +45,26 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     git config --global --add safe.directory "${REPO_ROOT}" || true
   fi
 
+  # New Task Marker Protocol:
+  # -------------------------
+  # The marker file (.new-task-marker) is created by 'codexctl task new' to signal
+  # that this workspace should be reset to the latest remote HEAD. This handles:
+  #
+  # 1. NEW TASK: Marker exists -> clone or reset to latest HEAD, then remove marker
+  # 2. RESTARTED TASK: No marker -> fetch only, preserve local changes
+  #
+  # This ensures new tasks always start with fresh code while preserving work
+  # in progress for restarted containers. It also handles edge cases like stale
+  # workspaces from incompletely deleted tasks.
+  NEW_TASK_MARKER="${REPO_ROOT}/.new-task-marker"
+  IS_NEW_TASK=false
+  if [[ -f "${NEW_TASK_MARKER}" ]]; then
+    IS_NEW_TASK=true
+    echo ">> detected new task marker - will reset to latest HEAD"
+  fi
+
   if [[ ! -d "${REPO_ROOT}/.git" ]]; then
+    # No .git directory - perform initial clone
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
     echo ">> initial clone from ${SRC_REPO}"
     git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
@@ -53,11 +72,46 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     if [[ -n "${CLONE_FROM:-}" && "${CLONE_FROM}" != "${CODE_REPO}" ]]; then
       git -C "${REPO_ROOT}" remote set-url origin "${CODE_REPO}" || true
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
-      # Optionally fetch latest from upstream right away
+      # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
     fi
-  else
+    # Remove marker after successful clone (new task is now initialized)
+    rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
+
+  elif [[ "${IS_NEW_TASK}" == "true" ]]; then
+    # .git exists but this is a new task (marker present)
+    # This happens when a previous task with the same ID wasn't fully cleaned up.
+    # Reset to latest remote HEAD to ensure fresh state.
+    echo ">> new task with existing .git - resetting to latest HEAD"
     git -C "${REPO_ROOT}" fetch --all --prune
+    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    
+    # Check if the target branch exists on the remote, fallback to origin/HEAD if not
+    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+      echo ">> Target branch found, will reset to origin/${TARGET_BRANCH}"
+      RESET_TARGET="origin/${TARGET_BRANCH}"
+    else
+      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, falling back to origin/HEAD"
+      RESET_TARGET="origin/HEAD"
+    fi
+    
+    reset_ok=true
+    if ! git -C "${REPO_ROOT}" reset --hard "${RESET_TARGET}"; then
+      echo ">> WARNING: git reset failed; preserving new task marker for retry"
+      reset_ok=false
+    fi
+    git -C "${REPO_ROOT}" clean -fd || true
+    # Remove marker only after successful reset
+    if [[ "${reset_ok}" == "true" ]]; then
+      rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
+    fi
+
+  else
+    # .git exists and no marker - this is a restarted task
+    # Only fetch updates, preserve local changes
+    echo ">> restarted task - fetching updates (preserving local changes)"
+    git -C "${REPO_ROOT}" fetch --all --prune
+    # Only reset if explicitly requested via GIT_RESET_MODE
     if [[ -n "${GIT_BRANCH:-}" && "${GIT_RESET_MODE}" != "none" ]]; then
       echo ">> git reset (${GIT_RESET_MODE}) to origin/${GIT_BRANCH}"
       case "${GIT_RESET_MODE}" in

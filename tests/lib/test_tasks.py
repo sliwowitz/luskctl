@@ -50,6 +50,44 @@ class TaskTests(unittest.TestCase):
                 self.assertFalse(meta_path.exists())
                 self.assertFalse(workspace.exists())
 
+    def test_task_new_creates_marker_file(self) -> None:
+        """Verify that task_new() creates the .new-task-marker file.
+
+        The marker file signals to init-ssh-and-repo.sh that this is a fresh
+        task and the workspace should be reset to the latest remote HEAD.
+        See the docstring in task_new() for the full protocol description.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_marker"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+
+                # Verify marker file exists in the workspace subdirectory
+                workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
+                marker_path = workspace_dir / ".new-task-marker"
+                self.assertTrue(marker_path.is_file(), "Marker file should be created by task_new()")
+
+                # Verify marker content explains its purpose
+                marker_content = marker_path.read_text(encoding="utf-8")
+                self.assertIn("reset to the latest remote HEAD", marker_content)
+
     def test_build_task_env_gatekept(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
