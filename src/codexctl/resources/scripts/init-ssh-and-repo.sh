@@ -85,9 +85,18 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     echo ">> new task with existing .git - resetting to latest HEAD"
     git -C "${REPO_ROOT}" fetch --all --prune
     TARGET_BRANCH="${GIT_BRANCH:-main}"
-    echo ">> git reset --hard origin/${TARGET_BRANCH}"
+    
+    # Check if the target branch exists on the remote, fallback to origin/HEAD if not
+    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+      echo ">> Target branch found, will reset to origin/${TARGET_BRANCH}"
+      RESET_TARGET="origin/${TARGET_BRANCH}"
+    else
+      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, falling back to origin/HEAD"
+      RESET_TARGET="origin/HEAD"
+    fi
+    
     reset_ok=true
-    if ! git -C "${REPO_ROOT}" reset --hard "origin/${TARGET_BRANCH}"; then
+    if ! git -C "${REPO_ROOT}" reset --hard "${RESET_TARGET}"; then
       echo ">> WARNING: git reset failed; preserving new task marker for retry"
       reset_ok=false
     fi
