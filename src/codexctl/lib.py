@@ -631,6 +631,28 @@ def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
 
 
+def _ensure_dev_ownership(path: Path) -> None:
+    """Best-effort chown to dev (uid/gid 1000) for shared mounts."""
+    uid = 1000
+    gid = 1000
+    chown = getattr(os, "lchown", os.chown)
+    try:
+        chown(path, uid, gid)
+    except Exception:
+        return
+    if not path.is_dir():
+        return
+    try:
+        for root, dirs, files in os.walk(path):
+            for name in dirs + files:
+                try:
+                    chown(Path(root) / name, uid, gid)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+
 def _render_template(template_path: Path, variables: dict) -> str:
     content = template_path.read_text()
     # Extremely simple token replacement: {{VAR}} → variables["VAR"]
@@ -920,6 +942,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Ensure codex dir exists so the mount works
     codex_host_dir.mkdir(parents=True, exist_ok=True)
     claude_host_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dev_ownership(codex_host_dir)
+    _ensure_dev_ownership(claude_host_dir)
 
     env = {
         "PROJECT_ID": project.id,
@@ -975,6 +999,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
+            _ensure_dev_ownership(ssh_host_dir)
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
@@ -1493,6 +1518,7 @@ def codex_auth(project_id: str) -> None:
     codex_host_dir = envs_base / "_codex-config"
     # Ensure codex dir exists so the mount works
     codex_host_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_dev_ownership(codex_host_dir)
 
     container_name = f"{project.id}-auth"
 

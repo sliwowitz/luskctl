@@ -20,12 +20,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # --- END USER SNIPPET ---
 
 RUN set -eux; \
+    uid_owner="$(getent passwd 1000 | cut -d: -f1 || true)"; \
+    if [ -n "$uid_owner" ] && [ "$uid_owner" != "dev" ]; then \
+      if getent group "$uid_owner" >/dev/null; then groupmod -n dev "$uid_owner" || true; fi; \
+      usermod -l dev "$uid_owner"; \
+      usermod -d /home/dev -m dev; \
+    fi; \
     if ! getent group dev >/dev/null; then \
-      if getent group 1000 >/dev/null; then groupadd -o -g 1000 dev; else groupadd -g 1000 dev; fi; \
+      groupadd dev; \
     fi; \
     if ! id -u dev >/dev/null 2>&1; then \
-      useradd -m -o -u 1000 -g 1000 -s /bin/bash dev; \
+      useradd -m -u 1000 -g dev -s /bin/bash dev; \
     fi; \
+    if [ "$(id -u dev)" != "1000" ]; then usermod -u 1000 dev; fi; \
     printf 'dev ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/dev; \
     chmod 0440 /etc/sudoers.d/dev; \
     mkdir -p /workspace /home/dev/.ssh; \
