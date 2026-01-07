@@ -10,7 +10,7 @@ from textual.widgets import ListView, ListItem, Static, Button
 from textual.containers import Horizontal
 from textual.message import Message
 
-from .lib import Project as CodexProject
+from .projects import Project as CodexProject
 
 
 @dataclass

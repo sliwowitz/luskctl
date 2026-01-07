@@ -37,21 +37,12 @@ if _HAS_TEXTUAL:
     from textual.containers import Horizontal, Vertical
     from textual import on
 
-    from .lib import (
-        list_projects,
-        get_tasks,
-        task_new,
-        task_run_cli,
-        task_run_ui,
-        generate_dockerfiles,
-        build_images,
-        load_project,
-        state_root,
-        init_project_ssh,
-        init_project_cache,
-        get_project_state,
-        task_delete,
-    )
+    from .config import state_root
+    from .docker import build_images, generate_dockerfiles
+    from .git_cache import init_project_cache
+    from .projects import get_project_state, list_projects, load_project
+    from .ssh import init_project_ssh
+    from .tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui
     from .widgets import (
         ProjectList,
         ProjectActions,
@@ -63,7 +54,7 @@ if _HAS_TEXTUAL:
     )
 
     class CodexTUI(App):
-        """Minimal TUI frontend for codexctl.lib."""
+        """Minimal TUI frontend for codexctl core modules."""
 
         CSS_PATH = None
 

@@ -3,27 +3,22 @@ from __future__ import annotations
 
 import argparse
 
-from .lib import (
-    generate_dockerfiles,
-    build_images,
+from .auth import codex_auth
+from .config import (
+    build_root as _build_root,
     config_root as _config_root,
+    get_envs_base_dir as _get_envs_base_dir,
+    get_ui_base_port as _get_ui_base_port,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
     state_root as _state_root,
     user_projects_root as _user_projects_root,
-    build_root as _build_root,
-    get_ui_base_port as _get_ui_base_port,
-    init_project_ssh,
-    init_project_cache,
-    task_new,
-    task_list,
-    task_run_cli,
-    task_run_ui,
-    list_projects,
-    get_tasks as _get_tasks,
-    task_delete,
-    codex_auth,
 )
+from .docker import build_images, generate_dockerfiles
+from .git_cache import init_project_cache
+from .projects import list_projects
+from .ssh import init_project_ssh
+from .tasks import get_tasks as _get_tasks, task_delete, task_list, task_new, task_run_cli, task_run_ui
 import os
 from importlib import resources
 from pathlib import Path
@@ -225,7 +220,6 @@ def main() -> None:
 
         # Envs base dir
         try:
-            from .lib import get_envs_base_dir as _get_envs_base_dir  # lazy import to avoid cycles
             print(f"- Envs base dir (for mounts): {_get_envs_base_dir()}")
         except Exception:
             pass
