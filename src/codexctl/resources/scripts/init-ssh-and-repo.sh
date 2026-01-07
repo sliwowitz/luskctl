@@ -86,10 +86,16 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     git -C "${REPO_ROOT}" fetch --all --prune
     TARGET_BRANCH="${GIT_BRANCH:-main}"
     echo ">> git reset --hard origin/${TARGET_BRANCH}"
-    git -C "${REPO_ROOT}" reset --hard "origin/${TARGET_BRANCH}" || true
+    reset_ok=true
+    if ! git -C "${REPO_ROOT}" reset --hard "origin/${TARGET_BRANCH}"; then
+      echo ">> WARNING: git reset failed; preserving new task marker for retry"
+      reset_ok=false
+    fi
     git -C "${REPO_ROOT}" clean -fd || true
-    # Remove marker after successful reset
-    rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
+    # Remove marker only after successful reset
+    if [[ "${reset_ok}" == "true" ]]; then
+      rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
+    fi
 
   else
     # .git exists and no marker - this is a restarted task
