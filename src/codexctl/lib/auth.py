@@ -14,7 +14,7 @@ def codex_auth(project_id: str) -> None:
 
     This command:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
-    - Mounts the shared codex config directory (/root/.codex)
+    - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
@@ -59,7 +59,7 @@ def codex_auth(project_id: str) -> None:
         "--rm",
         "-it",
         "-p", "127.0.0.1:1455:1455",
-        "-v", f"{codex_host_dir}:/root/.codex:Z",
+        "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
         "codex", "login",

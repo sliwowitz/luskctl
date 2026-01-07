@@ -122,4 +122,4 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
                 self.assertEqual(env["GIT_BRANCH"], "main")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z,ro", volumes)
-                self.assertIn(f"{ssh_dir}:/tmp/ssh-config-ro:Z,ro", volumes)
+                self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)

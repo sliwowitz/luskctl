@@ -7,6 +7,7 @@ ENV HOST="0.0.0.0" \
     CODEXUI_DIR="/opt/codexui" \
     CODEXUI_REPO="https://github.com/sliwowitz/codex-in-podman.git"
 
+USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ssh ca-certificates python3 nodejs npm \
     && rm -rf /var/lib/apt/lists/*
@@ -22,8 +23,13 @@ RUN set -eux; \
       printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
     fi
 
+RUN set -eux; \
+    mkdir -p /opt/codexui; \
+    chown -R dev:dev /opt/codexui
+
 COPY scripts/codexui-entry.sh /usr/local/bin/codexui-entry.sh
 RUN chmod +x /usr/local/bin/codexui-entry.sh
 
 EXPOSE 7860
+USER dev
 CMD ["codexui-entry.sh"]

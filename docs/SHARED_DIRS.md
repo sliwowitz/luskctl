@@ -3,9 +3,9 @@ Shared directories and mounts used by codexctl tasks
 Overview
 - When you run a task (CLI or UI), codexctl starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (/workspace)
-  - Shared credentials/config for Codex under /root/.codex
-  - Shared credentials/config for Claude Code under /root/.claude
-  - Optional per‑project SSH configuration under /home/dev/.ssh (read‑only)
+  - Shared credentials/config for Codex under /home/dev/.codex
+  - Shared credentials/config for Claude Code under /home/dev/.claude
+  - Optional per‑project SSH configuration under /home/dev/.ssh (read‑write)
 
 Per‑task workspace (required)
 - Host path: <state_root>/tasks/<project_id>/<task_id>/workspace
@@ -20,14 +20,14 @@ Shared envs base directory (configurable)
       base_dir: /var/lib/codexctl/envs
 - Under this base, three subdirectories may be used:
   1) _codex-config (required; created automatically if missing)
-     - Mounted as: <base_dir>/_codex-config → /root/.codex:Z (read‑write)
+     - Mounted as: <base_dir>/_codex-config → /home/dev/.codex:Z (read‑write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
   2) _claude-config (required; created automatically if missing)
-     - Mounted as: <base_dir>/_claude-config → /root/claude:Z (read‑write)
+     - Mounted as: <base_dir>/_claude-config → /home/dev/.claude:Z (read‑write)
      - Purpose: Shared credentials/config used by Claude Code in CLI mode.
-     - Note: codexctl sets CLAUDE_CONFIG_DIR=/root/.claude inside containers.
+     - Note: codexctl sets CLAUDE_CONFIG_DIR=/home/dev/.claude inside containers.
   3) _ssh-config-<project_id> (optional)
-     - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z,ro (read‑only)
+     - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z (read‑write)
      - Purpose: If your project uses private git URLs (e.g. git@github.com:...), provide SSH keys and config here so the container can fetch the repository.
 
 Expected contents of the optional SSH config directory
@@ -35,7 +35,7 @@ Expected contents of the optional SSH config directory
 - Files:
   - Private/public key pair for the project (e.g. id_ed25519_<project>, id_ed25519_<project>.pub)
   - config file with host definitions and IdentityFile entries
-- Permissions: The directory is mounted read‑only to /tmp/ssh-config-ro in the container. The init script (running as root) will copy the key and config to /root/.ssh with secure permissions and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
+- Permissions: The directory is mounted read‑write to /home/dev/.ssh in the container. The init script will use the keys and config directly and, if available, warm up known_hosts for github.com only when the project's code repo is hosted on GitHub.
 - Key selection: The init script relies on SSH_KEY_NAME if provided in the image/env, but your config file can also refer to the correct IdentityFile.
 
 How to create this directory automatically
@@ -59,13 +59,13 @@ How to create this directory automatically
   - Prints the resulting paths. Use the .pub key to register a deploy key or add it to your Git host.
 
 SELinux and mount flags
-- codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z,ro to enforce read‑only access.
+- codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z for read‑write access.
 
 Quick reference (runtime mounts)
 - /workspace          ← <state_root>/tasks/<project>/<task>/workspace:Z
-- /root/.codex        ← <envs_base>/_codex-config:Z
-- /root/.claude       ← <envs_base>/_claude-config:Z
-- /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z,ro
+- /home/dev/.codex        ← <envs_base>/_codex-config:Z
+- /home/dev/.claude       ← <envs_base>/_claude-config:Z
+- /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z
 
 How codexctl discovers these paths
 - state_root: Determined by CODEXCTL_STATE_DIR or defaults (root: /var/lib/codexctl; user: ${XDG_DATA_HOME:-~/.local/share}/codexctl).

@@ -6,21 +6,36 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CODE_REPO="{{CODE_REPO_DEFAULT}}" \
     SSH_KEY_NAME="{{SSH_KEY_NAME}}" \
     GIT_BRANCH="{{DEFAULT_BRANCH}}" \
-    GIT_RESET_MODE="none"
+    GIT_RESET_MODE="none" \
+    HOME="/home/dev" \
+    USER="dev"
 
 # Basic dev tooling common to all projects
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl gnupg git openssh-client \
+      ca-certificates curl gnupg git openssh-client sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # --- BEGIN USER SNIPPET ---
 {{USER_SNIPPET}}
 # --- END USER SNIPPET ---
 
-RUN mkdir -p /workspace && chmod 0777 /workspace
+RUN set -eux; \
+    if ! getent group dev >/dev/null; then \
+      if getent group 1000 >/dev/null; then groupadd -o -g 1000 dev; else groupadd -g 1000 dev; fi; \
+    fi; \
+    if ! id -u dev >/dev/null 2>&1; then \
+      useradd -m -o -u 1000 -g 1000 -s /bin/bash dev; \
+    fi; \
+    printf 'dev ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/dev; \
+    chmod 0440 /etc/sudoers.d/dev; \
+    mkdir -p /workspace /home/dev/.ssh; \
+    chown -R dev:dev /home/dev /workspace; \
+    chmod 700 /home/dev/.ssh; \
+    chmod 0777 /workspace
 WORKDIR /workspace
 
 COPY scripts/init-ssh-and-repo.sh /usr/local/bin/init-ssh-and-repo.sh
 RUN chmod +x /usr/local/bin/init-ssh-and-repo.sh
 
+USER dev
 CMD ["init-ssh-and-repo.sh"]

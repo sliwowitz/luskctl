@@ -158,9 +158,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
-    - Mount shared codex config dir to /root/.codex (read-write).
-    - Mount shared Claude config dir to /root/.claude (read-write).
-    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-only).
+    - Mount shared codex config dir to /home/dev/.codex (read-write).
+    - Mount shared Claude config dir to /home/dev/.claude (read-write).
+    - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-write).
     - Provide REPO_ROOT and git info for the init script.
     """
     # Per-task workspace directory as a subdirectory of the task dir
@@ -186,7 +186,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Default reset mode is none; allow overriding via container env if needed
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
-        "CLAUDE_CONFIG_DIR": "/root/.claude",
+        "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     }
 
     volumes: list[str] = []
@@ -194,9 +194,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{repo_dir}:/workspace:Z")
 
     # Shared codex credentials/config
-    volumes.append(f"{codex_host_dir}:/root/.codex:Z")
+    volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
     # Shared Claude credentials/config
-    volumes.append(f"{claude_host_dir}:/root/.claude:Z")
+    volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path
@@ -232,7 +232,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             env["GIT_BRANCH"] = project.default_branch or "main"
         # Optional SSH config mount in online mode (configurable)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            volumes.append(f"{ssh_host_dir}:/tmp/ssh-config-ro:Z,ro")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
 

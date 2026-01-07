@@ -22,7 +22,7 @@ def init_project_ssh(
 ) -> dict:
     """Initialize the shared SSH directory for a project and generate a keypair.
 
-    This prepares the host directory that containers mount read-only at /tmp/ssh-config-ro
+    This prepares the host directory that containers mount read-write at /home/dev/.ssh
     and creates an SSH keypair plus a minimal config file if missing.
 
     Location resolution:
@@ -130,6 +130,29 @@ def init_project_ssh(
         except Exception as e:
             raise SystemExit(f"Failed to write SSH config at {cfg_path}: {e}")
 
+    # Best-effort permissions and ownership for container dev user access.
+    try:
+        os.chmod(target_dir, 0o700)
+        if priv_path.exists():
+            os.chmod(priv_path, 0o600)
+        if pub_path.exists():
+            os.chmod(pub_path, 0o644)
+        if cfg_path.exists():
+            os.chmod(cfg_path, 0o644)
+    except Exception:
+        # Permission adjustments are best-effort.
+        pass
+    try:
+        dev_uid = 1000
+        dev_gid = 1000
+        os.chown(target_dir, dev_uid, dev_gid)
+        for p in (priv_path, pub_path, cfg_path):
+            if p.exists():
+                os.chown(p, dev_uid, dev_gid)
+    except Exception:
+        # Ownership adjustments are best-effort.
+        pass
+
     print("SSH directory initialized:")
     print(f"  dir:         {target_dir}")
     print(f"  private key: {priv_path}")
@@ -150,7 +173,7 @@ def init_project_ssh(
     # When ssh.key_name is omitted in project.yml, we still derive a stable
     # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
     # Containers receive only this bare filename via SSH_KEY_NAME and mount
-    # the host ssh_host_dir at /tmp/ssh-config-ro, so path handling remains
+    # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
     # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
         print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
