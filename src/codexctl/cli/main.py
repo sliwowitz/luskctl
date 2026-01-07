@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from ..lib.auth import codex_auth, mistral_auth
+from ..lib.auth import codex_auth, mistral_auth, claude_auth
 from ..lib.config import (
     build_root as _build_root,
     config_root as _config_root,
@@ -115,23 +115,34 @@ def main() -> None:
         pass
     p_cache.add_argument("--force", action="store_true", help="Recreate the mirror from scratch")
 
-    # auth (codex)
-    p_auth = sub.add_parser(
-        "auth",
+    # auth-codex
+    p_auth_codex = sub.add_parser(
+        "auth-codex",
         help="Authenticate Codex CLI by running 'codex login' inside an L2 container with port forwarding",
     )
-    _a = p_auth.add_argument("project_id")
+    _a = p_auth_codex.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
         pass
 
-    # mistral-auth
-    p_mistral_auth = sub.add_parser(
-        "mistral-auth",
+    # auth-mistral
+    p_auth_mistral = sub.add_parser(
+        "auth-mistral",
         help="Set up Mistral API key for Vibe CLI inside an L2 container",
     )
-    _a = p_mistral_auth.add_argument("project_id")
+    _a = p_auth_mistral.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    # auth-claude
+    p_auth_claude = sub.add_parser(
+        "auth-claude",
+        help="Set up Claude API key for CLI inside an L2 container",
+    )
+    _a = p_auth_claude.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
@@ -214,10 +225,12 @@ def main() -> None:
     elif args.cmd == "cache-init":
         res = init_project_cache(args.project_id, force=getattr(args, "force", False))
         print(f"Cache ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})")
-    elif args.cmd == "auth":
+    elif args.cmd == "auth-codex":
         codex_auth(args.project_id)
-    elif args.cmd == "mistral-auth":
+    elif args.cmd == "auth-mistral":
         mistral_auth(args.project_id)
+    elif args.cmd == "auth-claude":
+        claude_auth(args.project_id)
     elif args.cmd == "config":
         # READ PATHS
         print("Configuration (read):")
