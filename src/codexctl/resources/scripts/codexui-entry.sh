@@ -21,29 +21,16 @@ fi
 
 cd "${CODEXUI_DIR}"
 ui_entry_ts="${CODEXUI_DIR}/server.ts"
-ui_entry_js="${CODEXUI_DIR}/server.js"
-install_dev=0
-if [[ -f "${ui_entry_ts}" ]]; then
-  install_dev=1
+if [[ ! -f "${ui_entry_ts}" ]]; then
+  echo "!! no UI entrypoint found (expected server.ts)."
+  exit 1
 fi
 
-if [[ "${install_dev}" -eq 1 ]]; then
-  echo ">> npm install (include dev for TypeScript)"
-else
-  echo ">> npm install (omit dev)"
-fi
+echo ">> npm install (include dev for TypeScript)"
 if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
-  if [[ "${install_dev}" -eq 1 ]]; then
-    npm ci --no-fund --no-audit --progress=false
-  else
-    npm ci --omit=dev --no-fund --no-audit --progress=false
-  fi
+  npm ci --no-fund --no-audit --progress=false
 else
-  if [[ "${install_dev}" -eq 1 ]]; then
-    npm install --no-fund --no-audit --progress=false
-  else
-    npm install --omit=dev --no-fund --no-audit --progress=false
-  fi
+  npm install --no-fund --no-audit --progress=false
 fi
 
 # If a task workspace repository exists, prefer that as working directory
@@ -56,21 +43,13 @@ fi
 # directory is the task workspace. This ensures that server.ts is resolved
 # from CODEXUI_DIR while allowing the UI to treat the workspace as its
 # current directory (for project-specific files, etc.).
-if [[ -f "${ui_entry_ts}" ]]; then
-  if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
-    ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
-  elif [[ -x "${CODEXUI_DIR}/node_modules/.bin/ts-node" ]]; then
-    ui_runner="${CODEXUI_DIR}/node_modules/.bin/ts-node"
-  else
-    echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
-    exit 1
-  fi
-  echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry_ts})"
-  exec "${ui_runner}" "${ui_entry_ts}"
-elif [[ -f "${ui_entry_js}" ]]; then
-  echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry_js})"
-  exec node "${ui_entry_js}"
+if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
+  ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
+elif [[ -x "${CODEXUI_DIR}/node_modules/.bin/ts-node" ]]; then
+  ui_runner="${CODEXUI_DIR}/node_modules/.bin/ts-node"
 else
-  echo "!! no UI entrypoint found (expected server.ts or server.js)."
+  echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
   exit 1
 fi
+echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry_ts})"
+exec "${ui_runner}" "${ui_entry_ts}"
