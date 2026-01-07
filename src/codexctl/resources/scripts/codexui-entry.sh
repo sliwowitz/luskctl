@@ -44,13 +44,20 @@ fi
 # from CODEXUI_DIR while allowing the UI to treat the workspace as its
 # current directory (for project-specific files, etc.).
 ui_args=()
+if [[ -z "${CODEXUI_LOG:-}" && ! -w /var/log ]]; then
+  export CODEXUI_LOG="/tmp/codexui.log"
+fi
 if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
   ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
-elif [[ -x "${CODEXUI_DIR}/node_modules/.bin/ts-node" ]]; then
-  ui_runner="${CODEXUI_DIR}/node_modules/.bin/ts-node"
-  ui_args+=(--esm)
   if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
-    ui_args+=(--project "${CODEXUI_DIR}/tsconfig.json")
+    ui_args+=(--tsconfig "${CODEXUI_DIR}/tsconfig.json")
+  fi
+elif [[ -f "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs" ]]; then
+  ui_runner="node"
+  ui_args+=(--loader "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs")
+  if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
+    : "${TS_NODE_PROJECT:=${CODEXUI_DIR}/tsconfig.json}"
+    export TS_NODE_PROJECT
   fi
 else
   echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
