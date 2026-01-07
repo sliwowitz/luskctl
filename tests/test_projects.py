@@ -3,18 +3,12 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from codexctl.config import build_root, state_root
 from codexctl.projects import get_project_state, list_projects, load_project
-
-
-def _write_project(root: Path, project_id: str, yaml_text: str) -> Path:
-    proj_dir = root / project_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "project.yml").write_text(yaml_text, encoding="utf-8")
-    return proj_dir
+from test_utils import write_project
 
 
 class ProjectTests(unittest.TestCase):
@@ -26,13 +20,13 @@ class ProjectTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj1"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: https://example.com/repo.git\n""".lstrip(),
             )
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
@@ -55,18 +49,18 @@ class ProjectTests(unittest.TestCase):
             user_projects = user_root / "codexctl" / "projects"
 
             project_id = "proj2"
-            _write_project(
+            write_project(
                 system_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://system.example/repo.git\n""".lstrip(),
             )
-            _write_project(
+            write_project(
                 user_projects,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://user.example/repo.git\n""".lstrip(),
             )
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(system_root),
@@ -87,7 +81,7 @@ class ProjectTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj3"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n""".lstrip(),
@@ -96,7 +90,7 @@ class ProjectTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
@@ -116,7 +110,7 @@ class ProjectTests(unittest.TestCase):
                 cache_dir = state_root() / "cache" / f"{project_id}.git"
                 cache_dir.mkdir(parents=True, exist_ok=True)
 
-                with mock.patch("codexctl.projects.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.projects.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     state = get_project_state(project_id)
 

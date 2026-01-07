@@ -3,17 +3,11 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from codexctl.git_cache import init_project_cache
-
-
-def _write_project(root: Path, project_id: str, yaml_text: str) -> Path:
-    proj_dir = root / project_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "project.yml").write_text(yaml_text, encoding="utf-8")
-    return proj_dir
+from test_utils import write_project
 
 
 class GitCacheTests(unittest.TestCase):
@@ -25,7 +19,7 @@ class GitCacheTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj6"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: git@github.com:org/repo.git\n""".lstrip(),
@@ -34,7 +28,7 @@ class GitCacheTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
@@ -52,20 +46,20 @@ class GitCacheTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj7"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n""".lstrip(),
             )
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
                     "CODEXCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                with mock.patch("codexctl.git_cache.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.git_cache.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     result = init_project_cache(project_id)
 

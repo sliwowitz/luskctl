@@ -3,18 +3,12 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from codexctl.config import build_root
 from codexctl.docker import generate_dockerfiles
-
-
-def _write_project(root: Path, project_id: str, yaml_text: str) -> Path:
-    proj_dir = root / project_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "project.yml").write_text(yaml_text, encoding="utf-8")
-    return proj_dir
+from test_utils import write_project
 
 
 class DockerTests(unittest.TestCase):
@@ -26,13 +20,13 @@ class DockerTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj4"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\n""".lstrip(),
             )
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),

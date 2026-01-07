@@ -3,17 +3,11 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from codexctl.ssh import init_project_ssh
-
-
-def _write_project(root: Path, project_id: str, yaml_text: str) -> Path:
-    proj_dir = root / project_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "project.yml").write_text(yaml_text, encoding="utf-8")
-    return proj_dir
+from test_utils import write_project
 
 
 class SshTests(unittest.TestCase):
@@ -26,7 +20,7 @@ class SshTests(unittest.TestCase):
             ssh_dir.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj5"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\nssh:\n  host_dir: {ssh_dir}\n""".lstrip(),
@@ -36,8 +30,8 @@ class SshTests(unittest.TestCase):
             (ssh_dir / key_name).write_text("dummy", encoding="utf-8")
             (ssh_dir / f"{key_name}.pub").write_text("dummy", encoding="utf-8")
 
-            with mock.patch.dict(os.environ, {"CODEXCTL_CONFIG_DIR": str(config_root)}):
-                with mock.patch("codexctl.ssh.subprocess.run") as run_mock:
+            with unittest.mock.patch.dict(os.environ, {"CODEXCTL_CONFIG_DIR": str(config_root)}):
+                with unittest.mock.patch("codexctl.ssh.subprocess.run") as run_mock:
                     result = init_project_ssh(project_id, key_name=key_name)
 
                 run_mock.assert_not_called()

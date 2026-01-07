@@ -471,7 +471,6 @@ def task_run_ui(project_id: str, task_id: str) -> None:
     # is actually running. We intentionally rely on a *log marker* here
     # instead of just probing the TCP port, because podman exposes the host port
     # regardless of the state of the routed guest port.
-    # conflicts 
     # Codex UI currently prints stable lines when the server is ready, e.g.:
     #   "Logging Codex UI activity to /var/log/codexui.log"
     #   "Codex UI (SDK streaming) on http://0.0.0.0:7860 - repo /workspace"
@@ -602,6 +601,7 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
                 sys.stdout.write(line)
                 sys.stdout.flush()
             except Exception:
+                # Ignore terminal write errors.
                 pass
             # Check readiness based on the line content
             try:
@@ -621,5 +621,6 @@ def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], read
                 except Exception:
                     proc.kill()
         except Exception:
+            # Best-effort termination; ignore cleanup errors.
             pass
     return ready

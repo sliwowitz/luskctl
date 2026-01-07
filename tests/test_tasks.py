@@ -3,26 +3,12 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
-from unittest import mock
 
 from codexctl.projects import load_project
 from codexctl.tasks import _build_task_env_and_volumes, task_delete, task_new
-
-
-def _write_project(root: Path, project_id: str, yaml_text: str) -> Path:
-    proj_dir = root / project_id
-    proj_dir.mkdir(parents=True, exist_ok=True)
-    (proj_dir / "project.yml").write_text(yaml_text, encoding="utf-8")
-    return proj_dir
-
-
-def _parse_meta_value(meta_text: str, key: str) -> str | None:
-    for line in meta_text.splitlines():
-        if line.startswith(f"{key}:"):
-            value = line.split(":", 1)[1].strip()
-            return value.strip("'\"")
-    return None
+from test_utils import parse_meta_value, write_project
 
 
 class TaskTests(unittest.TestCase):
@@ -34,13 +20,13 @@ class TaskTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj8"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"project:\n  id: {project_id}\n",
             )
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
@@ -53,11 +39,11 @@ class TaskTests(unittest.TestCase):
                 self.assertTrue(meta_path.is_file())
 
                 meta_text = meta_path.read_text(encoding="utf-8")
-                self.assertEqual(_parse_meta_value(meta_text, "task_id"), "1")
-                workspace = Path(_parse_meta_value(meta_text, "workspace") or "")
+                self.assertEqual(parse_meta_value(meta_text, "task_id"), "1")
+                workspace = Path(parse_meta_value(meta_text, "workspace") or "")
                 self.assertTrue(workspace.is_dir())
 
-                with mock.patch("codexctl.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.tasks.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     task_delete(project_id, "1")
 
@@ -73,7 +59,7 @@ class TaskTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj9"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\n""".lstrip(),
@@ -82,7 +68,7 @@ class TaskTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
@@ -112,7 +98,7 @@ class TaskTests(unittest.TestCase):
             ssh_dir.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj10"
-            _write_project(
+            write_project(
                 config_root,
                 project_id,
                 f"""\nproject:\n  id: {project_id}\n  security_class: online\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\nssh:\n  host_dir: {ssh_dir}\n  mount_in_online: true\n""".lstrip(),
@@ -121,7 +107,7 @@ class TaskTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            with mock.patch.dict(
+            with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),

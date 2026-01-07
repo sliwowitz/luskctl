@@ -10,18 +10,10 @@ from typing import Optional
 
 from .config import get_envs_base_dir
 from .projects import _effective_ssh_key_name, load_project
+from .template_utils import render_template
 
 
 # ---------- SSH shared dir initialization ----------
-
-def _render_template(template_path: Path, variables: dict) -> str:
-    content = template_path.read_text()
-    # Extremely simple token replacement: {{VAR}} -> variables["VAR"]
-    for k, v in variables.items():
-        content = content.replace(f"{{{{{k}}}}}", str(v))
-    return content
-
-
 def init_project_ssh(
     project_id: str,
     key_type: str = "ed25519",
@@ -72,6 +64,7 @@ def init_project_ssh(
                 if pub_path.exists():
                     pub_path.unlink()
             except Exception:
+                # Best-effort cleanup before regenerating keys.
                 pass
 
         cmd = ["ssh-keygen", "-t", key_type, "-f", str(priv_path), "-N", "", "-C", f"codexctl {project.id} {getpass.getuser()}@{socket.gethostname()}"]
@@ -87,6 +80,7 @@ def init_project_ssh(
             os.chmod(priv_path, 0o600)
             os.chmod(pub_path, 0o644)
         except Exception:
+            # Permission adjustments are best-effort.
             pass
 
     # Ensure config exists and references the key. Render from user or packaged template.
@@ -112,7 +106,7 @@ def init_project_ssh(
         # Prefer user template if provided
         if user_template_path is not None:
             try:
-                config_text = _render_template(user_template_path, variables)
+                config_text = render_template(user_template_path, variables)
             except Exception:
                 config_text = None
         # Otherwise use packaged template (works from wheels/zip)
@@ -151,6 +145,7 @@ def init_project_ssh(
                 print("Public key:")
                 print(f"  {pub_key_text}")
     except Exception:
+        # Reading the public key is best-effort.
         pass
     # When ssh.key_name is omitted in project.yml, we still derive a stable
     # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.

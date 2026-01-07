@@ -129,6 +129,7 @@ def user_projects_root() -> Path:
         if up:
             return Path(up).expanduser().resolve()
     except Exception:
+        # Fall back to state_root() if global config is missing or invalid.
         pass
 
     xdg = os.environ.get("XDG_CONFIG_HOME")

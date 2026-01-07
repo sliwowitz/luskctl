@@ -87,6 +87,7 @@ def init_project_cache(project_id: str, force: bool = False) -> dict:
             if cache_dir.is_dir():
                 shutil.rmtree(cache_dir)
         except Exception:
+            # Best-effort cleanup; ignore delete failures.
             pass
 
     if not cache_dir.exists():
