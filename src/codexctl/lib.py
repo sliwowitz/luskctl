@@ -639,6 +639,13 @@ def _ensure_dir_writable(path: Path, label: str) -> None:
         )
 
 
+def _podman_userns_args() -> list[str]:
+    """Return user namespace args for rootless podman so UID 1000 maps correctly."""
+    if os.geteuid() == 0:
+        return []
+    return ["--userns=keep-id:uid=1000,gid=1000"]
+
+
 def _render_template(template_path: Path, variables: dict) -> str:
     content = template_path.read_text()
     # Extremely simple token replacement: {{VAR}} → variables["VAR"]
@@ -1233,6 +1240,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     # Run detached and keep the container alive so users can exec into it later
     cmd = ["podman", "run", "--rm", "-d"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:
@@ -1298,6 +1306,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
 
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
+    cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
     for v in volumes:
@@ -1532,6 +1541,7 @@ def codex_auth(project_id: str) -> None:
         f"{project.id}:l2",
         "codex", "login",
     ]
+    cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()
