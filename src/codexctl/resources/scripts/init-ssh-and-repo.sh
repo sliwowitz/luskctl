@@ -88,7 +88,7 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     
     # Check if the target branch exists on the remote, fallback to origin/HEAD if not
     if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-      echo ">> git reset --hard origin/${TARGET_BRANCH}"
+      echo ">> Target branch found, will reset to origin/${TARGET_BRANCH}"
       RESET_TARGET="origin/${TARGET_BRANCH}"
     else
       echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, falling back to origin/HEAD"
