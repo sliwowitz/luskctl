@@ -67,17 +67,18 @@ SELinux and mount flags
 
 Git identity configuration
 - codexctl automatically configures git user.name and user.email inside containers to identify AI-generated commits.
-- The identity is set based on the agent type (CODEXCTL_AGENT_TYPE environment variable):
-  - codex → "Codex <codex@openai.com>"
-  - claude → "Claude <noreply@anthropic.com>"
-  - mistral (or vibe) → "Mistral Vibe <vibe@mistral.ai>"
-    - Note: "vibe" is accepted as an alias since the Mistral CLI tool is called "vibe"
-  - blablador → "Blablador <blablador@ai-agent>"
-  - (default) → "AI Agent <ai-agent@localhost>"
+- **For CLI mode**: Git identity is set via environment variables (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`) in the command aliases for each agent:
+  - `codex` → "Codex <codex@openai.com>"
+  - `claude` → "Claude <noreply@anthropic.com>"
+  - `vibe` → "Mistral Vibe <vibe@mistral.ai>"
+  - Each agent's alias sets its own git identity, allowing multiple agents to coexist in the same container
+- **For UI mode**: Git identity is set in the entry script based on the `CODEXUI_BACKEND` environment variable:
+  - `codex` → "Codex <codex@openai.com>"
+  - `claude` → "Claude <noreply@anthropic.com>"
+  - `mistral` → "Mistral Vibe <vibe@mistral.ai>"
+  - Unknown backends default to "AI Agent <ai-agent@localhost>"
 - Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
-- For CLI mode (task run-cli), the default agent type is "claude" unless overridden via CODEXCTL_AGENT_TYPE environment variable.
-- For UI mode (task run-ui), the agent type matches the --backend parameter (codex, claude, or mistral). When no backend is specified, it defaults to "codex".
-- This allows you to quickly distinguish which commits were made by AI agents versus human developers.
+- This approach ensures commits are always properly attributed to the specific AI agent that created them.
 
 Quick reference (runtime mounts)
 - /workspace          ← <state_root>/tasks/<project>/<task>/workspace:Z
