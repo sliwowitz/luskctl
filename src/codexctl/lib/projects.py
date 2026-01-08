@@ -140,8 +140,7 @@ def load_project(project_id: str) -> Project:
     ssh_cfg = cfg.get("ssh", {}) or {}
     codex_cfg = cfg.get("codex", {}) or {}
     tasks_cfg = cfg.get("tasks", {}) or {}
-    # Support both "gate:" and legacy "cache:" config sections
-    gate_path_cfg = cfg.get("gate", {}) or cfg.get("cache", {}) or {}
+    gate_path_cfg = cfg.get("gate", {}) or {}
     gate_cfg = cfg.get("gatekeeping", {}) or {}
 
     pid = proj_cfg.get("id", project_id)

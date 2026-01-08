@@ -11,7 +11,7 @@ The "cache" has been renamed to "gate" throughout the codebase because it serves
 - `codexctl cache-init` → `codexctl gate-init`
 - `cache_path` → `gate_path`
 - `/git-cache/cache.git` → `/git-gate/gate.git`
-- Config section `cache:` → `gate:` (with backward compatibility for `cache:`)
+- Config section `cache:` → `gate:`
 
 ### New Features
 
