@@ -611,16 +611,7 @@ class TaskTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\
-project:
-  id: {project_id}
-  security_class: gatekept
-git:
-  upstream_url: {upstream_url}
-  default_branch: main
-gatekeeping:
-  expose_external_remote: true
-""",
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -662,16 +653,7 @@ gatekeeping:
             write_project(
                 config_root,
                 project_id,
-                f"""\
-project:
-  id: {project_id}
-  security_class: gatekept
-git:
-  upstream_url: {upstream_url}
-  default_branch: main
-gatekeeping:
-  expose_external_remote: false
-""",
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: false\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -712,15 +694,7 @@ gatekeeping:
             write_project(
                 config_root,
                 project_id,
-                f"""\
-project:
-  id: {project_id}
-  security_class: gatekept
-git:
-  default_branch: main
-gatekeeping:
-  expose_external_remote: true
-""",
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
