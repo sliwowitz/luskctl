@@ -373,25 +373,25 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{blablador_host_dir}:/home/dev/.blablador:Z")
 
     # Security mode specific wiring
-    cache_repo = project.cache_path
-    cache_parent = cache_repo.parent
-    # Mount point inside container for the cache
-    cache_mount_inside = "/git-cache/cache.git"
+    gate_repo = project.gate_path
+    gate_parent = gate_repo.parent
+    # Mount point inside container for the gate
+    gate_mount_inside = "/git-gate/gate.git"
 
     if project.security_class == "gatekept":
-        # In gatekept mode, hide upstream and SSH. Use the host cache as the only remote.
-        if not cache_repo.exists():
+        # In gatekept mode, hide upstream and SSH. Use the host gate as the only remote.
+        if not gate_repo.exists():
             raise SystemExit(
-                f"Git cache missing for project '{project.id}'.\n"
-                f"Expected at: {cache_repo}\n"
-                f"Run 'codexctl cache-init {project.id}' to create/update the local mirror."
+                f"Git gate missing for project '{project.id}'.\n"
+                f"Expected at: {gate_repo}\n"
+                f"Run 'codexctl gate-init {project.id}' to create/update the local mirror."
             )
 
-        # Ensure parent exists for mount consistency (cache should already exist)
-        cache_parent.mkdir(parents=True, exist_ok=True)
-        # Mount cache read-write so tasks can push branches for review
-        volumes.append(f"{cache_repo}:{cache_mount_inside}:Z")
-        env["CODE_REPO"] = f"file://{cache_mount_inside}"
+        # Ensure parent exists for mount consistency (gate should already exist)
+        gate_parent.mkdir(parents=True, exist_ok=True)
+        # Mount gate read-write so tasks can push branches for review
+        volumes.append(f"{gate_repo}:{gate_mount_inside}:Z")
+        env["CODE_REPO"] = f"file://{gate_mount_inside}"
         env["GIT_BRANCH"] = project.default_branch or "main"
         # Optionally expose the upstream URL as an "external" remote for reference.
         # This allows the container to see where the real upstream is without having
@@ -403,12 +403,12 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             _ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
     else:
-        # Online mode: clone from cache if present, then set upstream to real URL
-        if cache_repo.exists():
-            cache_parent.mkdir(parents=True, exist_ok=True)
-            # Mount cache read-only
-            volumes.append(f"{cache_repo}:{cache_mount_inside}:Z,ro")
-            env["CLONE_FROM"] = f"file://{cache_mount_inside}"
+        # Online mode: clone from gate if present, then set upstream to real URL
+        if gate_repo.exists():
+            gate_parent.mkdir(parents=True, exist_ok=True)
+            # Mount gate read-only
+            volumes.append(f"{gate_repo}:{gate_mount_inside}:Z,ro")
+            env["CLONE_FROM"] = f"file://{gate_mount_inside}"
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
             env["GIT_BRANCH"] = project.default_branch or "main"

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, List
 
 import yaml  # pip install pyyaml
 
@@ -40,7 +40,7 @@ class Project:
     root: Path
 
     tasks_root: Path             # workspace dirs
-    cache_path: Path             # future cache
+    gate_path: Path              # git gate (mirror) path
     staging_root: Optional[Path] # gatekept only
 
     ssh_key_name: Optional[str]
@@ -63,6 +63,12 @@ class Project:
     # Optional human credentials for git committer (while AI is the author)
     human_name: Optional[str] = None
     human_email: Optional[str] = None
+    # Upstream polling configuration for gatekeeping mode
+    upstream_polling_enabled: bool = True
+    upstream_polling_interval_minutes: int = 5
+    # Auto-sync configuration for gatekeeping mode
+    auto_sync_enabled: bool = False
+    auto_sync_branches: List[str] = field(default_factory=list)
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -134,7 +140,7 @@ def load_project(project_id: str) -> Project:
     ssh_cfg = cfg.get("ssh", {}) or {}
     codex_cfg = cfg.get("codex", {}) or {}
     tasks_cfg = cfg.get("tasks", {}) or {}
-    cache_cfg = cfg.get("cache", {}) or {}
+    gate_path_cfg = cfg.get("gate", {}) or {}
     gate_cfg = cfg.get("gatekeeping", {}) or {}
 
     pid = proj_cfg.get("id", project_id)
@@ -142,7 +148,7 @@ def load_project(project_id: str) -> Project:
 
     sr = state_root()
     tasks_root = Path(tasks_cfg.get("root", sr / "tasks" / pid)).resolve()
-    cache_path = Path(cache_cfg.get("path", sr / "cache" / f"{pid}.git")).resolve()
+    gate_path = Path(gate_path_cfg.get("path", sr / "gate" / f"{pid}.git")).resolve()
 
     staging_root: Optional[Path] = None
     if sec == "gatekept":
@@ -180,12 +186,22 @@ def load_project(project_id: str) -> Project:
         human_name = _get_global_git_config("user.name")
     if not human_name:
         human_name = "Nobody"
-    
+
     human_email = git_cfg.get("human_email")
     if not human_email:
         human_email = _get_global_git_config("user.email")
     if not human_email:
         human_email = "nobody@localhost"
+
+    # Upstream polling configuration
+    polling_cfg = gate_cfg.get("upstream_polling", {}) or {}
+    upstream_polling_enabled = bool(polling_cfg.get("enabled", True))
+    upstream_polling_interval_minutes = int(polling_cfg.get("interval_minutes", 5))
+
+    # Auto-sync configuration
+    sync_cfg = gate_cfg.get("auto_sync", {}) or {}
+    auto_sync_enabled = bool(sync_cfg.get("enabled", False))
+    auto_sync_branches = list(sync_cfg.get("branches", []))
 
     p = Project(
         id=pid,
@@ -194,7 +210,7 @@ def load_project(project_id: str) -> Project:
         default_branch=default_branch,
         root=root.resolve(),
         tasks_root=tasks_root,
-        cache_path=cache_path,
+        gate_path=gate_path,
         staging_root=staging_root,
         ssh_key_name=ssh_key_name,
         ssh_host_dir=ssh_host_dir,
@@ -205,6 +221,10 @@ def load_project(project_id: str) -> Project:
         expose_external_remote=expose_external_remote,
         human_name=human_name,
         human_email=human_email,
+        upstream_polling_enabled=upstream_polling_enabled,
+        upstream_polling_interval_minutes=upstream_polling_interval_minutes,
+        auto_sync_enabled=auto_sync_enabled,
+        auto_sync_branches=auto_sync_branches,
     )
     return p
 
@@ -223,8 +243,8 @@ def get_project_state(project_id: str) -> dict:
       ``<id>:l2`` and ``<id>:l3`` exist.
     - ``ssh`` - True if the project SSH directory exists and contains
       a ``config`` file.
-    - ``cache`` - True if the project's cache directory exists.
-    - ``cache_last_commit`` - Dict with commit info if cache exists, None otherwise.
+    - ``gate`` - True if the project's git gate directory exists.
+    - ``gate_last_commit`` - Dict with commit info if gate exists, None otherwise.
     """
 
     project = load_project(project_id)
@@ -263,22 +283,22 @@ def get_project_state(project_id: str) -> dict:
     ssh_dir = Path(ssh_dir).expanduser().resolve()
     has_ssh = ssh_dir.is_dir() and (ssh_dir / "config").is_file()
 
-    # Cache: a mirror bare repo initialized by init_project_cache(). We
-    # treat existence of the directory as "cache present".
-    cache_dir = project.cache_path
-    has_cache = cache_dir.is_dir()
-    
-    # Get cache commit info if cache exists
-    cache_last_commit = None
-    if has_cache:
+    # Gate: a mirror bare repo initialized by init_project_gate(). We
+    # treat existence of the directory as "gate present".
+    gate_dir = project.gate_path
+    has_gate = gate_dir.is_dir()
+
+    # Get gate commit info if gate exists
+    gate_last_commit = None
+    if has_gate:
         # Import here to avoid circular import
-        from .git_cache import get_cache_last_commit
-        cache_last_commit = get_cache_last_commit(project_id)
+        from .git_gate import get_gate_last_commit
+        gate_last_commit = get_gate_last_commit(project_id)
 
     return {
         "dockerfiles": has_dockerfiles,
         "images": has_images,
         "ssh": has_ssh,
-        "cache": has_cache,
-        "cache_last_commit": cache_last_commit,
+        "gate": has_gate,
+        "gate_last_commit": gate_last_commit,
     }

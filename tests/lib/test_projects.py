@@ -37,7 +37,7 @@ class ProjectTests(unittest.TestCase):
                 self.assertEqual(proj.id, project_id)
                 self.assertEqual(proj.security_class, "gatekept")
                 self.assertEqual(proj.tasks_root, (state_root() / "tasks" / project_id).resolve())
-                self.assertEqual(proj.cache_path, (state_root() / "cache" / f"{project_id}.git").resolve())
+                self.assertEqual(proj.gate_path, (state_root() / "gate" / f"{project_id}.git").resolve())
                 self.assertEqual(proj.staging_root, (build_root() / project_id).resolve())
 
     def test_list_projects_prefers_user(self) -> None:
@@ -107,8 +107,8 @@ class ProjectTests(unittest.TestCase):
                 ssh_dir.mkdir(parents=True, exist_ok=True)
                 (ssh_dir / "config").write_text("", encoding="utf-8")
 
-                cache_dir = state_root() / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_root() / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 with unittest.mock.patch("codexctl.lib.projects.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
@@ -120,7 +120,7 @@ class ProjectTests(unittest.TestCase):
                         "dockerfiles": True,
                         "images": True,
                         "ssh": True,
-                        "cache": True,
-                        "cache_last_commit": None,
+                        "gate": True,
+                        "gate_last_commit": None,
                     },
                 )
