@@ -2,12 +2,13 @@
 set -euo pipefail
 
 # Expected env:
-#   SSH_KEY_NAME    - private key name in ~/.ssh (without .pub)
-#   REPO_ROOT       - target repo dir (e.g. /workspace/ultimate-container)
-#   CODE_REPO       - git URL (https:// or git@)
-#   GIT_BRANCH      - optional, e.g. "main" or "master"
-#   GIT_RESET_MODE  - "none" (default), "hard", or "soft"
-#   CLONE_FROM      - optional alternate source to seed the repo (e.g. file:///git-cache/cache.git)
+#   SSH_KEY_NAME        - private key name in ~/.ssh (without .pub)
+#   REPO_ROOT           - target repo dir (e.g. /workspace/ultimate-container)
+#   CODE_REPO           - git URL (https://, git@, or file://)
+#   GIT_BRANCH          - optional, e.g. "main" or "master"
+#   GIT_RESET_MODE      - "none" (default), "hard", or "soft"
+#   CLONE_FROM          - optional alternate source to seed the repo (e.g. file:///git-cache/cache.git)
+#   EXTERNAL_REMOTE_URL - optional URL for upstream repo in gatekeeping mode (added as "external" remote)
 
 : "${GIT_RESET_MODE:=none}"
 
@@ -132,6 +133,17 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
           ;;
       esac
     fi
+  fi
+
+  # In gatekeeping mode, optionally add an "external" remote pointing to the
+  # real upstream. This is informational only - the container cannot actually
+  # reach this URL. Useful for IDEs on the host side that want to know the
+  # canonical remote without having to track individual task clones.
+  if [[ -n "${EXTERNAL_REMOTE_URL:-}" ]]; then
+    echo ">> adding 'external' remote: ${EXTERNAL_REMOTE_URL}"
+    # Remove existing external remote if present (idempotent)
+    git -C "${REPO_ROOT}" remote remove external 2>/dev/null || true
+    git -C "${REPO_ROOT}" remote add external "${EXTERNAL_REMOTE_URL}"
   fi
 fi
 

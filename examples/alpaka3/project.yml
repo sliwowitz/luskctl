@@ -30,6 +30,14 @@ ssh:
   key_name: "id_ed25519_alpaka3"
   # mount_in_gatekeeping: true  # Enable SSH mount in gatekeeping mode
 
+# Gatekeeping mode settings
+gatekeeping:
+  # Expose the upstream URL as a remote named "external" inside the container.
+  # This allows IDEs/tools on the host to reference the canonical upstream
+  # by inspecting the task's git config, without giving the container network
+  # access to the real remote. The container can see the URL but cannot fetch/push to it.
+  expose_external_remote: true
+
 codex:
   ui:
     enabled: true
