@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from ..lib.auth import codex_auth, mistral_auth, claude_auth
+from ..lib.auth import codex_auth, mistral_auth, claude_auth, blablador_auth
 from ..lib.config import (
     build_root as _build_root,
     config_root as _config_root,
@@ -156,6 +156,17 @@ def main() -> None:
     except Exception:
         pass
 
+    # auth-blablador
+    p_auth_blablador = sub.add_parser(
+        "auth-blablador",
+        help="Set up Blablador API key for OpenCode inside an L2 container",
+    )
+    _a = p_auth_blablador.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -245,6 +256,8 @@ def main() -> None:
         mistral_auth(args.project_id)
     elif args.cmd == "auth-claude":
         claude_auth(args.project_id)
+    elif args.cmd == "auth-blablador":
+        blablador_auth(args.project_id)
     elif args.cmd == "config":
         # READ PATHS
         print("Configuration (read):")

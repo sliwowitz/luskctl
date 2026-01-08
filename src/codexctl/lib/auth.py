@@ -245,3 +245,74 @@ def mistral_auth(project_id: str) -> None:
             stderr=subprocess.DEVNULL,
             check=False,
         )
+
+
+# ---------- Blablador authentication ----------
+
+def blablador_auth(project_id: str) -> None:
+    """Set up Blablador API key for OpenCode inside the L2 container.
+
+    This command:
+    - Spins up a temporary L2 container for the project (L2 has OpenCode + blablador wrapper)
+    - Mounts the shared blablador config directory (/home/dev/.blablador)
+    - Runs an interactive shell where the user can enter their Blablador API key
+    - The API key persists in the shared .blablador folder
+
+    Blablador stores the API key in ~/.blablador/config.json as {"api_key": "<key>"}.
+    """
+    _check_podman()
+
+    project = load_project(project_id)
+
+    # Shared env mounts - we only need the blablador config directory
+    envs_base = get_envs_base_dir()
+    blablador_host_dir = envs_base / "_blablador-config"
+    _ensure_dir_writable(blablador_host_dir, "Blablador config")
+
+    container_name = f"{project.id}-auth-blablador"
+    _cleanup_existing_container(container_name)
+
+    # Build the podman run command
+    # - Interactive with TTY for API key entry
+    # - Mount blablador config dir for persistent auth
+    # - Use L2 image (which has OpenCode + blablador wrapper installed)
+    cmd = [
+        "podman", "run",
+        "--rm",
+        "-it",
+        "-v", f"{blablador_host_dir}:/home/dev/.blablador:Z",
+        "--name", container_name,
+        f"{project.id}:l2",
+        "bash", "-c",
+        "echo 'Enter your Blablador API key (get one at https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens):' && "
+        "read -r -p 'BLABLADOR_API_KEY=' api_key && "
+        "mkdir -p ~/.blablador && "
+        "echo \"{\\\"api_key\\\": \\\"$api_key\\\"}\" > ~/.blablador/config.json && "
+        "echo && echo 'API key saved to ~/.blablador/config.json' && "
+        "echo 'You can now use blablador in task containers.'",
+    ]
+    cmd[3:3] = _podman_userns_args()
+
+    print("Authenticating Blablador for project:", project.id)
+    print()
+    print("You will be prompted to enter your Blablador API key.")
+    print("Get your API key at: https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens")
+    print()
+    print("$", " ".join(map(str, cmd)))
+    print()
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 130:
+            print("\nAuthentication container stopped.")
+        else:
+            raise SystemExit(f"Auth failed: {e}")
+    except KeyboardInterrupt:
+        print("\nAuthentication interrupted.")
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
