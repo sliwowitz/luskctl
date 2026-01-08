@@ -51,13 +51,13 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
             cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD"]
             
         result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0:
-            return result.stdout
-        else:
-            # If no diff (clean working tree), return empty string
-            if "no changes added to commit" in result.stderr or result.returncode == 1:
-                return ""
+        if result.returncode != 0:
+            # Non-zero return code indicates an error; treat as failure
             return None
+
+        # Successful run; stdout may be empty if there is no diff
+        return result.stdout
+            
             
     except Exception:
         # If anything goes wrong, return None - this is a best-effort operation
