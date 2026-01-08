@@ -33,8 +33,10 @@ class Project:
     #   {{KEY_NAME}}       -> filename of the generated key (no .pub)
     #   {{PROJECT_ID}}     -> project id
     ssh_config_template: Optional[Path] = None
-    # Whether to mount SSH credentials inside online containers. Default: True.
+    # Whether to mount SSH credentials in online mode. Default: True.
     ssh_mount_in_online: bool = True
+    # Whether to mount SSH credentials in gatekeeping mode. Default: False.
+    ssh_mount_in_gatekeeping: bool = False
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -139,6 +141,8 @@ def load_project(project_id: str) -> Project:
 
     # Optional flag: ssh.mount_in_online (default true)
     ssh_mount_in_online = bool(ssh_cfg.get("mount_in_online", True))
+    # Optional flag: ssh.mount_in_gatekeeping (default false)
+    ssh_mount_in_gatekeeping = bool(ssh_cfg.get("mount_in_gatekeeping", False))
 
     p = Project(
         id=pid,
@@ -154,6 +158,7 @@ def load_project(project_id: str) -> Project:
         codex_config_dir=codex_config_dir,
         ssh_config_template=ssh_cfg_template_path,
         ssh_mount_in_online=ssh_mount_in_online,
+        ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
     )
     return p
 
