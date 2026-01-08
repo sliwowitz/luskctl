@@ -4,7 +4,7 @@ Overview
 - codexctl builds project containers in three logical layers. L0 (dev) and L1 (agent) are project‑agnostic and cache well; L2 is project‑specific.
 
 Layers
-0. L0 — development base (codexctl-l0:latest)
+0. L0 — development base (codexctl-l0:<base-tag>)
    - Based on Ubuntu 24.04 by default (override via docker.base_image).
    - Installs common tooling (git, openssh-client, ripgrep, vim, etc.).
    - Creates /workspace and sets WORKDIR to /workspace.
@@ -14,7 +14,7 @@ Layers
      - REPO_ROOT=/workspace
      - GIT_RESET_MODE=none
 
-1. L1 — agent images (codexctl-l1-cli:latest, codexctl-l1-ui:latest)
+1. L1 — agent images (codexctl-l1-cli:<base-tag>, codexctl-l1-ui:<base-tag>)
    - Built FROM L0.
    - CLI image installs Codex, Claude Code, Mistral Vibe, and supporting tools.
    - UI image installs UI dependencies and sets CMD to codexui-entry.sh.
@@ -38,12 +38,15 @@ Build flow
   - L1.ui.Dockerfile
   - L2.Dockerfile
 - codexctl build <project> executes podman builds in order:
-  1) codexctl-l0:latest FROM docker.base_image (default: Ubuntu 24.04)
-  2) codexctl-l1-cli:latest FROM codexctl-l0:latest
-  3) codexctl-l1-ui:latest FROM codexctl-l0:latest
-  4) <project>:l2-cli FROM codexctl-l1-cli:latest (via --build-arg BASE_IMAGE=...)
-  5) <project>:l2-ui FROM codexctl-l1-ui:latest (via --build-arg BASE_IMAGE=...)
-  6) Optional: <project>:l2-dev FROM codexctl-l0:latest (when `codexctl build --dev` is used)
+  1) codexctl-l0:<base-tag> FROM docker.base_image (default: Ubuntu 24.04)
+  2) codexctl-l1-cli:<base-tag> FROM codexctl-l0:<base-tag>
+  3) codexctl-l1-ui:<base-tag> FROM codexctl-l0:<base-tag>
+  4) <project>:l2-cli FROM codexctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
+  5) <project>:l2-ui FROM codexctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
+  6) Optional: <project>:l2-dev FROM codexctl-l0:<base-tag> (when `codexctl build --dev` is used)
+  - <base-tag> is derived from docker.base_image (sanitized), e.g.:
+    - ubuntu:24.04 → ubuntu-24.04
+    - nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04 → nvcr-io-nvidia-nvhpc-25.9-devel-cuda13.0-ubuntu24.04
 
 Runtime behavior (tasks)
 - codexctl task run-cli starts <project>:l2-cli; codexctl task run-ui starts <project>:l2-ui.

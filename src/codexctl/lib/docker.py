@@ -154,10 +154,10 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     # Build with the project-specific build directory as context so COPY scripts/ works
     context_dir = str(stage_dir)
 
-    l0_image = base_dev_image()
     base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
-    l1_cli_image = agent_cli_image()
-    l1_ui_image = agent_ui_image()
+    l0_image = base_dev_image(base_image)
+    l1_cli_image = agent_cli_image(base_image)
+    l1_ui_image = agent_ui_image(base_image)
     l2_cli_image = project_cli_image(project.id)
     l2_ui_image = project_ui_image(project.id)
     l2_dev_image = project_dev_image(project.id)
