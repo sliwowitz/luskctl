@@ -10,6 +10,25 @@ import yaml  # pip install pyyaml
 from .config import build_root, config_root, get_envs_base_dir, state_root, user_projects_root
 
 
+def _get_global_git_config(key: str) -> Optional[str]:
+    """Get a value from the user's global git config.
+    
+    Returns None if git is not available or the key is not set.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "config", "--global", "--get", key],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() or None
+        return None
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return None
+
+
 # ---------- Project model ----------
 
 @dataclass
@@ -41,6 +60,9 @@ class Project:
     # This allows the container to reference the real upstream for informational purposes
     # without having network access to it. Default: False.
     expose_external_remote: bool = False
+    # Optional human credentials for git committer (while AI is the author)
+    human_name: Optional[str] = None
+    human_email: Optional[str] = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -151,6 +173,20 @@ def load_project(project_id: str) -> Project:
     # When true, passes the upstream URL to the container as "external" remote
     expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
+    # Optional human credentials for git committer (while AI is the author)
+    # Precedence: 1) git.human_name/human_email from config, 2) global git config, 3) defaults
+    human_name = git_cfg.get("human_name")
+    if not human_name:
+        human_name = _get_global_git_config("user.name")
+    if not human_name:
+        human_name = "Nobody"
+    
+    human_email = git_cfg.get("human_email")
+    if not human_email:
+        human_email = _get_global_git_config("user.email")
+    if not human_email:
+        human_email = "nobody@localhost"
+
     p = Project(
         id=pid,
         security_class=sec,
@@ -167,6 +203,8 @@ def load_project(project_id: str) -> Project:
         ssh_mount_in_online=ssh_mount_in_online,
         ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
         expose_external_remote=expose_external_remote,
+        human_name=human_name,
+        human_email=human_email,
     )
     return p
 

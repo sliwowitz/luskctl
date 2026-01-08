@@ -6,6 +6,35 @@ if command -v /usr/local/bin/init-ssh-and-repo.sh >/dev/null 2>&1; then
   /usr/local/bin/init-ssh-and-repo.sh || exit $?
 fi
 
+# Set git author/committer based on UI backend for AI-generated commits
+# Author = AI agent, Committer = Human (if configured)
+# This ensures commits made by the UI are properly attributed
+if command -v git >/dev/null 2>&1 && [[ -n "${CODEXUI_BACKEND:-}" ]]; then
+  case "${CODEXUI_BACKEND,,}" in
+    codex)
+      export GIT_AUTHOR_NAME="Codex"
+      export GIT_AUTHOR_EMAIL="codex@openai.com"
+      ;;
+    claude)
+      export GIT_AUTHOR_NAME="Claude"
+      export GIT_AUTHOR_EMAIL="noreply@anthropic.com"
+      ;;
+    mistral)
+      export GIT_AUTHOR_NAME="Mistral Vibe"
+      export GIT_AUTHOR_EMAIL="vibe@mistral.ai"
+      ;;
+    *)
+      # Default fallback for unknown backends
+      export GIT_AUTHOR_NAME="AI Agent"
+      export GIT_AUTHOR_EMAIL="ai-agent@localhost"
+      ;;
+  esac
+  
+  # Set committer to human credentials
+  export GIT_COMMITTER_NAME="${HUMAN_GIT_NAME:-Nobody}"
+  export GIT_COMMITTER_EMAIL="${HUMAN_GIT_EMAIL:-nobody@localhost}"
+fi
+
 : "${CODEXUI_DIR:=/opt/codexui}"
 : "${CODEXUI_REPO:=https://github.com/sliwowitz/codex-in-podman.git}"
 : "${HOST:=0.0.0.0}"

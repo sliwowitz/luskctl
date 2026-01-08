@@ -354,6 +354,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
         "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
+        # Human credentials for git committer (AI agent is the author)
+        "HUMAN_GIT_NAME": project.human_name or "Nobody",
+        "HUMAN_GIT_EMAIL": project.human_email or "nobody@localhost",
     }
 
     volumes: list[str] = []
