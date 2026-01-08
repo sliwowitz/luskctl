@@ -596,3 +596,128 @@ class TaskTests(unittest.TestCase):
 
             # Verify all three utilities were tried
             self.assertEqual(run_mock.call_count, 3)
+
+    def test_build_task_env_gatekept_expose_external_remote_enabled(self) -> None:
+        """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_external_remote_enabled"
+            upstream_url = "https://github.com/example/repo.git"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                },
+            ):
+                cache_dir = state_dir / "cache" / f"{project_id}.git"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+
+                env, volumes = _build_task_env_and_volumes(
+                    project=load_project(project_id),
+                    task_id="10",
+                )
+
+                # Verify EXTERNAL_REMOTE_URL is set when expose_external_remote is enabled
+                self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
+                # Verify gatekeeping mode settings are still correct
+                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
+                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+
+    def test_build_task_env_gatekept_expose_external_remote_disabled(self) -> None:
+        """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_external_remote_disabled"
+            upstream_url = "https://github.com/example/repo.git"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: false\n""".lstrip(),
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                },
+            ):
+                cache_dir = state_dir / "cache" / f"{project_id}.git"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+
+                env, volumes = _build_task_env_and_volumes(
+                    project=load_project(project_id),
+                    task_id="11",
+                )
+
+                # Verify EXTERNAL_REMOTE_URL is NOT set when expose_external_remote is false
+                self.assertNotIn("EXTERNAL_REMOTE_URL", env)
+                # Verify gatekeeping mode settings are still correct
+                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
+                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+
+    def test_build_task_env_gatekept_expose_external_remote_no_upstream(self) -> None:
+        """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_external_remote_no_upstream"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                },
+            ):
+                cache_dir = state_dir / "cache" / f"{project_id}.git"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+
+                env, volumes = _build_task_env_and_volumes(
+                    project=load_project(project_id),
+                    task_id="12",
+                )
+
+                # Verify EXTERNAL_REMOTE_URL is NOT set when upstream_url is missing
+                self.assertNotIn("EXTERNAL_REMOTE_URL", env)
+                # Verify gatekeeping mode settings are still correct
+                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
+                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)

@@ -37,6 +37,10 @@ class Project:
     ssh_mount_in_online: bool = True
     # Whether to mount SSH credentials in gatekeeping mode. Default: False.
     ssh_mount_in_gatekeeping: bool = False
+    # Whether to expose the upstream URL as a remote named "external" in gatekeeping mode.
+    # This allows the container to reference the real upstream for informational purposes
+    # without having network access to it. Default: False.
+    expose_external_remote: bool = False
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -143,6 +147,9 @@ def load_project(project_id: str) -> Project:
     ssh_mount_in_online = bool(ssh_cfg.get("mount_in_online", True))
     # Optional flag: ssh.mount_in_gatekeeping (default false)
     ssh_mount_in_gatekeeping = bool(ssh_cfg.get("mount_in_gatekeeping", False))
+    # Optional flag: gatekeeping.expose_external_remote (default false)
+    # When true, passes the upstream URL to the container as "external" remote
+    expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
     p = Project(
         id=pid,
@@ -159,6 +166,7 @@ def load_project(project_id: str) -> Project:
         ssh_config_template=ssh_cfg_template_path,
         ssh_mount_in_online=ssh_mount_in_online,
         ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
+        expose_external_remote=expose_external_remote,
     )
     return p
 

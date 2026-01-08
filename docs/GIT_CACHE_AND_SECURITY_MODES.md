@@ -82,6 +82,14 @@ The project’s **security mode** controls how tasks interact with upstream vs c
   * This is useful for repos with git submodules that need to be fetched from private repositories.
   * The user should ensure the SSH key does not have write access to upstream repositories.
 
+* **Optional external remote exposure** (`gatekeeping.expose_external_remote`):
+
+  * By default, containers in gatekeeping mode have no knowledge of the upstream URL.
+  * Set `gatekeeping.expose_external_remote: true` in project.yml to add the upstream URL as a remote named "external" in the container's git config.
+  * The container can see this URL but cannot actually fetch from or push to it (no network access or credentials).
+  * This is useful for IDE integration on the host side: tools can inspect the task's git remotes to discover the canonical upstream without having to track individual task clones, which are transient.
+  * The git cache serves as a communication channel between host and container, and having the external remote defined makes it easier for host-side tools to understand where changes should eventually go.
+
 ### Host-side cache lifecycle
 1. Generate SSH material for private upstreams (optional for public HTTPS):
    - `codexctl ssh-init <project>`
