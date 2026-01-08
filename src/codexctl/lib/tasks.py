@@ -160,8 +160,15 @@ def _apply_ui_env_overrides(env: dict, backend: Optional[str]) -> dict:
     """Return a copy of env with UI-specific overrides applied."""
     merged = dict(env)
     normalized = _normalize_ui_backend(backend)
+    
+    # Set agent type for git commits based on UI backend
+    # Default to "codex" if no backend specified for UI mode
     if normalized:
         merged["CODEXUI_BACKEND"] = normalized
+        merged["CODEXCTL_AGENT_TYPE"] = normalized
+    elif "CODEXCTL_AGENT_TYPE" not in merged:
+        # UI mode without explicit backend defaults to codex
+        merged["CODEXCTL_AGENT_TYPE"] = "codex"
 
     for key, value in os.environ.items():
         if key.startswith(UI_ENV_PASSTHROUGH_PREFIX) and key not in merged:
@@ -354,6 +361,9 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
         "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
+        # Set agent type for git commits - default to "claude" for CLI mode
+        # User can override via CODEXCTL_AGENT_TYPE env var
+        "CODEXCTL_AGENT_TYPE": os.environ.get("CODEXCTL_AGENT_TYPE", "claude"),
     }
 
     volumes: list[str] = []

@@ -44,6 +44,32 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
   # Make git happy about mounted host-owned dirs
   if command -v git >/dev/null 2>&1; then
     git config --global --add safe.directory "${REPO_ROOT}" || true
+    
+    # Set git user.name and user.email based on agent type so AI commits are distinguishable
+    # Default to "AI Agent" if CODEXCTL_AGENT_TYPE is not set
+    AGENT_TYPE="${CODEXCTL_AGENT_TYPE:-AI Agent}"
+    case "${AGENT_TYPE,,}" in
+      codex)
+        git config --global user.name "Codex" || true
+        git config --global user.email "codex@ai-agent" || true
+        ;;
+      claude)
+        git config --global user.name "Claude" || true
+        git config --global user.email "claude@ai-agent" || true
+        ;;
+      mistral|vibe)
+        git config --global user.name "Mistral" || true
+        git config --global user.email "mistral@ai-agent" || true
+        ;;
+      blablador)
+        git config --global user.name "Blablador" || true
+        git config --global user.email "blablador@ai-agent" || true
+        ;;
+      *)
+        git config --global user.name "AI Agent" || true
+        git config --global user.email "ai-agent@localhost" || true
+        ;;
+    esac
   fi
 
   # New Task Marker Protocol:
