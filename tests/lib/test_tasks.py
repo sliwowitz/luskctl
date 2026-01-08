@@ -244,7 +244,7 @@ class TaskTests(unittest.TestCase):
                 },
             ):
                 task_new(project_id)
-                
+
                 # Mock subprocess.run to simulate clean git repository
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     mock_result = unittest.mock.Mock()
@@ -283,9 +283,9 @@ class TaskTests(unittest.TestCase):
                 },
             ):
                 task_new(project_id)
-                
+
                 expected_diff = "diff --git a/file.txt b/file.txt\n+new line\n"
-                
+
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
@@ -330,9 +330,9 @@ class TaskTests(unittest.TestCase):
                 },
             ):
                 task_new(project_id)
-                
+
                 expected_diff = "diff --git a/file.txt b/file.txt\n+previous commit change\n"
-                
+
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
@@ -378,7 +378,7 @@ class TaskTests(unittest.TestCase):
                 },
             ):
                 task_new(project_id)
-                
+
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     # Simulate git command failure
                     mock_result = unittest.mock.Mock()
