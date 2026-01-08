@@ -22,6 +22,10 @@ RUN set -eux; \
 RUN set -eux; \
     PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mistral-vibe
 
+# Copy setup script for codex auth (port forwarding for OAuth callbacks)
+COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
+RUN chmod +x /usr/local/bin/setup-codex-auth.sh
+
 RUN set -eux; \
     printf '%s\n' \
       'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' \

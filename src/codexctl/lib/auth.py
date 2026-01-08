@@ -58,44 +58,12 @@ def codex_auth(project_id: str) -> None:
     container_name = f"{project.id}-auth-codex"
     _cleanup_existing_container(container_name)
 
-    # Setup script for port forwarding (required for codex login in rootless podman)
-    # This configures port 1455 forwarding for OAuth callbacks using socat.
-    # In rootless podman, we need to forward from the container IP to localhost.
-    setup_and_run_script = (
-        "set -e && "
-        "echo '>> Setting up port forwarding for codex auth (port 1455)' && "
-        "if ! command -v socat >/dev/null 2>&1 || ! command -v ip >/dev/null 2>&1; then "
-        "  echo '>> Installing required packages...' && "
-        "  sudo apt-get update -qq && "
-        "  sudo apt-get install -y socat iproute2; "
-        "else "
-        "  echo '>> Required packages already installed'; "
-        "fi && "
-        "echo '>> Getting container IP address...' && "
-        "CIP=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1) && "
-        "if [ -z \"$CIP\" ]; then "
-        "  echo '>> ERROR: Could not detect container IP address' && "
-        "  exit 1; "
-        "fi && "
-        "echo \">> Container IP: $CIP\" && "
-        "echo '>> Starting socat port forwarder in background...' && "
-        "socat -v TCP-LISTEN:1455,bind=$CIP,fork,reuseaddr TCP:127.0.0.1:1455 & "
-        "SOCAT_PID=$! && "
-        "echo \">> socat running (PID: $SOCAT_PID)\" && "
-        "echo '>> Starting codex login...' && "
-        "codex login; "
-        "EXIT_CODE=$? && "
-        "echo '>> Stopping socat...' && "
-        "kill $SOCAT_PID 2>/dev/null || true && "
-        "exit $EXIT_CODE"
-    )
-
     # Build the podman run command
     # - Interactive with TTY for codex login
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
     # - Use L2 image (which has the codex CLI installed)
-    # - Run setup script followed by codex login
+    # - Run setup-codex-auth.sh script which handles port forwarding and codex login
     cmd = [
         "podman", "run",
         "--rm",
@@ -104,7 +72,7 @@ def codex_auth(project_id: str) -> None:
         "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
-        "bash", "-c", setup_and_run_script,
+        "setup-codex-auth.sh",
     ]
     cmd[3:3] = _podman_userns_args()
 
