@@ -7,7 +7,7 @@ set -euo pipefail
 #   CODE_REPO           - git URL (https://, git@, or file://)
 #   GIT_BRANCH          - optional, e.g. "main" or "master"
 #   GIT_RESET_MODE      - "none" (default), "hard", or "soft"
-#   CLONE_FROM          - optional alternate source to seed the repo (e.g. file:///git-cache/cache.git)
+#   CLONE_FROM          - optional alternate source to seed the repo (e.g. file:///git-gate/gate.git)
 #   EXTERNAL_REMOTE_URL - optional URL for upstream repo in gatekeeping mode (added as "external" remote)
 
 : "${GIT_RESET_MODE:=none}"
@@ -71,13 +71,13 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
     echo ">> initial clone from ${SRC_REPO}"
     git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
-    # If we cloned from a cache, repoint origin to the canonical repo for future updates
+    # If we cloned from a gate, repoint origin to the canonical repo for future updates
     if [[ -n "${CLONE_FROM:-}" && "${CLONE_FROM}" != "${CODE_REPO}" ]]; then
       git -C "${REPO_ROOT}" remote set-url origin "${CODE_REPO}" || true
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
       # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
-      # Hard reset to latest HEAD since cache may be stale
+      # Hard reset to latest HEAD since gate may be stale
       TARGET_BRANCH="${GIT_BRANCH:-main}"
       if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
         echo ">> resetting to origin/${TARGET_BRANCH}"
@@ -144,6 +144,53 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     # Remove existing external remote if present (idempotent)
     git -C "${REPO_ROOT}" remote remove external 2>/dev/null || true
     git -C "${REPO_ROOT}" remote add external "${EXTERNAL_REMOTE_URL}"
+  fi
+
+  # Check gate staleness (informational only)
+  # This only works when EXTERNAL_REMOTE_URL is set (relaxed gatekeeping mode)
+  if [[ -n "${EXTERNAL_REMOTE_URL:-}" && -d "${REPO_ROOT}/.git" ]]; then
+    echo ">> checking gate freshness against upstream..."
+
+    # Get local HEAD
+    LOCAL_HEAD=$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || echo "")
+
+    # Get upstream HEAD using ls-remote (cheap, just queries refs)
+    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    UPSTREAM_HEAD=$(git ls-remote "${EXTERNAL_REMOTE_URL}" "refs/heads/${TARGET_BRANCH}" 2>/dev/null | cut -f1 || echo "")
+
+    if [[ -n "${LOCAL_HEAD}" && -n "${UPSTREAM_HEAD}" ]]; then
+      if [[ "${LOCAL_HEAD}" != "${UPSTREAM_HEAD}" ]]; then
+        # Try to count commits behind (may fail if we don't have upstream commits locally)
+        BEHIND_COUNT=""
+        if git -C "${REPO_ROOT}" cat-file -e "${UPSTREAM_HEAD}" 2>/dev/null; then
+          BEHIND_COUNT=$(git -C "${REPO_ROOT}" rev-list --count "${LOCAL_HEAD}..${UPSTREAM_HEAD}" 2>/dev/null || echo "")
+        fi
+
+        if [[ -n "${BEHIND_COUNT}" && "${BEHIND_COUNT}" != "0" ]]; then
+          echo ""
+          echo "=========================================="
+          echo "NOTE: Gate is ${BEHIND_COUNT} commits behind upstream on ${TARGET_BRANCH}"
+          echo "  Local:    ${LOCAL_HEAD:0:8}"
+          echo "  Upstream: ${UPSTREAM_HEAD:0:8}"
+          echo "  Run 'codexctl gate-init <project>' on host to update"
+          echo "=========================================="
+          echo ""
+        else
+          echo ""
+          echo "=========================================="
+          echo "NOTE: Gate may be behind upstream on ${TARGET_BRANCH}"
+          echo "  Local:    ${LOCAL_HEAD:0:8}"
+          echo "  Upstream: ${UPSTREAM_HEAD:0:8}"
+          echo "  (Cannot determine exact commit count)"
+          echo "=========================================="
+          echo ""
+        fi
+      else
+        echo ">> gate is up to date with upstream"
+      fi
+    elif [[ -z "${UPSTREAM_HEAD}" ]]; then
+      echo ">> could not query upstream (network may be restricted)"
+    fi
   fi
 fi
 

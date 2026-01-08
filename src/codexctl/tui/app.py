@@ -40,7 +40,7 @@ if _HAS_TEXTUAL:
 
     from ..lib.config import state_root
     from ..lib.docker import build_images, generate_dockerfiles
-    from ..lib.git_cache import init_project_cache
+    from ..lib.git_gate import init_project_gate
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
@@ -121,7 +121,7 @@ if _HAS_TEXTUAL:
             ("g", "generate_dockerfiles", "Generate Dockerfiles"),
             ("b", "build_images", "Build images"),
             ("s", "init_ssh", "Init SSH"),
-            ("c", "init_cache", "Init cache"),
+            ("c", "init_gate", "Init gate"),
             ("t", "new_task", "New task"),
             ("r", "run_cli", "Run CLI"),
             ("u", "run_ui", "Run UI"),
@@ -457,24 +457,24 @@ if _HAS_TEXTUAL:
             self.notify(f"Initialized SSH dir for {self.current_project_id}")
             self._refresh_project_state()
 
-        async def action_init_cache(self) -> None:
-            """Initialize or update the git cache mirror for the project."""
+        async def action_init_gate(self) -> None:
+            """Initialize or update the git gate mirror for the project."""
             if not self.current_project_id:
                 self.notify("No project selected.")
                 return
 
             with self.suspend():
                 try:
-                    res = init_project_cache(self.current_project_id)
+                    res = init_project_gate(self.current_project_id)
                     print(
-                        f"Cache ready at {res['path']} "
+                        f"Gate ready at {res['path']} "
                         f"(upstream: {res['upstream_url']}; created: {res['created']})"
                     )
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to CodexTUI] ")
 
-            self.notify(f"Git cache initialized for {self.current_project_id}")
+            self.notify(f"Git gate initialized for {self.current_project_id}")
             self._refresh_project_state()
 
         async def action_new_task(self) -> None:

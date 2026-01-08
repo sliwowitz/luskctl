@@ -38,6 +38,17 @@ gatekeeping:
   # access to the real remote. The container can see the URL but cannot fetch/push to it.
   expose_external_remote: true
 
+  # Upstream polling - TUI periodically checks if upstream has new commits
+  upstream_polling:
+    enabled: true           # default: true
+    interval_minutes: 5     # default: 5
+
+  # Auto-sync - automatically update gate when upstream changes detected
+  auto_sync:
+    enabled: false          # default: false (manual sync preferred)
+    branches:               # branches to auto-sync (required if enabled)
+      - dev
+
 codex:
   ui:
     enabled: true

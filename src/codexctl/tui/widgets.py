@@ -83,7 +83,7 @@ class ProjectActions(Static):
             yield Button("[yellow]g[/yellow]en", id="btn-generate", compact=True)          # generate Dockerfiles (g)
             yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)           # build images (b)
             yield Button("[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True)          # init SSH dir (s)
-            yield Button("[yellow]c[/yellow]ache", id="btn-cache-init", compact=True)      # init git cache (c)
+            yield Button("[yellow]c[/yellow] gate", id="btn-gate-init", compact=True)       # init git gate (c)
 
         # Second row of actions (task-level).
         with Horizontal():
@@ -103,7 +103,7 @@ class ProjectActions(Static):
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
             "btn-ssh-init": "action_init_ssh",
-            "btn-cache-init": "action_init_cache",
+            "btn-gate-init": "action_init_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
             "btn-task-run-ui": "action_run_ui",
@@ -257,7 +257,7 @@ class ProjectState(Static):
         docker_s = "yes" if state.get("dockerfiles") else "no"
         images_s = "yes" if state.get("images") else "no"
         ssh_s = "yes" if state.get("ssh") else "no"
-        cache_s = "yes" if state.get("cache") else "no"
+        gate_s = "yes" if state.get("gate") else "no"
 
         if task_count is None:
             tasks_line = "Tasks:     unknown"
@@ -273,19 +273,19 @@ class ProjectState(Static):
             f"Dockerfiles: {docker_s}",
             f"Images:      {images_s}",
             f"SSH dir:     {ssh_s}",
-            f"Git cache:   {cache_s}",
+            f"Git gate:    {gate_s}",
             tasks_line,
         ]
 
-        # Add cache commit info if available
-        cache_commit = state.get("cache_last_commit")
-        if cache_commit:
+        # Add gate commit info if available
+        gate_commit = state.get("gate_last_commit")
+        if gate_commit:
             lines.append("")
-            lines.append("Cache info:")
-            lines.append(f"  Commit:   {cache_commit.get('commit_hash', 'unknown')[:8]}")
-            lines.append(f"  Date:     {cache_commit.get('commit_date', 'unknown')}")
-            lines.append(f"  Author:   {cache_commit.get('commit_author', 'unknown')}")
-            lines.append(f"  Message:  {cache_commit.get('commit_message', 'unknown')[:50]}{'...' if len(cache_commit.get('commit_message', '')) > 50 else ''}")
+            lines.append("Gate info:")
+            lines.append(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}")
+            lines.append(f"  Date:     {gate_commit.get('commit_date', 'unknown')}")
+            lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
+            lines.append(f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}")
 
         self.update("\n".join(lines))
 

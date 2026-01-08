@@ -6,12 +6,12 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.git_cache import init_project_cache, get_cache_last_commit
+from codexctl.lib.git_gate import init_project_gate, get_gate_last_commit
 from test_utils import write_project
 
 
-class GitCacheTests(unittest.TestCase):
-    def test_init_project_cache_ssh_requires_config(self) -> None:
+class GitGateTests(unittest.TestCase):
+    def test_init_project_gate_ssh_requires_config(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -36,9 +36,9 @@ class GitCacheTests(unittest.TestCase):
                 },
             ):
                 with self.assertRaises(SystemExit):
-                    init_project_cache(project_id)
+                    init_project_gate(project_id)
 
-    def test_init_project_cache_https_clone(self) -> None:
+    def test_init_project_gate_https_clone(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -59,9 +59,9 @@ class GitCacheTests(unittest.TestCase):
                     "CODEXCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                with unittest.mock.patch("codexctl.lib.git_cache.subprocess.run") as run_mock:
+                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
-                    result = init_project_cache(project_id)
+                    result = init_project_gate(project_id)
 
                 self.assertTrue(result["created"])
                 self.assertIn("path", result)
@@ -73,8 +73,8 @@ class GitCacheTests(unittest.TestCase):
                 self.assertEqual(args[0][:3], ["git", "clone", "--mirror"])
                 self.assertIn("env", kwargs)
 
-    def test_get_cache_last_commit_no_cache(self) -> None:
-        """Test get_cache_last_commit when cache doesn't exist."""
+    def test_get_gate_last_commit_no_gate(self) -> None:
+        """Test get_gate_last_commit when gate doesn't exist."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -98,11 +98,11 @@ git:
                     "CODEXCTL_CONFIG_DIR": str(config_root),
                 },
             ):
-                result = get_cache_last_commit(project_id)
+                result = get_gate_last_commit(project_id)
                 self.assertIsNone(result)
 
-    def test_get_cache_last_commit_with_cache(self) -> None:
-        """Test get_cache_last_commit when cache exists."""
+    def test_get_gate_last_commit_with_gate(self) -> None:
+        """Test get_gate_last_commit when gate exists."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -122,9 +122,9 @@ git:
 """.lstrip(),
             )
 
-            # Create a fake cache directory
-            cache_dir = state_dir / "cache" / f"{project_id}.git"
-            cache_dir.mkdir(parents=True, exist_ok=True)
+            # Create a fake gate directory
+            gate_dir = state_dir / "gate" / f"{project_id}.git"
+            gate_dir.mkdir(parents=True, exist_ok=True)
 
             with unittest.mock.patch.dict(
                 os.environ,
@@ -137,10 +137,10 @@ git:
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
                 mock_result.stdout = "abc123def456|2023-01-01 12:00:00 +0000|Test commit message|John Doe\n"
-                
-                with unittest.mock.patch("codexctl.lib.git_cache.subprocess.run", return_value=mock_result):
-                    result = get_cache_last_commit(project_id)
-                    
+
+                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                    result = get_gate_last_commit(project_id)
+
                 self.assertIsNotNone(result)
                 self.assertEqual(result["commit_hash"], "abc123def456")
                 self.assertEqual(result["commit_date"], "2023-01-01 12:00:00 +0000")
