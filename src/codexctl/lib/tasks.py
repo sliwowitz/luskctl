@@ -386,7 +386,10 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         volumes.append(f"{cache_repo}:{cache_mount_inside}:Z")
         env["CODE_REPO"] = f"file://{cache_mount_inside}"
         env["GIT_BRANCH"] = project.default_branch or "main"
-        # No SSH mount in gatekept
+        # Optional SSH mount in gatekeeping mode
+        if project.ssh_mount_in_gatekeeping and ssh_host_dir.is_dir():
+            _ensure_dir_writable(ssh_host_dir, "SSH config")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
     else:
         # Online mode: clone from cache if present, then set upstream to real URL
         if cache_repo.exists():

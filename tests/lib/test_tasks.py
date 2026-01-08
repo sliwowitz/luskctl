@@ -133,6 +133,52 @@ class TaskTests(unittest.TestCase):
 
                 self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                # Verify SSH is NOT mounted by default in gatekept mode
+                ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
+                self.assertEqual(ssh_mounts, [])
+
+    def test_build_task_env_gatekept_with_ssh(self) -> None:
+        """Gatekept mode with mount_in_gatekeeping enabled should mount SSH."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            ssh_dir = base / "ssh"
+            config_root.mkdir(parents=True, exist_ok=True)
+            ssh_dir.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_gatekept_ssh"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\nssh:\n  host_dir: {ssh_dir}\n  mount_in_gatekeeping: true\n""".lstrip(),
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                },
+            ):
+                cache_dir = state_dir / "cache" / f"{project_id}.git"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+
+                env, volumes = _build_task_env_and_volumes(
+                    project=load_project(project_id),
+                    task_id="9",
+                )
+
+                # Verify gatekept behavior: CODE_REPO is file-based cache
+                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
+                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                # Verify SSH IS mounted when mount_in_gatekeeping is true
+                self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)
 
     def test_build_task_env_online(self) -> None:
         with tempfile.TemporaryDirectory() as td:
