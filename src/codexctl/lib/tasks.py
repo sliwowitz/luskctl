@@ -337,11 +337,13 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     codex_host_dir = envs_base / "_codex-config"
     claude_host_dir = envs_base / "_claude-config"
     vibe_host_dir = envs_base / "_vibe-config"
+    blablador_host_dir = envs_base / "_blablador-config"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
     _ensure_dir_writable(codex_host_dir, "Codex config")
     _ensure_dir_writable(claude_host_dir, "Claude config")
     _ensure_dir_writable(vibe_host_dir, "Vibe config")
+    _ensure_dir_writable(blablador_host_dir, "Blablador config")
 
     env = {
         "PROJECT_ID": project.id,
@@ -364,6 +366,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
     # Shared Mistral Vibe credentials/config
     volumes.append(f"{vibe_host_dir}:/home/dev/.vibe:Z")
+    # Shared Blablador credentials/config (OpenCode wrapper)
+    volumes.append(f"{blablador_host_dir}:/home/dev/.blablador:Z")
 
     # Security mode specific wiring
     cache_repo = project.cache_path

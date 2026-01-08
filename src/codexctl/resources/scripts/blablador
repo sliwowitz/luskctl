@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""
+Blablador launcher for OpenCode.
+
+Fetches models from Blablador's OpenAI-compatible API, prompts for a model
+selection, and runs OpenCode with full permissions inside the container.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import tempfile
+import subprocess
+from pathlib import Path
+from typing import Iterable, List, Optional
+from urllib import request, error
+
+
+DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
+
+
+def _config_dir() -> Path:
+    return Path.home() / ".blablador"
+
+
+def _config_path() -> Path:
+    return _config_dir() / "config.json"
+
+
+def _load_api_key() -> Optional[str]:
+    api_key = os.environ.get("BLABLADOR_API_KEY")
+    if api_key:
+        return api_key
+    cfg_path = _config_path()
+    if not cfg_path.is_file():
+        return None
+    try:
+        data = json.loads(cfg_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    val = data.get("api_key")
+    return val if isinstance(val, str) and val.strip() else None
+
+
+def _fetch_models(base_url: str, api_key: str) -> List[str]:
+    url = base_url.rstrip("/") + "/models"
+    req = request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        raise SystemExit(f"Failed to fetch models ({exc.code}): {exc.reason}")
+    except error.URLError as exc:
+        raise SystemExit(f"Failed to fetch models: {exc.reason}")
+    except json.JSONDecodeError:
+        raise SystemExit("Failed to parse models response as JSON")
+
+    items: Iterable[object] = []
+    if isinstance(payload, dict):
+        if isinstance(payload.get("data"), list):
+            items = payload["data"]
+        elif isinstance(payload.get("models"), list):
+            items = payload["models"]
+
+    models: List[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            model_id = item.get("id")
+            if isinstance(model_id, str) and model_id:
+                models.append(model_id)
+
+    models = sorted({m for m in models})
+    if not models:
+        raise SystemExit("No models returned from Blablador /v1/models")
+    return models
+
+
+def _print_models(models: List[str]) -> None:
+    for model in models:
+        print(model)
+
+
+def _choose_model(models: List[str]) -> str:
+    if not sys.stdin.isatty():
+        raise SystemExit("No TTY available. Pass --model or set BLABLADOR_MODEL.")
+    print("Available Blablador models:")
+    for idx, model in enumerate(models, start=1):
+        print(f"  {idx:>2}) {model}")
+    while True:
+        choice = input(f"Select model [1-{len(models)}] (default 1): ").strip()
+        if not choice:
+            return models[0]
+        if choice.isdigit():
+            pick = int(choice)
+            if 1 <= pick <= len(models):
+                return models[pick - 1]
+        if choice in models:
+            return choice
+        print("Invalid selection. Try again.")
+
+
+def _build_config(base_url: str, api_key: str, model: str, models: Optional[List[str]]) -> dict:
+    model_map = {model: {"name": model}}
+    if models:
+        for mid in models:
+            if isinstance(mid, str) and mid:
+                model_map.setdefault(mid, {"name": mid})
+    return {
+        "$schema": "https://opencode.ai/config.json",
+        "model": f"blablador/{model}",
+        "provider": {
+            "blablador": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "Helmholtz Blablador",
+                "options": {
+                    "baseURL": base_url,
+                    "apiKey": api_key,
+                },
+                "models": model_map,
+            }
+        },
+        "permission": {
+            "*": "allow",
+        },
+    }
+
+
+def _write_temp_config(config: dict) -> Path:
+    tmp = tempfile.NamedTemporaryFile(prefix="opencode-blablador-", suffix=".json", delete=False)
+    with tmp:
+        tmp.write(json.dumps(config, indent=2).encode("utf-8"))
+    return Path(tmp.name)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="blablador",
+        description="Run OpenCode against Helmholtz Blablador with full permissions.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  blablador                # prompt for a model, then launch\n"
+            "  blablador --model <id>   # use a specific model\n"
+            "  blablador --list-models  # list available models\n"
+            "  blablador -- --help      # pass flags to opencode\n"
+        ),
+    )
+    parser.add_argument("--model", "-m", help="Model ID from /v1/models")
+    parser.add_argument("--list-models", action="store_true", help="List available models and exit")
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help=f"Override API base URL (default: {DEFAULT_BASE_URL})",
+    )
+
+    args, opencode_args = parser.parse_known_args()
+
+    api_key = _load_api_key()
+    if not api_key:
+        raise SystemExit(
+            "Missing BLABLADOR_API_KEY. Set it in the environment or write "
+            f'{{"api_key": "..."}} to {_config_path()}.'
+        )
+
+    base_url = args.base_url or os.environ.get("BLABLADOR_BASE_URL") or DEFAULT_BASE_URL
+    base_url = base_url.rstrip("/")
+
+    if args.list_models:
+        models = _fetch_models(base_url, api_key)
+        _print_models(models)
+        return 0
+
+    model = args.model or os.environ.get("BLABLADOR_MODEL")
+    fetched_models: Optional[List[str]] = None
+    try:
+        fetched_models = _fetch_models(base_url, api_key)
+    except SystemExit:
+        if not model:
+            raise
+
+    if not model:
+        if not fetched_models:
+            raise SystemExit("No models available. Pass --model to continue.")
+        model = _choose_model(fetched_models)
+
+    config = _build_config(base_url, api_key, model, fetched_models)
+    config_path = _write_temp_config(config)
+
+    env = os.environ.copy()
+    env["OPENCODE_CONFIG"] = str(config_path)
+
+    cmd = ["opencode"] + opencode_args
+    try:
+        return subprocess.call(cmd, env=env)
+    except FileNotFoundError:
+        raise SystemExit("opencode not found. Rebuild the L2 image to install it.")
+    finally:
+        try:
+            config_path.unlink()
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

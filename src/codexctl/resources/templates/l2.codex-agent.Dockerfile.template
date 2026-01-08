@@ -22,9 +22,18 @@ RUN set -eux; \
 RUN set -eux; \
     PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mistral-vibe
 
+# Install OpenCode CLI (used by the Blablador wrapper)
+RUN set -eux; \
+    export OPENCODE_INSTALL_DIR=/usr/local/bin; \
+    curl -fsSL https://opencode.ai/install | bash
+
 # Copy setup script for codex auth (port forwarding for OAuth callbacks)
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
+
+# Copy blablador wrapper (OpenCode-based)
+COPY scripts/blablador /usr/local/bin/blablador
+RUN chmod +x /usr/local/bin/blablador
 
 RUN set -eux; \
     printf '%s\n' \
@@ -39,6 +48,7 @@ RUN set -eux; \
       '  printf "  \\033[36mcodex\\033[0m  - OpenAI Codex CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mclaude\\033[0m - Claude Code CLI (permissions skipped)\\n"' \
       '  printf "  \\033[36mvibe\\033[0m   - Mistral Vibe CLI (auto-approve enabled)\\n"' \
+      '  printf "  \\033[36mblablador\\033[0m - OpenCode (Blablador) with full permissions\\n"' \
       '  printf "\\n"' \
       'fi' \
       > /etc/profile.d/codexctl-agent-aliases.sh; \
