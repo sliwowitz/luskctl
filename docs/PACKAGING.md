@@ -89,7 +89,7 @@ Runtime lookup strategy
 Build directory
 ---------------
 
-- Generated artifacts default to the "build" directory under the writable state root, e.g. ${state_root}/build/<project>/L1.Dockerfile.
+- Generated artifacts default to the "build" directory under the writable state root, e.g. ${state_root}/build/<project>/L0.Dockerfile.
 
 FHS note about writability
 --------------------------

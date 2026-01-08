@@ -96,6 +96,11 @@ def main() -> None:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
         pass
+    p_build.add_argument(
+        "--dev",
+        action="store_true",
+        help="Also build a manual dev image from L0 (tagged as <project>:l2-dev)",
+    )
 
     # ssh-init
     p_ssh = sub.add_parser("ssh-init", help="Initialize shared SSH dir and generate a keypair for a project")
@@ -126,7 +131,7 @@ def main() -> None:
     # auth-codex
     p_auth_codex = sub.add_parser(
         "auth-codex",
-        help="Authenticate Codex CLI by running 'codex login' inside an L2 container with port forwarding",
+        help="Authenticate Codex CLI by running 'codex login' inside an L2 CLI container with port forwarding",
     )
     _a = p_auth_codex.add_argument("project_id")
     try:
@@ -137,7 +142,7 @@ def main() -> None:
     # auth-mistral
     p_auth_mistral = sub.add_parser(
         "auth-mistral",
-        help="Set up Mistral API key for Vibe CLI inside an L2 container",
+        help="Set up Mistral API key for Vibe CLI inside an L2 CLI container",
     )
     _a = p_auth_mistral.add_argument("project_id")
     try:
@@ -148,7 +153,7 @@ def main() -> None:
     # auth-claude
     p_auth_claude = sub.add_parser(
         "auth-claude",
-        help="Set up Claude API key for CLI inside an L2 container",
+        help="Set up Claude API key for CLI inside an L2 CLI container",
     )
     _a = p_auth_claude.add_argument("project_id")
     try:
@@ -159,7 +164,7 @@ def main() -> None:
     # auth-blablador
     p_auth_blablador = sub.add_parser(
         "auth-blablador",
-        help="Set up Blablador API key for OpenCode inside an L2 container",
+        help="Set up Blablador API key for OpenCode inside an L2 CLI container",
     )
     _a = p_auth_blablador.add_argument("project_id")
     try:
@@ -239,7 +244,7 @@ def main() -> None:
     if args.cmd == "generate":
         generate_dockerfiles(args.project_id)
     elif args.cmd == "build":
-        build_images(args.project_id)
+        build_images(args.project_id, include_dev=getattr(args, "dev", False))
     elif args.cmd == "ssh-init":
         init_project_ssh(
             args.project_id,
@@ -324,7 +329,7 @@ def main() -> None:
             print("- Expected generated files per project:")
             for p in projs:
                 base = build_root / p.id
-                for fname in ("L1.Dockerfile", "L2.Dockerfile", "L3.Dockerfile"):
+                for fname in ("L0.Dockerfile", "L1.cli.Dockerfile", "L1.ui.Dockerfile", "L2.Dockerfile"):
                     path = base / fname
                     print(f"  • {p.id}: {path} (exists: {'yes' if path.is_file() else 'no'})")
 

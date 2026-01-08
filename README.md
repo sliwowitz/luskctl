@@ -154,7 +154,7 @@ docker:
 ```
 
 Optional Docker include snippet (user.dockerinclude)
-- This text is pasted near the end of your base image (L1) Dockerfile.
+- This text is pasted near the end of your project image (L2) Dockerfile.
 - Example lines you might add:
 ```
 RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists/*
@@ -165,6 +165,7 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
 
 4) Build images
 - codexctl build myproj
+- Optional: codexctl build myproj --dev
 
 5) Initialize the shared SSH directory and generate a keypair (only if using private Git over SSH)
 - codexctl ssh-init myproj

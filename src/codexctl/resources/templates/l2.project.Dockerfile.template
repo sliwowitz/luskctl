@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ENV CODE_REPO="{{CODE_REPO_DEFAULT}}" \
+    SSH_KEY_NAME="{{SSH_KEY_NAME}}" \
+    GIT_BRANCH="{{DEFAULT_BRANCH}}"
+
+USER root
+
+# --- BEGIN USER SNIPPET ---
+{{USER_SNIPPET}}
+# --- END USER SNIPPET ---
+
+WORKDIR /workspace
+USER dev

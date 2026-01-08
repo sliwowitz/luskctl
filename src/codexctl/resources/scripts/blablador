@@ -202,7 +202,7 @@ def main() -> int:
     try:
         return subprocess.call(cmd, env=env)
     except FileNotFoundError:
-        raise SystemExit("opencode not found. Rebuild the L2 image to install it.")
+        raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
     finally:
         try:
             config_path.unlink()

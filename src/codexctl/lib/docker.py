@@ -8,6 +8,14 @@ from pathlib import Path
 import yaml  # pip install pyyaml
 
 from .config import build_root
+from .images import (
+    agent_cli_image,
+    agent_ui_image,
+    base_dev_image,
+    project_cli_image,
+    project_dev_image,
+    project_ui_image,
+)
 from .projects import _effective_ssh_key_name, load_project
 
 
@@ -49,26 +57,30 @@ def _stage_scripts_into(dest: Path) -> None:
     _copy_package_tree("codexctl", pkg_rel, dest)
 
 
+def _load_docker_config(project_root: Path) -> dict:
+    try:
+        cfg = yaml.safe_load((project_root / "project.yml").read_text()) or {}
+        return cfg.get("docker", {}) or {}
+    except Exception:
+        return {}
+
+
 def generate_dockerfiles(project_id: str) -> None:
     project = load_project(project_id)
 
     # Load templates from package resources (codexctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
     tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
-    l1_txt = (tmpl_pkg / "l1.dev.Dockerfile.template").read_text()
-    l2_txt = (tmpl_pkg / "l2.codex-agent.Dockerfile.template").read_text()
-    l3_txt = (tmpl_pkg / "l3.codexui.Dockerfile.template").read_text()
+    l0_txt = (tmpl_pkg / "l0.dev.Dockerfile.template").read_text()
+    l1_cli_txt = (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text()
+    l1_ui_txt = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
+    l2_txt = (tmpl_pkg / "l2.project.Dockerfile.template").read_text()
 
     out_dir = build_root() / project.id
     _ensure_dir(out_dir)
 
     # Read additional docker-related settings directly from the project.yml
-    docker_cfg: dict = {}
-    try:
-        cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
-        docker_cfg = cfg.get("docker", {}) or {}
-    except Exception:
-        docker_cfg = {}
+    docker_cfg = _load_docker_config(project.root)
 
     # Resolve optional user snippet: prefer inline over file
     user_snippet = ""
@@ -106,9 +118,10 @@ def generate_dockerfiles(project_id: str) -> None:
 
     # Apply simple token replacement
     for name, content in (
-        ("L1.Dockerfile", l1_txt),
+        ("L0.Dockerfile", l0_txt),
+        ("L1.cli.Dockerfile", l1_cli_txt),
+        ("L1.ui.Dockerfile", l1_ui_txt),
         ("L2.Dockerfile", l2_txt),
-        ("L3.Dockerfile", l3_txt),
     ):
         for k, v in variables.items():
             content = content.replace(f"{{{{{k}}}}}", str(v))
@@ -124,45 +137,78 @@ def generate_dockerfiles(project_id: str) -> None:
     print(f"Generated Dockerfiles in {out_dir}")
 
 
-def build_images(project_id: str) -> None:
+def build_images(project_id: str, include_dev: bool = False) -> None:
     project = load_project(project_id)
+    docker_cfg = _load_docker_config(project.root)
     stage_dir = build_root() / project.id
 
-    l1 = stage_dir / "L1.Dockerfile"
+    l0 = stage_dir / "L0.Dockerfile"
+    l1_cli = stage_dir / "L1.cli.Dockerfile"
+    l1_ui = stage_dir / "L1.ui.Dockerfile"
     l2 = stage_dir / "L2.Dockerfile"
-    l3 = stage_dir / "L3.Dockerfile"
 
-    if not l1.is_file() or not l2.is_file() or not l3.is_file():
+    if not l0.is_file() or not l1_cli.is_file() or not l1_ui.is_file() or not l2.is_file():
         raise SystemExit("Dockerfiles are missing. Run 'codexctl generate <project>' first.")
 
     # Build commands (using podman). Real implementation would pass context and tags.
     # Build with the project-specific build directory as context so COPY scripts/ works
     context_dir = str(stage_dir)
 
-    # Read docker.base_image from project.yml for L1 only (handled in templates
-    # at generation time). For L2/L3 we must base FROM the just-built L1 image
-    # so that init-ssh-and-repo.sh (and other assets) are available at runtime.
-    # Therefore, we always pass BASE_IMAGE="<project_id>:l1" when building L2/L3.
-    l2l3_base_image = f"{project.id}:l1"
+    l0_image = base_dev_image()
+    base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
+    l1_cli_image = agent_cli_image()
+    l1_ui_image = agent_ui_image()
+    l2_cli_image = project_cli_image(project.id)
+    l2_ui_image = project_ui_image(project.id)
+    l2_dev_image = project_dev_image(project.id)
 
     cmds = [
-        ["podman", "build", "-f", str(l1), "-t", f"{project.id}:l1", context_dir],
-        # L2 and L3 use ARG BASE_IMAGE before FROM, so we must pass --build-arg
+        [
+            "podman", "build",
+            "-f", str(l0),
+            "--build-arg", f"BASE_IMAGE={base_image}",
+            "-t", l0_image,
+            context_dir,
+        ],
+        [
+            "podman", "build",
+            "-f", str(l1_cli),
+            "--build-arg", f"BASE_IMAGE={l0_image}",
+            "-t", l1_cli_image,
+            context_dir,
+        ],
+        [
+            "podman", "build",
+            "-f", str(l1_ui),
+            "--build-arg", f"BASE_IMAGE={l0_image}",
+            "-t", l1_ui_image,
+            context_dir,
+        ],
         [
             "podman", "build",
             "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
-            "-t", f"{project.id}:l2",
+            "--build-arg", f"BASE_IMAGE={l1_cli_image}",
+            "-t", l2_cli_image,
             context_dir,
         ],
         [
             "podman", "build",
-            "-f", str(l3),
-            "--build-arg", f"BASE_IMAGE={l2l3_base_image}",
-            "-t", f"{project.id}:l3",
+            "-f", str(l2),
+            "--build-arg", f"BASE_IMAGE={l1_ui_image}",
+            "-t", l2_ui_image,
             context_dir,
         ],
     ]
+    if include_dev:
+        cmds.append(
+            [
+                "podman", "build",
+                "-f", str(l2),
+                "--build-arg", f"BASE_IMAGE={l0_image}",
+                "-t", l2_dev_image,
+                context_dir,
+            ]
+        )
     for cmd in cmds:
         print("$", " ".join(cmd))
         try:

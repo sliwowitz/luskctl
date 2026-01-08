@@ -16,6 +16,7 @@ from .config import get_envs_base_dir, get_ui_base_port, state_root
 from .fs import _ensure_dir_writable
 from .podman import _podman_userns_args
 from .projects import Project, load_project
+from .images import project_cli_image, project_ui_image
 
 
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> Optional[str]:
@@ -577,7 +578,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     cmd += [
         "--name", f"{project.id}-cli-{task_id}",
         "-w", "/workspace",
-        f"{project.id}:l2",
+        project_cli_image(project.id),
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
         "bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
@@ -643,7 +644,7 @@ def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) ->
     cmd += [
         "--name", container_name,
         "-w", "/workspace",
-        f"{project.id}:l3",
+        project_ui_image(project.id),
     ]
     print("$", " ".join(map(str, cmd)))
     try:

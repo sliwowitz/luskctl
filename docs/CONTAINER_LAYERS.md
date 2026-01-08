@@ -1,49 +1,52 @@
 Container layering in codexctl
 
 Overview
-- codexctl builds project containers in three logical layers. This keeps the base tools and initialization logic separate from the Codex agent and the web UI, improving cache reuse and making images easier to reason about.
+- codexctl builds project containers in three logical layers. L0 (dev) and L1 (agent) are project‑agnostic and cache well; L2 is project‑specific.
 
 Layers
-1. L1 — development base (project:l1)
-   - Based on the project-configured base image (docker.base_image in project.yml, applied via the L1 Dockerfile template).
-   - Installs common tooling (git, openssh-client, etc.).
+0. L0 — development base (codexctl-l0:latest)
+   - Based on Ubuntu 24.04 by default (override via docker.base_image).
+   - Installs common tooling (git, openssh-client, ripgrep, vim, etc.).
    - Creates /workspace and sets WORKDIR to /workspace.
    - Creates a dev user with passwordless sudo and runs containers as that user.
    - Stages the init-ssh-and-repo.sh script into the image at /usr/local/bin and makes it the default CMD.
    - Exposes environment defaults used by the init script:
      - REPO_ROOT=/workspace
-     - CODE_REPO=<project upstream URL, if set>
-     - SSH_KEY_NAME=<from project.yml if configured>
-     - GIT_BRANCH=<project default branch>
      - GIT_RESET_MODE=none
 
-2. L2 — Codex + Claude + Mistral Vibe agents (project:l2)
-   - Built FROM the freshly built L1 image (enforced by build_images()).
-   - Installs the CLI Codex, Claude Code, and Mistral Vibe agents plus supporting tools (nodejs, ripgrep).
-   - Does not override CMD: it reuses init-ssh-and-repo.sh from L1, so the container can self-initialize the repo and SSH when it starts.
-   - At runtime, codexctl runs the container detached and keeps it alive after init so you can exec into it.
-
-3. L3 — Web UI (project:l3)
-   - Built FROM the freshly built L1 image (enforced by build_images()).
-   - Installs dependencies for the web UI and sets CMD to codexui-entry.sh.
-   - The UI backend is configurable (Codex, Claude, or Mistral) via CODEXUI_BACKEND or `codexctl task run-ui --backend`.
-     - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
-     - For Mistral, provide CODEXUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional CODEXUI_MISTRAL_MODEL.
+1. L1 — agent images (codexctl-l1-cli:latest, codexctl-l1-ui:latest)
+   - Built FROM L0.
+   - CLI image installs Codex, Claude Code, Mistral Vibe, and supporting tools.
+   - UI image installs UI dependencies and sets CMD to codexui-entry.sh.
    - codexui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
      - Syncs the UI repo, installs node dependencies, then starts the UI server.
      - If REPO_ROOT exists, cd into it so the UI starts in the project root.
 
+2. L2 — project images (<project>:l2-cli, <project>:l2-ui)
+   - Built FROM the corresponding L1 agent image.
+   - Adds project‑specific defaults (CODE_REPO, SSH_KEY_NAME, GIT_BRANCH) and the user snippet.
+   - Optional manual dev image (<project>:l2-dev) is built FROM L0 when requested.
+   - The UI backend is configurable (Codex, Claude, or Mistral) via CODEXUI_BACKEND or `codexctl task run-ui --backend`.
+     - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
+     - For Mistral, provide CODEXUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional CODEXUI_MISTRAL_MODEL.
+
 Build flow
-- codexctl generate <project> renders three Dockerfiles (L1/L2/L3) into the per‑project build directory.
-- codexctl build <project> executes three podman builds in order:
-  1) project:l1 FROM the configured base image
-  2) project:l2 FROM project:l1 (via --build-arg BASE_IMAGE=<project>:l1)
-  3) project:l3 FROM project:l1 (via --build-arg BASE_IMAGE=<project>:l1)
-- This guarantees the init script and common setup from L1 are available in both L2 and L3.
+- codexctl generate <project> renders four Dockerfiles (L0/L1/L2) into the per‑project build directory:
+  - L0.Dockerfile
+  - L1.cli.Dockerfile
+  - L1.ui.Dockerfile
+  - L2.Dockerfile
+- codexctl build <project> executes podman builds in order:
+  1) codexctl-l0:latest FROM docker.base_image (default: Ubuntu 24.04)
+  2) codexctl-l1-cli:latest FROM codexctl-l0:latest
+  3) codexctl-l1-ui:latest FROM codexctl-l0:latest
+  4) <project>:l2-cli FROM codexctl-l1-cli:latest (via --build-arg BASE_IMAGE=...)
+  5) <project>:l2-ui FROM codexctl-l1-ui:latest (via --build-arg BASE_IMAGE=...)
+  6) Optional: <project>:l2-dev FROM codexctl-l0:latest (when `codexctl build --dev` is used)
 
 Runtime behavior (tasks)
-- codexctl task run-cli starts project:l2; codexctl task run-ui starts project:l3.
+- codexctl task run-cli starts <project>:l2-cli; codexctl task run-ui starts <project>:l2-ui.
 - Both modes:
   - Mount a per‑task workspace directory from the host to /workspace.
   - Mount a shared codex config directory to /home/dev/.codex (rw).

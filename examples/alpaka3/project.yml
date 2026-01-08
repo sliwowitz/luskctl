@@ -13,7 +13,7 @@ git:
 docker:
   # GPU-capable base image (NVIDIA HPC SDK, CUDA 13, Ubuntu 24.04)
   base_image: "nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04"
-  # This is executed when building the L1 image
+  # This is executed when building the L2 project image
   user_snippet_inline: |
     RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg lsb-release software-properties-common \

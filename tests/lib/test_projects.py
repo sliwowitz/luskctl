@@ -100,7 +100,7 @@ class ProjectTests(unittest.TestCase):
             ):
                 stage_dir = build_root() / project_id
                 stage_dir.mkdir(parents=True, exist_ok=True)
-                for name in ("L1.Dockerfile", "L2.Dockerfile", "L3.Dockerfile"):
+                for name in ("L0.Dockerfile", "L1.cli.Dockerfile", "L1.ui.Dockerfile", "L2.Dockerfile"):
                     (stage_dir / name).write_text("", encoding="utf-8")
 
                 ssh_dir = envs_dir / f"_ssh-config-{project_id}"
