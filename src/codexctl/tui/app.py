@@ -533,51 +533,36 @@ if _HAS_TEXTUAL:
             await self.refresh_tasks()
             self._log_debug("delete: refresh_tasks() finished")
 
-        async def action_copy_diff_head(self) -> None:
-            """Copy git diff vs HEAD to clipboard."""
+        async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:
+            """Common helper to copy a git diff to the clipboard."""
             if not self.current_project_id or not self.current_task:
                 self.notify("No task selected.")
                 return
-            
+
             task_id = self.current_task.task_id
-            diff = get_workspace_git_diff(self.current_project_id, task_id, "HEAD")
-            
+            diff = get_workspace_git_diff(self.current_project_id, task_id, git_ref)
+
             if diff is None:
                 self.notify("Failed to get git diff. Is this a git repository?")
                 return
-                
+
             if diff == "":
                 self.notify("No changes to copy (working tree clean).")
                 return
-                
+
             success = copy_to_clipboard(diff)
             if success:
-                self.notify(f"Git diff vs HEAD copied to clipboard ({len(diff)} characters)")
+                self.notify(f"Git diff vs {label} copied to clipboard ({len(diff)} characters)")
             else:
                 self.notify("Failed to copy to clipboard. Clipboard utility not found.")
 
+        async def action_copy_diff_head(self) -> None:
+            """Copy git diff vs HEAD to clipboard."""
+            await self._copy_diff_to_clipboard("HEAD", "HEAD")
+
         async def action_copy_diff_prev(self) -> None:
             """Copy git diff vs previous commit to clipboard."""
-            if not self.current_project_id or not self.current_task:
-                self.notify("No task selected.")
-                return
-            
-            task_id = self.current_task.task_id
-            diff = get_workspace_git_diff(self.current_project_id, task_id, "PREV")
-            
-            if diff is None:
-                self.notify("Failed to get git diff. Is this a git repository?")
-                return
-                
-            if diff == "":
-                self.notify("No changes to copy (working tree clean).")
-                return
-                
-            success = copy_to_clipboard(diff)
-            if success:
-                self.notify(f"Git diff vs PREV copied to clipboard ({len(diff)} characters)")
-            else:
-                self.notify("Failed to copy to clipboard. Clipboard utility not found.")
+            await self._copy_diff_to_clipboard("PREV", "PREV")
 
     def main() -> None:
         CodexTUI().run()
