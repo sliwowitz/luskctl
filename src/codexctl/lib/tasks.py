@@ -83,21 +83,21 @@ def copy_to_clipboard(text: str) -> bool:
         
     # Try wl-copy first (Wayland)
     try:
-        subprocess.run(["wl-copy", "--type", "text/plain"], input=text, check=True)
+        subprocess.run(["wl-copy", "--type", "text/plain"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
         
     # Try xclip (X11)
     try:
-        subprocess.run(["xclip", "-selection", "clipboard"], input=text, check=True)
+        subprocess.run(["xclip", "-selection", "clipboard"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
         
     # Try pbcopy (macOS)
     try:
-        subprocess.run(["pbcopy"], input=text, check=True)
+        subprocess.run(["pbcopy"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
