@@ -68,12 +68,13 @@ SELinux and mount flags
 Git identity configuration
 - codexctl automatically configures git user.name and user.email inside containers to identify AI-generated commits.
 - The identity is set based on the agent type (CODEXCTL_AGENT_TYPE environment variable):
-  - codex → "Codex <codex@ai-agent>"
-  - claude → "Claude <claude@ai-agent>"
-  - mistral (or vibe) → "Mistral <mistral@ai-agent>"
+  - codex → "Codex <codex@openai.com>"
+  - claude → "Claude <noreply@anthropic.com>"
+  - mistral (or vibe) → "Mistral Vibe <vibe@mistral.ai>"
     - Note: "vibe" is accepted as an alias since the Mistral CLI tool is called "vibe"
   - blablador → "Blablador <blablador@ai-agent>"
   - (default) → "AI Agent <ai-agent@localhost>"
+- Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
 - For CLI mode (task run-cli), the default agent type is "claude" unless overridden via CODEXCTL_AGENT_TYPE environment variable.
 - For UI mode (task run-ui), the agent type matches the --backend parameter (codex, claude, or mistral). When no backend is specified, it defaults to "codex".
 - This allows you to quickly distinguish which commits were made by AI agents versus human developers.
