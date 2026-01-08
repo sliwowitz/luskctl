@@ -40,6 +40,7 @@ def codex_auth(project_id: str) -> None:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
+    - Sets up iptables NAT rules for port 1455 (required for regular users)
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
 
@@ -57,11 +58,31 @@ def codex_auth(project_id: str) -> None:
     container_name = f"{project.id}-auth-codex"
     _cleanup_existing_container(container_name)
 
+    # Setup script for iptables NAT rules (required for codex login as regular user)
+    # This configures port 1455 redirection for OAuth callbacks
+    setup_nat_script = (
+        "echo '>> Setting up iptables NAT rules for codex auth (port 1455)' && "
+        "if ! command -v iptables >/dev/null 2>&1; then "
+        "  echo '>> Installing iptables...' && "
+        "  sudo apt-get update -qq && "
+        "  sudo apt-get install -y iptables; "
+        "else "
+        "  echo '>> iptables already installed'; "
+        "fi && "
+        "echo '>> Configuring NAT rule for port 1455...' && "
+        "sudo iptables -t nat -A PREROUTING -p tcp --dport 1455 -j REDIRECT --to-ports 1455 && "
+        "echo '>> Current NAT PREROUTING rules:' && "
+        "sudo iptables -t nat -S PREROUTING && "
+        "echo '>> NAT setup complete' && "
+        "codex login"
+    )
+
     # Build the podman run command
     # - Interactive with TTY for codex login
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
     # - Use L2 image (which has the codex CLI installed)
+    # - Run setup script followed by codex login
     cmd = [
         "podman", "run",
         "--rm",
@@ -70,13 +91,13 @@ def codex_auth(project_id: str) -> None:
         "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
-        "codex", "login",
+        "bash", "-c", setup_nat_script,
     ]
     cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()
-    print("This will open a browser for authentication.")
+    print("This will set up iptables NAT rules and open a browser for authentication.")
     print("After completing authentication, press Ctrl+C to stop the container.")
     print()
     print("$", " ".join(map(str, cmd)))
