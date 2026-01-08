@@ -238,7 +238,7 @@ def get_project_state(project_id: str) -> dict:
     The resulting dict contains boolean flags that can be used by UIs
     (including the TUI) to give a quick overview of the project:
 
-    - ``dockerfiles`` - True if all required Dockerfiles (L0/L1/L2) exist
+    - ``dockerfiles`` - True if all required Dockerfiles (L0, L1.cli, L1.ui, L2) exist
       under the build root for this project.
     - ``images`` - True if podman reports that images ``<id>:l2-cli``
       and ``<id>:l2-ui`` exist.
