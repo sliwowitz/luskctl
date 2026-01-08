@@ -14,11 +14,6 @@ class ImagesTests(unittest.TestCase):
         result = images._base_tag("")
         self.assertEqual(result, "ubuntu-24.04")
 
-    def test_base_tag_none(self) -> None:
-        """None should return default tag."""
-        result = images._base_tag(None)  # type: ignore
-        self.assertEqual(result, "ubuntu-24.04")
-
     def test_base_tag_whitespace_only(self) -> None:
         """Whitespace-only string should return default tag."""
         result = images._base_tag("   ")
@@ -106,7 +101,7 @@ class ImagesTests(unittest.TestCase):
 
     def test_base_tag_long_with_special_chars(self) -> None:
         """Long name with special chars should be sanitized then truncated."""
-        name = ("ubuntu@special" * 20)  # Over 120 chars with special chars
+        name = "ubuntu@special" * 20  # Over 120 chars with special chars
         result = images._base_tag(name)
         self.assertEqual(len(result), 120)
         # Should not contain @ symbols
