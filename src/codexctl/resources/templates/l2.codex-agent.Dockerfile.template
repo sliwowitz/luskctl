@@ -40,7 +40,6 @@ RUN set -eux; \
       'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' \
       'alias claude="claude --dangerously-skip-permissions"' \
       'alias vibe="vibe --auto-approve"' \
-      'alias blablador="blablador"' \
       '' \
       '# Print available agents on interactive login' \
       'if [ -t 1 ] && [ -z "$_CODEXCTL_AGENTS_SHOWN" ]; then' \
