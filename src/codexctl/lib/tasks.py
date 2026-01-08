@@ -107,6 +107,14 @@ def copy_to_clipboard(text: str) -> bool:
 
 # ---------- Tasks ----------
 
+UI_BACKENDS = ("codex", "claude")
+UI_ENV_PASSTHROUGH_PREFIX = "CODEXUI_"
+UI_ENV_PASSTHROUGH_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "CLAUDE_API_KEY",
+)
+
+
 def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
 
@@ -136,6 +144,35 @@ def _log_debug(message: str) -> None:
 
 def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
+
+
+def _normalize_ui_backend(backend: Optional[str]) -> Optional[str]:
+    if backend is None:
+        return None
+    backend = backend.strip()
+    if not backend:
+        return None
+    return backend.lower()
+
+
+def _apply_ui_env_overrides(env: dict, backend: Optional[str]) -> dict:
+    """Return a copy of env with UI-specific overrides applied."""
+    merged = dict(env)
+    normalized = _normalize_ui_backend(backend)
+    if normalized:
+        merged["CODEXUI_BACKEND"] = normalized
+
+    for key, value in os.environ.items():
+        if key.startswith(UI_ENV_PASSTHROUGH_PREFIX) and key not in merged:
+            merged[key] = value
+
+    for key in UI_ENV_PASSTHROUGH_KEYS:
+        if key not in merged:
+            val = os.environ.get(key)
+            if val:
+                merged[key] = val
+
+    return merged
 
 
 def task_new(project_id: str) -> None:
@@ -557,7 +594,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     )
 
 
-def task_run_ui(project_id: str, task_id: str) -> None:
+def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -573,6 +610,7 @@ def task_run_ui(project_id: str, task_id: str) -> None:
         meta_path.write_text(yaml.safe_dump(meta))
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
+    env = _apply_ui_env_overrides(env, backend)
 
     container_name = f"{project.id}-ui-{task_id}"
 

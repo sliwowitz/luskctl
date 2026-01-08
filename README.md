@@ -191,8 +191,10 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
 7) Run the task
 - CLI agent mode (headless; Codex or Claude Code):
   - codexctl task run-cli myproj <task_id>
-- UI (web) mode (Codex UI only):
-  - codexctl task run-ui myproj <task_id>
+- UI (web) mode (Codex UI or Claude):
+  - codexctl task run-ui myproj <task_id> [--backend codex|claude]
+  - For Claude, set one of: CODEXUI_CLAUDE_API_KEY / ANTHROPIC_API_KEY / CLAUDE_API_KEY
+  - Optional: CODEXUI_CLAUDE_MODEL=claude-3-5-sonnet-20240620
 
 Tips
 - Show resolved paths and configuration:
@@ -220,7 +222,7 @@ Container readiness and initial log streaming (important for developers)
 
 - UI (task run-ui):
   - Readiness is currently determined by probing the bound localhost port (127.0.0.1:<assigned_port> → container port 7860). The host follows the container logs for a short time and detaches as soon as the TCP port is reachable, or after a timeout.
-  - This implies a dependency on the UI process actually listening on PORT (default 7860) and binding to 0.0.0.0 inside the container. The default entry script is resources/scripts/codexui-entry.sh which runs `node server.js` from the CodexUI repo.
+- This implies a dependency on the UI process actually listening on PORT (default 7860) and binding to 0.0.0.0 inside the container. The default entry script is resources/scripts/codexui-entry.sh which runs `server.ts` via `tsx`/`ts-node` (or `server.js` if present) from the CodexUI repo.
   - If the UI server changes its port, bind address, or startup behavior (e.g., delays listening until after long asset builds), you may need to adjust:
     - The exposed/internal port, and the host port mapping in src/codexctl/lib/tasks.py (task_run_ui).
     - The readiness timeout in src/codexctl/lib/tasks.py.

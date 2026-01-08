@@ -20,9 +20,15 @@ else
 fi
 
 cd "${CODEXUI_DIR}"
+ui_entry_js="${CODEXUI_DIR}/server.js"
 ui_entry_ts="${CODEXUI_DIR}/server.ts"
-if [[ ! -f "${ui_entry_ts}" ]]; then
-  echo "!! no UI entrypoint found (expected server.ts)."
+ui_entry=""
+if [[ -f "${ui_entry_js}" ]]; then
+  ui_entry="${ui_entry_js}"
+elif [[ -f "${ui_entry_ts}" ]]; then
+  ui_entry="${ui_entry_ts}"
+else
+  echo "!! no UI entrypoint found (expected server.js or server.ts)."
   exit 1
 fi
 
@@ -40,28 +46,32 @@ if [[ -n "${REPO_ROOT:-}" && -d "${REPO_ROOT}" ]]; then
 fi
 
 # Always run the UI server from the CodexUI repo, even if the working
-# directory is the task workspace. This ensures that server.ts is resolved
-# from CODEXUI_DIR while allowing the UI to treat the workspace as its
-# current directory (for project-specific files, etc.).
+# directory is the task workspace. This ensures that server.ts/server.js is
+# resolved from CODEXUI_DIR while allowing the UI to treat the workspace as
+# its current directory (for project-specific files, etc.).
 ui_args=()
 if [[ -z "${CODEXUI_LOG:-}" && ! -w /var/log ]]; then
   export CODEXUI_LOG="/tmp/codexui.log"
 fi
-if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
-  ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
-  if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
-    ui_args+=(--tsconfig "${CODEXUI_DIR}/tsconfig.json")
-  fi
-elif [[ -f "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs" ]]; then
+if [[ "${ui_entry}" == "${ui_entry_js}" ]]; then
   ui_runner="node"
-  ui_args+=(--loader "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs")
-  if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
-    : "${TS_NODE_PROJECT:=${CODEXUI_DIR}/tsconfig.json}"
-    export TS_NODE_PROJECT
-  fi
 else
-  echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
-  exit 1
+  if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
+    ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
+    if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
+      ui_args+=(--tsconfig "${CODEXUI_DIR}/tsconfig.json")
+    fi
+  elif [[ -f "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs" ]]; then
+    ui_runner="node"
+    ui_args+=(--loader "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs")
+    if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
+      : "${TS_NODE_PROJECT:=${CODEXUI_DIR}/tsconfig.json}"
+      export TS_NODE_PROJECT
+    fi
+  else
+    echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
+    exit 1
+  fi
 fi
-echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry_ts})"
-exec "${ui_runner}" "${ui_args[@]}" "${ui_entry_ts}"
+echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry})"
+exec "${ui_runner}" "${ui_args[@]}" "${ui_entry}"

@@ -25,8 +25,9 @@ Layers
 
 3. L3 — Web UI (project:l3)
    - Built FROM the freshly built L1 image (enforced by build_images()).
-   - Installs dependencies for the Codex UI and sets CMD to codexui-entry.sh.
-   - Claude Code is not available in the web UI; CLI mode only.
+   - Installs dependencies for the web UI and sets CMD to codexui-entry.sh.
+   - The UI backend is configurable (Codex or Claude) via CODEXUI_BACKEND or `codexctl task run-ui --backend`.
+     - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
    - codexui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
      - Syncs the UI repo, installs node dependencies, then starts the UI server.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -8,11 +9,13 @@ from pathlib import Path
 
 from codexctl.lib.projects import load_project
 from codexctl.lib.tasks import (
+    _apply_ui_env_overrides,
     _build_task_env_and_volumes,
     copy_to_clipboard,
     get_workspace_git_diff,
     task_delete,
     task_new,
+    task_run_ui,
 )
 from test_utils import parse_meta_value, write_project
 
@@ -168,6 +171,76 @@ class TaskTests(unittest.TestCase):
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z,ro", volumes)
                 self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)
 
+    def test_apply_ui_env_overrides_passthrough(self) -> None:
+        base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "CODEXUI_TOKEN": "token-123",
+                "ANTHROPIC_API_KEY": "anthropic-456",
+                "CLAUDE_API_KEY": "from-env",
+            },
+            clear=True,
+        ):
+            merged = _apply_ui_env_overrides(base_env, "CLAUDE")
+
+        self.assertEqual(merged["CODEXUI_BACKEND"], "claude")
+        self.assertEqual(merged["CODEXUI_TOKEN"], "token-123")
+        self.assertEqual(merged["ANTHROPIC_API_KEY"], "anthropic-456")
+        self.assertEqual(merged["CLAUDE_API_KEY"], "override")
+
+    def test_task_run_ui_passes_passthrough_env(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_ui_env"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "CODEXUI_TOKEN": "token-xyz",
+                    "ANTHROPIC_API_KEY": "anthropic-abc",
+                },
+                clear=True,
+            ):
+                task_new(project_id)
+                with unittest.mock.patch(
+                    "codexctl.lib.tasks._stream_initial_logs",
+                    return_value=True,
+                ), unittest.mock.patch(
+                    "codexctl.lib.tasks._is_container_running",
+                    return_value=True,
+                ), unittest.mock.patch(
+                    "codexctl.lib.tasks._assign_ui_port",
+                    return_value=7788,
+                ), unittest.mock.patch(
+                    "codexctl.lib.tasks.subprocess.run"
+                ) as run_mock:
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    task_run_ui(project_id, "1", backend="CLAUDE")
+
+                cmd = run_mock.call_args[0][0]
+                env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
+
+                self.assertIn("CODEXUI_BACKEND=claude", env_entries)
+                self.assertIn("CODEXUI_TOKEN=token-xyz", env_entries)
+                self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
+
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
         with tempfile.TemporaryDirectory() as td:
@@ -251,12 +324,12 @@ class TaskTests(unittest.TestCase):
                     mock_result.returncode = 0
                     mock_result.stdout = ""
                     run_mock.return_value = mock_result
-                    
+
                     # Also need to mock .git existence check
                     workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                     git_dir = workspace_dir / ".git"
                     git_dir.mkdir(parents=True, exist_ok=True)
-                    
+
                     result = get_workspace_git_diff(project_id, "1")
                     self.assertEqual(result, "")
 
@@ -291,14 +364,14 @@ class TaskTests(unittest.TestCase):
                     mock_result.returncode = 0
                     mock_result.stdout = expected_diff
                     run_mock.return_value = mock_result
-                    
+
                     workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                     git_dir = workspace_dir / ".git"
                     git_dir.mkdir(parents=True, exist_ok=True)
-                    
+
                     result = get_workspace_git_diff(project_id, "1", "HEAD")
                     self.assertEqual(result, expected_diff)
-                    
+
                     # Verify git command was called correctly
                     run_mock.assert_called_once()
                     call_args = run_mock.call_args[0][0]
@@ -338,14 +411,14 @@ class TaskTests(unittest.TestCase):
                     mock_result.returncode = 0
                     mock_result.stdout = expected_diff
                     run_mock.return_value = mock_result
-                    
+
                     workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                     git_dir = workspace_dir / ".git"
                     git_dir.mkdir(parents=True, exist_ok=True)
-                    
+
                     result = get_workspace_git_diff(project_id, "1", "PREV")
                     self.assertEqual(result, expected_diff)
-                    
+
                     # Verify git command was called with HEAD~1
                     run_mock.assert_called_once()
                     call_args = run_mock.call_args[0][0]
@@ -384,11 +457,11 @@ class TaskTests(unittest.TestCase):
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 1
                     run_mock.return_value = mock_result
-                    
+
                     workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                     git_dir = workspace_dir / ".git"
                     git_dir.mkdir(parents=True, exist_ok=True)
-                    
+
                     result = get_workspace_git_diff(project_id, "1")
                     self.assertIsNone(result)
 
@@ -403,10 +476,10 @@ class TaskTests(unittest.TestCase):
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 0
             run_mock.return_value = mock_result
-            
+
             result = copy_to_clipboard("test content")
             self.assertTrue(result)
-            
+
             # Verify wl-copy was called with correct arguments
             run_mock.assert_called_once_with(
                 ["wl-copy", "--type", "text/plain"],
@@ -426,12 +499,12 @@ class TaskTests(unittest.TestCase):
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
                 return mock_result
-            
+
             run_mock.side_effect = side_effect
-            
+
             result = copy_to_clipboard("test content")
             self.assertTrue(result)
-            
+
             # Verify xclip was called
             self.assertEqual(run_mock.call_count, 2)
             second_call = run_mock.call_args_list[1]
@@ -447,12 +520,12 @@ class TaskTests(unittest.TestCase):
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
                 return mock_result
-            
+
             run_mock.side_effect = side_effect
-            
+
             result = copy_to_clipboard("test content")
             self.assertTrue(result)
-            
+
             # Verify pbcopy was called
             self.assertEqual(run_mock.call_count, 3)
             third_call = run_mock.call_args_list[2]
@@ -463,9 +536,9 @@ class TaskTests(unittest.TestCase):
         with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
             # All clipboard utilities fail
             run_mock.side_effect = FileNotFoundError()
-            
+
             result = copy_to_clipboard("test content")
             self.assertFalse(result)
-            
+
             # Verify all three utilities were tried
             self.assertEqual(run_mock.call_count, 3)
