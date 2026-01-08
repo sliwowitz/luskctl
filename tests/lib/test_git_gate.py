@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -319,7 +320,6 @@ git:
                 },
             ):
                 # Mock timeout
-                import subprocess
                 with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 30)):
                     result = get_upstream_head(project_id)
 
@@ -879,7 +879,6 @@ git:
                 },
             ):
                 # Mock timeout
-                import subprocess
                 with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 120)):
                     result = sync_gate_branches(project_id)
 
