@@ -40,6 +40,7 @@ def codex_auth(project_id: str) -> None:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
+    - Sets up socat port forwarding for port 1455 (required for rootless podman)
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
 
@@ -62,6 +63,7 @@ def codex_auth(project_id: str) -> None:
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
     # - Use L2 image (which has the codex CLI installed)
+    # - Run setup-codex-auth.sh script which handles port forwarding and codex login
     cmd = [
         "podman", "run",
         "--rm",
@@ -70,13 +72,13 @@ def codex_auth(project_id: str) -> None:
         "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
-        "codex", "login",
+        "setup-codex-auth.sh",
     ]
     cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()
-    print("This will open a browser for authentication.")
+    print("This will set up port forwarding (using socat) and open a browser for authentication.")
     print("After completing authentication, press Ctrl+C to stop the container.")
     print()
     print("$", " ".join(map(str, cmd)))
