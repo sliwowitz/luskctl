@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional
 import inspect
 
 from textual.app import ComposeResult
-from textual.widgets import ListView, ListItem, Static, Button
-from textual.containers import Horizontal
+from textual.widgets import ListView, ListItem, Static, Button, Label
+from textual.containers import Horizontal, Vertical
 from textual.message import Message
 
 from ..lib.projects import Project as CodexProject
@@ -182,10 +182,38 @@ class TaskList(ListView):
 class TaskDetails(Static):
     """Bottom panel showing details for the currently selected task."""
 
+    class CopyDiffRequested(Message):
+        """Message sent when user requests to copy git diff."""
+        def __init__(self, project_id: str, task_id: str, diff_type: str) -> None:
+            super().__init__()
+            self.project_id = project_id
+            self.task_id = task_id
+            self.diff_type = diff_type  # "HEAD" or "PREV"
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.current_project_id: Optional[str] = None
+        self.current_task_id: Optional[str] = None
+
+    def compose(self) -> ComposeResult:
+        yield Label("Task Details", id="task-details-title")
+        yield Static(id="task-details-content")
+        with Horizontal(id="task-details-actions"):
+            yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
+            yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
+
     def set_task(self, task: Optional[TaskMeta]) -> None:
+        content = self.query_one("#task-details-content", Static)
+        
         if task is None:
-            self.update("No task selected.")
+            content.update("No task selected.")
+            self.current_project_id = None
+            self.current_task_id = None
             return
+
+        # Store current task info for button handlers
+        self.current_project_id = self.app.current_project_id if self.app else None
+        self.current_task_id = task.task_id
 
         lines = [
             f"Task ID:   {task.task_id}",
@@ -196,7 +224,21 @@ class TaskDetails(Static):
         if task.ui_port:
             lines.append(f"UI URL:    http://127.0.0.1:{task.ui_port}/")
 
-        self.update("\n".join(lines))
+        content.update("\n".join(lines))
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses for copy diff actions."""
+        if not self.current_project_id or not self.current_task_id:
+            return
+            
+        btn_id = event.button.id
+        diff_type = "HEAD" if btn_id == "btn-copy-diff-head" else "PREV"
+        
+        self.post_message(self.CopyDiffRequested(
+            self.current_project_id, 
+            self.current_task_id, 
+            diff_type
+        ))
 
 
 class ProjectState(Static):

@@ -18,6 +18,93 @@ from .podman import _podman_userns_args
 from .projects import Project, load_project
 
 
+def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> Optional[str]:
+    """Get git diff from a task's workspace.
+    
+    Args:
+        project_id: The project ID
+        task_id: The task ID
+        against: What to diff against ("HEAD" or "PREV")
+        
+    Returns:
+        The git diff output as a string, or None if failed
+    """
+    try:
+        project = load_project(project_id)
+        tasks_root = project.tasks_root
+        workspace_dir = tasks_root / task_id / "workspace"
+        
+        if not workspace_dir.exists() or not workspace_dir.is_dir():
+            return None
+            
+        # Check if this is a git repository
+        git_dir = workspace_dir / ".git"
+        if not git_dir.exists():
+            return None
+            
+        # Determine what to diff against
+        if against == "PREV":
+            # Diff against previous commit
+            cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD~1", "HEAD"]
+        else:
+            # Default: diff against HEAD (unstaged changes)
+            cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD"]
+            
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout
+        else:
+            # If no diff (clean working tree), return empty string
+            if "no changes added to commit" in result.stderr or result.returncode == 1:
+                return ""
+            return None
+            
+    except Exception:
+        # If anything goes wrong, return None - this is a best-effort operation
+        return None
+
+
+def copy_to_clipboard(text: str) -> bool:
+    """Copy text to system clipboard.
+    
+    Tries multiple clipboard utilities in order of preference:
+    1. wl-copy (Wayland)
+    2. xclip (X11)
+    3. pbcopy (macOS)
+    
+    Args:
+        text: Text to copy to clipboard
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not text:
+        return False
+        
+    # Try wl-copy first (Wayland)
+    try:
+        subprocess.run(["wl-copy", "--type", "text/plain"], input=text, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+        
+    # Try xclip (X11)
+    try:
+        subprocess.run(["xclip", "-selection", "clipboard"], input=text, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+        
+    # Try pbcopy (macOS)
+    try:
+        subprocess.run(["pbcopy"], input=text, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+        
+    return False
+
+
 # ---------- Tasks ----------
 
 def _tasks_meta_dir(project_id: str) -> Path:
