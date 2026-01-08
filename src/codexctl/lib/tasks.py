@@ -107,11 +107,12 @@ def copy_to_clipboard(text: str) -> bool:
 
 # ---------- Tasks ----------
 
-UI_BACKENDS = ("codex", "claude")
+UI_BACKENDS = ("codex", "claude", "mistral")
 UI_ENV_PASSTHROUGH_PREFIX = "CODEXUI_"
 UI_ENV_PASSTHROUGH_KEYS = (
     "ANTHROPIC_API_KEY",
     "CLAUDE_API_KEY",
+    "MISTRAL_API_KEY",
 )
 
 

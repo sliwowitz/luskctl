@@ -170,17 +170,19 @@ RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists
   - The command prints the new task ID. You can list tasks with: codexctl task list myproj
 
 7) Run the task
-- CLI agent mode (headless; Codex or Claude Code):
+- CLI agent mode (headless; Codex, Claude Code, or Mistral Vibe):
   - codexctl task run-cli myproj <task_id>
-- UI (web) mode (Codex UI or Claude):
-  - codexctl task run-ui myproj <task_id> [--backend codex|claude]
+- UI (web) mode (Codex UI, Claude, or Mistral):
+  - codexctl task run-ui myproj <task_id> [--backend codex|claude|mistral]
   - For Claude, set one of: CODEXUI_CLAUDE_API_KEY / ANTHROPIC_API_KEY / CLAUDE_API_KEY
   - Optional: CODEXUI_CLAUDE_MODEL=claude-3-5-sonnet-20240620
+  - For Mistral, set one of: CODEXUI_MISTRAL_API_KEY / MISTRAL_API_KEY
+  - Optional: CODEXUI_MISTRAL_MODEL=mistral-large-latest
 
 Tips
 - Show resolved paths and configuration:
   - codexctl config
-- Where envs (SSH and codex config) live by default:
+- Where envs (SSH, Codex, Claude, and Mistral config) live by default:
   - /var/lib/codexctl/envs (root) or as configured in examples/codexctl-config.yml under envs.base_dir
 - Details on shared directories and SSH mounts:
   - docs/SHARED_DIRS.md

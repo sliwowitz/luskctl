@@ -177,8 +177,10 @@ class TaskTests(unittest.TestCase):
             os.environ,
             {
                 "CODEXUI_TOKEN": "token-123",
+                "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
                 "ANTHROPIC_API_KEY": "anthropic-456",
                 "CLAUDE_API_KEY": "from-env",
+                "MISTRAL_API_KEY": "mistral-456",
             },
             clear=True,
         ):
@@ -186,8 +188,10 @@ class TaskTests(unittest.TestCase):
 
         self.assertEqual(merged["CODEXUI_BACKEND"], "claude")
         self.assertEqual(merged["CODEXUI_TOKEN"], "token-123")
+        self.assertEqual(merged["CODEXUI_MISTRAL_API_KEY"], "mistral-xyz")
         self.assertEqual(merged["ANTHROPIC_API_KEY"], "anthropic-456")
         self.assertEqual(merged["CLAUDE_API_KEY"], "override")
+        self.assertEqual(merged["MISTRAL_API_KEY"], "mistral-456")
 
     def test_task_run_ui_passes_passthrough_env(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -214,7 +218,9 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_STATE_DIR": str(state_dir),
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                     "CODEXUI_TOKEN": "token-xyz",
+                    "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
                     "ANTHROPIC_API_KEY": "anthropic-abc",
+                    "MISTRAL_API_KEY": "mistral-abc",
                 },
                 clear=True,
             ):
@@ -239,7 +245,9 @@ class TaskTests(unittest.TestCase):
 
                 self.assertIn("CODEXUI_BACKEND=claude", env_entries)
                 self.assertIn("CODEXUI_TOKEN=token-xyz", env_entries)
+                self.assertIn("CODEXUI_MISTRAL_API_KEY=mistral-xyz", env_entries)
                 self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
+                self.assertIn("MISTRAL_API_KEY=mistral-abc", env_entries)
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
