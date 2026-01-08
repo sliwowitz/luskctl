@@ -180,19 +180,19 @@ def main() -> int:
         return 0
 
     model = args.model or os.environ.get("BLABLADOR_MODEL")
-    models: Optional[List[str]] = None
+    fetched_models: Optional[List[str]] = None
     try:
-        models = _fetch_models(base_url, api_key)
+        fetched_models = _fetch_models(base_url, api_key)
     except SystemExit:
         if not model:
             raise
 
     if not model:
-        if not models:
+        if not fetched_models:
             raise SystemExit("No models available. Pass --model to continue.")
-        model = _choose_model(models)
+        model = _choose_model(fetched_models)
 
-    config = _build_config(base_url, api_key, model, models)
+    config = _build_config(base_url, api_key, model, fetched_models)
     config_path = _write_temp_config(config)
 
     env = os.environ.copy()
