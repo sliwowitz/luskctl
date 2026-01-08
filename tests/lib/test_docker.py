@@ -35,15 +35,17 @@ class DockerTests(unittest.TestCase):
             ):
                 generate_dockerfiles(project_id)
                 out_dir = build_root() / project_id
-                l1 = out_dir / "L1.Dockerfile"
+                l0 = out_dir / "L0.Dockerfile"
+                l1_cli = out_dir / "L1.cli.Dockerfile"
+                l1_ui = out_dir / "L1.ui.Dockerfile"
                 l2 = out_dir / "L2.Dockerfile"
-                l3 = out_dir / "L3.Dockerfile"
 
-                self.assertTrue(l1.is_file())
+                self.assertTrue(l0.is_file())
+                self.assertTrue(l1_cli.is_file())
+                self.assertTrue(l1_ui.is_file())
                 self.assertTrue(l2.is_file())
-                self.assertTrue(l3.is_file())
 
-                content = l1.read_text(encoding="utf-8")
+                content = l2.read_text(encoding="utf-8")
                 self.assertIn(f"SSH_KEY_NAME=\"id_ed25519_{project_id}\"", content)
                 self.assertNotIn("{{DEFAULT_BRANCH}}", content)
 

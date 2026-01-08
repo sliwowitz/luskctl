@@ -8,6 +8,7 @@ from typing import Optional, List
 import yaml  # pip install pyyaml
 
 from .config import build_root, config_root, get_envs_base_dir, state_root, user_projects_root
+from .images import project_cli_image, project_ui_image
 
 
 def _get_global_git_config(key: str) -> Optional[str]:
@@ -237,10 +238,10 @@ def get_project_state(project_id: str) -> dict:
     The resulting dict contains boolean flags that can be used by UIs
     (including the TUI) to give a quick overview of the project:
 
-    - ``dockerfiles`` - True if all three Dockerfiles (L1/L2/L3) exist
+    - ``dockerfiles`` - True if all required Dockerfiles (L0, L1.cli, L1.ui, L2) exist
       under the build root for this project.
-    - ``images`` - True if podman reports that images ``<id>:l1``,
-      ``<id>:l2`` and ``<id>:l3`` exist.
+    - ``images`` - True if podman reports that images ``<id>:l2-cli``
+      and ``<id>:l2-ui`` exist.
     - ``ssh`` - True if the project SSH directory exists and contains
       a ``config`` file.
     - ``gate`` - True if the project's git gate directory exists.
@@ -252,16 +253,20 @@ def get_project_state(project_id: str) -> dict:
     # Dockerfiles: look in the same location generate_dockerfiles writes to.
     stage_dir = build_root() / project.id
     dockerfiles = [
-        stage_dir / "L1.Dockerfile",
+        stage_dir / "L0.Dockerfile",
+        stage_dir / "L1.cli.Dockerfile",
+        stage_dir / "L1.ui.Dockerfile",
         stage_dir / "L2.Dockerfile",
-        stage_dir / "L3.Dockerfile",
     ]
     has_dockerfiles = all(p.is_file() for p in dockerfiles)
 
     # Images: rely on podman image tags created by build_images().
     has_images = False
     try:
-        required_tags = [f"{project.id}:l1", f"{project.id}:l2", f"{project.id}:l3"]
+        required_tags = [
+            project_cli_image(project.id),
+            project_ui_image(project.id),
+        ]
         ok = True
         for tag in required_tags:
             # ``podman image exists`` exits with 0 when the image is present.

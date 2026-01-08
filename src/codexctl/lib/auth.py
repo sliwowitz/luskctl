@@ -5,6 +5,7 @@ import subprocess
 
 from .config import get_envs_base_dir
 from .fs import _ensure_dir_writable
+from .images import project_cli_image
 from .podman import _podman_userns_args
 from .projects import load_project
 
@@ -34,10 +35,10 @@ def _cleanup_existing_container(container_name: str) -> None:
 
 
 def codex_auth(project_id: str) -> None:
-    """Run codex login inside the L2 container to authenticate the Codex CLI.
+    """Run codex login inside the L2 CLI container to authenticate the Codex CLI.
 
     This command:
-    - Spins up a temporary L2 container for the project (L2 has the codex CLI)
+    - Spins up a temporary L2 CLI container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
     - Sets up socat port forwarding for port 1455 (required for rootless podman)
@@ -62,7 +63,7 @@ def codex_auth(project_id: str) -> None:
     # - Interactive with TTY for codex login
     # - Port 1455 is the default port used by `codex login` for OAuth callback
     # - Mount codex config dir for persistent auth
-    # - Use L2 image (which has the codex CLI installed)
+    # - Use L2 CLI image (which has the codex CLI installed)
     # - Run setup-codex-auth.sh script which handles port forwarding and codex login
     cmd = [
         "podman", "run",
@@ -71,7 +72,7 @@ def codex_auth(project_id: str) -> None:
         "-p", "127.0.0.1:1455:1455",
         "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
-        f"{project.id}:l2",
+        project_cli_image(project.id),
         "setup-codex-auth.sh",
     ]
     cmd[3:3] = _podman_userns_args()
@@ -107,10 +108,10 @@ def codex_auth(project_id: str) -> None:
 
 
 def claude_auth(project_id: str) -> None:
-    """Set up Claude API key for CLI inside the L2 container.
+    """Set up Claude API key for CLI inside the L2 CLI container.
 
     This command:
-    - Spins up a temporary L2 container for the project (L2 has the claude CLI)
+    - Spins up a temporary L2 CLI container for the project (L2 has the claude CLI)
     - Mounts the shared claude config directory (/home/dev/.claude)
     - Runs an interactive shell where the user can enter their Claude API key
     - The API key persists in the shared .claude folder
@@ -132,14 +133,14 @@ def claude_auth(project_id: str) -> None:
     # Build the podman run command
     # - Interactive with TTY for API key entry
     # - Mount claude config dir for persistent auth
-    # - Use L2 image (which has claude CLI installed)
+    # - Use L2 CLI image (which has claude CLI installed)
     cmd = [
         "podman", "run",
         "--rm",
         "-it",
         "-v", f"{claude_host_dir}:/home/dev/.claude:Z",
         "--name", container_name,
-        f"{project.id}:l2",
+        project_cli_image(project.id),
         "bash", "-c",
         "echo 'Enter your Claude API key (get one at https://console.anthropic.com/settings/keys):' && "
         "read -r -p 'ANTHROPIC_API_KEY=' api_key && "
@@ -178,10 +179,10 @@ def claude_auth(project_id: str) -> None:
 # ---------- Mistral Vibe authentication ----------
 
 def mistral_auth(project_id: str) -> None:
-    """Set up Mistral API key for Vibe CLI inside the L2 container.
+    """Set up Mistral API key for Vibe CLI inside the L2 CLI container.
 
     This command:
-    - Spins up a temporary L2 container for the project (L2 has mistral-vibe)
+    - Spins up a temporary L2 CLI container for the project (L2 has mistral-vibe)
     - Mounts the shared vibe config directory (/home/dev/.vibe)
     - Runs an interactive shell where the user can run `vibe` to trigger
       the API key prompt, or manually create ~/.vibe/.env
@@ -204,14 +205,14 @@ def mistral_auth(project_id: str) -> None:
     # Build the podman run command
     # - Interactive with TTY for API key entry
     # - Mount vibe config dir for persistent auth
-    # - Use L2 image (which has mistral-vibe installed)
+    # - Use L2 CLI image (which has mistral-vibe installed)
     cmd = [
         "podman", "run",
         "--rm",
         "-it",
         "-v", f"{vibe_host_dir}:/home/dev/.vibe:Z",
         "--name", container_name,
-        f"{project.id}:l2",
+        project_cli_image(project.id),
         "bash", "-c",
         "echo 'Enter your Mistral API key (get one at https://console.mistral.ai/api-keys):' && "
         "read -r -p 'MISTRAL_API_KEY=' api_key && "
@@ -250,10 +251,10 @@ def mistral_auth(project_id: str) -> None:
 # ---------- Blablador authentication ----------
 
 def blablador_auth(project_id: str) -> None:
-    """Set up Blablador API key for OpenCode inside the L2 container.
+    """Set up Blablador API key for OpenCode inside the L2 CLI container.
 
     This command:
-    - Spins up a temporary L2 container for the project (L2 has OpenCode + blablador wrapper)
+    - Spins up a temporary L2 CLI container for the project (L2 has OpenCode + blablador wrapper)
     - Mounts the shared blablador config directory (/home/dev/.blablador)
     - Runs an interactive shell where the user can enter their Blablador API key
     - The API key persists in the shared .blablador folder
@@ -275,14 +276,14 @@ def blablador_auth(project_id: str) -> None:
     # Build the podman run command
     # - Interactive with TTY for API key entry
     # - Mount blablador config dir for persistent auth
-    # - Use L2 image (which has OpenCode + blablador wrapper installed)
+    # - Use L2 CLI image (which has OpenCode + blablador wrapper installed)
     cmd = [
         "podman", "run",
         "--rm",
         "-it",
         "-v", f"{blablador_host_dir}:/home/dev/.blablador:Z",
         "--name", container_name,
-        f"{project.id}:l2",
+        project_cli_image(project.id),
         "bash", "-c",
         "echo 'Enter your Blablador API key (get one at https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens):' && "
         "read -r -p 'BLABLADOR_API_KEY=' api_key && "
