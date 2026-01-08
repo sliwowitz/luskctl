@@ -59,8 +59,11 @@ def codex_auth(project_id: str) -> None:
     _cleanup_existing_container(container_name)
 
     # Setup script for iptables NAT rules (required for codex login as regular user)
-    # This configures port 1455 redirection for OAuth callbacks
+    # This configures port 1455 redirection for OAuth callbacks.
+    # Note: The REDIRECT to the same port (1455->1455) is intentional and necessary
+    # for non-root users to handle OAuth callbacks correctly in the container.
     setup_nat_script = (
+        "set -e && "
         "echo '>> Setting up iptables NAT rules for codex auth (port 1455)' && "
         "if ! command -v iptables >/dev/null 2>&1; then "
         "  echo '>> Installing iptables...' && "
