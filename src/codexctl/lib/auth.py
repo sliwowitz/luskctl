@@ -40,7 +40,7 @@ def codex_auth(project_id: str) -> None:
     - Spins up a temporary L2 container for the project (L2 has the codex CLI)
     - Mounts the shared codex config directory (/home/dev/.codex)
     - Forwards port 1455 from the container to localhost for OAuth callback
-    - Sets up iptables NAT rules for port 1455 (required for regular users)
+    - Sets up socat port forwarding for port 1455 (required for rootless podman)
     - Runs `codex login` interactively
     - The authentication persists in the shared .codex folder
 
@@ -58,26 +58,28 @@ def codex_auth(project_id: str) -> None:
     container_name = f"{project.id}-auth-codex"
     _cleanup_existing_container(container_name)
 
-    # Setup script for iptables NAT rules (required for codex login as regular user)
-    # This configures port 1455 redirection for OAuth callbacks.
-    # Note: The REDIRECT to the same port (1455->1455) is intentional and necessary
-    # for non-root users to handle OAuth callbacks correctly in the container.
-    setup_nat_script = (
+    # Setup script for port forwarding (required for codex login in rootless podman)
+    # This configures port 1455 forwarding for OAuth callbacks using socat.
+    # In rootless podman, we need to forward from the container IP to localhost.
+    setup_and_run_script = (
         "set -e && "
-        "echo '>> Setting up iptables NAT rules for codex auth (port 1455)' && "
-        "if ! command -v iptables >/dev/null 2>&1; then "
-        "  echo '>> Installing iptables...' && "
-        "  sudo apt-get update -qq && "
-        "  sudo apt-get install -y iptables; "
-        "else "
-        "  echo '>> iptables already installed'; "
-        "fi && "
-        "echo '>> Configuring NAT rule for port 1455...' && "
-        "sudo iptables -t nat -A PREROUTING -p tcp --dport 1455 -j REDIRECT --to-ports 1455 && "
-        "echo '>> Current NAT PREROUTING rules:' && "
-        "sudo iptables -t nat -S PREROUTING && "
-        "echo '>> NAT setup complete' && "
-        "codex login"
+        "echo '>> Setting up port forwarding for codex auth (port 1455)' && "
+        "echo '>> Installing required packages...' && "
+        "sudo apt-get update -qq && "
+        "sudo apt-get install -y socat iproute2 && "
+        "echo '>> Getting container IP address...' && "
+        "CIP=$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1) && "
+        "echo \">> Container IP: $CIP\" && "
+        "echo '>> Starting socat port forwarder in background...' && "
+        "socat -v TCP-LISTEN:1455,bind=$CIP,fork,reuseaddr TCP:127.0.0.1:1455 & "
+        "SOCAT_PID=$! && "
+        "echo \">> socat running (PID: $SOCAT_PID)\" && "
+        "echo '>> Starting codex login...' && "
+        "codex login; "
+        "EXIT_CODE=$? && "
+        "echo '>> Stopping socat...' && "
+        "kill $SOCAT_PID 2>/dev/null || true && "
+        "exit $EXIT_CODE"
     )
 
     # Build the podman run command
@@ -94,13 +96,13 @@ def codex_auth(project_id: str) -> None:
         "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
         "--name", container_name,
         f"{project.id}:l2",
-        "bash", "-c", setup_nat_script,
+        "bash", "-c", setup_and_run_script,
     ]
     cmd[3:3] = _podman_userns_args()
 
     print("Authenticating Codex for project:", project.id)
     print()
-    print("This will set up iptables NAT rules and open a browser for authentication.")
+    print("This will set up port forwarding (using socat) and open a browser for authentication.")
     print("After completing authentication, press Ctrl+C to stop the container.")
     print()
     print("$", " ".join(map(str, cmd)))
