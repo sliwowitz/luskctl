@@ -15,10 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg git openssh-client sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# --- BEGIN USER SNIPPET ---
-{{USER_SNIPPET}}
-# --- END USER SNIPPET ---
-
 RUN set -eux; \
     uid_owner="$(getent passwd 1000 | cut -d: -f1 || true)"; \
     if [ -n "$uid_owner" ] && [ "$uid_owner" != "dev" ]; then \
@@ -39,6 +35,11 @@ RUN set -eux; \
     chown -R dev:dev /home/dev /workspace; \
     chmod 700 /home/dev/.ssh; \
     chmod 0777 /workspace
+
+# --- BEGIN USER SNIPPET ---
+{{USER_SNIPPET}}
+# --- END USER SNIPPET ---
+
 WORKDIR /workspace
 
 COPY scripts/init-ssh-and-repo.sh /usr/local/bin/init-ssh-and-repo.sh
