@@ -66,19 +66,25 @@ SELinux and mount flags
 - codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z for read‑write access.
 
 Git identity configuration
-- codexctl automatically configures git user.name and user.email inside containers to identify AI-generated commits.
-- **For CLI mode**: Git identity is set via environment variables (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`) in the command aliases for each agent:
-  - `codex` → "Codex <codex@openai.com>"
-  - `claude` → "Claude <noreply@anthropic.com>"
-  - `vibe` → "Mistral Vibe <vibe@mistral.ai>"
-  - Each agent's alias sets its own git identity, allowing multiple agents to coexist in the same container
+- codexctl automatically configures git author and committer identities inside containers to identify AI-generated commits.
+- **Git Author**: Set to the AI agent that created the commit (Codex, Claude, or Mistral Vibe)
+- **Git Committer**: Set to human credentials (configurable per project)
+- **For CLI mode**: Git identity is set via environment variables in the command aliases for each agent:
+  - `codex` → Author: "Codex <codex@openai.com>", Committer: human credentials
+  - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
+  - `vibe` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials
+  - Each agent's alias sets its own git author, allowing multiple agents to coexist in the same container
 - **For UI mode**: Git identity is set in the entry script based on the `CODEXUI_BACKEND` environment variable:
-  - `codex` → "Codex <codex@openai.com>"
-  - `claude` → "Claude <noreply@anthropic.com>"
-  - `mistral` → "Mistral Vibe <vibe@mistral.ai>"
-  - Unknown backends default to "AI Agent <ai-agent@localhost>"
+  - `codex` → Author: "Codex <codex@openai.com>", Committer: human credentials
+  - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
+  - `mistral` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials
+  - Unknown backends default to Author: "AI Agent <ai-agent@localhost>", Committer: human credentials
+- **Human credentials configuration**:
+  - Add `human_name` and `human_email` to the `git:` section in `project.yml`
+  - If not specified, codexctl will try to use your global git config (`git config --global user.name` and `git config --global user.email`)
+  - If still not available, defaults to "Nobody <nobody@localhost>"
 - Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
-- This approach ensures commits are always properly attributed to the specific AI agent that created them.
+- This approach ensures commits show both the AI agent (author) and the human supervisor (committer).
 
 Quick reference (runtime mounts)
 - /workspace          ← <state_root>/tasks/<project>/<task>/workspace:Z
