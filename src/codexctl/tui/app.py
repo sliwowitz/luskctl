@@ -42,7 +42,7 @@ if _HAS_TEXTUAL:
     from ..lib.git_cache import init_project_cache
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
-    from ..lib.tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui
+    from ..lib.tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui, get_workspace_git_diff, copy_to_clipboard
     from .widgets import (
         ProjectList,
         ProjectActions,
@@ -93,7 +93,16 @@ if _HAS_TEXTUAL:
 
         #task-details {
             height: 2fr;
-            min-height: 4;
+            min-height: 6;
+        }
+        
+        # Task details internal layout
+        #task-details-content {
+            height: 1fr;
+        }
+        #task-details-actions {
+            height: auto;
+            margin-top: 1;
         }
         """
 
@@ -107,6 +116,8 @@ if _HAS_TEXTUAL:
             ("r", "run_cli", "Run CLI"),
             ("u", "run_ui", "Run UI"),
             ("d", "delete_task", "Delete task"),
+            ("y", "copy_diff_head", "Copy diff vs HEAD"),
+            ("Y", "copy_diff_prev", "Copy diff vs PREV"),
         ]
 
         def __init__(self) -> None:
@@ -322,6 +333,31 @@ if _HAS_TEXTUAL:
             details = self.query_one("#task-details", TaskDetails)
             details.set_task(self.current_task)
 
+        @on(TaskDetails.CopyDiffRequested)
+        async def handle_copy_diff_requested(self, message: TaskDetails.CopyDiffRequested) -> None:
+            """Called when user requests to copy git diff to clipboard."""
+            if not self.current_project_id or not self.current_task:
+                self.notify("No task selected.")
+                return
+                
+            task_id = self.current_task.task_id
+            diff = get_workspace_git_diff(self.current_project_id, task_id, message.diff_type)
+            
+            if diff is None:
+                self.notify("Failed to get git diff. Is this a git repository?")
+                return
+                
+            if diff == "":
+                self.notify("No changes to copy (working tree clean).")
+                return
+                
+            # Try to copy to clipboard
+            success = copy_to_clipboard(diff)
+            if success:
+                self.notify(f"Git diff copied to clipboard ({len(diff)} characters)")
+            else:
+                self.notify("Failed to copy to clipboard. Clipboard utility not found.")
+
         # ---------- Button presses (forwarded from ProjectActions) ----------
 
         async def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -496,6 +532,37 @@ if _HAS_TEXTUAL:
             self._log_debug("delete: refreshing tasks")
             await self.refresh_tasks()
             self._log_debug("delete: refresh_tasks() finished")
+
+        async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:
+            """Common helper to copy a git diff to the clipboard."""
+            if not self.current_project_id or not self.current_task:
+                self.notify("No task selected.")
+                return
+
+            task_id = self.current_task.task_id
+            diff = get_workspace_git_diff(self.current_project_id, task_id, git_ref)
+
+            if diff is None:
+                self.notify("Failed to get git diff. Is this a git repository?")
+                return
+
+            if diff == "":
+                self.notify("No changes to copy (working tree clean).")
+                return
+
+            success = copy_to_clipboard(diff)
+            if success:
+                self.notify(f"Git diff vs {label} copied to clipboard ({len(diff)} characters)")
+            else:
+                self.notify("Failed to copy to clipboard. Clipboard utility not found.")
+
+        async def action_copy_diff_head(self) -> None:
+            """Copy git diff vs HEAD to clipboard."""
+            await self._copy_diff_to_clipboard("HEAD", "HEAD")
+
+        async def action_copy_diff_prev(self) -> None:
+            """Copy git diff vs previous commit to clipboard."""
+            await self._copy_diff_to_clipboard("PREV", "PREV")
 
     def main() -> None:
         CodexTUI().run()

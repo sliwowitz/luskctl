@@ -7,7 +7,13 @@ import unittest.mock
 from pathlib import Path
 
 from codexctl.lib.projects import load_project
-from codexctl.lib.tasks import _build_task_env_and_volumes, task_delete, task_new
+from codexctl.lib.tasks import (
+    _build_task_env_and_volumes,
+    copy_to_clipboard,
+    get_workspace_git_diff,
+    task_delete,
+    task_new,
+)
 from test_utils import parse_meta_value, write_project
 
 
@@ -161,3 +167,305 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(env["GIT_BRANCH"], "main")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z,ro", volumes)
                 self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)
+
+    def test_get_workspace_git_diff_no_workspace(self) -> None:
+        """Test get_workspace_git_diff returns None when workspace doesn't exist."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_1"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                # Try to get diff for non-existent task
+                result = get_workspace_git_diff(project_id, "999")
+                self.assertIsNone(result)
+
+    def test_get_workspace_git_diff_no_git_repo(self) -> None:
+        """Test get_workspace_git_diff returns None when workspace is not a git repo."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_2"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+                # Workspace exists but .git directory doesn't
+                result = get_workspace_git_diff(project_id, "1")
+                self.assertIsNone(result)
+
+    def test_get_workspace_git_diff_clean_working_tree(self) -> None:
+        """Test get_workspace_git_diff returns empty string for clean working tree."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_3"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+
+                # Mock subprocess.run to simulate clean git repository
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    mock_result = unittest.mock.Mock()
+                    mock_result.returncode = 0
+                    mock_result.stdout = ""
+                    run_mock.return_value = mock_result
+                    
+                    # Also need to mock .git existence check
+                    workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
+                    git_dir = workspace_dir / ".git"
+                    git_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    result = get_workspace_git_diff(project_id, "1")
+                    self.assertEqual(result, "")
+
+    def test_get_workspace_git_diff_with_changes(self) -> None:
+        """Test get_workspace_git_diff returns diff output when there are changes."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_4"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+
+                expected_diff = "diff --git a/file.txt b/file.txt\n+new line\n"
+
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    mock_result = unittest.mock.Mock()
+                    mock_result.returncode = 0
+                    mock_result.stdout = expected_diff
+                    run_mock.return_value = mock_result
+                    
+                    workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
+                    git_dir = workspace_dir / ".git"
+                    git_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    result = get_workspace_git_diff(project_id, "1", "HEAD")
+                    self.assertEqual(result, expected_diff)
+                    
+                    # Verify git command was called correctly
+                    run_mock.assert_called_once()
+                    call_args = run_mock.call_args[0][0]
+                    self.assertEqual(call_args[0], "git")
+                    self.assertEqual(call_args[1], "-C")
+                    self.assertEqual(call_args[3], "diff")
+                    self.assertEqual(call_args[4], "HEAD")
+
+    def test_get_workspace_git_diff_prev_commit(self) -> None:
+        """Test get_workspace_git_diff with PREV option."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_5"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+
+                expected_diff = "diff --git a/file.txt b/file.txt\n+previous commit change\n"
+
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    mock_result = unittest.mock.Mock()
+                    mock_result.returncode = 0
+                    mock_result.stdout = expected_diff
+                    run_mock.return_value = mock_result
+                    
+                    workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
+                    git_dir = workspace_dir / ".git"
+                    git_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    result = get_workspace_git_diff(project_id, "1", "PREV")
+                    self.assertEqual(result, expected_diff)
+                    
+                    # Verify git command was called with HEAD~1
+                    run_mock.assert_called_once()
+                    call_args = run_mock.call_args[0][0]
+                    self.assertEqual(call_args[0], "git")
+                    self.assertEqual(call_args[1], "-C")
+                    self.assertEqual(call_args[3], "diff")
+                    self.assertEqual(call_args[4], "HEAD~1")
+                    self.assertEqual(call_args[5], "HEAD")
+
+    def test_get_workspace_git_diff_error(self) -> None:
+        """Test get_workspace_git_diff returns None when git command fails."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_diff_6"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    # Simulate git command failure
+                    mock_result = unittest.mock.Mock()
+                    mock_result.returncode = 1
+                    run_mock.return_value = mock_result
+                    
+                    workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
+                    git_dir = workspace_dir / ".git"
+                    git_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    result = get_workspace_git_diff(project_id, "1")
+                    self.assertIsNone(result)
+
+    def test_copy_to_clipboard_empty_text(self) -> None:
+        """Test copy_to_clipboard returns False for empty text."""
+        result = copy_to_clipboard("")
+        self.assertFalse(result)
+
+    def test_copy_to_clipboard_success_wl_copy(self) -> None:
+        """Test copy_to_clipboard succeeds with wl-copy."""
+        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+            mock_result = unittest.mock.Mock()
+            mock_result.returncode = 0
+            run_mock.return_value = mock_result
+            
+            result = copy_to_clipboard("test content")
+            self.assertTrue(result)
+            
+            # Verify wl-copy was called with correct arguments
+            run_mock.assert_called_once_with(
+                ["wl-copy", "--type", "text/plain"],
+                input="test content",
+                check=True,
+                text=True,
+            )
+
+    def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
+        """Test copy_to_clipboard falls back to xclip when wl-copy is not found."""
+        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+            # First call (wl-copy) raises FileNotFoundError
+            # Second call (xclip) succeeds
+            def side_effect(*args, **kwargs):
+                if args[0][0] == "wl-copy":
+                    raise FileNotFoundError()
+                mock_result = unittest.mock.Mock()
+                mock_result.returncode = 0
+                return mock_result
+            
+            run_mock.side_effect = side_effect
+            
+            result = copy_to_clipboard("test content")
+            self.assertTrue(result)
+            
+            # Verify xclip was called
+            self.assertEqual(run_mock.call_count, 2)
+            second_call = run_mock.call_args_list[1]
+            self.assertEqual(second_call[0][0][0], "xclip")
+
+    def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
+        """Test copy_to_clipboard falls back to pbcopy when wl-copy and xclip fail."""
+        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+            # First two calls fail, third succeeds
+            def side_effect(*args, **kwargs):
+                if args[0][0] in ["wl-copy", "xclip"]:
+                    raise FileNotFoundError()
+                mock_result = unittest.mock.Mock()
+                mock_result.returncode = 0
+                return mock_result
+            
+            run_mock.side_effect = side_effect
+            
+            result = copy_to_clipboard("test content")
+            self.assertTrue(result)
+            
+            # Verify pbcopy was called
+            self.assertEqual(run_mock.call_count, 3)
+            third_call = run_mock.call_args_list[2]
+            self.assertEqual(third_call[0][0][0], "pbcopy")
+
+    def test_copy_to_clipboard_all_fail(self) -> None:
+        """Test copy_to_clipboard returns False when all clipboard utilities fail."""
+        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+            # All clipboard utilities fail
+            run_mock.side_effect = FileNotFoundError()
+            
+            result = copy_to_clipboard("test content")
+            self.assertFalse(result)
+            
+            # Verify all three utilities were tried
+            self.assertEqual(run_mock.call_count, 3)
