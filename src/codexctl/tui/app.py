@@ -40,7 +40,12 @@ if _HAS_TEXTUAL:
 
     from ..lib.config import state_root
     from ..lib.docker import build_images, generate_dockerfiles
-    from ..lib.git_gate import init_project_gate
+    from ..lib.git_gate import (
+        init_project_gate,
+        compare_gate_vs_upstream,
+        sync_gate_branches,
+        GateStalenessInfo,
+    )
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
@@ -122,6 +127,7 @@ if _HAS_TEXTUAL:
             ("b", "build_images", "Build images"),
             ("s", "init_ssh", "Init SSH"),
             ("c", "init_gate", "Init gate"),
+            ("S", "sync_gate", "Sync gate"),
             ("t", "new_task", "New task"),
             ("r", "run_cli", "Run CLI"),
             ("u", "run_ui", "Run UI"),
@@ -136,6 +142,10 @@ if _HAS_TEXTUAL:
             self.current_task: Optional[TaskMeta] = None
             # Set on mount; used to display status / notifications.
             self._status_bar: Optional[StatusBar] = None
+            # Upstream polling state
+            self._staleness_info: Optional[GateStalenessInfo] = None
+            self._polling_timer = None
+            self._last_notified_stale: bool = False  # Track if we already notified about staleness
 
         # ---------- Layout ----------
 
@@ -261,6 +271,8 @@ if _HAS_TEXTUAL:
                     self.current_project_id = projects[0].id
                     proj_widget.select_project(self.current_project_id)
                 await self.refresh_tasks()
+                # Start upstream polling for the selected project
+                self._start_upstream_polling()
             else:
                 self.current_project_id = None
                 task_list = self.query_one("#task-list", TaskList)
@@ -347,7 +359,142 @@ if _HAS_TEXTUAL:
                 state_widget.update(f"Project state error: {e}")
                 return
 
-            state_widget.set_state(project, state, task_count)
+            state_widget.set_state(project, state, task_count, self._staleness_info)
+
+        # ---------- Upstream polling ----------
+
+        def _start_upstream_polling(self) -> None:
+            """Start background polling for upstream changes.
+
+            Only polls for gatekept projects with polling enabled and a gate initialized.
+            """
+            self._stop_upstream_polling()  # Stop any existing timer
+            self._staleness_info = None
+            self._last_notified_stale = False
+
+            if not self.current_project_id:
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+            except SystemExit:
+                return
+
+            # Only poll for gatekept projects with polling enabled
+            if project.security_class != "gatekept":
+                return
+            if not project.upstream_polling_enabled:
+                return
+            if not project.gate_path.exists():
+                return
+
+            interval_seconds = project.upstream_polling_interval_minutes * 60
+
+            # Perform initial poll immediately
+            self._poll_upstream()
+
+            # Schedule recurring polls
+            self._polling_timer = self.set_interval(
+                interval_seconds,
+                self._poll_upstream,
+                name="upstream_polling"
+            )
+
+        def _stop_upstream_polling(self) -> None:
+            """Stop the upstream polling timer."""
+            if self._polling_timer is not None:
+                self._polling_timer.stop()
+                self._polling_timer = None
+
+        def _poll_upstream(self) -> None:
+            """Check upstream for changes and update staleness info."""
+            if not self.current_project_id:
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+                if project.security_class != "gatekept":
+                    return
+
+                self._log_debug(f"polling upstream for {self.current_project_id}")
+                staleness = compare_gate_vs_upstream(self.current_project_id)
+                self._on_staleness_updated(staleness)
+
+            except Exception as e:
+                self._log_debug(f"upstream poll error: {e}")
+
+        def _on_staleness_updated(self, staleness: GateStalenessInfo) -> None:
+            """Handle updated staleness info."""
+            self._staleness_info = staleness
+
+            # Notify user if gate became stale (only once per stale state)
+            if staleness.is_stale and not self._last_notified_stale:
+                behind_str = ""
+                if staleness.commits_behind is not None:
+                    behind_str = f" ({staleness.commits_behind} commits behind)"
+                self.notify(f"Gate is behind upstream on {staleness.branch}{behind_str}")
+                self._last_notified_stale = True
+
+                # Trigger auto-sync if enabled
+                self._maybe_auto_sync()
+            elif not staleness.is_stale:
+                self._last_notified_stale = False
+
+            # Refresh the project state display
+            self._refresh_project_state()
+
+        def _maybe_auto_sync(self) -> None:
+            """Trigger auto-sync if enabled for this project."""
+            if not self.current_project_id or not self._staleness_info:
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+                if not project.auto_sync_enabled:
+                    return
+
+                branches = project.auto_sync_branches or None
+                self._log_debug(f"auto-syncing gate for {self.current_project_id}")
+                result = sync_gate_branches(self.current_project_id, branches)
+
+                if result["success"]:
+                    self.notify(f"Auto-synced gate from upstream")
+                    # Re-check staleness after sync
+                    self._staleness_info = compare_gate_vs_upstream(self.current_project_id)
+                    self._last_notified_stale = False
+                    self._refresh_project_state()
+                else:
+                    self.notify(f"Auto-sync failed: {', '.join(result['errors'])}")
+
+            except Exception as e:
+                self._log_debug(f"auto-sync error: {e}")
+
+        async def action_sync_gate(self) -> None:
+            """Manually sync gate from upstream."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+                if project.security_class != "gatekept":
+                    self.notify("Sync only available for gatekept projects.")
+                    return
+
+                self.notify("Syncing gate from upstream...")
+                result = sync_gate_branches(self.current_project_id)
+
+                if result["success"]:
+                    self.notify("Gate synced from upstream")
+                    # Re-check staleness
+                    self._staleness_info = compare_gate_vs_upstream(self.current_project_id)
+                    self._last_notified_stale = False
+                    self._refresh_project_state()
+                else:
+                    self.notify(f"Sync failed: {', '.join(result['errors'])}")
+
+            except Exception as e:
+                self.notify(f"Sync error: {e}")
 
         # ---------- Selection handlers (from widgets) ----------
 
@@ -356,6 +503,8 @@ if _HAS_TEXTUAL:
             """Called when user activates a project in the list."""
             self.current_project_id = message.project_id
             await self.refresh_tasks()
+            # Start polling for the newly selected project
+            self._start_upstream_polling()
 
 
         @on(TaskList.TaskSelected)
@@ -409,6 +558,8 @@ if _HAS_TEXTUAL:
             ``AttributeError`` on quit while still delegating to Textual's
             normal shutdown/cleanup logic.
             """
+            # Stop upstream polling before exit
+            self._stop_upstream_polling()
 
             # Textual's ``App`` provides ``exit()`` rather than ``shutdown()``;
             # calling the latter would raise ``AttributeError``.
