@@ -71,6 +71,7 @@ Git identity configuration
   - codex → "Codex <codex@ai-agent>"
   - claude → "Claude <claude@ai-agent>"
   - mistral (or vibe) → "Mistral <mistral@ai-agent>"
+    - Note: "vibe" is accepted as an alias since the Mistral CLI tool is called "vibe"
   - blablador → "Blablador <blablador@ai-agent>"
   - (default) → "AI Agent <ai-agent@localhost>"
 - For CLI mode (task run-cli), the default agent type is "claude" unless overridden via CODEXCTL_AGENT_TYPE environment variable.
