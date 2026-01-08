@@ -9,7 +9,7 @@ ENV HOST="0.0.0.0" \
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git ssh ca-certificates python3 nodejs npm \
+      git ssh ca-certificates python-is-python3 python3 ripgrep nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
