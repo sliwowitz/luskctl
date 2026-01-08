@@ -121,5 +121,6 @@ class ProjectTests(unittest.TestCase):
                         "images": True,
                         "ssh": True,
                         "cache": True,
+                        "cache_last_commit": None,
                     },
                 )

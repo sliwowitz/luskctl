@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import sys
 import shutil
 from pathlib import Path
@@ -42,7 +43,16 @@ if _HAS_TEXTUAL:
     from ..lib.git_cache import init_project_cache
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
-    from ..lib.tasks import get_tasks, task_delete, task_new, task_run_cli, task_run_ui, get_workspace_git_diff, copy_to_clipboard
+    from ..lib.tasks import (
+        UI_BACKENDS,
+        copy_to_clipboard,
+        get_tasks,
+        get_workspace_git_diff,
+        task_delete,
+        task_new,
+        task_run_cli,
+        task_run_ui,
+    )
     from .widgets import (
         ProjectList,
         ProjectActions,
@@ -95,7 +105,7 @@ if _HAS_TEXTUAL:
             height: 2fr;
             min-height: 6;
         }
-        
+
         # Task details internal layout
         #task-details-content {
             height: 1fr;
@@ -215,6 +225,29 @@ if _HAS_TEXTUAL:
             except Exception:
                 # Logging must never break the TUI.
                 pass
+
+        def _prompt_ui_backend(self) -> str:
+            backends = list(UI_BACKENDS)
+            default = os.environ.get("CODEXUI_BACKEND", "").strip().lower()
+            if not default:
+                default = backends[0] if backends else "codex"
+
+            print("Select UI backend:")
+            for idx, backend in enumerate(backends, start=1):
+                label = backend
+                if backend == default:
+                    label += " (default)"
+                print(f"  {idx}) {label}")
+
+            choice = input(f"Backend [{default}]: ").strip()
+            if not choice:
+                return default
+            if choice.isdigit():
+                idx = int(choice)
+                if 1 <= idx <= len(backends):
+                    return backends[idx - 1]
+                return default
+            return choice.lower()
 
         # ---------- Helpers ----------
 
@@ -339,18 +372,18 @@ if _HAS_TEXTUAL:
             if not self.current_project_id or not self.current_task:
                 self.notify("No task selected.")
                 return
-                
+
             task_id = self.current_task.task_id
             diff = get_workspace_git_diff(self.current_project_id, task_id, message.diff_type)
-            
+
             if diff is None:
                 self.notify("Failed to get git diff. Is this a git repository?")
                 return
-                
+
             if diff == "":
                 self.notify("No changes to copy (working tree clean).")
                 return
-                
+
             # Try to copy to clipboard
             success = copy_to_clipboard(diff)
             if success:
@@ -478,8 +511,12 @@ if _HAS_TEXTUAL:
             tid = self.current_task.task_id
             with self.suspend():
                 try:
-                    print(f"Starting UI for {self.current_project_id}/{tid}...\n")
-                    task_run_ui(self.current_project_id, tid)
+                    backend = self._prompt_ui_backend()
+                    print(
+                        f"Starting UI for {self.current_project_id}/{tid} "
+                        f"(backend: {backend})...\n"
+                    )
+                    task_run_ui(self.current_project_id, tid, backend=backend)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to CodexTUI] ")

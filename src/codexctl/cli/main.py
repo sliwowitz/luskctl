@@ -18,7 +18,15 @@ from ..lib.docker import build_images, generate_dockerfiles
 from ..lib.git_cache import init_project_cache
 from ..lib.projects import list_projects
 from ..lib.ssh import init_project_ssh
-from ..lib.tasks import get_tasks as _get_tasks, task_delete, task_list, task_new, task_run_cli, task_run_ui
+from ..lib.tasks import (
+    UI_BACKENDS,
+    get_tasks as _get_tasks,
+    task_delete,
+    task_list,
+    task_new,
+    task_run_cli,
+    task_run_ui,
+)
 import os
 from importlib import resources
 from pathlib import Path
@@ -189,6 +197,12 @@ def main() -> None:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
         pass
+    known_backends = ", ".join(UI_BACKENDS)
+    t_run_ui.add_argument(
+        "--backend",
+        dest="ui_backend",
+        help=f"UI backend ({known_backends})",
+    )
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
     _a = t_delete.add_argument("project_id")
@@ -331,7 +345,7 @@ def main() -> None:
         elif args.task_cmd == "run-cli":
             task_run_cli(args.project_id, args.task_id)
         elif args.task_cmd == "run-ui":
-            task_run_ui(args.project_id, args.task_id)
+            task_run_ui(args.project_id, args.task_id, backend=getattr(args, "ui_backend", None))
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
         else:
