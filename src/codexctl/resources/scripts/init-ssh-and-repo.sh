@@ -69,36 +69,46 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     # Remove marker first so the directory is empty for git clone
     rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
-    echo ">> initial clone from ${SRC_REPO}"
-    git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
+    TARGET_BRANCH="${GIT_BRANCH:-main}"
+
+    # Clone directly to the target branch if specified, avoiding an extra checkout step
+    CLONE_OK=false
+    if [[ -n "${GIT_BRANCH:-}" ]]; then
+      echo ">> initial clone from ${SRC_REPO} (branch: ${TARGET_BRANCH})"
+      if git clone --recurse-submodules -b "${TARGET_BRANCH}" "${SRC_REPO}" "${REPO_ROOT}" 2>/dev/null; then
+        CLONE_OK=true
+      else
+        echo ">> branch ${TARGET_BRANCH} not found, cloning default branch"
+      fi
+    fi
+
+    # Fallback: clone without -b (uses remote's default HEAD)
+    if [[ "${CLONE_OK}" != "true" ]]; then
+      echo ">> initial clone from ${SRC_REPO}"
+      git clone --recurse-submodules "${SRC_REPO}" "${REPO_ROOT}"
+    fi
+
     # If we cloned from a gate, repoint origin to the canonical repo for future updates
     if [[ -n "${CLONE_FROM:-}" && "${CLONE_FROM}" != "${CODE_REPO}" ]]; then
       git -C "${REPO_ROOT}" remote set-url origin "${CODE_REPO}" || true
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
       # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
-    fi
-    # Checkout the target branch from settings. git clone uses the remote's default
-    # HEAD, which may differ from the branch configured in project.yml.
-    # We use checkout -B to create/reset the local branch to track the remote.
-    TARGET_BRANCH="${GIT_BRANCH:-main}"
-    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-      echo ">> checking out branch ${TARGET_BRANCH}"
-      git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
-    else
-      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, staying on cloned default"
-      # The clone already checked out the remote's default branch. Just ensure we're
-      # on a local branch (not detached HEAD) by checking out the current branch.
-      CURRENT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-      if [[ -n "${CURRENT_BRANCH}" && "${CURRENT_BRANCH}" != "HEAD" ]]; then
-        echo ">> staying on current branch: ${CURRENT_BRANCH}"
-      else
-        # Detached HEAD - try to find and checkout the remote's default branch
-        DEFAULT_REMOTE_BRANCH=$(git -C "${REPO_ROOT}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "")
-        if [[ -n "${DEFAULT_REMOTE_BRANCH}" ]]; then
-          echo ">> checking out remote default branch: ${DEFAULT_REMOTE_BRANCH}"
-          git -C "${REPO_ROOT}" checkout -B "${DEFAULT_REMOTE_BRANCH}" "origin/${DEFAULT_REMOTE_BRANCH}" 2>/dev/null || true
+      # After repointing, checkout the target branch from the new origin
+      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+        echo ">> checking out branch ${TARGET_BRANCH}"
+        git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+      fi
+    elif [[ "${CLONE_OK}" != "true" ]]; then
+      # We cloned with default branch, try to switch to target if it exists
+      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+        CURRENT=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ "${CURRENT}" != "${TARGET_BRANCH}" ]]; then
+          echo ">> checking out branch ${TARGET_BRANCH}"
+          git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
         fi
+      else
+        echo ">> WARNING: Branch ${TARGET_BRANCH} not found, staying on cloned default"
       fi
     fi
 
