@@ -59,7 +59,7 @@ class Project:
     ssh_mount_in_gatekeeping: bool = False
     # Whether to expose the upstream URL as a remote named "external" in gatekeeping mode.
     # This allows the container to also reference the real upstream.
-        expose_external_remote: bool = False
+    expose_external_remote: bool = False
     # Optional human credentials for git committer (while AI is the author)
     human_name: Optional[str] = None
     human_email: Optional[str] = None
