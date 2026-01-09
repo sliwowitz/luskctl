@@ -147,7 +147,7 @@ if _HAS_TEXTUAL:
             self._polling_timer = None
             self._polling_project_id: Optional[str] = None  # Project ID the timer was started for
             self._last_notified_stale: bool = False  # Track if we already notified about staleness
-            self._auto_sync_cooldown_until: float = 0  # Timestamp until which auto-sync is blocked
+            self._auto_sync_cooldown: dict[str, float] = {}  # Per-project cooldown timestamps
 
         # ---------- Layout ----------
 
@@ -486,9 +486,10 @@ if _HAS_TEXTUAL:
             if not project_id or project_id != self.current_project_id:
                 return
 
-            # Check cooldown (5 minute minimum between auto-syncs)
+            # Check cooldown (5 minute minimum between auto-syncs per project)
             now = time.time()
-            if now < self._auto_sync_cooldown_until:
+            cooldown_until = self._auto_sync_cooldown.get(project_id, 0)
+            if now < cooldown_until:
                 self._log_debug("auto-sync skipped: cooldown active")
                 return
 
@@ -498,7 +499,7 @@ if _HAS_TEXTUAL:
                     return
 
                 # Set cooldown before starting sync (5 minutes)
-                self._auto_sync_cooldown_until = now + 300
+                self._auto_sync_cooldown[project_id] = now + 300
 
                 self._log_debug(f"auto-syncing gate for {project_id}")
                 self.notify("Auto-syncing gate from upstream...")

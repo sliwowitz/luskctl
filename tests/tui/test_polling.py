@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import time
-import unittest
-from unittest import mock
-from dataclasses import dataclass
+from unittest import TestCase, main, mock
 from typing import Optional
 
 # Mock dependencies before importing app module
@@ -16,18 +14,7 @@ sys.modules['textual.containers'] = mock.MagicMock()
 sys.modules['textual.message'] = mock.MagicMock()
 sys.modules['yaml'] = mock.MagicMock()
 
-
-# Inline copy of GateStalenessInfo to avoid import chain issues
-@dataclass
-class GateStalenessInfo:
-    """Result of comparing gate vs upstream."""
-    branch: str
-    gate_head: Optional[str]
-    upstream_head: Optional[str]
-    is_stale: bool
-    commits_behind: Optional[int]
-    last_checked: str
-    error: Optional[str]
+from codexctl.lib.git_gate import GateStalenessInfo
 
 
 class MockProject:
@@ -53,7 +40,7 @@ class MockProject:
         self.gate_path.exists.return_value = True
 
 
-class PollingStateTests(unittest.TestCase):
+class PollingStateTests(TestCase):
     """Tests for polling state management logic (without full TUI)."""
 
     def test_staleness_notification_only_once(self):
@@ -131,33 +118,39 @@ class PollingStateTests(unittest.TestCase):
         self.assertTrue(last_notified_stale)  # Preserved
 
     def test_auto_sync_cooldown(self):
-        """Test that auto-sync respects cooldown period."""
-        cooldown_until = 0.0
+        """Test that auto-sync respects cooldown period per project."""
+        cooldown_dict = {}
         sync_calls = []
 
         def maybe_auto_sync(project_id: str):
-            nonlocal cooldown_until
-
             now = time.time()
+            cooldown_until = cooldown_dict.get(project_id, 0)
             if now < cooldown_until:
                 return  # Cooldown active
 
-            # Set 5 minute cooldown
-            cooldown_until = now + 300
+            # Set 5 minute cooldown for this project
+            cooldown_dict[project_id] = now + 300
             sync_calls.append(project_id)
 
         # First sync should work
         maybe_auto_sync("proj1")
         self.assertEqual(len(sync_calls), 1)
+        self.assertEqual(sync_calls[0], "proj1")
 
         # Second sync within cooldown should be skipped
         maybe_auto_sync("proj1")
         self.assertEqual(len(sync_calls), 1)
 
-        # After cooldown expires
-        cooldown_until = time.time() - 1  # Expired
-        maybe_auto_sync("proj1")
+        # Different project should work (no shared cooldown)
+        maybe_auto_sync("proj2")
         self.assertEqual(len(sync_calls), 2)
+        self.assertEqual(sync_calls[1], "proj2")
+
+        # After cooldown expires for proj1
+        cooldown_dict["proj1"] = time.time() - 1  # Expired
+        maybe_auto_sync("proj1")
+        self.assertEqual(len(sync_calls), 3)
+        self.assertEqual(sync_calls[2], "proj1")
 
     def test_only_reset_flag_when_up_to_date(self):
         """Test notification flag only resets when confirmed up-to-date."""
@@ -223,7 +216,7 @@ class PollingStateTests(unittest.TestCase):
         self.assertIsNone(staleness_info)
 
 
-class GateStalenessInfoTests(unittest.TestCase):
+class GateStalenessInfoTests(TestCase):
     """Tests for GateStalenessInfo dataclass."""
 
     def test_stale_state(self):
@@ -271,4 +264,4 @@ class GateStalenessInfoTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()
