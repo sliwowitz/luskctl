@@ -145,7 +145,9 @@ if _HAS_TEXTUAL:
             # Upstream polling state
             self._staleness_info: Optional[GateStalenessInfo] = None
             self._polling_timer = None
+            self._polling_project_id: Optional[str] = None  # Project ID the timer was started for
             self._last_notified_stale: bool = False  # Track if we already notified about staleness
+            self._auto_sync_cooldown_until: float = 0  # Timestamp until which auto-sync is blocked
 
         # ---------- Layout ----------
 
@@ -389,8 +391,9 @@ if _HAS_TEXTUAL:
                 return
 
             interval_seconds = project.upstream_polling_interval_minutes * 60
+            self._polling_project_id = self.current_project_id
 
-            # Perform initial poll immediately
+            # Perform initial poll immediately (in background worker)
             self._poll_upstream()
 
             # Schedule recurring polls
@@ -405,69 +408,148 @@ if _HAS_TEXTUAL:
             if self._polling_timer is not None:
                 self._polling_timer.stop()
                 self._polling_timer = None
+            self._polling_project_id = None
 
         def _poll_upstream(self) -> None:
-            """Check upstream for changes and update staleness info."""
-            if not self.current_project_id:
+            """Check upstream for changes and update staleness info.
+
+            Runs the actual comparison in a background worker to avoid blocking the UI.
+            """
+            project_id = self._polling_project_id
+            if not project_id or project_id != self.current_project_id:
+                # Project changed since timer was started, skip this poll
                 return
 
+            self._log_debug(f"polling upstream for {project_id}")
+            # Run blocking git operation in background worker
+            self.run_worker(
+                self._poll_upstream_worker(project_id),
+                name="poll_upstream",
+                exclusive=True,  # Cancel any previous poll still running
+            )
+
+        async def _poll_upstream_worker(self, project_id: str) -> None:
+            """Background worker to check upstream (runs in thread pool)."""
+            import asyncio
+
             try:
-                project = load_project(self.current_project_id)
-                if project.security_class != "gatekept":
+                # Run blocking call in thread pool
+                staleness = await asyncio.get_event_loop().run_in_executor(
+                    None, compare_gate_vs_upstream, project_id
+                )
+
+                # Validate project hasn't changed while we were polling
+                if project_id != self.current_project_id:
                     return
 
-                self._log_debug(f"polling upstream for {self.current_project_id}")
-                staleness = compare_gate_vs_upstream(self.current_project_id)
-                self._on_staleness_updated(staleness)
+                self._on_staleness_updated(project_id, staleness)
 
             except Exception as e:
                 self._log_debug(f"upstream poll error: {e}")
 
-        def _on_staleness_updated(self, staleness: GateStalenessInfo) -> None:
+        def _on_staleness_updated(self, project_id: str, staleness: GateStalenessInfo) -> None:
             """Handle updated staleness info."""
+            # Double-check project hasn't changed
+            if project_id != self.current_project_id:
+                return
+
             self._staleness_info = staleness
 
-            # Notify user if gate became stale (only once per stale state)
-            if staleness.is_stale and not self._last_notified_stale:
+            # Only update notification state for valid (non-error) comparisons
+            if staleness.error:
+                # Don't change notification state on errors - preserve previous state
+                pass
+            elif staleness.is_stale and not self._last_notified_stale:
                 behind_str = ""
                 if staleness.commits_behind is not None:
                     behind_str = f" ({staleness.commits_behind} commits behind)"
                 self.notify(f"Gate is behind upstream on {staleness.branch}{behind_str}")
                 self._last_notified_stale = True
 
-                # Trigger auto-sync if enabled
-                self._maybe_auto_sync()
+                # Trigger auto-sync if enabled (with cooldown check)
+                self._maybe_auto_sync(project_id)
             elif not staleness.is_stale:
+                # Only reset when we have confirmed up-to-date status
                 self._last_notified_stale = False
 
             # Refresh the project state display
             self._refresh_project_state()
 
-        def _maybe_auto_sync(self) -> None:
-            """Trigger auto-sync if enabled for this project."""
-            if not self.current_project_id or not self._staleness_info:
+        def _maybe_auto_sync(self, project_id: str) -> None:
+            """Trigger auto-sync if enabled for this project.
+
+            Runs sync in background worker to avoid blocking UI.
+            Implements cooldown to prevent sync loops.
+            """
+            import time
+
+            if not project_id or project_id != self.current_project_id:
+                return
+
+            # Check cooldown (5 minute minimum between auto-syncs)
+            now = time.time()
+            if now < self._auto_sync_cooldown_until:
+                self._log_debug("auto-sync skipped: cooldown active")
                 return
 
             try:
-                project = load_project(self.current_project_id)
+                project = load_project(project_id)
                 if not project.auto_sync_enabled:
                     return
 
-                branches = project.auto_sync_branches or None
-                self._log_debug(f"auto-syncing gate for {self.current_project_id}")
-                result = sync_gate_branches(self.current_project_id, branches)
+                # Set cooldown before starting sync (5 minutes)
+                self._auto_sync_cooldown_until = now + 300
 
-                if result["success"]:
-                    self.notify(f"Auto-synced gate from upstream")
-                    # Re-check staleness after sync
-                    self._staleness_info = compare_gate_vs_upstream(self.current_project_id)
-                    self._last_notified_stale = False
-                    self._refresh_project_state()
-                else:
-                    self.notify(f"Auto-sync failed: {', '.join(result['errors'])}")
+                self._log_debug(f"auto-syncing gate for {project_id}")
+                self.notify("Auto-syncing gate from upstream...")
+
+                # Run sync in background worker
+                branches = project.auto_sync_branches or None
+                self.run_worker(
+                    self._sync_worker(project_id, branches, is_auto=True),
+                    name="auto_sync",
+                    exclusive=True,
+                )
 
             except Exception as e:
                 self._log_debug(f"auto-sync error: {e}")
+
+        async def _sync_worker(self, project_id: str, branches: list = None, is_auto: bool = False) -> None:
+            """Background worker to sync gate from upstream."""
+            import asyncio
+
+            try:
+                # Run blocking sync in thread pool
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, sync_gate_branches, project_id, branches
+                )
+
+                # Validate project hasn't changed
+                if project_id != self.current_project_id:
+                    return
+
+                if result["success"]:
+                    label = "Auto-synced" if is_auto else "Synced"
+                    self.notify(f"{label} gate from upstream")
+
+                    # Re-check staleness after sync
+                    staleness = await asyncio.get_event_loop().run_in_executor(
+                        None, compare_gate_vs_upstream, project_id
+                    )
+
+                    if project_id == self.current_project_id:
+                        self._staleness_info = staleness
+                        # Only reset notification flag if we're actually up-to-date now
+                        if not staleness.is_stale and not staleness.error:
+                            self._last_notified_stale = False
+                        self._refresh_project_state()
+                else:
+                    label = "Auto-sync" if is_auto else "Sync"
+                    self.notify(f"{label} failed: {', '.join(result['errors'])}")
+
+            except Exception as e:
+                label = "Auto-sync" if is_auto else "Sync"
+                self.notify(f"{label} error: {e}")
 
         async def action_sync_gate(self) -> None:
             """Manually sync gate from upstream."""
@@ -482,16 +564,13 @@ if _HAS_TEXTUAL:
                     return
 
                 self.notify("Syncing gate from upstream...")
-                result = sync_gate_branches(self.current_project_id)
 
-                if result["success"]:
-                    self.notify("Gate synced from upstream")
-                    # Re-check staleness
-                    self._staleness_info = compare_gate_vs_upstream(self.current_project_id)
-                    self._last_notified_stale = False
-                    self._refresh_project_state()
-                else:
-                    self.notify(f"Sync failed: {', '.join(result['errors'])}")
+                # Run sync in background worker
+                self.run_worker(
+                    self._sync_worker(self.current_project_id, None, is_auto=False),
+                    name="manual_sync",
+                    exclusive=True,
+                )
 
             except Exception as e:
                 self.notify(f"Sync error: {e}")
