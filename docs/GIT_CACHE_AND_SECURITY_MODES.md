@@ -17,8 +17,6 @@ The "cache" has been renamed to "gate" throughout the codebase because it serves
 
 1. **External remote exposure** (`gatekeeping.expose_external_remote`):
    - Optionally add upstream URL as "external" remote in container
-   - Container can see URL but cannot fetch/push (no credentials/network)
-   - Useful for IDE integration on the host side
 
 2. **Upstream polling** (`gatekeeping.upstream_polling`):
    - TUI periodically checks if upstream has new commits using `git ls-remote` (cheap)
@@ -96,8 +94,7 @@ The project's **security mode** controls how tasks interact with upstream vs gat
 * **Optional external remote exposure** (`gatekeeping.expose_external_remote`):
   * By default, containers in gatekeeping mode have no knowledge of the upstream URL.
   * Set `gatekeeping.expose_external_remote: true` in project.yml to add the upstream URL as a remote named "external" in the container's git config.
-  * The container can see this URL but cannot actually fetch from or push to it (no network access or credentials by default).
-  * This is a "relaxed gatekeeping" mode - if you also provide network access, the container can read from upstream.
+  * This is a "relaxed gatekeeping" mode - the container knows about the upstream, but should push to local by default.
   * Useful for IDE integration on the host side.
 
 * **Upstream polling** (`gatekeeping.upstream_polling`):
@@ -182,6 +179,4 @@ gatekeeping:
   * gate serves as communication channel between host IDE and container.
 
 * **Relaxed Gatekept** (`expose_external_remote: true`):
-  * containers know the upstream URL but default to no access,
-  * if network is available, can read from upstream (not write),
-  * useful for IDE integration and staleness awareness.
+  * containers know the upstream URL, but use the gate as the default remote
