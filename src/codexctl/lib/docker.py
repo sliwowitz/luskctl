@@ -112,12 +112,12 @@ def generate_dockerfiles(project_id: str) -> None:
         # Template-specific extras
         "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
         "SSH_KEY_NAME": effective_ssh_key_name,
-        # For gatekept projects, default CODE_REPO to the git-gate mount path.
+        # For gatekeeping projects, default CODE_REPO to the git-gate mount path.
         # For online projects, default to the real upstream URL.
         # These defaults can be overridden at runtime via -e flags.
         "CODE_REPO_DEFAULT": (
             "file:///git-gate/gate.git"
-            if project.security_class == "gatekept"
+            if project.security_class == "gatekeeping"
             else (project.upstream_url or "")
         ),
         "USER_SNIPPET": user_snippet,

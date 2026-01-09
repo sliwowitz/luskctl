@@ -57,8 +57,8 @@ class DockerTests(unittest.TestCase):
                 # For online projects, CODE_REPO should default to upstream URL
                 self.assertIn('CODE_REPO="https://example.com/repo.git"', content)
 
-    def test_generate_dockerfiles_gatekept_code_repo(self) -> None:
-        """For gatekept projects, CODE_REPO_DEFAULT should be the git-gate path."""
+    def test_generate_dockerfiles_gatekeeping_code_repo(self) -> None:
+        """For gatekeeping projects, CODE_REPO_DEFAULT should be the git-gate path."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -69,7 +69,7 @@ class DockerTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\n""".lstrip(),
             )
 
             with unittest.mock.patch.dict(
@@ -84,7 +84,7 @@ class DockerTests(unittest.TestCase):
                 l2 = out_dir / "L2.Dockerfile"
 
                 content = l2.read_text(encoding="utf-8")
-                # For gatekept projects, CODE_REPO should default to git-gate
+                # For gatekeeping projects, CODE_REPO should default to git-gate
                 self.assertIn('CODE_REPO="file:///git-gate/gate.git"', content)
                 # Should NOT contain the real upstream URL as CODE_REPO
                 self.assertNotIn('CODE_REPO="https://example.com/repo.git"', content)

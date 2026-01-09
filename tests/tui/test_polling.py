@@ -22,7 +22,7 @@ class MockProject:
     def __init__(
         self,
         project_id: str = "test-proj",
-        security_class: str = "gatekept",
+        security_class: str = "gatekeeping",
         upstream_polling_enabled: bool = True,
         upstream_polling_interval_minutes: int = 5,
         auto_sync_enabled: bool = False,

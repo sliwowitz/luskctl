@@ -291,7 +291,7 @@ class ProjectState(Static):
             lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
             lines.append(f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}")
 
-        # Add upstream staleness info if available (gatekept projects only)
+        # Add upstream staleness info if available (gatekeeping projects only)
         if staleness is not None:
             lines.append("")
             lines.append("Upstream status:")
