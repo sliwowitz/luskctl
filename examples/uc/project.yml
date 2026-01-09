@@ -20,6 +20,12 @@ codex:
   ui:
     enabled: true
 
+webui:
+  # Preferred Web UI backend for this project. Overrides the global config.
+  # Can also be set via WEBUI_BACKEND env var or --backend CLI flag.
+  # Valid values: codex, claude, mistral
+  # backend: claude
+
 # Runtime settings for this project
 run:
   # Enable GPU passthrough for this project (per-project only). Default is disabled.

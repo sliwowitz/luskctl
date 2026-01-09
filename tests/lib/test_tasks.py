@@ -219,11 +219,12 @@ class TaskTests(unittest.TestCase):
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
+        # Host env uses WEBUI_* prefix, which gets remapped to CODEXUI_* for containers
         with unittest.mock.patch.dict(
             os.environ,
             {
-                "CODEXUI_TOKEN": "token-123",
-                "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
+                "WEBUI_TOKEN": "token-123",
+                "WEBUI_MISTRAL_API_KEY": "mistral-xyz",
                 "ANTHROPIC_API_KEY": "anthropic-456",
                 "CLAUDE_API_KEY": "from-env",
                 "MISTRAL_API_KEY": "mistral-456",
@@ -232,6 +233,7 @@ class TaskTests(unittest.TestCase):
         ):
             merged = _apply_ui_env_overrides(base_env, "CLAUDE")
 
+        # Container receives CODEXUI_* (remapped from host WEBUI_*)
         self.assertEqual(merged["CODEXUI_BACKEND"], "claude")
         self.assertEqual(merged["CODEXUI_TOKEN"], "token-123")
         self.assertEqual(merged["CODEXUI_MISTRAL_API_KEY"], "mistral-xyz")
@@ -257,14 +259,15 @@ class TaskTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
+            # Host env uses WEBUI_* prefix, which gets remapped to CODEXUI_* for containers
             with unittest.mock.patch.dict(
                 os.environ,
                 {
                     "CODEXCTL_CONFIG_DIR": str(config_root),
                     "CODEXCTL_STATE_DIR": str(state_dir),
                     "CODEXCTL_CONFIG_FILE": str(config_file),
-                    "CODEXUI_TOKEN": "token-xyz",
-                    "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
+                    "WEBUI_TOKEN": "token-xyz",
+                    "WEBUI_MISTRAL_API_KEY": "mistral-xyz",
                     "ANTHROPIC_API_KEY": "anthropic-abc",
                     "MISTRAL_API_KEY": "mistral-abc",
                 },
@@ -289,6 +292,7 @@ class TaskTests(unittest.TestCase):
                 cmd = run_mock.call_args[0][0]
                 env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
 
+                # Container receives CODEXUI_* (remapped from host WEBUI_*)
                 self.assertIn("CODEXUI_BACKEND=claude", env_entries)
                 self.assertIn("CODEXUI_TOKEN=token-xyz", env_entries)
                 self.assertIn("CODEXUI_MISTRAL_API_KEY=mistral-xyz", env_entries)

@@ -109,7 +109,10 @@ def copy_to_clipboard(text: str) -> bool:
 # ---------- Tasks ----------
 
 UI_BACKENDS = ("codex", "claude", "mistral")
-UI_ENV_PASSTHROUGH_PREFIX = "CODEXUI_"
+# Host-side env prefix for passthrough. Note: We use WEBUI_ on the host but
+# export as CODEXUI_ to the container for backward compatibility with the
+# container-side scripts (codexui-entry.sh) which are being renamed.
+UI_ENV_PASSTHROUGH_PREFIX = "WEBUI_"
 UI_ENV_PASSTHROUGH_KEYS = (
     "ANTHROPIC_API_KEY",
     "CLAUDE_API_KEY",
@@ -157,16 +160,41 @@ def _normalize_ui_backend(backend: Optional[str]) -> Optional[str]:
     return backend.lower()
 
 
-def _apply_ui_env_overrides(env: dict, backend: Optional[str]) -> dict:
-    """Return a copy of env with UI-specific overrides applied."""
+def _apply_ui_env_overrides(
+    env: dict,
+    backend: Optional[str],
+    project_backend: Optional[str] = None,
+) -> dict:
+    """Return a copy of env with UI-specific overrides applied.
+
+    Backend precedence (highest to lowest):
+    1. Explicit backend argument (from CLI --backend flag)
+    2. WEBUI_BACKEND environment variable on host
+    3. project_backend (from project.yml or global config)
+    4. Default: "codex"
+    """
     merged = dict(env)
-    normalized = _normalize_ui_backend(backend)
-    if normalized:
-        merged["CODEXUI_BACKEND"] = normalized
+
+    # Determine effective backend with precedence
+    effective_backend = _normalize_ui_backend(backend)
+    if not effective_backend:
+        effective_backend = _normalize_ui_backend(os.environ.get("WEBUI_BACKEND"))
+    if not effective_backend:
+        effective_backend = _normalize_ui_backend(project_backend)
+    if not effective_backend:
+        effective_backend = "codex"
+
+    # Export as CODEXUI_BACKEND to the container. The container-side scripts
+    # (codexui-entry.sh) still use this name; renaming is planned but the
+    # container interface is kept stable for now.
+    merged["CODEXUI_BACKEND"] = effective_backend
 
     for key, value in os.environ.items():
         if key.startswith(UI_ENV_PASSTHROUGH_PREFIX) and key not in merged:
-            merged[key] = value
+            # Remap WEBUI_* host env vars to CODEXUI_* for container compatibility
+            container_key = "CODEXUI_" + key[len(UI_ENV_PASSTHROUGH_PREFIX):]
+            if container_key not in merged:
+                merged[container_key] = value
 
     for key in UI_ENV_PASSTHROUGH_KEYS:
         if key not in merged:
@@ -627,7 +655,7 @@ def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) ->
         meta_path.write_text(yaml.safe_dump(meta))
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
-    env = _apply_ui_env_overrides(env, backend)
+    env = _apply_ui_env_overrides(env, backend, project.webui_backend)
 
     container_name = f"{project.id}-ui-{task_id}"
 

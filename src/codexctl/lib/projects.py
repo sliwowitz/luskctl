@@ -13,6 +13,7 @@ from .config import (
     get_envs_base_dir,
     get_global_human_email,
     get_global_human_name,
+    get_global_webui_backend,
     state_root,
     user_projects_root,
 )
@@ -78,6 +79,8 @@ class Project:
     # Auto-sync configuration for gatekeeping mode
     auto_sync_enabled: bool = False
     auto_sync_branches: List[str] = field(default_factory=list)
+    # Web UI backend preference (codex, claude, mistral)
+    webui_backend: Optional[str] = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -216,6 +219,13 @@ def load_project(project_id: str) -> Project:
     auto_sync_enabled = bool(sync_cfg.get("enabled", False))
     auto_sync_branches = list(sync_cfg.get("branches", []))
 
+    # Web UI backend preference
+    # Precedence: 1) project.yml webui.backend, 2) global codexctl config, 3) None (use default)
+    webui_cfg = cfg.get("webui", {}) or {}
+    webui_backend = webui_cfg.get("backend")
+    if not webui_backend:
+        webui_backend = get_global_webui_backend()
+
     p = Project(
         id=pid,
         security_class=sec,
@@ -238,6 +248,7 @@ def load_project(project_id: str) -> Project:
         upstream_polling_interval_minutes=upstream_polling_interval_minutes,
         auto_sync_enabled=auto_sync_enabled,
         auto_sync_branches=auto_sync_branches,
+        webui_backend=webui_backend,
     )
     return p
 

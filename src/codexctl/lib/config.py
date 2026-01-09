@@ -194,3 +194,10 @@ def get_global_human_email() -> Optional[str]:
     cfg = load_global_config()
     git_cfg = cfg.get("git", {}) or {}
     return git_cfg.get("human_email")
+
+
+def get_global_webui_backend() -> Optional[str]:
+    """Return webui.backend from global config, or None if not set."""
+    cfg = load_global_config()
+    webui_cfg = cfg.get("webui", {}) or {}
+    return webui_cfg.get("backend")
