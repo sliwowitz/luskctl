@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import yaml  # pip install pyyaml
 
@@ -179,3 +180,17 @@ def get_envs_base_dir() -> Path:
     envs_cfg = cfg.get("envs", {}) or {}
     base = envs_cfg.get("base_dir", "/var/lib/codexctl/envs")
     return Path(str(base)).expanduser().resolve()
+
+
+def get_global_human_name() -> Optional[str]:
+    """Return git.human_name from global config, or None if not set."""
+    cfg = load_global_config()
+    git_cfg = cfg.get("git", {}) or {}
+    return git_cfg.get("human_name")
+
+
+def get_global_human_email() -> Optional[str]:
+    """Return git.human_email from global config, or None if not set."""
+    cfg = load_global_config()
+    git_cfg = cfg.get("git", {}) or {}
+    return git_cfg.get("human_email")

@@ -7,7 +7,15 @@ from typing import Optional, List
 
 import yaml  # pip install pyyaml
 
-from .config import build_root, config_root, get_envs_base_dir, state_root, user_projects_root
+from .config import (
+    build_root,
+    config_root,
+    get_envs_base_dir,
+    get_global_human_email,
+    get_global_human_name,
+    state_root,
+    user_projects_root,
+)
 from .images import project_cli_image, project_ui_image
 
 
@@ -181,14 +189,18 @@ def load_project(project_id: str) -> Project:
     expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
     # Optional human credentials for git committer (while AI is the author)
-    # Precedence: 1) git.human_name/human_email from config, 2) global git config, 3) defaults
+    # Precedence: 1) project.yml, 2) global codexctl config, 3) global git config, 4) defaults
     human_name = git_cfg.get("human_name")
+    if not human_name:
+        human_name = get_global_human_name()
     if not human_name:
         human_name = _get_global_git_config("user.name")
     if not human_name:
         human_name = "Nobody"
 
     human_email = git_cfg.get("human_email")
+    if not human_email:
+        human_email = get_global_human_email()
     if not human_email:
         human_email = _get_global_git_config("user.email")
     if not human_email:
