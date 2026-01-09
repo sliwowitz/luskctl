@@ -7,7 +7,16 @@ from typing import Optional, List
 
 import yaml  # pip install pyyaml
 
-from .config import build_root, config_root, get_envs_base_dir, state_root, user_projects_root
+from .config import (
+    build_root,
+    config_root,
+    get_envs_base_dir,
+    get_global_default_agent,
+    get_global_human_email,
+    get_global_human_name,
+    state_root,
+    user_projects_root,
+)
 from .images import project_cli_image, project_ui_image
 
 
@@ -46,7 +55,6 @@ class Project:
 
     ssh_key_name: Optional[str]
     ssh_host_dir: Optional[Path]
-    codex_config_dir: Optional[Path]
     # Optional path to an SSH config template (user-provided). If set, ssh-init
     # will render this template to the shared .ssh/config. Tokens supported:
     #   {{IDENTITY_FILE}}  -> absolute path of the generated private key
@@ -70,6 +78,8 @@ class Project:
     # Auto-sync configuration for gatekeeping mode
     auto_sync_enabled: bool = False
     auto_sync_branches: List[str] = field(default_factory=list)
+    # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
+    default_agent: Optional[str] = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -139,7 +149,6 @@ def load_project(project_id: str) -> Project:
     proj_cfg = cfg.get("project", {}) or {}
     git_cfg = cfg.get("git", {}) or {}
     ssh_cfg = cfg.get("ssh", {}) or {}
-    codex_cfg = cfg.get("codex", {}) or {}
     tasks_cfg = cfg.get("tasks", {}) or {}
     gate_path_cfg = cfg.get("gate", {}) or {}
     gate_cfg = cfg.get("gatekeeping", {}) or {}
@@ -162,8 +171,6 @@ def load_project(project_id: str) -> Project:
     ssh_key_name = ssh_cfg.get("key_name")
     ssh_host_dir = Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
 
-    codex_config_dir = Path(codex_cfg.get("config_dir")).expanduser().resolve() if codex_cfg.get("config_dir") else None
-
     # Optional: ssh.config_template (path to a template file). If relative, it's relative to the project root.
     ssh_cfg_template_path: Optional[Path] = None
     if ssh_cfg.get("config_template"):
@@ -181,14 +188,18 @@ def load_project(project_id: str) -> Project:
     expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
     # Optional human credentials for git committer (while AI is the author)
-    # Precedence: 1) git.human_name/human_email from config, 2) global git config, 3) defaults
+    # Precedence: 1) project.yml, 2) global codexctl config, 3) global git config, 4) defaults
     human_name = git_cfg.get("human_name")
+    if not human_name:
+        human_name = get_global_human_name()
     if not human_name:
         human_name = _get_global_git_config("user.name")
     if not human_name:
         human_name = "Nobody"
 
     human_email = git_cfg.get("human_email")
+    if not human_email:
+        human_email = get_global_human_email()
     if not human_email:
         human_email = _get_global_git_config("user.email")
     if not human_email:
@@ -204,6 +215,12 @@ def load_project(project_id: str) -> Project:
     auto_sync_enabled = bool(sync_cfg.get("enabled", False))
     auto_sync_branches = list(sync_cfg.get("branches", []))
 
+    # Default agent preference (for Web UI and potentially CLI)
+    # Precedence: 1) project.yml default_agent, 2) global codexctl config, 3) None (use default)
+    default_agent = cfg.get("default_agent")
+    if not default_agent:
+        default_agent = get_global_default_agent()
+
     p = Project(
         id=pid,
         security_class=sec,
@@ -215,7 +232,6 @@ def load_project(project_id: str) -> Project:
         staging_root=staging_root,
         ssh_key_name=ssh_key_name,
         ssh_host_dir=ssh_host_dir,
-        codex_config_dir=codex_config_dir,
         ssh_config_template=ssh_cfg_template_path,
         ssh_mount_in_online=ssh_mount_in_online,
         ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
@@ -226,6 +242,7 @@ def load_project(project_id: str) -> Project:
         upstream_polling_interval_minutes=upstream_polling_interval_minutes,
         auto_sync_enabled=auto_sync_enabled,
         auto_sync_branches=auto_sync_branches,
+        default_agent=default_agent,
     )
     return p
 

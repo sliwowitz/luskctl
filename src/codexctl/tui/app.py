@@ -240,7 +240,10 @@ if _HAS_TEXTUAL:
 
         def _prompt_ui_backend(self) -> str:
             backends = list(UI_BACKENDS)
-            default = os.environ.get("CODEXUI_BACKEND", "").strip().lower()
+            # Check DEFAULT_AGENT first, fall back to CODEXUI_BACKEND for compatibility
+            default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
+            if not default:
+                default = os.environ.get("CODEXUI_BACKEND", "").strip().lower()
             if not default:
                 default = backends[0] if backends else "codex"
 

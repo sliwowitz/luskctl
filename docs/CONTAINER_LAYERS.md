@@ -27,7 +27,12 @@ Layers
    - Built FROM the corresponding L1 agent image.
    - Adds project‑specific defaults (CODE_REPO, SSH_KEY_NAME, GIT_BRANCH) and the user snippet.
    - Optional manual dev image (<project>:l2-dev) is built FROM L0 when requested.
-   - The UI backend is configurable (Codex, Claude, or Mistral) via CODEXUI_BACKEND or `codexctl task run-ui --backend`.
+   - The UI backend is configurable (Codex, Claude, or Mistral). Precedence (highest to lowest):
+     1. CLI flag: `codexctl task run-ui --backend <backend>`
+     2. Environment variable: `DEFAULT_AGENT` on the host
+     3. Per-project config: `default_agent` in project.yml
+     4. Global config: `default_agent` in ~/.config/codexctl/config.yml
+     5. Default: codex
      - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
      - For Mistral, provide CODEXUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional CODEXUI_MISTRAL_MODEL.
 

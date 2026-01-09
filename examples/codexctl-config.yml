@@ -37,6 +37,19 @@ paths:
   # If not set, defaults to: <state_root>/build
   # build_root: ~/.local/share/codexctl/build
 
+git:
+  # Default human identity for git commits (committer).
+  # These can be overridden per-project in project.yml under git.human_name/human_email.
+  # If not set here, falls back to global git config, then to "Nobody <nobody@localhost>".
+  # human_name: Your Name
+  # human_email: your.email@example.com
+
+# Default agent for all projects (used for Web UI, and potentially CLI in the future).
+# Can be overridden per-project in project.yml, via the DEFAULT_AGENT env var,
+# or the --backend CLI flag.
+# Valid values: codex, claude, mistral
+# default_agent: claude
+
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no
 # global or environment switch.

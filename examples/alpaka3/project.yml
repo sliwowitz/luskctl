@@ -49,10 +49,6 @@ gatekeeping:
     branches:               # branches to auto-sync (required if enabled)
       - dev
 
-codex:
-  ui:
-    enabled: true
-
 # Runtime settings for this project
 run:
   # Enable GPUs for this project

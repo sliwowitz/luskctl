@@ -219,6 +219,7 @@ class TaskTests(unittest.TestCase):
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
+        # Host env uses CODEXUI_* prefix for passthrough to containers
         with unittest.mock.patch.dict(
             os.environ,
             {
@@ -232,6 +233,7 @@ class TaskTests(unittest.TestCase):
         ):
             merged = _apply_ui_env_overrides(base_env, "CLAUDE")
 
+        # Container receives CODEXUI_* passthrough
         self.assertEqual(merged["CODEXUI_BACKEND"], "claude")
         self.assertEqual(merged["CODEXUI_TOKEN"], "token-123")
         self.assertEqual(merged["CODEXUI_MISTRAL_API_KEY"], "mistral-xyz")
@@ -257,6 +259,7 @@ class TaskTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
+            # Host env uses CODEXUI_* prefix for passthrough to containers
             with unittest.mock.patch.dict(
                 os.environ,
                 {
@@ -289,6 +292,7 @@ class TaskTests(unittest.TestCase):
                 cmd = run_mock.call_args[0][0]
                 env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
 
+                # Container receives CODEXUI_* passthrough
                 self.assertIn("CODEXUI_BACKEND=claude", env_entries)
                 self.assertIn("CODEXUI_TOKEN=token-xyz", env_entries)
                 self.assertIn("CODEXUI_MISTRAL_API_KEY=mistral-xyz", env_entries)

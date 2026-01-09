@@ -74,15 +74,16 @@ Git identity configuration
   - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
   - `vibe` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials
   - Each agent's alias sets its own git author, allowing multiple agents to coexist in the same container
-- **For UI mode**: Git identity is set in the entry script based on the `CODEXUI_BACKEND` environment variable:
+- **For UI mode**: Git identity is set in the entry script based on the default agent (configured via `DEFAULT_AGENT` env var, `default_agent` in config, or `--backend` CLI flag):
   - `codex` → Author: "Codex <codex@openai.com>", Committer: human credentials
   - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
   - `mistral` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials
   - Unknown backends default to Author: "AI Agent <ai-agent@localhost>", Committer: human credentials
-- **Human credentials configuration**:
-  - Add `human_name` and `human_email` to the `git:` section in `project.yml`
-  - If not specified, codexctl will try to use your global git config (`git config --global user.name` and `git config --global user.email`)
-  - If still not available, defaults to "Nobody <nobody@localhost>"
+- **Human credentials configuration** (checked in order):
+  1. Per-project: `human_name` and `human_email` in the `git:` section of `project.yml`
+  2. Global codexctl config: `human_name` and `human_email` in the `git:` section of `~/.config/codexctl/config.yml`
+  3. Global git config: `git config --global user.name` and `git config --global user.email`
+  4. Defaults: "Nobody <nobody@localhost>"
 - Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
 - This approach ensures commits show both the AI agent (author) and the human supervisor (committer).
 
