@@ -196,8 +196,7 @@ def get_global_human_email() -> Optional[str]:
     return git_cfg.get("human_email")
 
 
-def get_global_webui_backend() -> Optional[str]:
-    """Return webui.backend from global config, or None if not set."""
+def get_global_default_agent() -> Optional[str]:
+    """Return default_agent from global config, or None if not set."""
     cfg = load_global_config()
-    webui_cfg = cfg.get("webui", {}) or {}
-    return webui_cfg.get("backend")
+    return cfg.get("default_agent")

@@ -29,13 +29,12 @@ Layers
    - Optional manual dev image (<project>:l2-dev) is built FROM L0 when requested.
    - The UI backend is configurable (Codex, Claude, or Mistral). Precedence (highest to lowest):
      1. CLI flag: `codexctl task run-ui --backend <backend>`
-     2. Environment variable: `WEBUI_BACKEND` on the host
-     3. Per-project config: `webui.backend` in project.yml
-     4. Global config: `webui.backend` in ~/.config/codexctl/config.yml
+     2. Environment variable: `DEFAULT_AGENT` on the host
+     3. Per-project config: `default_agent` in project.yml
+     4. Global config: `default_agent` in ~/.config/codexctl/config.yml
      5. Default: codex
-     - For Claude, provide WEBUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional WEBUI_CLAUDE_MODEL.
-     - For Mistral, provide WEBUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional WEBUI_MISTRAL_MODEL.
-     - Note: Environment variables are remapped from WEBUI_* to CODEXUI_* when passed to containers for backward compatibility.
+     - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
+     - For Mistral, provide CODEXUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional CODEXUI_MISTRAL_MODEL.
 
 Build flow
 - codexctl generate <project> renders four Dockerfiles (L0/L1/L2) into the per‑project build directory:

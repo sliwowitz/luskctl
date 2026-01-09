@@ -74,7 +74,7 @@ Git identity configuration
   - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
   - `vibe` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials
   - Each agent's alias sets its own git author, allowing multiple agents to coexist in the same container
-- **For UI mode**: Git identity is set in the entry script based on the Web UI backend (configured via `WEBUI_BACKEND` env var, `webui.backend` in config, or `--backend` CLI flag):
+- **For UI mode**: Git identity is set in the entry script based on the default agent (configured via `DEFAULT_AGENT` env var, `default_agent` in config, or `--backend` CLI flag):
   - `codex` → Author: "Codex <codex@openai.com>", Committer: human credentials
   - `claude` → Author: "Claude <noreply@anthropic.com>", Committer: human credentials
   - `mistral` → Author: "Mistral Vibe <vibe@mistral.ai>", Committer: human credentials

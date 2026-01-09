@@ -44,12 +44,11 @@ git:
   # human_name: Your Name
   # human_email: your.email@example.com
 
-webui:
-  # Default Web UI backend for all projects.
-  # Can be overridden per-project in project.yml under webui.backend,
-  # or via the WEBUI_BACKEND environment variable, or the --backend CLI flag.
-  # Valid values: codex, claude, mistral
-  # backend: claude
+# Default agent for all projects (used for Web UI, and potentially CLI in the future).
+# Can be overridden per-project in project.yml, via the DEFAULT_AGENT env var,
+# or the --backend CLI flag.
+# Valid values: codex, claude, mistral
+# default_agent: claude
 
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no

@@ -11,9 +11,9 @@ from .config import (
     build_root,
     config_root,
     get_envs_base_dir,
+    get_global_default_agent,
     get_global_human_email,
     get_global_human_name,
-    get_global_webui_backend,
     state_root,
     user_projects_root,
 )
@@ -79,8 +79,8 @@ class Project:
     # Auto-sync configuration for gatekeeping mode
     auto_sync_enabled: bool = False
     auto_sync_branches: List[str] = field(default_factory=list)
-    # Web UI backend preference (codex, claude, mistral)
-    webui_backend: Optional[str] = None
+    # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
+    default_agent: Optional[str] = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -219,12 +219,11 @@ def load_project(project_id: str) -> Project:
     auto_sync_enabled = bool(sync_cfg.get("enabled", False))
     auto_sync_branches = list(sync_cfg.get("branches", []))
 
-    # Web UI backend preference
-    # Precedence: 1) project.yml webui.backend, 2) global codexctl config, 3) None (use default)
-    webui_cfg = cfg.get("webui", {}) or {}
-    webui_backend = webui_cfg.get("backend")
-    if not webui_backend:
-        webui_backend = get_global_webui_backend()
+    # Default agent preference (for Web UI and potentially CLI)
+    # Precedence: 1) project.yml default_agent, 2) global codexctl config, 3) None (use default)
+    default_agent = cfg.get("default_agent")
+    if not default_agent:
+        default_agent = get_global_default_agent()
 
     p = Project(
         id=pid,
@@ -248,7 +247,7 @@ def load_project(project_id: str) -> Project:
         upstream_polling_interval_minutes=upstream_polling_interval_minutes,
         auto_sync_enabled=auto_sync_enabled,
         auto_sync_branches=auto_sync_branches,
-        webui_backend=webui_backend,
+        default_agent=default_agent,
     )
     return p
 
