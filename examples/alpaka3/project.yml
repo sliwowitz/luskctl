@@ -33,9 +33,6 @@ ssh:
 # Gatekeeping mode settings
 gatekeeping:
   # Expose the upstream URL as a remote named "external" inside the container.
-  # This allows IDEs/tools on the host to reference the canonical upstream
-  # by inspecting the task's git config, without giving the container network
-  # access to the real remote. The container can see the URL but cannot fetch/push to it.
   expose_external_remote: true
 
   # Upstream polling - TUI periodically checks if upstream has new commits

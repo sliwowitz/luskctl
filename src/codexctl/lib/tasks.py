@@ -394,9 +394,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         volumes.append(f"{gate_repo}:{gate_mount_inside}:Z")
         env["CODE_REPO"] = f"file://{gate_mount_inside}"
         env["GIT_BRANCH"] = project.default_branch or "main"
-        # Optionally expose the upstream URL as an "external" remote for reference.
-        # This allows the container to see where the real upstream is without having
-        # network access to it. Useful for IDE integration on the host side.
+        # Optionally expose the upstream URL as an "external" remote.
         if project.expose_external_remote and project.upstream_url:
             env["EXTERNAL_REMOTE_URL"] = project.upstream_url
         # Optional SSH mount in gatekeeping mode
