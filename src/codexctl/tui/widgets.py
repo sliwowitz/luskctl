@@ -11,6 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 
 from ..lib.projects import Project as CodexProject
+from ..lib.git_gate import GateStalenessInfo
 
 
 @dataclass
@@ -83,7 +84,8 @@ class ProjectActions(Static):
             yield Button("[yellow]g[/yellow]en", id="btn-generate", compact=True)          # generate Dockerfiles (g)
             yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)           # build images (b)
             yield Button("[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True)          # init SSH dir (s)
-            yield Button("[yellow]c[/yellow] gate", id="btn-gate-init", compact=True)       # init git gate (c)
+            yield Button("[yellow]c[/yellow] gate", id="btn-gate-init", compact=True)      # init git gate (c)
+            yield Button("[yellow]S[/yellow]ync", id="btn-sync-gate", compact=True)        # sync gate from upstream (S)
 
         # Second row of actions (task-level).
         with Horizontal():
@@ -104,6 +106,7 @@ class ProjectActions(Static):
             "btn-build": "action_build_images",
             "btn-ssh-init": "action_init_ssh",
             "btn-gate-init": "action_init_gate",
+            "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
             "btn-task-run-ui": "action_run_ui",
@@ -249,6 +252,7 @@ class ProjectState(Static):
         project: Optional[CodexProject],
         state: Optional[dict],
         task_count: Optional[int] = None,
+        staleness: Optional[GateStalenessInfo] = None,
     ) -> None:
         if project is None or state is None:
             self.update("No project selected.")
@@ -286,6 +290,24 @@ class ProjectState(Static):
             lines.append(f"  Date:     {gate_commit.get('commit_date', 'unknown')}")
             lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
             lines.append(f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}")
+
+        # Add upstream staleness info if available (gatekept projects only)
+        if staleness is not None:
+            lines.append("")
+            lines.append("Upstream status:")
+            if staleness.error:
+                lines.append(f"  Error:    {staleness.error}")
+            elif staleness.is_stale:
+                behind_str = "unknown"
+                if staleness.commits_behind is not None:
+                    behind_str = str(staleness.commits_behind)
+                lines.append(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
+                lines.append(f"  Upstream: {staleness.upstream_head[:8] if staleness.upstream_head else 'unknown'}")
+                lines.append(f"  Gate:     {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}")
+            else:
+                lines.append(f"  Status:   Up to date on {staleness.branch}")
+                lines.append(f"  Commit:   {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}")
+            lines.append(f"  Checked:  {staleness.last_checked}")
 
         self.update("\n".join(lines))
 
