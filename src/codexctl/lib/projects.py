@@ -55,7 +55,6 @@ class Project:
 
     ssh_key_name: Optional[str]
     ssh_host_dir: Optional[Path]
-    codex_config_dir: Optional[Path]
     # Optional path to an SSH config template (user-provided). If set, ssh-init
     # will render this template to the shared .ssh/config. Tokens supported:
     #   {{IDENTITY_FILE}}  -> absolute path of the generated private key
@@ -150,7 +149,6 @@ def load_project(project_id: str) -> Project:
     proj_cfg = cfg.get("project", {}) or {}
     git_cfg = cfg.get("git", {}) or {}
     ssh_cfg = cfg.get("ssh", {}) or {}
-    codex_cfg = cfg.get("codex", {}) or {}
     tasks_cfg = cfg.get("tasks", {}) or {}
     gate_path_cfg = cfg.get("gate", {}) or {}
     gate_cfg = cfg.get("gatekeeping", {}) or {}
@@ -172,8 +170,6 @@ def load_project(project_id: str) -> Project:
 
     ssh_key_name = ssh_cfg.get("key_name")
     ssh_host_dir = Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
-
-    codex_config_dir = Path(codex_cfg.get("config_dir")).expanduser().resolve() if codex_cfg.get("config_dir") else None
 
     # Optional: ssh.config_template (path to a template file). If relative, it's relative to the project root.
     ssh_cfg_template_path: Optional[Path] = None
@@ -236,7 +232,6 @@ def load_project(project_id: str) -> Project:
         staging_root=staging_root,
         ssh_key_name=ssh_key_name,
         ssh_host_dir=ssh_host_dir,
-        codex_config_dir=codex_config_dir,
         ssh_config_template=ssh_cfg_template_path,
         ssh_mount_in_online=ssh_mount_in_online,
         ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
