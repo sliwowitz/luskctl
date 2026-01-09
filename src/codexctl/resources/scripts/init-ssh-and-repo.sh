@@ -77,14 +77,28 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
       git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
       # Fetch latest from upstream to ensure we have all refs
       git -C "${REPO_ROOT}" fetch --all --prune || true
-      # Hard reset to latest HEAD since gate may be stale
-      TARGET_BRANCH="${GIT_BRANCH:-main}"
-      if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-        echo ">> resetting to origin/${TARGET_BRANCH}"
-        git -C "${REPO_ROOT}" reset --hard "origin/${TARGET_BRANCH}"
+    fi
+    # Checkout the target branch from settings. git clone uses the remote's default
+    # HEAD, which may differ from the branch configured in project.yml.
+    # We use checkout -B to create/reset the local branch to track the remote.
+    TARGET_BRANCH="${GIT_BRANCH:-main}"
+    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+      echo ">> checking out branch ${TARGET_BRANCH}"
+      git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+    else
+      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, staying on cloned default"
+      # The clone already checked out the remote's default branch. Just ensure we're
+      # on a local branch (not detached HEAD) by checking out the current branch.
+      CURRENT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+      if [[ -n "${CURRENT_BRANCH}" && "${CURRENT_BRANCH}" != "HEAD" ]]; then
+        echo ">> staying on current branch: ${CURRENT_BRANCH}"
       else
-        echo ">> resetting to origin/HEAD"
-        git -C "${REPO_ROOT}" reset --hard "origin/HEAD"
+        # Detached HEAD - try to find and checkout the remote's default branch
+        DEFAULT_REMOTE_BRANCH=$(git -C "${REPO_ROOT}" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo "")
+        if [[ -n "${DEFAULT_REMOTE_BRANCH}" ]]; then
+          echo ">> checking out remote default branch: ${DEFAULT_REMOTE_BRANCH}"
+          git -C "${REPO_ROOT}" checkout -B "${DEFAULT_REMOTE_BRANCH}" "origin/${DEFAULT_REMOTE_BRANCH}" 2>/dev/null || true
+        fi
       fi
     fi
 
@@ -95,23 +109,29 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     echo ">> new task with existing .git - resetting to latest HEAD"
     git -C "${REPO_ROOT}" fetch --all --prune
     TARGET_BRANCH="${GIT_BRANCH:-main}"
-    
-    # Check if the target branch exists on the remote, fallback to origin/HEAD if not
-    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
-      echo ">> Target branch found, will reset to origin/${TARGET_BRANCH}"
-      RESET_TARGET="origin/${TARGET_BRANCH}"
-    else
-      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, falling back to origin/HEAD"
-      RESET_TARGET="origin/HEAD"
-    fi
-    
+
+    # Checkout and reset to the target branch. Use checkout -B to create/reset
+    # the local branch to track the remote.
     reset_ok=true
-    if ! git -C "${REPO_ROOT}" reset --hard "${RESET_TARGET}"; then
-      echo ">> WARNING: git reset failed; preserving new task marker for retry"
-      reset_ok=false
+    if git -C "${REPO_ROOT}" rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+      echo ">> checking out branch ${TARGET_BRANCH}"
+      if ! git -C "${REPO_ROOT}" checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"; then
+        echo ">> WARNING: git checkout failed; preserving new task marker for retry"
+        reset_ok=false
+      fi
+    else
+      echo ">> WARNING: Branch origin/${TARGET_BRANCH} not found, staying on current branch"
+      # Stay on current branch but reset to its remote tracking branch
+      CURRENT_BRANCH=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+      if [[ -n "${CURRENT_BRANCH}" && "${CURRENT_BRANCH}" != "HEAD" ]]; then
+        if git -C "${REPO_ROOT}" rev-parse --verify "origin/${CURRENT_BRANCH}" >/dev/null 2>&1; then
+          echo ">> resetting ${CURRENT_BRANCH} to origin/${CURRENT_BRANCH}"
+          git -C "${REPO_ROOT}" reset --hard "origin/${CURRENT_BRANCH}" || true
+        fi
+      fi
     fi
     git -C "${REPO_ROOT}" clean -fd || true
-    # Remove marker only after successful reset
+    # Remove marker only after successful checkout/reset
     if [[ "${reset_ok}" == "true" ]]; then
       rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
     fi
