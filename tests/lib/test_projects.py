@@ -12,7 +12,7 @@ from test_utils import write_project
 
 
 class ProjectTests(unittest.TestCase):
-    def test_load_project_gatekept_defaults(self) -> None:
+    def test_load_project_gatekeeping_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -23,7 +23,7 @@ class ProjectTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: https://example.com/repo.git\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  upstream_url: https://example.com/repo.git\n""".lstrip(),
             )
 
             with unittest.mock.patch.dict(
@@ -35,7 +35,7 @@ class ProjectTests(unittest.TestCase):
             ):
                 proj = load_project(project_id)
                 self.assertEqual(proj.id, project_id)
-                self.assertEqual(proj.security_class, "gatekept")
+                self.assertEqual(proj.security_class, "gatekeeping")
                 self.assertEqual(proj.tasks_root, (state_root() / "tasks" / project_id).resolve())
                 self.assertEqual(proj.gate_path, (state_root() / "gate" / f"{project_id}.git").resolve())
                 self.assertEqual(proj.staging_root, (build_root() / project_id).resolve())

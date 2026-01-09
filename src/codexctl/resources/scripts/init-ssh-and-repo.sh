@@ -135,6 +135,21 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     fi
   fi
 
+  # Gatekeeping mode: Ensure origin remote is set to the git-gate (CODE_REPO).
+  # This is necessary because:
+  # 1. Existing workspaces might have origin pointing to the real upstream
+  #    (e.g., from a previous online mode run or misconfigured setup)
+  # 2. In gatekeeping mode, origin should ALWAYS be the local git-gate
+  # We detect gatekeeping mode by checking if CODE_REPO is a local file path.
+  if [[ "${CODE_REPO}" == file://* ]]; then
+    CURRENT_ORIGIN=$(git -C "${REPO_ROOT}" remote get-url origin 2>/dev/null || echo "")
+    if [[ "${CURRENT_ORIGIN}" != "${CODE_REPO}" ]]; then
+      echo ">> gatekeeping mode: fixing origin remote (was: ${CURRENT_ORIGIN})"
+      git -C "${REPO_ROOT}" remote set-url origin "${CODE_REPO}" || true
+      git -C "${REPO_ROOT}" remote set-url --push origin "${CODE_REPO}" || true
+    fi
+  fi
+
   # In gatekeeping mode, optionally add an "external" remote pointing to the
   # real upstream. This is informational only - the container cannot actually
   # reach this URL. Useful for IDEs on the host side that want to know the

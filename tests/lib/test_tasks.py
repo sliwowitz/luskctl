@@ -97,7 +97,7 @@ class TaskTests(unittest.TestCase):
                 marker_content = marker_path.read_text(encoding="utf-8")
                 self.assertIn("reset to the latest remote HEAD", marker_content)
 
-    def test_build_task_env_gatekept(self) -> None:
+    def test_build_task_env_gatekeeping(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -109,7 +109,7 @@ class TaskTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  default_branch: main\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -133,11 +133,11 @@ class TaskTests(unittest.TestCase):
 
                 self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
-                # Verify SSH is NOT mounted by default in gatekept mode
+                # Verify SSH is NOT mounted by default in gatekeeping mode
                 ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
                 self.assertEqual(ssh_mounts, [])
 
-    def test_build_task_env_gatekept_with_ssh(self) -> None:
+    def test_build_task_env_gatekeeping_with_ssh(self) -> None:
         """Gatekept mode with mount_in_gatekeeping enabled should mount SSH."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -148,11 +148,11 @@ class TaskTests(unittest.TestCase):
             config_root.mkdir(parents=True, exist_ok=True)
             ssh_dir.mkdir(parents=True, exist_ok=True)
 
-            project_id = "proj_gatekept_ssh"
+            project_id = "proj_gatekeeping_ssh"
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\nssh:\n  host_dir: {ssh_dir}\n  mount_in_gatekeeping: true\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  default_branch: main\nssh:\n  host_dir: {ssh_dir}\n  mount_in_gatekeeping: true\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -174,7 +174,7 @@ class TaskTests(unittest.TestCase):
                     task_id="9",
                 )
 
-                # Verify gatekept behavior: CODE_REPO is file-based cache
+                # Verify gatekeeping behavior: CODE_REPO is file-based cache
                 self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
                 # Verify SSH IS mounted when mount_in_gatekeeping is true
@@ -601,7 +601,7 @@ class TaskTests(unittest.TestCase):
             # Verify all three utilities were tried
             self.assertEqual(run_mock.call_count, 3)
 
-    def test_build_task_env_gatekept_expose_external_remote_enabled(self) -> None:
+    def test_build_task_env_gatekeeping_expose_external_remote_enabled(self) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -615,7 +615,7 @@ class TaskTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -643,7 +643,7 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
 
-    def test_build_task_env_gatekept_expose_external_remote_disabled(self) -> None:
+    def test_build_task_env_gatekeeping_expose_external_remote_disabled(self) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -657,7 +657,7 @@ class TaskTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: false\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  upstream_url: {upstream_url}\n  default_branch: main\ngatekeeping:\n  expose_external_remote: false\n""".lstrip(),
             )
 
             config_file = base / "config.yml"
@@ -685,7 +685,7 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
                 self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
 
-    def test_build_task_env_gatekept_expose_external_remote_no_upstream(self) -> None:
+    def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -698,7 +698,7 @@ class TaskTests(unittest.TestCase):
             write_project(
                 config_root,
                 project_id,
-                f"""\nproject:\n  id: {project_id}\n  security_class: gatekept\ngit:\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
+                f"""\nproject:\n  id: {project_id}\n  security_class: gatekeeping\ngit:\n  default_branch: main\ngatekeeping:\n  expose_external_remote: true\n""".lstrip(),
             )
 
             config_file = base / "config.yml"

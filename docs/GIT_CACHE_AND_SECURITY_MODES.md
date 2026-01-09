@@ -1,6 +1,6 @@
 # Git Gate and Security Modes
 
-This document describes the **Git gate** concept and the distinction between **online** and **gatekept** projects.
+This document describes the **Git gate** concept and the distinction between **online** and **gatekeeping** projects.
 
 ## Update (January 2026)
 
@@ -49,14 +49,14 @@ For each project you conceptually have three Git layers:
      * `STATE_ROOT/gate/<project_id>.git`
    * Purpose:
      * Speed up **clone** operations (no repeated large network transfers).
-     * In gatekept setups, act as the **only thing** containers can access.
+     * In gatekeeping setups, act as the **only thing** containers can access.
      * Serve as a communication channel between host and container.
 
 3. **Task working copy (container)**
    * A regular Git working directory underneath each task's workspace.
    * Each **task** gets its own **isolated repo**, seeded from either:
      * the real upstream (online mode), or
-     * the local gate (gatekept mode).
+     * the local gate (gatekeeping mode).
 
 ---
 
@@ -139,7 +139,7 @@ The project's **security mode** controls how tasks interact with upstream vs gat
 ```yaml
 project:
   id: "myproject"
-  security_class: "gatekept"
+  security_class: "gatekeeping"
 
 git:
   upstream_url: "git@github.com:org/repo.git"

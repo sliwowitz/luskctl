@@ -2,11 +2,11 @@ project:
   id: "alpaka3"
   name: "Alpaka3"
   # Gatekept: tasks can only push to a host-side staging repo, not upstream
-  security_class: "gatekept"
+  security_class: "gatekeeping"
 
 git:
   # Upstream is intentionally SSH to exercise SSH init when used in online mode.
-  # In gatekept mode we do NOT expose this inside the container.
+  # In gatekeeping mode we do NOT expose this inside the container.
   upstream_url: "git@github.com:sliwowitz/alpaka3.git"
   default_branch: "dev"
 
@@ -24,7 +24,7 @@ docker:
     RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 140 \
      && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 140
 
-# No SSH exposure for gatekept projects inside the container by default.
+# No SSH exposure for gatekeeping projects inside the container by default.
 # You may still generate keys on the host for mirroring/promotions.
 ssh:
   key_name: "id_ed25519_alpaka3"

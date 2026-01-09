@@ -44,14 +44,14 @@ def _get_global_git_config(key: str) -> Optional[str]:
 @dataclass
 class Project:
     id: str
-    security_class: str          # "online" | "gatekept"
+    security_class: str          # "online" | "gatekeeping"
     upstream_url: Optional[str]
     default_branch: str
     root: Path
 
     tasks_root: Path             # workspace dirs
     gate_path: Path              # git gate (mirror) path
-    staging_root: Optional[Path] # gatekept only
+    staging_root: Optional[Path] # gatekeeping only
 
     ssh_key_name: Optional[str]
     ssh_host_dir: Optional[Path]
@@ -160,7 +160,7 @@ def load_project(project_id: str) -> Project:
     gate_path = Path(gate_path_cfg.get("path", sr / "gate" / f"{pid}.git")).resolve()
 
     staging_root: Optional[Path] = None
-    if sec == "gatekept":
+    if sec == "gatekeeping":
         # Default to build_root unless explicitly configured in project.yml
         staging_root = Path(gate_cfg.get("staging_root", build_root() / pid)).resolve()
 

@@ -371,7 +371,7 @@ if _HAS_TEXTUAL:
         def _start_upstream_polling(self) -> None:
             """Start background polling for upstream changes.
 
-            Only polls for gatekept projects with polling enabled and a gate initialized.
+            Only polls for gatekeeping projects with polling enabled and a gate initialized.
             """
             self._stop_upstream_polling()  # Stop any existing timer
             self._staleness_info = None
@@ -385,8 +385,8 @@ if _HAS_TEXTUAL:
             except SystemExit:
                 return
 
-            # Only poll for gatekept projects with polling enabled
-            if project.security_class != "gatekept":
+            # Only poll for gatekeeping projects with polling enabled
+            if project.security_class != "gatekeeping":
                 return
             if not project.upstream_polling_enabled:
                 return
@@ -563,8 +563,8 @@ if _HAS_TEXTUAL:
 
             try:
                 project = load_project(self.current_project_id)
-                if project.security_class != "gatekept":
-                    self.notify("Sync only available for gatekept projects.")
+                if project.security_class != "gatekeeping":
+                    self.notify("Sync only available for gatekeeping projects.")
                     return
 
                 self.notify("Syncing gate from upstream...")

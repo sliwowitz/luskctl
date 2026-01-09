@@ -404,8 +404,8 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     # Mount point inside container for the gate
     gate_mount_inside = "/git-gate/gate.git"
 
-    if project.security_class == "gatekept":
-        # In gatekept mode, hide upstream and SSH. Use the host gate as the only remote.
+    if project.security_class == "gatekeeping":
+        # In gatekeeping mode, hide upstream and SSH. Use the host gate as the only remote.
         if not gate_repo.exists():
             raise SystemExit(
                 f"Git gate missing for project '{project.id}'.\n"
