@@ -86,3 +86,37 @@ class DockerTests(unittest.TestCase):
                 self.assertIn('CODE_REPO="file:///git-gate/gate.git"', content)
                 # Should NOT contain the real upstream URL as CODE_REPO
                 self.assertNotIn('CODE_REPO="https://example.com/repo.git"', content)
+
+    def test_l1_cli_pipx_inject_has_env_vars(self) -> None:
+        """Verify that PIPX environment variables are set globally and pipx commands use them."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_pipx_test"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\n""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                generate_dockerfiles(project_id)
+                out_dir = build_root() / project_id
+                l1_cli = out_dir / "L1.cli.Dockerfile"
+
+                content = l1_cli.read_text(encoding="utf-8")
+                # Verify that PIPX_HOME and PIPX_BIN_DIR are set as ENV variables
+                self.assertIn("PIPX_HOME=/opt/pipx", content)
+                self.assertIn("PIPX_BIN_DIR=/usr/local/bin", content)
+                # Verify that pipx commands use these environment variables (no inline vars)
+                self.assertIn("pipx install mistral-vibe", content)
+                self.assertIn("pipx inject mistral-vibe mistralai", content)
