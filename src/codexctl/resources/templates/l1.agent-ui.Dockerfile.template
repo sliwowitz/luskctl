@@ -4,9 +4,7 @@ FROM ${BASE_IMAGE}
 
 ENV HOST="0.0.0.0" \
     PORT="7860" \
-    CODEXUI_DIR="/opt/codexui" \
-    CODEXUI_DIST_TAG="v0.0.0" \
-    CODEXUI_DIST_URL="https://github.com/sliwowitz/codex-in-podman/releases/download/\${CODEXUI_DIST_TAG}/codexui-dist.tar.gz"
+    CODEXUI_DIR="/opt/codexui"
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \

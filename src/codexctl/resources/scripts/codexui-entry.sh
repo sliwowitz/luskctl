@@ -36,7 +36,7 @@ if command -v git >/dev/null 2>&1 && [[ -n "${CODEXUI_BACKEND:-}" ]]; then
 fi
 
 : "${CODEXUI_DIR:=/opt/codexui}"
-: "${CODEXUI_DIST_TAG:=v0.0.0}"
+: "${CODEXUI_DIST_TAG:=latest}"
 : "${CODEXUI_DIST_URL:=https://github.com/sliwowitz/codex-in-podman/releases/download/${CODEXUI_DIST_TAG}/codexui-dist.tar.gz}"
 : "${HOST:=0.0.0.0}"
 : "${PORT:=7860}"
