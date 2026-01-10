@@ -10,6 +10,7 @@ from codexctl.lib.tasks import (
     _apply_ui_env_overrides,
     _build_task_env_and_volumes,
     copy_to_clipboard,
+    copy_to_clipboard_detailed,
     get_workspace_git_diff,
     task_delete,
     task_new,
@@ -19,6 +20,28 @@ from test_utils import mock_git_config, parse_meta_value, write_project
 
 
 class TaskTests(unittest.TestCase):
+    def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+                result = copy_to_clipboard_detailed("hello")
+        self.assertFalse(result.ok)
+        self.assertIsNotNone(result.hint)
+        self.assertIn("xclip", result.hint or "")
+
+    def test_copy_to_clipboard_uses_xclip_when_available(self) -> None:
+        def which_side_effect(name: str):
+            return "/usr/bin/xclip" if name == "xclip" else None
+
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", side_effect=which_side_effect):
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                    result = copy_to_clipboard_detailed("hello")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.method, "xclip")
+        run_mock.assert_called()
+
     def test_task_new_and_delete(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -540,76 +563,66 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_success_wl_copy(self) -> None:
         """Test copy_to_clipboard succeeds with wl-copy."""
-        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
-            mock_result = unittest.mock.Mock()
-            mock_result.returncode = 0
-            run_mock.return_value = mock_result
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/wl-copy"):
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-            result = copy_to_clipboard("test content")
-            self.assertTrue(result)
+                    result = copy_to_clipboard("test content")
+                    self.assertTrue(result)
 
-            # Verify wl-copy was called with correct arguments
-            run_mock.assert_called_once_with(
-                ["wl-copy", "--type", "text/plain"],
-                input="test content",
-                check=True,
-                text=True,
-            )
+                    run_mock.assert_called_once()
+                    args, kwargs = run_mock.call_args
+                    self.assertEqual(args[0][0], "wl-copy")
+                    self.assertEqual(kwargs["input"], "test content")
+                    self.assertTrue(kwargs["check"])
+                    self.assertTrue(kwargs["text"])
+                    self.assertTrue(kwargs["capture_output"])
 
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
-        """Test copy_to_clipboard falls back to xclip when wl-copy is not found."""
-        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
-            # First call (wl-copy) raises FileNotFoundError
-            # Second call (xclip) succeeds
-            def side_effect(*args, **kwargs):
-                if args[0][0] == "wl-copy":
-                    raise FileNotFoundError()
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 0
-                return mock_result
+        """Test copy_to_clipboard uses xclip on X11 when available."""
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/xclip"):
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-            run_mock.side_effect = side_effect
+                    result = copy_to_clipboard("test content")
+                    self.assertTrue(result)
 
-            result = copy_to_clipboard("test content")
-            self.assertTrue(result)
-
-            # Verify xclip was called
-            self.assertEqual(run_mock.call_count, 2)
-            second_call = run_mock.call_args_list[1]
-            self.assertEqual(second_call[0][0][0], "xclip")
+                    run_mock.assert_called_once()
+                    args, _kwargs = run_mock.call_args
+                    self.assertEqual(args[0][0], "xclip")
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
-        """Test copy_to_clipboard falls back to pbcopy when wl-copy and xclip fail."""
-        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
-            # First two calls fail, third succeeds
-            def side_effect(*args, **kwargs):
-                if args[0][0] in ["wl-copy", "xclip"]:
-                    raise FileNotFoundError()
-                mock_result = unittest.mock.Mock()
-                mock_result.returncode = 0
-                return mock_result
+        """Test copy_to_clipboard uses pbcopy on macOS."""
+        with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"):
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-            run_mock.side_effect = side_effect
+                    result = copy_to_clipboard("test content")
+                    self.assertTrue(result)
 
-            result = copy_to_clipboard("test content")
-            self.assertTrue(result)
-
-            # Verify pbcopy was called
-            self.assertEqual(run_mock.call_count, 3)
-            third_call = run_mock.call_args_list[2]
-            self.assertEqual(third_call[0][0][0], "pbcopy")
+                    run_mock.assert_called_once()
+                    args, _kwargs = run_mock.call_args
+                    self.assertEqual(args[0][0], "pbcopy")
 
     def test_copy_to_clipboard_all_fail(self) -> None:
         """Test copy_to_clipboard returns False when all clipboard utilities fail."""
-        with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
-            # All clipboard utilities fail
-            run_mock.side_effect = FileNotFoundError()
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+            def which_side_effect(name: str):
+                if name in ("xclip", "xsel"):
+                    return f"/usr/bin/{name}"
+                return None
 
-            result = copy_to_clipboard("test content")
-            self.assertFalse(result)
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", side_effect=which_side_effect):
+                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                    run_mock.side_effect = subprocess.CalledProcessError(1, ["xclip"], stderr="boom")
 
-            # Verify all three utilities were tried
-            self.assertEqual(run_mock.call_count, 3)
+                    result = copy_to_clipboard("test content")
+                    self.assertFalse(result)
+
+                    self.assertEqual(run_mock.call_count, 2)
 
     def test_build_task_env_gatekeeping_expose_external_remote_enabled(self) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""

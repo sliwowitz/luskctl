@@ -5,6 +5,7 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -61,45 +62,112 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
         return None
 
 
-def copy_to_clipboard(text: str) -> bool:
-    """Copy text to system clipboard.
+@dataclass(frozen=True)
+class ClipboardHelperStatus:
+    available: tuple[str, ...]
+    hint: str | None = None
 
-    Tries multiple clipboard utilities in order of preference:
-    1. wl-copy (Wayland)
-    2. xclip (X11)
-    3. pbcopy (macOS)
 
-    Args:
-        text: Text to copy to clipboard
+@dataclass(frozen=True)
+class ClipboardCopyResult:
+    ok: bool
+    method: str | None = None
+    error: str | None = None
+    hint: str | None = None
 
-    Returns:
-        True if successful, False otherwise
+
+def _clipboard_install_hint() -> str:
+    if sys.platform == "darwin":
+        return ""
+
+    # Wayland vs X11 is fuzzy; provide a useful Ubuntu/Debian hint.
+    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
+
+    if wayland and not x11:
+        return "Install wl-clipboard: sudo apt install wl-clipboard"
+    if x11 and not wayland:
+        return "Install xclip or xsel: sudo apt install xclip"
+    return "Install wl-clipboard (Wayland) or xclip/xsel (X11)"
+
+
+def _clipboard_candidates() -> list[tuple[str, list[str]]]:
+    candidates: list[tuple[str, list[str]]] = []
+
+    if sys.platform == "darwin":
+        candidates.append(("pbcopy", ["pbcopy"]))
+        return candidates
+    if os.name == "nt":
+        candidates.append(("clip", ["clip"]))
+        return candidates
+
+    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
+
+    if wayland:
+        candidates.append(("wl-copy", ["wl-copy", "--type", "text/plain"]))
+    if x11:
+        candidates.append(("xclip", ["xclip", "-selection", "clipboard"]))
+        candidates.append(("xsel", ["xsel", "--clipboard", "--input"]))
+
+    if not candidates:
+        candidates.extend(
+            [
+                ("wl-copy", ["wl-copy", "--type", "text/plain"]),
+                ("xclip", ["xclip", "-selection", "clipboard"]),
+                ("xsel", ["xsel", "--clipboard", "--input"]),
+            ]
+        )
+
+    return candidates
+
+
+def get_clipboard_helper_status() -> ClipboardHelperStatus:
+    """Return which clipboard helpers are available on this machine."""
+
+    candidates = _clipboard_candidates()
+    available = tuple(name for name, cmd in candidates if shutil.which(cmd[0]))
+    if available:
+        return ClipboardHelperStatus(available=available)
+
+    hint = _clipboard_install_hint()
+    return ClipboardHelperStatus(available=(), hint=hint or None)
+
+
+def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
+    """Copy text to the system clipboard.
+
+    Prefers native OS clipboard helpers when available.
+    On Linux, users may need to install a helper (e.g., wl-clipboard on Wayland
+    or xclip/xsel on X11).
     """
     if not text:
-        return False
+        return ClipboardCopyResult(ok=False, error="Nothing to copy.")
 
-    # Try wl-copy first (Wayland)
-    try:
-        subprocess.run(["wl-copy", "--type", "text/plain"], input=text, check=True, text=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+    candidates = _clipboard_candidates()
+    available = [(name, cmd) for name, cmd in candidates if shutil.which(cmd[0])]
+    if not available:
+        hint = _clipboard_install_hint()
+        return ClipboardCopyResult(ok=False, error="No clipboard helper found on PATH.", hint=hint or None)
 
-    # Try xclip (X11)
-    try:
-        subprocess.run(["xclip", "-selection", "clipboard"], input=text, check=True, text=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+    errors: list[str] = []
+    for name, cmd in available:
+        try:
+            subprocess.run(cmd, input=text, check=True, text=True, capture_output=True)
+            return ClipboardCopyResult(ok=True, method=name)
+        except subprocess.CalledProcessError as e:
+            detail = (e.stderr or e.stdout or "").strip()
+            errors.append(f"{name} failed" + (f": {detail}" if detail else ""))
+        except Exception as e:
+            errors.append(f"{name} error: {e}")
 
-    # Try pbcopy (macOS)
-    try:
-        subprocess.run(["pbcopy"], input=text, check=True, text=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+    hint = _clipboard_install_hint()
+    return ClipboardCopyResult(ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None)
 
-    return False
+
+def copy_to_clipboard(text: str) -> bool:
+    """Backward-compatible clipboard copy helper returning only success."""
+    return copy_to_clipboard_detailed(text).ok
 
 
 # ---------- Tasks ----------
