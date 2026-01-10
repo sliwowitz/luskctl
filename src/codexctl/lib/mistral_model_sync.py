@@ -47,7 +47,7 @@ def get_api_key() -> str | None:
                     if line.startswith("MISTRAL_API_KEY="):
                         # Remove quotes if present
                         value = line.split("=", 1)[1].strip()
-                        return value.strip('"\'')
+                        return value.strip("\"'")
         except Exception as e:
             print(f"Warning: Could not read .env file: {e}", file=sys.stderr)
 
@@ -57,10 +57,7 @@ def get_api_key() -> str | None:
 def fetch_models(api_key: str) -> list[str]:
     """Fetch available models from Mistral API."""
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
         response = requests.get(MISTRAL_MODELS_URL, headers=headers, timeout=30)
         response.raise_for_status()
@@ -157,7 +154,7 @@ def read_config_models(config_path: Path) -> set[str]:
             models.add(model)
 
         # Array of models pattern
-        array_matches = re.findall(r'models\s*=\s*\[([^\]]+)\]', content)
+        array_matches = re.findall(r"models\s*=\s*\[([^\]]+)\]", content)
         for match in array_matches:
             # Extract quoted strings from the array
             array_models = re.findall(r'"([^"]+)"', match)
@@ -189,26 +186,21 @@ def parse_args() -> dict[str, Any]:
     """Parse command line arguments."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Mistral Model Synchronization Tool"
+    parser = argparse.ArgumentParser(description="Mistral Model Synchronization Tool")
+
+    parser.add_argument(
+        "--min-age-seconds", type=int, help="Skip fetching when cache is newer than N seconds"
     )
 
     parser.add_argument(
-        "--min-age-seconds",
-        type=int,
-        help="Skip fetching when cache is newer than N seconds"
+        "--min-age-hours", type=int, help="Skip fetching when cache is newer than N hours"
     )
 
     parser.add_argument(
-        "--min-age-hours",
-        type=int,
-        help="Skip fetching when cache is newer than N hours"
-    )
-
-    parser.add_argument(
-        "--ack", "--acknowledge",
+        "--ack",
+        "--acknowledge",
         action="store_true",
-        help="Update the cache with the latest list from the API"
+        help="Update the cache with the latest list from the API",
     )
 
     args = parser.parse_args()
@@ -220,10 +212,7 @@ def parse_args() -> dict[str, Any]:
     elif args.min_age_hours is not None:
         min_age_seconds = args.min_age_hours * 3600
 
-    return {
-        "min_age_seconds": min_age_seconds,
-        "acknowledge": args.ack or args.acknowledge
-    }
+    return {"min_age_seconds": min_age_seconds, "acknowledge": args.ack or args.acknowledge}
 
 
 def main() -> int:
