@@ -64,21 +64,31 @@ def validate_gate_upstream_match(project_id: str) -> None:
     sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
 
     for other_id, other_url in sharing:
-        if other_url != project.upstream_url:
+        # Treat any difference, including missing upstream_url on either side, as a conflict.
+        if other_url is None or project.upstream_url is None or other_url != project.upstream_url:
+            this_display = project.upstream_url if project.upstream_url is not None else "<not configured>"
+            other_display = other_url if other_url is not None else "<not configured>"
+            missing_note = ""
+            if other_url is None or project.upstream_url is None:
+                missing_note = (
+                    "\nNote: One or more projects sharing this gate do not have an "
+                    "upstream_url configured in project.yml.\n"
+                )
             raise SystemExit(
                 f"Gate path conflict detected!\n"
                 f"\n"
                 f"  Gate path: {project.gate_path}\n"
                 f"\n"
                 f"  This project ({project_id}):\n"
-                f"    upstream_url: {project.upstream_url}\n"
+                f"    upstream_url: {this_display}\n"
                 f"\n"
                 f"  Conflicting project ({other_id}):\n"
-                f"    upstream_url: {other_url}\n"
+                f"    upstream_url: {other_display}\n"
                 f"\n"
                 f"Projects sharing a gate must have the same upstream_url.\n"
                 f"Either change the gate.path in one project's project.yml,\n"
-                f"or ensure both projects point to the same upstream repository."
+                f"or ensure both projects point to the same upstream repository.\n"
+                f"{missing_note}"
             )
 
 
