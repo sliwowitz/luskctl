@@ -179,7 +179,7 @@ if _HAS_TEXTUAL:
                 if not clipboard_status.available:
                     msg = "Clipboard copy unavailable: no clipboard helper found."
                     if clipboard_status.hint:
-                        msg = f"{msg} {clipboard_status.hint}"
+                        msg = f"{msg}\n{clipboard_status.hint}"
                     self.notify(msg, severity="warning", timeout=10)
             except Exception:
                 # Clipboard helpers are best-effort; never block startup.
@@ -636,7 +636,7 @@ if _HAS_TEXTUAL:
             else:
                 msg = result.error or "Failed to copy to clipboard."
                 if result.hint:
-                    msg = f"{msg} {result.hint}"
+                    msg = f"{msg}\n{result.hint}"
                 self.notify(msg)
 
         # ---------- Button presses (forwarded from ProjectActions) ----------
@@ -840,7 +840,7 @@ if _HAS_TEXTUAL:
             else:
                 msg = result.error or "Failed to copy to clipboard."
                 if result.hint:
-                    msg = f"{msg} {result.hint}"
+                    msg = f"{msg}\n{result.hint}"
                 self.notify(msg)
 
         async def action_copy_diff_head(self) -> None:
