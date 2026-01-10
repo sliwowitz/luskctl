@@ -28,7 +28,7 @@ class GateStalenessInfo:
 
 
 def find_projects_sharing_gate(
-    gate_path: Path, exclude_project: str = None
+    gate_path: Path, exclude_project: str | None = None
 ) -> list[tuple[str, str | None]]:
     """Find all projects configured to use the same gate path.
 
