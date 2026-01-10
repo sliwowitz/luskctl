@@ -22,7 +22,7 @@ Readiness is determined by log markers, not port probing. The host follows conta
 - Primary marker: `"Codex UI ("` (the main startup banner when HTTP server is ready)
 - Secondary marker: `"Logging Codex UI activity"` (log redirection message)
 
-This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/codexui-entry.sh` which runs `server.ts` via `tsx` or `ts-node` from the CodexUI repo.
+This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/codexui-entry.sh` which downloads a pre-built CodexUI distribution tarball and runs the production-ready `dist/server.js` via Node.js.
 
 **If the UI server changes its startup behavior or output format**, you may need to adjust:
 - The readiness markers in `src/codexctl/lib/tasks.py` (`_ui_ready` function)

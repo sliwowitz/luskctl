@@ -20,7 +20,8 @@ Layers
    - UI image installs UI dependencies and sets CMD to codexui-entry.sh.
    - codexui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
-     - Syncs the UI repo, installs node dependencies, then starts the UI server.
+     - Downloads a pre-built CodexUI distribution tarball containing production-ready assets and dependencies.
+     - Starts the UI server directly using the pre-built dist/server.js.
      - If REPO_ROOT exists, cd into it so the UI starts in the project root.
 
 2. L2 — project images (<project>:l2-cli, <project>:l2-ui)
