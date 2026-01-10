@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import get_envs_base_dir
-from .projects import _effective_ssh_key_name, load_project
+from .projects import _effective_ssh_key_name, list_projects, load_project
 
 # ---------- Staleness dataclass ----------
 
@@ -22,6 +22,76 @@ class GateStalenessInfo:
     commits_behind: int | None  # None if couldn't determine
     last_checked: str  # ISO timestamp
     error: str | None
+
+
+# ---------- Gate sharing validation ----------
+
+
+def find_projects_sharing_gate(
+    gate_path: Path, exclude_project: str | None = None
+) -> list[tuple[str, str | None]]:
+    """Find all projects configured to use the same gate path.
+
+    Args:
+        gate_path: The gate path to check for
+        exclude_project: Project ID to exclude from results (usually the current project)
+
+    Returns:
+        List of (project_id, upstream_url) tuples for projects sharing this gate
+    """
+    gate_path = gate_path.resolve()
+    sharing = []
+
+    for project in list_projects():
+        if exclude_project and project.id == exclude_project:
+            continue
+        if project.gate_path.resolve() == gate_path:
+            sharing.append((project.id, project.upstream_url))
+
+    return sharing
+
+
+def validate_gate_upstream_match(project_id: str) -> None:
+    """Validate that no other project uses the same gate with a different upstream.
+
+    Raises SystemExit if another project uses the same gate path but has a
+    different upstream_url configured.
+
+    Args:
+        project_id: The project to validate
+    """
+    project = load_project(project_id)
+    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
+
+    for other_id, other_url in sharing:
+        # Treat any difference, including missing upstream_url on either side, as a conflict.
+        if other_url is None or project.upstream_url is None or other_url != project.upstream_url:
+            this_display = (
+                project.upstream_url if project.upstream_url is not None else "<not configured>"
+            )
+            other_display = other_url if other_url is not None else "<not configured>"
+            missing_note = ""
+            if other_url is None or project.upstream_url is None:
+                missing_note = (
+                    "\nNote: One or more projects sharing this gate do not have an "
+                    "upstream_url configured in project.yml.\n"
+                )
+            raise SystemExit(
+                f"Gate path conflict detected!\n"
+                f"\n"
+                f"  Gate path: {project.gate_path}\n"
+                f"\n"
+                f"  This project ({project_id}):\n"
+                f"    upstream_url: {this_display}\n"
+                f"\n"
+                f"  Conflicting project ({other_id}):\n"
+                f"    upstream_url: {other_display}\n"
+                f"\n"
+                f"Projects sharing a gate must have the same upstream_url.\n"
+                f"Either change the gate.path in one project's project.yml,\n"
+                f"or ensure both projects point to the same upstream repository.\n"
+                f"{missing_note}"
+            )
 
 
 # ---------- Git gate initialization (host-side) ----------
@@ -118,6 +188,9 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
     project = load_project(project_id)
     if not project.upstream_url:
         raise SystemExit("Project has no git.upstream_url configured")
+
+    # Validate no other project uses this gate with a different upstream
+    validate_gate_upstream_match(project_id)
 
     gate_dir = project.gate_path
     gate_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -354,6 +427,9 @@ def sync_gate_branches(project_id: str, branches: list[str] = None) -> dict:
 
     if not gate_dir.exists():
         return {"success": False, "updated_branches": [], "errors": ["Gate not initialized"]}
+
+    # Validate no other project uses this gate with a different upstream
+    validate_gate_upstream_match(project_id)
 
     env = _git_env_with_ssh(project)
     errors = []

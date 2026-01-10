@@ -7,11 +7,13 @@ from pathlib import Path
 
 from codexctl.lib.git_gate import (
     compare_gate_vs_upstream,
+    find_projects_sharing_gate,
     get_gate_branch_head,
     get_gate_last_commit,
     get_upstream_head,
     init_project_gate,
     sync_gate_branches,
+    validate_gate_upstream_match,
 )
 from test_utils import write_project
 
@@ -984,3 +986,263 @@ git:
                 self.assertTrue(result["success"])
                 self.assertEqual(result["updated_branches"], ["main", "develop"])
                 self.assertEqual(result["errors"], [])
+
+    def test_sync_gate_branches_rejects_mismatched_upstream(self) -> None:
+        """Test sync_gate_branches refuses when another project uses gate with different upstream."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "sync-conflict.git"
+            shared_gate.mkdir(parents=True, exist_ok=True)
+
+            # Create existing project with gate
+            write_project(
+                config_root,
+                "existing-proj",
+                f"""
+project:
+  id: existing-proj
+git:
+  upstream_url: https://github.com/org/existing-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            # Create new project trying to use same gate with different upstream
+            write_project(
+                config_root,
+                "new-proj",
+                f"""
+project:
+  id: new-proj
+git:
+  upstream_url: https://github.com/org/different-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    sync_gate_branches("new-proj")
+
+                error_msg = str(ctx.exception)
+                self.assertIn("Gate path conflict", error_msg)
+                self.assertIn("existing-proj", error_msg)
+
+    # Tests for gate sharing validation
+    def test_find_projects_sharing_gate(self) -> None:
+        """Test finding projects that share a gate path."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "shared.git"
+
+            # Create two projects sharing the same gate
+            write_project(
+                config_root,
+                "proj-a",
+                f"""
+project:
+  id: proj-a
+git:
+  upstream_url: https://github.com/org/repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            write_project(
+                config_root,
+                "proj-b",
+                f"""
+project:
+  id: proj-b
+git:
+  upstream_url: https://github.com/org/repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                # Find projects sharing the gate, excluding proj-a
+                sharing = find_projects_sharing_gate(shared_gate, exclude_project="proj-a")
+
+                self.assertEqual(len(sharing), 1)
+                self.assertEqual(sharing[0][0], "proj-b")
+                self.assertEqual(sharing[0][1], "https://github.com/org/repo.git")
+
+    def test_validate_gate_upstream_match_same_url(self) -> None:
+        """Test validation passes when projects share gate with same upstream."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "shared.git"
+
+            # Create two projects sharing the same gate AND same upstream
+            write_project(
+                config_root,
+                "proj-same-a",
+                f"""
+project:
+  id: proj-same-a
+git:
+  upstream_url: https://github.com/org/repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            write_project(
+                config_root,
+                "proj-same-b",
+                f"""
+project:
+  id: proj-same-b
+git:
+  upstream_url: https://github.com/org/repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                # Should not raise - same upstream URL
+                validate_gate_upstream_match("proj-same-a")
+                validate_gate_upstream_match("proj-same-b")
+
+    def test_validate_gate_upstream_match_different_url_fails(self) -> None:
+        """Test validation fails when projects share gate with different upstreams."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "conflict.git"
+
+            # Create two projects sharing the same gate but DIFFERENT upstreams
+            write_project(
+                config_root,
+                "proj-conflict-a",
+                f"""
+project:
+  id: proj-conflict-a
+git:
+  upstream_url: https://github.com/org/repo-A.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            write_project(
+                config_root,
+                "proj-conflict-b",
+                f"""
+project:
+  id: proj-conflict-b
+git:
+  upstream_url: https://github.com/org/repo-B.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                # Should raise SystemExit with helpful error message
+                with self.assertRaises(SystemExit) as ctx:
+                    validate_gate_upstream_match("proj-conflict-a")
+
+                error_msg = str(ctx.exception)
+                self.assertIn("Gate path conflict detected", error_msg)
+                self.assertIn("proj-conflict-a", error_msg)
+                self.assertIn("proj-conflict-b", error_msg)
+                self.assertIn("repo-A.git", error_msg)
+                self.assertIn("repo-B.git", error_msg)
+
+    def test_init_project_gate_rejects_mismatched_upstream(self) -> None:
+        """Test init_project_gate refuses when another project uses gate with different upstream."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "init-conflict.git"
+
+            # Create existing project with gate
+            write_project(
+                config_root,
+                "existing-proj",
+                f"""
+project:
+  id: existing-proj
+git:
+  upstream_url: https://github.com/org/existing-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            # Create new project trying to use same gate with different upstream
+            write_project(
+                config_root,
+                "new-proj",
+                f"""
+project:
+  id: new-proj
+git:
+  upstream_url: https://github.com/org/different-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    init_project_gate("new-proj")
+
+                error_msg = str(ctx.exception)
+                self.assertIn("Gate path conflict", error_msg)
+                self.assertIn("existing-proj", error_msg)
