@@ -48,7 +48,7 @@ Expected contents of the optional SSH config directory
 
 How to create this directory automatically
 - Use the helper command:
-  - codexctl ssh-init <project_id> [--key-type ed25519|rsa] [`--key-name` NAME] [--force]
+  - codexctl ssh-init <project_id> \[--key-type ed25519|rsa\] \[--key-name NAME\] \[--force\]
 - What it does:
   - Resolves the target directory for <project_id> as:
     - If <project>/project.yml sets ssh.host_dir → use it; otherwise
