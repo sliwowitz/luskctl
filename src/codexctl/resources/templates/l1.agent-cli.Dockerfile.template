@@ -17,9 +17,10 @@ RUN set -eux; \
     npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 
-# Install mistral-vibe using pipx as root, ensuring PATH is set up
+# Install mistral-vibe and mistralai SDK using pipx as root, ensuring PATH is set up
 RUN set -eux; \
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mistral-vibe
+    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mistral-vibe; \
+    pipx inject mistral-vibe mistralai
 
 # Install OpenCode CLI (used by the Blablador wrapper)
 RUN set -eux; \
@@ -32,7 +33,8 @@ RUN chmod +x /usr/local/bin/setup-codex-auth.sh
 
 # Copy blablador wrapper (OpenCode-based)
 COPY scripts/blablador /usr/local/bin/blablador
-RUN chmod +x /usr/local/bin/blablador
+COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
+RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
 
 RUN set -eux; \
     printf '%s\n' \
@@ -55,7 +57,9 @@ RUN set -eux; \
       printf '\n# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
     else \
       printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
-    fi
+    fi; \
+    # Add Mistral model sync to bashrc (only for interactive shells)
+    printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
 USER dev
 # No CMD: reuse init-ssh-and-repo.sh from base image

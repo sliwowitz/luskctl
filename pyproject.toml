@@ -38,6 +38,7 @@ python = ">=3.12,<4.0"
 PyYAML = ">=6.0"
 textual = ">=6.6"
 argcomplete = ">=3.1"
+requests = ">=2.31"
 
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "^253.28294.166"
