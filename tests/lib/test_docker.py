@@ -115,4 +115,7 @@ class DockerTests(unittest.TestCase):
 
                 content = l1_cli.read_text(encoding="utf-8")
                 # Verify that pipx inject has PIPX_HOME and PIPX_BIN_DIR set
-                self.assertIn("PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject mistral-vibe mistralai", content)
+                self.assertIn(
+                    "PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject mistral-vibe mistralai",
+                    content,
+                )
