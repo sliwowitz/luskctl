@@ -6,6 +6,7 @@ Overview
   - Shared credentials/config for Codex under /home/dev/.codex
   - Shared credentials/config for Claude Code under /home/dev/.claude
   - Shared credentials/config for Mistral Vibe under /home/dev/.vibe
+  - Shared credentials/config for Blablador (OpenCode) under /home/dev/.blablador
   - Optional per‑project SSH configuration under /home/dev/.ssh (read‑write)
 
 Per‑task workspace (required)
@@ -30,7 +31,10 @@ Shared envs base directory (configurable)
   3) _vibe-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_vibe-config → /home/dev/.vibe:Z (read‑write)
      - Purpose: Shared credentials/config used by Mistral Vibe (CLI + UI).
-  4) _ssh-config-<project_id> (optional)
+  4) _blablador-config (required; created automatically if missing)
+     - Mounted as: <base_dir>/_blablador-config → /home/dev/.blablador:Z (read‑write)
+     - Purpose: Shared credentials/config used by Blablador (OpenCode wrapper) inside the containers.
+  5) _ssh-config-<project_id> (optional)
      - Mounted as: <base_dir>/_ssh-config-<project_id> → /home/dev/.ssh:Z (read‑write)
      - Purpose: If your project uses private git URLs (e.g. git@github.com:...), provide SSH keys and config here so the container can fetch the repository.
 
@@ -88,10 +92,11 @@ Git identity configuration
 - This approach ensures commits show both the AI agent (author) and the human supervisor (committer).
 
 Quick reference (runtime mounts)
-- /workspace          ← <state_root>/tasks/<project>/<task>/workspace:Z
+- /workspace              ← <state_root>/tasks/<project>/<task>/workspace:Z
 - /home/dev/.codex        ← <envs_base>/_codex-config:Z
 - /home/dev/.claude       ← <envs_base>/_claude-config:Z
 - /home/dev/.vibe         ← <envs_base>/_vibe-config:Z
+- /home/dev/.blablador    ← <envs_base>/_blablador-config:Z
 - /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z
 
 How codexctl discovers these paths
@@ -100,10 +105,11 @@ How codexctl discovers these paths
 
 Minimal setup to run tasks
 1) Ensure codexctl can write to the state root (or set CODEXCTL_STATE_DIR accordingly).
-2) Optionally create the envs base dir (codexctl will create _codex-config, _claude-config, and _vibe-config automatically if missing):
+2) Optionally create the envs base dir (codexctl will create these directories automatically if missing):
    - sudo mkdir -p /var/lib/codexctl/envs/_codex-config
    - sudo mkdir -p /var/lib/codexctl/envs/_claude-config
    - sudo mkdir -p /var/lib/codexctl/envs/_vibe-config
+   - sudo mkdir -p /var/lib/codexctl/envs/_blablador-config
 3) If using private git repositories for a project <proj>:
    - sudo mkdir -p /var/lib/codexctl/envs/_ssh-config-<proj>
    - Place SSH keys and config there (see above). Keys must match your repo host.
@@ -111,8 +117,9 @@ Minimal setup to run tasks
 Notes
 - The SSH directory is optional. Public HTTPS repos do not require it.
 - The .codex directory is mounted read‑write and should contain any credentials/config required by Codex tooling.
-- The .claude directory is mounted read‑write and should contain any credentials/config required by Claude Code (CLI only).
+- The .claude directory is mounted read‑write and should contain any credentials/config required by Claude Code.
 - The .vibe directory is mounted read‑write and should contain any credentials/config required by Mistral Vibe.
+- The .blablador directory is mounted read‑write and should contain any credentials/config required by Blablador (OpenCode).
 - Both CLI and UI containers mount the same paths and start with the working directory set to /workspace.
 
 See also
