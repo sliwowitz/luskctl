@@ -46,7 +46,8 @@ if _HAS_TEXTUAL:
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
         UI_BACKENDS,
-        copy_to_clipboard,
+        copy_to_clipboard_detailed,
+        get_clipboard_helper_status,
         get_tasks,
         get_workspace_git_diff,
         task_delete,
@@ -172,6 +173,17 @@ if _HAS_TEXTUAL:
                 self._status_bar = self.query_one("#status-bar", StatusBar)
             except Exception:
                 self._status_bar = None
+
+            try:
+                clipboard_status = get_clipboard_helper_status()
+                if not clipboard_status.available:
+                    msg = "Clipboard copy unavailable: no clipboard helper found."
+                    if clipboard_status.hint:
+                        msg = f"{msg}\n{clipboard_status.hint}"
+                    self.notify(msg, severity="warning", timeout=10)
+            except Exception:
+                # Clipboard helpers are best-effort; never block startup.
+                pass
 
             await self.refresh_projects()
             # Defer layout logging until after the first refresh cycle so
@@ -618,11 +630,14 @@ if _HAS_TEXTUAL:
                 return
 
             # Try to copy to clipboard
-            success = copy_to_clipboard(diff)
-            if success:
+            result = copy_to_clipboard_detailed(diff)
+            if result.ok:
                 self.notify(f"Git diff copied to clipboard ({len(diff)} characters)")
             else:
-                self.notify("Failed to copy to clipboard. Clipboard utility not found.")
+                msg = result.error or "Failed to copy to clipboard."
+                if result.hint:
+                    msg = f"{msg}\n{result.hint}"
+                self.notify(msg)
 
         # ---------- Button presses (forwarded from ProjectActions) ----------
 
@@ -819,11 +834,14 @@ if _HAS_TEXTUAL:
                 self.notify("No changes to copy (working tree clean).")
                 return
 
-            success = copy_to_clipboard(diff)
-            if success:
+            result = copy_to_clipboard_detailed(diff)
+            if result.ok:
                 self.notify(f"Git diff vs {label} copied to clipboard ({len(diff)} characters)")
             else:
-                self.notify("Failed to copy to clipboard. Clipboard utility not found.")
+                msg = result.error or "Failed to copy to clipboard."
+                if result.hint:
+                    msg = f"{msg}\n{result.hint}"
+                self.notify(msg)
 
         async def action_copy_diff_head(self) -> None:
             """Copy git diff vs HEAD to clipboard."""
