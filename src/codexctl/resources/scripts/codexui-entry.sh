@@ -36,36 +36,20 @@ if command -v git >/dev/null 2>&1 && [[ -n "${CODEXUI_BACKEND:-}" ]]; then
 fi
 
 : "${CODEXUI_DIR:=/opt/codexui}"
-: "${CODEXUI_REPO:=https://github.com/sliwowitz/codex-in-podman.git}"
+: "${CODEXUI_DIST_URL:=https://github.com/sliwowitz/codex-in-podman/releases/download/latest/codexui-dist.tar.gz}"
 : "${HOST:=0.0.0.0}"
 : "${PORT:=7860}"
 
-echo ">> syncing CodexUI repo ${CODEXUI_REPO} -> ${CODEXUI_DIR}"
-if [[ ! -d "${CODEXUI_DIR}/.git" ]]; then
-  git clone --depth=1 "${CODEXUI_REPO}" "${CODEXUI_DIR}"
-else
-  git -C "${CODEXUI_DIR}" fetch --all --prune
-  git -C "${CODEXUI_DIR}" reset --hard origin/main || git -C "${CODEXUI_DIR}" reset --hard origin/master
-fi
+echo ">> fetching CodexUI release asset ${CODEXUI_DIST_URL}"
+mkdir -p "${CODEXUI_DIR}"
+curl -fsSL "${CODEXUI_DIST_URL}" -o /tmp/codexui-dist.tar.gz
+tar -xzf /tmp/codexui-dist.tar.gz -C "${CODEXUI_DIR}"
 
 cd "${CODEXUI_DIR}"
-ui_entry_js="${CODEXUI_DIR}/server.js"
-ui_entry_ts="${CODEXUI_DIR}/server.ts"
-ui_entry=""
-if [[ -f "${ui_entry_js}" ]]; then
-  ui_entry="${ui_entry_js}"
-elif [[ -f "${ui_entry_ts}" ]]; then
-  ui_entry="${ui_entry_ts}"
-else
-  echo "!! no UI entrypoint found (expected server.js or server.ts)."
+ui_entry="${CODEXUI_DIR}/dist/server.js"
+if [[ ! -f "${ui_entry}" ]]; then
+  echo "!! no UI entrypoint found (expected dist/server.js)."
   exit 1
-fi
-
-echo ">> npm install (include dev for TypeScript)"
-if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
-  npm ci --no-fund --no-audit --progress=false
-else
-  npm install --no-fund --no-audit --progress=false
 fi
 
 # If a task workspace repository exists, prefer that as working directory
@@ -75,32 +59,11 @@ if [[ -n "${REPO_ROOT:-}" && -d "${REPO_ROOT}" ]]; then
 fi
 
 # Always run the UI server from the CodexUI repo, even if the working
-# directory is the task workspace. This ensures that server.ts/server.js is
+# directory is the task workspace. This ensures that dist/server.js is
 # resolved from CODEXUI_DIR while allowing the UI to treat the workspace as
 # its current directory (for project-specific files, etc.).
-ui_args=()
 if [[ -z "${CODEXUI_LOG:-}" && ! -w /var/log ]]; then
   export CODEXUI_LOG="/tmp/codexui.log"
 fi
-if [[ "${ui_entry}" == "${ui_entry_js}" ]]; then
-  ui_runner="node"
-else
-  if [[ -x "${CODEXUI_DIR}/node_modules/.bin/tsx" ]]; then
-    ui_runner="${CODEXUI_DIR}/node_modules/.bin/tsx"
-    if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
-      ui_args+=(--tsconfig "${CODEXUI_DIR}/tsconfig.json")
-    fi
-  elif [[ -f "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs" ]]; then
-    ui_runner="node"
-    ui_args+=(--loader "${CODEXUI_DIR}/node_modules/ts-node/esm.mjs")
-    if [[ -f "${CODEXUI_DIR}/tsconfig.json" ]]; then
-      : "${TS_NODE_PROJECT:=${CODEXUI_DIR}/tsconfig.json}"
-      export TS_NODE_PROJECT
-    fi
-  else
-    echo "!! TypeScript entrypoint found but no tsx/ts-node runner is installed."
-    exit 1
-  fi
-fi
-echo ">> starting UI on ${HOST}:${PORT} (server: ${ui_entry})"
-exec "${ui_runner}" "${ui_args[@]}" "${ui_entry}"
+echo ">> starting UI on ${HOST}:${PORT}"
+exec node "${ui_entry}"
