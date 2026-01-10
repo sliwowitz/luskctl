@@ -33,7 +33,9 @@ class TaskTests(unittest.TestCase):
             return "/usr/bin/xclip" if name == "xclip" else None
 
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", side_effect=which_side_effect):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", side_effect=which_side_effect
+            ):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                     result = copy_to_clipboard_detailed("hello")
@@ -563,8 +565,12 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_success_wl_copy(self) -> None:
         """Test copy_to_clipboard succeeds with wl-copy."""
-        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/wl-copy"):
+        with unittest.mock.patch.dict(
+            os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
+        ):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/wl-copy"
+            ):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
@@ -582,7 +588,9 @@ class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
         """Test copy_to_clipboard uses xclip on X11 when available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/xclip"):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/xclip"
+            ):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
@@ -596,7 +604,9 @@ class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard uses pbcopy on macOS."""
         with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+            ):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
@@ -610,14 +620,19 @@ class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_all_fail(self) -> None:
         """Test copy_to_clipboard returns False when all clipboard utilities fail."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+
             def which_side_effect(name: str):
                 if name in ("xclip", "xsel"):
                     return f"/usr/bin/{name}"
                 return None
 
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", side_effect=which_side_effect):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", side_effect=which_side_effect
+            ):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
-                    run_mock.side_effect = subprocess.CalledProcessError(1, ["xclip"], stderr="boom")
+                    run_mock.side_effect = subprocess.CalledProcessError(
+                        1, ["xclip"], stderr="boom"
+                    )
 
                     result = copy_to_clipboard("test content")
                     self.assertFalse(result)

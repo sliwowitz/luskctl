@@ -81,7 +81,9 @@ def _clipboard_install_hint() -> str:
         return ""
 
     # Wayland vs X11 is fuzzy; provide a useful Ubuntu/Debian hint.
-    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(
+        os.environ.get("WAYLAND_DISPLAY")
+    )
     x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
 
     if wayland and not x11:
@@ -101,7 +103,9 @@ def _clipboard_candidates() -> list[tuple[str, list[str]]]:
         candidates.append(("clip", ["clip"]))
         return candidates
 
-    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(os.environ.get("WAYLAND_DISPLAY"))
+    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(
+        os.environ.get("WAYLAND_DISPLAY")
+    )
     x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
 
     if wayland:
@@ -148,7 +152,9 @@ def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
     available = [(name, cmd) for name, cmd in candidates if shutil.which(cmd[0])]
     if not available:
         hint = _clipboard_install_hint()
-        return ClipboardCopyResult(ok=False, error="No clipboard helper found on PATH.", hint=hint or None)
+        return ClipboardCopyResult(
+            ok=False, error="No clipboard helper found on PATH.", hint=hint or None
+        )
 
     errors: list[str] = []
     for name, cmd in available:
@@ -162,7 +168,9 @@ def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
             errors.append(f"{name} error: {e}")
 
     hint = _clipboard_install_hint()
-    return ClipboardCopyResult(ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None)
+    return ClipboardCopyResult(
+        ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None
+    )
 
 
 def copy_to_clipboard(text: str) -> bool:
