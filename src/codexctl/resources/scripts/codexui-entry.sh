@@ -43,9 +43,21 @@ fi
 echo ">> fetching CodexUI release asset ${CODEXUI_DIST_URL}"
 mkdir -p "${CODEXUI_DIR}"
 curl -fsSL "${CODEXUI_DIST_URL}" -o /tmp/codexui-dist.tar.gz
-tar -xzf /tmp/codexui-dist.tar.gz -C "${CODEXUI_DIR}"
-rm -f /tmp/codexui-dist.tar.gz
+tarball_path="/tmp/codexui-dist.tar.gz"
+curl -fsSL "${CODEXUI_DIST_URL}" -o "${tarball_path}"
 
+# Validate that the download succeeded and the archive is usable
+if [[ ! -s "${tarball_path}" ]]; then
+  echo "!! failed to download CodexUI distribution (file is missing or empty): ${tarball_path}"
+  exit 1
+fi
+
+if ! tar -tzf "${tarball_path}" >/dev/null 2>&1; then
+  echo "!! downloaded CodexUI archive appears to be corrupted or not a valid tar.gz: ${tarball_path}"
+  exit 1
+fi
+
+tar -xzf "${tarball_path}" -C "${CODEXUI_DIR}"
 cd "${CODEXUI_DIR}"
 ui_entry="${CODEXUI_DIR}/dist/server.js"
 if [[ ! -f "${ui_entry}" ]]; then
