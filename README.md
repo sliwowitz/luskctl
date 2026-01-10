@@ -1,5 +1,7 @@
 # Quick start
 
+> **Future plans and design documents** are collected in [`docs/brainstorming/`](docs/brainstorming/).
+
  * pre-requisites
    * set up podman (e.g. `~/.config/containers/storage.conf`)
  * install to venv
