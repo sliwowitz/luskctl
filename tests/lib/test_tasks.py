@@ -11,6 +11,7 @@ from codexctl.lib.tasks import (
     _build_task_env_and_volumes,
     copy_to_clipboard,
     copy_to_clipboard_detailed,
+    get_clipboard_helper_status,
     get_workspace_git_diff,
     task_delete,
     task_new,
@@ -602,7 +603,7 @@ class TaskTests(unittest.TestCase):
                     self.assertEqual(args[0][0], "xclip")
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
-        """Test copy_to_clipboard uses pbcopy on macOS."""
+        """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
         with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
             with unittest.mock.patch(
                 "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
@@ -610,15 +611,16 @@ class TaskTests(unittest.TestCase):
                 with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-                    result = copy_to_clipboard("test content")
-                    self.assertTrue(result)
+                    result = copy_to_clipboard_detailed("test content")
+                    self.assertTrue(result.ok)
+                    self.assertEqual(result.method, "pbcopy")
 
                     run_mock.assert_called_once()
                     args, _kwargs = run_mock.call_args
                     self.assertEqual(args[0][0], "pbcopy")
 
     def test_copy_to_clipboard_all_fail(self) -> None:
-        """Test copy_to_clipboard returns False when all clipboard utilities fail."""
+        """Test copy_to_clipboard_detailed returns proper error when all clipboard utilities fail."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
 
             def which_side_effect(name: str):
@@ -634,10 +636,43 @@ class TaskTests(unittest.TestCase):
                         1, ["xclip"], stderr="boom"
                     )
 
-                    result = copy_to_clipboard("test content")
-                    self.assertFalse(result)
+                    result = copy_to_clipboard_detailed("test content")
+                    self.assertFalse(result.ok)
+                    self.assertIsNotNone(result.error)
+                    self.assertIn("failed", result.error)
 
                     self.assertEqual(run_mock.call_count, 2)
+
+    def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
+        """Test get_clipboard_helper_status returns available helpers on macOS."""
+        with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
+            with unittest.mock.patch(
+                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+            ):
+                status = get_clipboard_helper_status()
+                self.assertTrue(status.available)
+                self.assertIn("pbcopy", status.available)
+                self.assertIsNone(status.hint)
+
+    def test_get_clipboard_helper_status_no_helpers_wayland(self) -> None:
+        """Test get_clipboard_helper_status returns hint for Wayland when no helpers available."""
+        with unittest.mock.patch.dict(
+            os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
+        ):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+                status = get_clipboard_helper_status()
+                self.assertEqual(status.available, ())
+                self.assertIsNotNone(status.hint)
+                self.assertIn("wl-clipboard", status.hint)
+
+    def test_get_clipboard_helper_status_no_helpers_x11(self) -> None:
+        """Test get_clipboard_helper_status returns hint for X11 when no helpers available."""
+        with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
+            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+                status = get_clipboard_helper_status()
+                self.assertEqual(status.available, ())
+                self.assertIsNotNone(status.hint)
+                self.assertIn("xclip", status.hint)
 
     def test_build_task_env_gatekeeping_expose_external_remote_enabled(self) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""

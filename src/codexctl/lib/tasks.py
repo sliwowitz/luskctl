@@ -139,11 +139,62 @@ def get_clipboard_helper_status() -> ClipboardHelperStatus:
 
 
 def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
-    """Copy text to the system clipboard.
+    """Copy text to the system clipboard and return a detailed result.
 
-    Prefers native OS clipboard helpers when available.
-    On Linux, users may need to install a helper (e.g., wl-clipboard on Wayland
-    or xclip/xsel on X11).
+    Prefers native OS clipboard helpers when available. On Linux, users may
+    need to install a helper (for example, ``wl-clipboard`` on Wayland or
+    ``xclip``/``xsel`` on X11).
+
+    Args:
+        text: The text to copy to the system clipboard. If this is an empty
+            string, the function will not invoke any clipboard helper and will
+            return a failure result.
+
+    Returns:
+        ClipboardCopyResult: A dataclass describing the outcome:
+
+            * ``ok``: ``True`` if the text was successfully written to the
+              clipboard using one of the available helpers; ``False`` if all
+              helpers failed or no helper was available, or if ``text`` was
+              empty.
+            * ``method``: The name of the clipboard helper that succeeded
+              (for example, ``"pbcopy"``, ``"wl-copy"``, or ``"xclip"``) when
+              ``ok`` is ``True``. ``None`` if no helper was run or all helpers
+              failed.
+            * ``error``: A human-readable error message describing why the
+              copy failed when ``ok`` is ``False``. This is ``"Nothing to copy."``
+              when ``text`` is empty, ``"No clipboard helper found on PATH."``
+              when no helper is available, or the last recorded helper failure
+              message when all helpers fail.
+            * ``hint``: An optional hint string with guidance on how to enable
+              clipboard support on the current platform (for example, a command
+              to install a missing helper). This is typically populated when no
+              helper is available or when all helpers fail, and is ``None`` on
+              successful copies.
+
+    Examples:
+        Basic usage with boolean check::
+
+            result = copy_to_clipboard_detailed("hello world")
+            if result.ok:
+                print(f"Copied to clipboard using {result.method}")
+            else:
+                print(f"Copy failed: {result.error}")
+                if result.hint:
+                    print(result.hint)
+
+        Handling the case where no clipboard helper is installed::
+
+            result = copy_to_clipboard_detailed("some text")
+            if not result.ok and result.error == "No clipboard helper found on PATH.":
+                # result.hint may contain a command to install a suitable helper.
+                print(result.hint or "Install a clipboard helper for your system.")
+
+        Handling an empty string (nothing to copy)::
+
+            result = copy_to_clipboard_detailed("")
+            assert not result.ok
+            assert result.error == "Nothing to copy."
     """
     if not text:
         return ClipboardCopyResult(ok=False, error="Nothing to copy.")
