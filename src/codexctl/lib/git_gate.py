@@ -66,7 +66,9 @@ def validate_gate_upstream_match(project_id: str) -> None:
     for other_id, other_url in sharing:
         # Treat any difference, including missing upstream_url on either side, as a conflict.
         if other_url is None or project.upstream_url is None or other_url != project.upstream_url:
-            this_display = project.upstream_url if project.upstream_url is not None else "<not configured>"
+            this_display = (
+                project.upstream_url if project.upstream_url is not None else "<not configured>"
+            )
             other_display = other_url if other_url is not None else "<not configured>"
             missing_note = ""
             if other_url is None or project.upstream_url is None:
