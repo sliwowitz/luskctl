@@ -22,6 +22,7 @@ class GitGateTests(unittest.TestCase):
             base = Path(td)
             config_root = base / "config"
             envs_dir = base / "envs"
+            state_dir = base / "state"
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj6"
@@ -40,6 +41,7 @@ class GitGateTests(unittest.TestCase):
                     {
                         "CODEXCTL_CONFIG_DIR": str(config_root),
                         "CODEXCTL_CONFIG_FILE": str(config_file),
+                        "CODEXCTL_STATE_DIR": str(state_dir),
                     },
                 ),
                 self.assertRaises(SystemExit),

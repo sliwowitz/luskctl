@@ -5,7 +5,7 @@ import unittest.mock
 from pathlib import Path
 
 from codexctl.lib.ssh import init_project_ssh
-from test_utils import write_project
+from test_utils import mock_git_config, write_project
 
 
 class SshTests(unittest.TestCase):
@@ -28,9 +28,12 @@ class SshTests(unittest.TestCase):
             (ssh_dir / key_name).write_text("dummy", encoding="utf-8")
             (ssh_dir / f"{key_name}.pub").write_text("dummy", encoding="utf-8")
 
-            with unittest.mock.patch.dict(os.environ, {"CODEXCTL_CONFIG_DIR": str(config_root)}):
-                with unittest.mock.patch("codexctl.lib.ssh.subprocess.run") as run_mock:
-                    result = init_project_ssh(project_id, key_name=key_name)
+            with (
+                unittest.mock.patch.dict(os.environ, {"CODEXCTL_CONFIG_DIR": str(config_root)}),
+                mock_git_config(),
+                unittest.mock.patch("codexctl.lib.ssh.subprocess.run") as run_mock,
+            ):
+                result = init_project_ssh(project_id, key_name=key_name)
 
                 run_mock.assert_not_called()
                 cfg_path = Path(result["config_path"])
