@@ -4,6 +4,8 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).
 
+> Similar project also listed on https://github.com/milisp/awesome-codex-cli
+
 ## Documentation
 
 | Document | Description |
