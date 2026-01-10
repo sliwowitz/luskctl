@@ -2,7 +2,9 @@
 ARG BASE_IMAGE=codexctl-l0:latest
 FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIPX_HOME=/opt/pipx \
+    PIPX_BIN_DIR=/usr/local/bin
 
 USER root
 RUN set -eux; \
@@ -19,8 +21,8 @@ RUN set -eux; \
 
 # Install mistral-vibe and mistralai SDK using pipx as root, ensuring PATH is set up
 RUN set -eux; \
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install mistral-vibe; \
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject mistral-vibe mistralai
+    pipx install mistral-vibe; \
+    pipx inject mistral-vibe mistralai
 
 # Install OpenCode CLI (used by the Blablador wrapper)
 RUN set -eux; \

@@ -88,7 +88,7 @@ class DockerTests(unittest.TestCase):
                 self.assertNotIn('CODE_REPO="https://example.com/repo.git"', content)
 
     def test_l1_cli_pipx_inject_has_env_vars(self) -> None:
-        """Verify that pipx inject uses the same environment variables as pipx install."""
+        """Verify that PIPX environment variables are set globally and pipx commands use them."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -114,8 +114,9 @@ class DockerTests(unittest.TestCase):
                 l1_cli = out_dir / "L1.cli.Dockerfile"
 
                 content = l1_cli.read_text(encoding="utf-8")
-                # Verify that pipx inject has PIPX_HOME and PIPX_BIN_DIR set
-                self.assertIn(
-                    "PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject mistral-vibe mistralai",
-                    content,
-                )
+                # Verify that PIPX_HOME and PIPX_BIN_DIR are set as ENV variables
+                self.assertIn("PIPX_HOME=/opt/pipx", content)
+                self.assertIn("PIPX_BIN_DIR=/usr/local/bin", content)
+                # Verify that pipx commands use these environment variables (no inline vars)
+                self.assertIn("pipx install mistral-vibe", content)
+                self.assertIn("pipx inject mistral-vibe mistralai", content)
