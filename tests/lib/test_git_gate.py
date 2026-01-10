@@ -987,6 +987,59 @@ git:
                 self.assertEqual(result["updated_branches"], ["main", "develop"])
                 self.assertEqual(result["errors"], [])
 
+    def test_sync_gate_branches_rejects_mismatched_upstream(self) -> None:
+        """Test sync_gate_branches refuses when another project uses gate with different upstream."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            shared_gate = state_dir / "gate" / "sync-conflict.git"
+            shared_gate.mkdir(parents=True, exist_ok=True)
+
+            # Create existing project with gate
+            write_project(
+                config_root,
+                "existing-proj",
+                f"""
+project:
+  id: existing-proj
+git:
+  upstream_url: https://github.com/org/existing-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            # Create new project trying to use same gate with different upstream
+            write_project(
+                config_root,
+                "new-proj",
+                f"""
+project:
+  id: new-proj
+git:
+  upstream_url: https://github.com/org/different-repo.git
+gate:
+  path: {shared_gate}
+""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "CODEXCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    sync_gate_branches("new-proj")
+
+                error_msg = str(ctx.exception)
+                self.assertIn("Gate path conflict", error_msg)
+                self.assertIn("existing-proj", error_msg)
+
     # Tests for gate sharing validation
     def test_find_projects_sharing_gate(self) -> None:
         """Test finding projects that share a gate path."""
