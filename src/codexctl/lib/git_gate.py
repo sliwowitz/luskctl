@@ -1,32 +1,31 @@
-from __future__ import annotations
-
 import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from .config import get_envs_base_dir
 from .projects import _effective_ssh_key_name, load_project
 
-
 # ---------- Staleness dataclass ----------
+
 
 @dataclass
 class GateStalenessInfo:
     """Result of comparing gate vs upstream."""
+
     branch: str
-    gate_head: Optional[str]
-    upstream_head: Optional[str]
+    gate_head: str | None
+    upstream_head: str | None
     is_stale: bool
-    commits_behind: Optional[int]  # None if couldn't determine
+    commits_behind: int | None  # None if couldn't determine
     last_checked: str  # ISO timestamp
-    error: Optional[str]
+    error: str | None
 
 
 # ---------- Git gate initialization (host-side) ----------
+
 
 def _git_env_with_ssh(project) -> dict:
     """Return an env that forces git to use the project's SSH config only.
@@ -57,7 +56,7 @@ def _git_env_with_ssh(project) -> dict:
     return env
 
 
-def get_gate_last_commit(project_id: str) -> Optional[dict]:
+def get_gate_last_commit(project_id: str) -> dict | None:
     """Get information about the last commit in the gate repository.
 
     Returns a dict with keys: commit_hash, commit_date, commit_message, commit_author,
@@ -78,9 +77,13 @@ def get_gate_last_commit(project_id: str) -> Optional[dict]:
         # Get the last commit info from the default branch
         # We use git log with specific format to get structured data
         cmd = [
-            "git", "-C", str(gate_dir), "log",
-            "-1", "--pretty=format:%H|%ad|%s|%an",
-            "--date=iso"
+            "git",
+            "-C",
+            str(gate_dir),
+            "log",
+            "-1",
+            "--pretty=format:%H|%ad|%s|%an",
+            "--date=iso",
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
@@ -94,7 +97,7 @@ def get_gate_last_commit(project_id: str) -> Optional[dict]:
                 "commit_hash": parts[0],
                 "commit_date": parts[1],
                 "commit_message": parts[2],
-                "commit_author": parts[3]
+                "commit_author": parts[3],
             }
         return None
 
@@ -166,7 +169,9 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
     else:
         # Update existing mirror
         try:
-            subprocess.run(["git", "-C", str(gate_dir), "remote", "update", "--prune"], check=True, env=env)
+            subprocess.run(
+                ["git", "-C", str(gate_dir), "remote", "update", "--prune"], check=True, env=env
+            )
         except subprocess.CalledProcessError as e:
             raise SystemExit(f"git remote update failed: {e}")
 
@@ -175,7 +180,8 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
 
 # ---------- Upstream comparison functions ----------
 
-def get_upstream_head(project_id: str, branch: str = None) -> Optional[dict]:
+
+def get_upstream_head(project_id: str, branch: str = None) -> dict | None:
     """Query upstream HEAD ref using git ls-remote (cheap, no object download).
 
     Args:
@@ -196,9 +202,7 @@ def get_upstream_head(project_id: str, branch: str = None) -> Optional[dict]:
 
         # git ls-remote only queries refs, doesn't download objects
         cmd = ["git", "ls-remote", project.upstream_url, f"refs/heads/{branch}"]
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, env=env, timeout=30
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=30)
 
         if result.returncode != 0:
             return None
@@ -208,7 +212,7 @@ def get_upstream_head(project_id: str, branch: str = None) -> Optional[dict]:
         if not line:
             return None
 
-        parts = line.split('\t')
+        parts = line.split("\t")
         if len(parts) >= 2:
             return {
                 "commit_hash": parts[0],
@@ -221,7 +225,7 @@ def get_upstream_head(project_id: str, branch: str = None) -> Optional[dict]:
         return None
 
 
-def get_gate_branch_head(project_id: str, branch: str = None) -> Optional[str]:
+def get_gate_branch_head(project_id: str, branch: str = None) -> str | None:
     """Get the commit hash for a specific branch in the gate.
 
     Args:
@@ -277,7 +281,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
             is_stale=False,
             commits_behind=None,
             last_checked=now,
-            error="Gate not initialized"
+            error="Gate not initialized",
         )
 
     # Get upstream HEAD
@@ -290,7 +294,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
             is_stale=False,
             commits_behind=None,
             last_checked=now,
-            error="Could not reach upstream"
+            error="Could not reach upstream",
         )
 
     upstream_head = upstream_info["commit_hash"]
@@ -308,11 +312,11 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
         is_stale=is_stale,
         commits_behind=commits_behind if is_stale else 0,
         last_checked=now,
-        error=None
+        error=None,
     )
 
 
-def _count_commits_behind(project_id: str, local_head: str, remote_head: str) -> Optional[int]:
+def _count_commits_behind(project_id: str, local_head: str, remote_head: str) -> int | None:
     """Count commits between local and remote HEAD.
 
     This requires the remote commits to exist in the gate (they won't if gate
@@ -325,8 +329,7 @@ def _count_commits_behind(project_id: str, local_head: str, remote_head: str) ->
 
         # This will only work if we've fetched the commits
         # For a stale gate, we may not have remote_head locally
-        cmd = ["git", "-C", str(gate_dir), "rev-list", "--count",
-               f"{local_head}..{remote_head}"]
+        cmd = ["git", "-C", str(gate_dir), "rev-list", "--count", f"{local_head}..{remote_head}"]
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
         if result.returncode == 0:
@@ -372,8 +375,4 @@ def sync_gate_branches(project_id: str, branches: list[str] = None) -> dict:
     except Exception as e:
         errors.append(str(e))
 
-    return {
-        "success": len(errors) == 0,
-        "updated_branches": updated,
-        "errors": errors
-    }
+    return {"success": len(errors) == 0, "updated_branches": updated, "errors": errors}

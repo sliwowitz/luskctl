@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import subprocess
 import tempfile
@@ -91,7 +89,9 @@ class TaskTests(unittest.TestCase):
                 # Verify marker file exists in the workspace subdirectory
                 workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                 marker_path = workspace_dir / ".new-task-marker"
-                self.assertTrue(marker_path.is_file(), "Marker file should be created by task_new()")
+                self.assertTrue(
+                    marker_path.is_file(), "Marker file should be created by task_new()"
+                )
 
                 # Verify marker content explains its purpose
                 marker_content = marker_path.read_text(encoding="utf-8")
@@ -274,18 +274,21 @@ class TaskTests(unittest.TestCase):
                 clear=True,
             ):
                 task_new(project_id)
-                with unittest.mock.patch(
-                    "codexctl.lib.tasks._stream_initial_logs",
-                    return_value=True,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks._is_container_running",
-                    return_value=True,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks._assign_ui_port",
-                    return_value=7788,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks.subprocess.run"
-                ) as run_mock:
+                with (
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._stream_initial_logs",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._is_container_running",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._assign_ui_port",
+                        return_value=7788,
+                    ),
+                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     task_run_ui(project_id, "1", backend="CLAUDE")
 

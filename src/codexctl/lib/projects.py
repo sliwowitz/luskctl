@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List
 
 import yaml  # pip install pyyaml
 
@@ -20,17 +17,14 @@ from .config import (
 from .images import project_cli_image, project_ui_image
 
 
-def _get_global_git_config(key: str) -> Optional[str]:
+def _get_global_git_config(key: str) -> str | None:
     """Get a value from the user's global git config.
-    
+
     Returns None if git is not available or the key is not set.
     """
     try:
         result = subprocess.run(
-            ["git", "config", "--global", "--get", key],
-            capture_output=True,
-            text=True,
-            check=False
+            ["git", "config", "--global", "--get", key], capture_output=True, text=True, check=False
         )
         if result.returncode == 0:
             return result.stdout.strip() or None
@@ -41,26 +35,27 @@ def _get_global_git_config(key: str) -> Optional[str]:
 
 # ---------- Project model ----------
 
+
 @dataclass
 class Project:
     id: str
-    security_class: str          # "online" | "gatekeeping"
-    upstream_url: Optional[str]
+    security_class: str  # "online" | "gatekeeping"
+    upstream_url: str | None
     default_branch: str
     root: Path
 
-    tasks_root: Path             # workspace dirs
-    gate_path: Path              # git gate (mirror) path
-    staging_root: Optional[Path] # gatekeeping only
+    tasks_root: Path  # workspace dirs
+    gate_path: Path  # git gate (mirror) path
+    staging_root: Path | None  # gatekeeping only
 
-    ssh_key_name: Optional[str]
-    ssh_host_dir: Optional[Path]
+    ssh_key_name: str | None
+    ssh_host_dir: Path | None
     # Optional path to an SSH config template (user-provided). If set, ssh-init
     # will render this template to the shared .ssh/config. Tokens supported:
     #   {{IDENTITY_FILE}}  -> absolute path of the generated private key
     #   {{KEY_NAME}}       -> filename of the generated key (no .pub)
     #   {{PROJECT_ID}}     -> project id
-    ssh_config_template: Optional[Path] = None
+    ssh_config_template: Path | None = None
     # Whether to mount SSH credentials in online mode. Default: True.
     ssh_mount_in_online: bool = True
     # Whether to mount SSH credentials in gatekeeping mode. Default: False.
@@ -69,16 +64,16 @@ class Project:
     # This allows the container to also reference the real upstream.
     expose_external_remote: bool = False
     # Optional human credentials for git committer (while AI is the author)
-    human_name: Optional[str] = None
-    human_email: Optional[str] = None
+    human_name: str | None = None
+    human_email: str | None = None
     # Upstream polling configuration for gatekeeping mode
     upstream_polling_enabled: bool = True
     upstream_polling_interval_minutes: int = 5
     # Auto-sync configuration for gatekeeping mode
     auto_sync_enabled: bool = False
-    auto_sync_branches: List[str] = field(default_factory=list)
+    auto_sync_branches: list[str] = field(default_factory=list)
     # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
-    default_agent: Optional[str] = None
+    default_agent: str | None = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -109,6 +104,7 @@ def _find_project_root(project_id: str) -> Path:
 
 
 # ---------- Project listing ----------
+
 
 def list_projects() -> list[Project]:
     """
@@ -159,7 +155,7 @@ def load_project(project_id: str) -> Project:
     tasks_root = Path(tasks_cfg.get("root", sr / "tasks" / pid)).resolve()
     gate_path = Path(gate_path_cfg.get("path", sr / "gate" / f"{pid}.git")).resolve()
 
-    staging_root: Optional[Path] = None
+    staging_root: Path | None = None
     if sec == "gatekeeping":
         # Default to build_root unless explicitly configured in project.yml
         staging_root = Path(gate_cfg.get("staging_root", build_root() / pid)).resolve()
@@ -168,14 +164,16 @@ def load_project(project_id: str) -> Project:
     default_branch = git_cfg.get("default_branch", "main")
 
     ssh_key_name = ssh_cfg.get("key_name")
-    ssh_host_dir = Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
+    ssh_host_dir = (
+        Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
+    )
 
     # Optional: ssh.config_template (path to a template file). If relative, it's relative to the project root.
-    ssh_cfg_template_path: Optional[Path] = None
+    ssh_cfg_template_path: Path | None = None
     if ssh_cfg.get("config_template"):
         cfg_t = Path(str(ssh_cfg.get("config_template")))
         if not cfg_t.is_absolute():
-            cfg_t = (root / cfg_t)
+            cfg_t = root / cfg_t
         ssh_cfg_template_path = cfg_t.expanduser().resolve()
 
     # Optional flag: ssh.mount_in_online (default true)
@@ -248,6 +246,7 @@ def load_project(project_id: str) -> Project:
 
 # ---------- Project state helpers ----------
 
+
 def get_project_state(project_id: str) -> dict:
     """Return a summary of per-project infrastructure state.
 
@@ -314,6 +313,7 @@ def get_project_state(project_id: str) -> dict:
     if has_gate:
         # Import here to avoid circular import
         from .git_gate import get_gate_last_commit
+
         gate_last_commit = get_gate_last_commit(project_id)
 
     return {

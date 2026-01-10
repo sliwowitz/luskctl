@@ -1,17 +1,33 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import argparse
+import os
+from importlib import resources
+from pathlib import Path
 
-from ..lib.auth import codex_auth, mistral_auth, claude_auth, blablador_auth
+from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
 from ..lib.config import (
     build_root as _build_root,
+)
+from ..lib.config import (
     config_root as _config_root,
+)
+from ..lib.config import (
     get_envs_base_dir as _get_envs_base_dir,
+)
+from ..lib.config import (
     get_ui_base_port as _get_ui_base_port,
+)
+from ..lib.config import (
     global_config_path as _global_config_path,
+)
+from ..lib.config import (
     global_config_search_paths as _global_config_search_paths,
+)
+from ..lib.config import (
     state_root as _state_root,
+)
+from ..lib.config import (
     user_projects_root as _user_projects_root,
 )
 from ..lib.docker import build_images, generate_dockerfiles
@@ -20,16 +36,15 @@ from ..lib.projects import list_projects
 from ..lib.ssh import init_project_ssh
 from ..lib.tasks import (
     UI_BACKENDS,
-    get_tasks as _get_tasks,
     task_delete,
     task_list,
     task_new,
     task_run_cli,
     task_run_ui,
 )
-import os
-from importlib import resources
-from pathlib import Path
+from ..lib.tasks import (
+    get_tasks as _get_tasks,
+)
 
 # Optional: bash completion via argcomplete
 try:
@@ -38,7 +53,9 @@ except Exception:  # pragma: no cover - optional dep
     argcomplete = None  # type: ignore
 
 
-def _complete_project_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover - shell integration
+def _complete_project_ids(
+    prefix: str, parsed_args, **kwargs
+):  # pragma: no cover - shell integration
     try:
         ids = [p.id for p in list_projects()]
     except Exception:
@@ -103,14 +120,25 @@ def main() -> None:
     )
 
     # ssh-init
-    p_ssh = sub.add_parser("ssh-init", help="Initialize shared SSH dir and generate a keypair for a project")
+    p_ssh = sub.add_parser(
+        "ssh-init", help="Initialize shared SSH dir and generate a keypair for a project"
+    )
     _a = p_ssh.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
         pass
-    p_ssh.add_argument("--key-type", choices=["ed25519", "rsa"], default="ed25519", help="Key algorithm (default: ed25519)")
-    p_ssh.add_argument("--key-name", default=None, help="Key file name (without .pub). Default: id_<type>_<project>")
+    p_ssh.add_argument(
+        "--key-type",
+        choices=["ed25519", "rsa"],
+        default="ed25519",
+        help="Key algorithm (default: ed25519)",
+    )
+    p_ssh.add_argument(
+        "--key-name",
+        default=None,
+        help="Key file name (without .pub). Default: id_<type>_<project>",
+    )
     p_ssh.add_argument("--force", action="store_true", help="Overwrite existing key and config")
 
     # gate-init
@@ -254,7 +282,9 @@ def main() -> None:
         )
     elif args.cmd == "gate-init":
         res = init_project_gate(args.project_id, force=getattr(args, "force", False))
-        print(f"Gate ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})")
+        print(
+            f"Gate ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})"
+        )
     elif args.cmd == "auth-codex":
         codex_auth(args.project_id)
     elif args.cmd == "auth-mistral":
@@ -272,7 +302,7 @@ def main() -> None:
         if paths:
             print("- Global config search order:")
             for p in paths:
-                exists = 'yes' if Path(p).is_file() else 'no'
+                exists = "yes" if Path(p).is_file() else "no"
                 print(f"  • {p} (exists: {exists})")
         print(f"- UI base port: {_get_ui_base_port()}")
 
@@ -285,7 +315,9 @@ def main() -> None:
         uproj = _user_projects_root()
         sproj = _config_root()
         print(f"- User projects root: {uproj} (exists: {'yes' if Path(uproj).is_dir() else 'no'})")
-        print(f"- System projects root: {sproj} (exists: {'yes' if Path(sproj).is_dir() else 'no'})")
+        print(
+            f"- System projects root: {sproj} (exists: {'yes' if Path(sproj).is_dir() else 'no'})"
+        )
 
         # Project configs discovered
         projs = list_projects()
@@ -300,7 +332,7 @@ def main() -> None:
         print("Templates (read):")
         tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
         try:
-            names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith('.template')]
+            names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
         except Exception:
             names = []
         print(f"- Package templates dir: {tmpl_pkg}")
@@ -329,7 +361,12 @@ def main() -> None:
             print("- Expected generated files per project:")
             for p in projs:
                 base = build_root / p.id
-                for fname in ("L0.Dockerfile", "L1.cli.Dockerfile", "L1.ui.Dockerfile", "L2.Dockerfile"):
+                for fname in (
+                    "L0.Dockerfile",
+                    "L1.cli.Dockerfile",
+                    "L1.ui.Dockerfile",
+                    "L2.Dockerfile",
+                ):
                     path = base / fname
                     print(f"  • {p.id}: {path} (exists: {'yes' if path.is_file() else 'no'})")
 

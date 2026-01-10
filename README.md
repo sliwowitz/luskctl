@@ -20,7 +20,7 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 ### Prerequisites
 
 - Podman installed and configured
-- Python 3.9+
+- Python 3.12+
 - OpenSSH client (for private git repos)
 
 ### Installation
@@ -105,6 +105,23 @@ git:
 
 - **Podman** is required for build/run commands
 - **TUI** is optional: `pip install 'codexctl[tui]'`
+
+## Contributing
+
+```bash
+# Setup
+git clone git@github.com:sliwowitz/codexctl.git && cd codexctl
+make install-dev
+
+# Before committing
+make lint      # Run linter (required)
+make format    # Auto-fix issues if lint fails
+
+# Before pushing
+make test      # Run tests
+```
+
+See [Developer Guide](docs/DEVELOPER.md) for full details.
 
 ## License
 

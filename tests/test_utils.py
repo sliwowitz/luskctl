@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from pathlib import Path
-from typing import Optional
 
 
 def write_project(root: Path, project_id: str, yaml_text: str) -> Path:
@@ -11,7 +8,7 @@ def write_project(root: Path, project_id: str, yaml_text: str) -> Path:
     return proj_dir
 
 
-def parse_meta_value(meta_text: str, key: str) -> Optional[str]:
+def parse_meta_value(meta_text: str, key: str) -> str | None:
     for line in meta_text.splitlines():
         if line.startswith(f"{key}:"):
             value = line.split(":", 1)[1].strip()

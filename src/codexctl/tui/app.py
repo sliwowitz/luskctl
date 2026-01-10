@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import os
 import sys
-import shutil
-from pathlib import Path
-from typing import Optional
 
 
 def enable_pycharm_debugger():
     import os
+
     if os.getenv("PYCHARM_DEBUG"):
         import pydevd_pycharm
-        pydevd_pycharm.settrace(
-            host='localhost',
-            port=5678,
-            suspend=False,   # or True if you want it to break immediately
-        )
 
+        pydevd_pycharm.settrace(
+            host="localhost",
+            port=5678,
+            suspend=False,  # or True if you want it to break immediately
+        )
 
 
 # Try to detect whether 'textual' is available. We avoid importing it or the
@@ -25,7 +22,7 @@ def enable_pycharm_debugger():
 # optional TUI dependencies.
 try:  # pragma: no cover - simple availability probe
     import importlib  # noqa: F401
-    import textual  # type: ignore
+
     _HAS_TEXTUAL = True
 except Exception:  # pragma: no cover - textual not installed
     _HAS_TEXTUAL = False
@@ -33,18 +30,17 @@ except Exception:  # pragma: no cover - textual not installed
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
-    from textual.app import App, ComposeResult
-    from textual.widgets import Header, Button
-    from textual.containers import Horizontal, Vertical
     from textual import on
+    from textual.app import App, ComposeResult
+    from textual.containers import Horizontal, Vertical
+    from textual.widgets import Button, Header
 
-    from ..lib.config import state_root
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
-        init_project_gate,
-        compare_gate_vs_upstream,
-        sync_gate_branches,
         GateStalenessInfo,
+        compare_gate_vs_upstream,
+        init_project_gate,
+        sync_gate_branches,
     )
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
@@ -59,13 +55,13 @@ if _HAS_TEXTUAL:
         task_run_ui,
     )
     from .widgets import (
-        ProjectList,
         ProjectActions,
-        TaskList,
-        TaskDetails,
-        TaskMeta,
+        ProjectList,
         ProjectState,
         StatusBar,
+        TaskDetails,
+        TaskList,
+        TaskMeta,
     )
 
     class CodexTUI(App):
@@ -138,14 +134,14 @@ if _HAS_TEXTUAL:
 
         def __init__(self) -> None:
             super().__init__()
-            self.current_project_id: Optional[str] = None
-            self.current_task: Optional[TaskMeta] = None
+            self.current_project_id: str | None = None
+            self.current_task: TaskMeta | None = None
             # Set on mount; used to display status / notifications.
-            self._status_bar: Optional[StatusBar] = None
+            self._status_bar: StatusBar | None = None
             # Upstream polling state
-            self._staleness_info: Optional[GateStalenessInfo] = None
+            self._staleness_info: GateStalenessInfo | None = None
             self._polling_timer = None
-            self._polling_project_id: Optional[str] = None  # Project ID the timer was started for
+            self._polling_project_id: str | None = None  # Project ID the timer was started for
             self._last_notified_stale: bool = False  # Track if we already notified about staleness
             self._auto_sync_cooldown: dict[str, float] = {}  # Per-project cooldown timestamps
 
@@ -196,6 +192,7 @@ if _HAS_TEXTUAL:
             """
             try:
                 from pathlib import Path as _Path
+
                 log_path = _Path("/tmp/codexctl-tui.log")
                 log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -210,10 +207,16 @@ if _HAS_TEXTUAL:
                     _f.write("[codexctl DEBUG] layout snapshot after refresh:\n")
                     _f.write(f"  left-pane   size={left_pane.size} region={left_pane.region}\n")
                     _f.write(f"  right-pane  size={right_pane.size} region={right_pane.region}\n")
-                    _f.write(f"  proj-list   size={project_list.size} region={project_list.region}\n")
-                    _f.write(f"  proj-state  size={project_state.size} region={project_state.region}\n")
+                    _f.write(
+                        f"  proj-list   size={project_list.size} region={project_list.region}\n"
+                    )
+                    _f.write(
+                        f"  proj-state  size={project_state.size} region={project_state.region}\n"
+                    )
                     _f.write(f"  task-list   size={task_list.size} region={task_list.region}\n")
-                    _f.write(f"  task-det    size={task_details.size} region={task_details.region}\n")
+                    _f.write(
+                        f"  task-det    size={task_details.size} region={task_details.region}\n"
+                    )
             except Exception:
                 pass
 
@@ -305,8 +308,7 @@ if _HAS_TEXTUAL:
             if self.current_task is None:
                 # Be explicit so users understand why the right side is empty.
                 task_details.update(
-                    "No tasks for this project yet.\n"
-                    "Press 't' to create a new task."
+                    "No tasks for this project yet.\nPress 't' to create a new task."
                 )
             else:
                 task_details.set_task(self.current_task)
@@ -344,7 +346,7 @@ if _HAS_TEXTUAL:
             except Exception:
                 pass
 
-        def _refresh_project_state(self, task_count: Optional[int] = None) -> None:
+        def _refresh_project_state(self, task_count: int | None = None) -> None:
             """Update the small project state summary panel.
 
             This is called whenever the current project changes or when actions
@@ -401,9 +403,7 @@ if _HAS_TEXTUAL:
 
             # Schedule recurring polls
             self._polling_timer = self.set_interval(
-                interval_seconds,
-                self._poll_upstream,
-                name="upstream_polling"
+                interval_seconds, self._poll_upstream, name="upstream_polling"
             )
 
         def _stop_upstream_polling(self) -> None:
@@ -518,7 +518,9 @@ if _HAS_TEXTUAL:
             except Exception as e:
                 self._log_debug(f"auto-sync error: {e}")
 
-        async def _sync_worker(self, project_id: str, branches: list = None, is_auto: bool = False) -> None:
+        async def _sync_worker(
+            self, project_id: str, branches: list = None, is_auto: bool = False
+        ) -> None:
             """Background worker to sync gate from upstream."""
             import asyncio
 
@@ -588,7 +590,6 @@ if _HAS_TEXTUAL:
             await self.refresh_tasks()
             # Start polling for the newly selected project
             self._start_upstream_polling()
-
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
@@ -747,8 +748,7 @@ if _HAS_TEXTUAL:
                 try:
                     backend = self._prompt_ui_backend()
                     print(
-                        f"Starting UI for {self.current_project_id}/{tid} "
-                        f"(backend: {backend})...\n"
+                        f"Starting UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
                     )
                     task_run_ui(self.current_project_id, tid, backend=backend)
                 except SystemExit as e:
@@ -763,9 +763,7 @@ if _HAS_TEXTUAL:
 
             tid = self.current_task.task_id
             try:
-                self._log_debug(
-                    f"delete: start project_id={self.current_project_id} task_id={tid}"
-                )
+                self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
                 # Let the user know we're working, since stopping containers
                 # and cleaning up state can take a little while and the TUI
                 # will be blocked during this operation. We keep the logic
@@ -839,6 +837,7 @@ if _HAS_TEXTUAL:
         CodexTUI().run()
 
 else:
+
     def main() -> None:
         print(
             "codexctl TUI requires the 'textual' package.\n"

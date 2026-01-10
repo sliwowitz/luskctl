@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import tempfile
 import unittest
@@ -46,7 +44,7 @@ class DockerTests(unittest.TestCase):
                 self.assertTrue(l2.is_file())
 
                 content = l2.read_text(encoding="utf-8")
-                self.assertIn(f"SSH_KEY_NAME=\"id_ed25519_{project_id}\"", content)
+                self.assertIn(f'SSH_KEY_NAME="id_ed25519_{project_id}"', content)
                 self.assertNotIn("{{DEFAULT_BRANCH}}", content)
 
                 scripts_dir = out_dir / "scripts"

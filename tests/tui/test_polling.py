@@ -1,24 +1,23 @@
 """Tests for TUI upstream polling logic."""
-from __future__ import annotations
-
-import time
-from unittest import TestCase, main, mock
-from typing import Optional
 
 # Mock dependencies before importing app module
 import sys
-sys.modules['textual'] = mock.MagicMock()
-sys.modules['textual.app'] = mock.MagicMock()
-sys.modules['textual.widgets'] = mock.MagicMock()
-sys.modules['textual.containers'] = mock.MagicMock()
-sys.modules['textual.message'] = mock.MagicMock()
-sys.modules['yaml'] = mock.MagicMock()
+import time
+from unittest import TestCase, main, mock
+
+sys.modules["textual"] = mock.MagicMock()
+sys.modules["textual.app"] = mock.MagicMock()
+sys.modules["textual.widgets"] = mock.MagicMock()
+sys.modules["textual.containers"] = mock.MagicMock()
+sys.modules["textual.message"] = mock.MagicMock()
+sys.modules["yaml"] = mock.MagicMock()
 
 from codexctl.lib.git_gate import GateStalenessInfo
 
 
 class MockProject:
     """Mock Project for testing."""
+
     def __init__(
         self,
         project_id: str = "test-proj",
@@ -62,8 +61,13 @@ class PollingStateTests(TestCase):
 
         # First stale notification
         stale1 = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head="bbb",
-            is_stale=True, commits_behind=3, last_checked="now", error=None
+            branch="main",
+            gate_head="aaa",
+            upstream_head="bbb",
+            is_stale=True,
+            commits_behind=3,
+            last_checked="now",
+            error=None,
         )
         on_staleness_updated(stale1)
         self.assertEqual(len(notifications), 1)
@@ -71,16 +75,26 @@ class PollingStateTests(TestCase):
 
         # Second stale poll - should NOT notify again
         stale2 = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head="ccc",
-            is_stale=True, commits_behind=5, last_checked="now", error=None
+            branch="main",
+            gate_head="aaa",
+            upstream_head="ccc",
+            is_stale=True,
+            commits_behind=5,
+            last_checked="now",
+            error=None,
         )
         on_staleness_updated(stale2)
         self.assertEqual(len(notifications), 1)  # Still 1
 
         # Up to date - should reset flag
         up_to_date = GateStalenessInfo(
-            branch="main", gate_head="ccc", upstream_head="ccc",
-            is_stale=False, commits_behind=0, last_checked="now", error=None
+            branch="main",
+            gate_head="ccc",
+            upstream_head="ccc",
+            is_stale=False,
+            commits_behind=0,
+            last_checked="now",
+            error=None,
         )
         on_staleness_updated(up_to_date)
         self.assertEqual(len(notifications), 1)
@@ -88,8 +102,13 @@ class PollingStateTests(TestCase):
 
         # Stale again - should notify
         stale3 = GateStalenessInfo(
-            branch="main", gate_head="ccc", upstream_head="ddd",
-            is_stale=True, commits_behind=1, last_checked="now", error=None
+            branch="main",
+            gate_head="ccc",
+            upstream_head="ddd",
+            is_stale=True,
+            commits_behind=1,
+            last_checked="now",
+            error=None,
         )
         on_staleness_updated(stale3)
         self.assertEqual(len(notifications), 2)
@@ -110,9 +129,13 @@ class PollingStateTests(TestCase):
 
         # Error occurs - should preserve stale state
         error_result = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head=None,
-            is_stale=False, commits_behind=None, last_checked="now",
-            error="Could not reach upstream"
+            branch="main",
+            gate_head="aaa",
+            upstream_head=None,
+            is_stale=False,
+            commits_behind=None,
+            last_checked="now",
+            error="Could not reach upstream",
         )
         on_staleness_updated(error_result)
         self.assertTrue(last_notified_stale)  # Preserved
@@ -164,25 +187,39 @@ class PollingStateTests(TestCase):
 
         # Sync completed but still stale
         still_stale = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head="bbb",
-            is_stale=True, commits_behind=1, last_checked="now", error=None
+            branch="main",
+            gate_head="aaa",
+            upstream_head="bbb",
+            is_stale=True,
+            commits_behind=1,
+            last_checked="now",
+            error=None,
         )
         sync_completed(still_stale)
         self.assertTrue(last_notified_stale)  # Not reset
 
         # Sync completed with error
         error_result = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head=None,
-            is_stale=False, commits_behind=None, last_checked="now",
-            error="Network error"
+            branch="main",
+            gate_head="aaa",
+            upstream_head=None,
+            is_stale=False,
+            commits_behind=None,
+            last_checked="now",
+            error="Network error",
         )
         sync_completed(error_result)
         self.assertTrue(last_notified_stale)  # Not reset
 
         # Sync completed and up-to-date
         up_to_date = GateStalenessInfo(
-            branch="main", gate_head="bbb", upstream_head="bbb",
-            is_stale=False, commits_behind=0, last_checked="now", error=None
+            branch="main",
+            gate_head="bbb",
+            upstream_head="bbb",
+            is_stale=False,
+            commits_behind=0,
+            last_checked="now",
+            error=None,
         )
         sync_completed(up_to_date)
         self.assertFalse(last_notified_stale)  # Reset
@@ -207,8 +244,13 @@ class PollingStateTests(TestCase):
 
         # Poll completes with proj1 result
         result = GateStalenessInfo(
-            branch="main", gate_head="aaa", upstream_head="bbb",
-            is_stale=True, commits_behind=3, last_checked="now", error=None
+            branch="main",
+            gate_head="aaa",
+            upstream_head="bbb",
+            is_stale=True,
+            commits_behind=3,
+            last_checked="now",
+            error=None,
         )
         on_poll_complete(poll_project, result)
 

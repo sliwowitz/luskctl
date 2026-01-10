@@ -7,8 +7,6 @@ This is an integration-style test that creates real git repos to test the
 actual shell script behavior.
 """
 
-from __future__ import annotations
-
 import os
 import subprocess
 import tempfile
@@ -18,7 +16,14 @@ from pathlib import Path
 
 def get_init_script_path() -> Path:
     """Get the path to init-ssh-and-repo.sh."""
-    return Path(__file__).parent.parent.parent / "src" / "codexctl" / "resources" / "scripts" / "init-ssh-and-repo.sh"
+    return (
+        Path(__file__).parent.parent.parent
+        / "src"
+        / "codexctl"
+        / "resources"
+        / "scripts"
+        / "init-ssh-and-repo.sh"
+    )
 
 
 def get_clean_git_env(temp_dir: Path | None = None) -> dict:
@@ -46,7 +51,9 @@ def get_clean_git_env(temp_dir: Path | None = None) -> dict:
     return env
 
 
-def create_bare_repo_with_branches(repo_path: Path, default_branch: str, other_branches: list[str]) -> None:
+def create_bare_repo_with_branches(
+    repo_path: Path, default_branch: str, other_branches: list[str]
+) -> None:
     """Create a bare git repo with multiple branches.
 
     Args:
@@ -63,61 +70,80 @@ def create_bare_repo_with_branches(repo_path: Path, default_branch: str, other_b
         # Initialize with default branch
         subprocess.run(
             ["git", "init", "-b", default_branch, str(work_path)],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
         subprocess.run(
             ["git", "-C", str(work_path), "config", "user.email", "test@test.com"],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
         subprocess.run(
             ["git", "-C", str(work_path), "config", "user.name", "Test"],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
 
         # Create initial commit on default branch
         (work_path / "README.md").write_text(f"# {default_branch}\n")
         subprocess.run(
-            ["git", "-C", str(work_path), "add", "."],
-            check=True, capture_output=True, env=git_env
+            ["git", "-C", str(work_path), "add", "."], check=True, capture_output=True, env=git_env
         )
         subprocess.run(
             ["git", "-C", str(work_path), "commit", "-m", f"Initial commit on {default_branch}"],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
 
         # Create other branches with unique commits
         for branch in other_branches:
             subprocess.run(
                 ["git", "-C", str(work_path), "checkout", "-b", branch],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
             (work_path / "README.md").write_text(f"# {branch}\n")
             subprocess.run(
                 ["git", "-C", str(work_path), "add", "."],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
             subprocess.run(
                 ["git", "-C", str(work_path), "commit", "-m", f"Commit on {branch}"],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
 
         # Switch back to default branch (so HEAD points to it in the bare clone)
         subprocess.run(
             ["git", "-C", str(work_path), "checkout", default_branch],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
 
         # Clone to bare repo
         subprocess.run(
             ["git", "clone", "--bare", str(work_path), str(repo_path)],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
 
         # Explicitly set HEAD to the default branch in the bare repo
         # (git clone --bare doesn't always do this correctly)
         subprocess.run(
             ["git", "-C", str(repo_path), "symbolic-ref", "HEAD", f"refs/heads/{default_branch}"],
-            check=True, capture_output=True, env=git_env
+            check=True,
+            capture_output=True,
+            env=git_env,
         )
 
 
@@ -125,7 +151,10 @@ def get_current_branch(repo_path: Path) -> str:
     """Get the current branch of a git repo."""
     result = subprocess.run(
         ["git", "-C", str(repo_path), "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, check=True, env=get_clean_git_env()
+        capture_output=True,
+        text=True,
+        check=True,
+        env=get_clean_git_env(),
     )
     return result.stdout.strip()
 
@@ -135,7 +164,9 @@ def get_file_content(repo_path: Path, filename: str) -> str:
     return (repo_path / filename).read_text().strip()
 
 
-def run_init_script(init_script: Path, base_path: Path, extra_env: dict) -> subprocess.CompletedProcess:
+def run_init_script(
+    init_script: Path, base_path: Path, extra_env: dict
+) -> subprocess.CompletedProcess:
     """Run the init script with a clean environment."""
     # Start with minimal environment to avoid pollution from test runner
     env = {
@@ -186,15 +217,19 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             create_bare_repo_with_branches(
                 gate_path,
                 default_branch="master",  # Remote's HEAD points here
-                other_branches=["dev", "feature"]  # We want to checkout 'dev'
+                other_branches=["dev", "feature"],  # We want to checkout 'dev'
             )
 
             # Run init script with GIT_BRANCH=dev (simulates gatekeeping mode)
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",
-                "GIT_BRANCH": "dev",  # Should checkout this, NOT master
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "dev",  # Should checkout this, NOT master
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             # Script should succeed
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
@@ -202,10 +237,11 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             # Workspace should be on 'dev', not 'master'
             current_branch = get_current_branch(workspace_path)
             self.assertEqual(
-                current_branch, "dev",
+                current_branch,
+                "dev",
                 f"Expected branch 'dev' but got '{current_branch}'. "
                 f"Script should use GIT_BRANCH, not remote's default HEAD.\n"
-                f"stdout: {result.stdout}\nstderr: {result.stderr}"
+                f"stdout: {result.stdout}\nstderr: {result.stderr}",
             )
 
             # Verify we have the dev branch content
@@ -221,17 +257,17 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             workspace_path.mkdir()
 
             # Create gate with only 'main' branch
-            create_bare_repo_with_branches(
-                gate_path,
-                default_branch="main",
-                other_branches=[]
-            )
+            create_bare_repo_with_branches(gate_path, default_branch="main", other_branches=[])
 
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",
-                "GIT_BRANCH": "nonexistent",  # Branch doesn't exist
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "nonexistent",  # Branch doesn't exist
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
@@ -255,14 +291,18 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             create_bare_repo_with_branches(
                 gate_path,
                 default_branch="master",  # Remote HEAD
-                other_branches=["main"]  # Script should default to this
+                other_branches=["main"],  # Script should default to this
             )
 
             # GIT_BRANCH not set - should default to 'main'
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
@@ -286,24 +326,24 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
 
             # Create gate (stale, on master)
             create_bare_repo_with_branches(
-                gate_path,
-                default_branch="master",
-                other_branches=["dev"]
+                gate_path, default_branch="master", other_branches=["dev"]
             )
 
             # Create upstream (has same branches)
             create_bare_repo_with_branches(
-                upstream_path,
-                default_branch="master",
-                other_branches=["dev"]
+                upstream_path, default_branch="master", other_branches=["dev"]
             )
 
-            result = run_init_script(self.init_script, base, {
-                "CLONE_FROM": f"file://{gate_path}",
-                "CODE_REPO": f"file://{upstream_path}",
-                "GIT_BRANCH": "dev",
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CLONE_FROM": f"file://{gate_path}",
+                    "CODE_REPO": f"file://{upstream_path}",
+                    "GIT_BRANCH": "dev",
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
@@ -314,7 +354,10 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             # Origin should point to upstream, not gate
             origin_url = subprocess.run(
                 ["git", "-C", str(workspace_path), "remote", "get-url", "origin"],
-                capture_output=True, text=True, check=True, env=get_clean_git_env()
+                capture_output=True,
+                text=True,
+                check=True,
+                env=get_clean_git_env(),
             ).stdout.strip()
             self.assertEqual(origin_url, f"file://{upstream_path}")
 
@@ -328,15 +371,15 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
 
             # Create gate with multiple branches
             create_bare_repo_with_branches(
-                gate_path,
-                default_branch="master",
-                other_branches=["dev", "feature"]
+                gate_path, default_branch="master", other_branches=["dev", "feature"]
             )
 
             # First, clone normally (will be on master since that's gate's HEAD)
             subprocess.run(
                 ["git", "clone", str(gate_path), str(workspace_path)],
-                check=True, capture_output=True, env=get_clean_git_env()
+                check=True,
+                capture_output=True,
+                env=get_clean_git_env(),
             )
 
             # Verify we're on master initially
@@ -346,11 +389,15 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             marker_path = workspace_path / ".new-task-marker"
             marker_path.write_text("marker")
 
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",
-                "GIT_BRANCH": "dev",  # Task should reset to this
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "dev",  # Task should reset to this
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
@@ -373,35 +420,43 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
 
             # Create gate
             create_bare_repo_with_branches(
-                gate_path,
-                default_branch="master",
-                other_branches=["dev"]
+                gate_path, default_branch="master", other_branches=["dev"]
             )
 
             # Clone and switch to dev manually
             subprocess.run(
                 ["git", "clone", str(gate_path), str(workspace_path)],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
             subprocess.run(
                 ["git", "-C", str(workspace_path), "checkout", "dev"],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
 
             # Make a local change
             (workspace_path / "local.txt").write_text("local change")
             subprocess.run(
                 ["git", "-C", str(workspace_path), "add", "."],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
 
             # No marker - this is a restart
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",
-                "GIT_BRANCH": "master",  # Different from current branch
-                "REPO_ROOT": str(workspace_path),
-                "GIT_RESET_MODE": "none",  # Default
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "master",  # Different from current branch
+                    "REPO_ROOT": str(workspace_path),
+                    "GIT_RESET_MODE": "none",  # Default
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
@@ -439,29 +494,41 @@ class GatekeepingModeOriginTests(unittest.TestCase):
             # Clone from upstream first (simulates workspace that was in online mode)
             subprocess.run(
                 ["git", "clone", str(upstream_path), str(workspace_path)],
-                check=True, capture_output=True, env=git_env
+                check=True,
+                capture_output=True,
+                env=git_env,
             )
 
             # Verify origin points to upstream
             origin_before = subprocess.run(
                 ["git", "-C", str(workspace_path), "remote", "get-url", "origin"],
-                capture_output=True, text=True, check=True, env=git_env
+                capture_output=True,
+                text=True,
+                check=True,
+                env=git_env,
             ).stdout.strip()
             self.assertIn("upstream", origin_before)
 
             # Run init in gatekeeping mode (file:// URL = gatekeeping)
-            result = run_init_script(self.init_script, base, {
-                "CODE_REPO": f"file://{gate_path}",  # file:// triggers gatekeeping mode
-                "GIT_BRANCH": "main",
-                "REPO_ROOT": str(workspace_path),
-            })
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",  # file:// triggers gatekeeping mode
+                    "GIT_BRANCH": "main",
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
 
             self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
 
             # Origin should now point to gate
             origin_after = subprocess.run(
                 ["git", "-C", str(workspace_path), "remote", "get-url", "origin"],
-                capture_output=True, text=True, check=True, env=git_env
+                capture_output=True,
+                text=True,
+                check=True,
+                env=git_env,
             ).stdout.strip()
             self.assertEqual(origin_after, f"file://{gate_path}")
 

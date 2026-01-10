@@ -123,6 +123,55 @@ See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md) for detai
 
 ## Development Workflow
 
+### Initial Setup
+
+```bash
+# Clone the repository
+git clone git@github.com:sliwowitz/codexctl.git
+cd codexctl
+
+# Install all development dependencies
+make install-dev
+```
+
+### Before You Commit
+
+**Always run the linter before committing:**
+
+```bash
+make lint      # Check for issues (fast, ~1 second)
+```
+
+If linting fails, auto-fix with:
+
+```bash
+make format    # Auto-fix lint issues and format code
+```
+
+**Run tests before pushing** (or at least before opening a PR):
+
+```bash
+make test      # Run full test suite with coverage
+```
+
+To run both (equivalent to CI):
+
+```bash
+make check     # Runs lint + test
+```
+
+### Available Make Targets
+
+| Command | Description | When to Use |
+|---------|-------------|-------------|
+| `make lint` | Check linting and formatting | Before every commit |
+| `make format` | Auto-fix lint issues and format | When lint fails |
+| `make test` | Run tests with coverage | Before pushing |
+| `make check` | Run lint + test | Before opening a PR |
+| `make docs` | Serve documentation locally | When editing docs |
+| `make install-dev` | Install all dependencies | Initial setup |
+| `make clean` | Remove build artifacts | When needed |
+
 ### Running from Source
 
 ```bash
@@ -140,28 +189,25 @@ python -m codexctl.cli build uc
 python -m codexctl.tui
 ```
 
-### PyCharm Setup
+### IDE Setup (PyCharm/VSCode)
 
-1. Open the repo and set up a Python interpreter (3.9+)
+1. Open the repo and set up a Python 3.12+ interpreter
 2. Set environment variables:
    - `CODEXCTL_CONFIG_DIR` = `/path/to/this/repo/examples`
    - Optional: `CODEXCTL_STATE_DIR` = writable path
-3. Create Run/Debug configuration:
-   - For CLI: Module name = `codexctl.cli`, Parameters = `projects` (or other subcommands)
-   - For TUI: Module name = `codexctl.tui` (no args)
+3. For PyCharm Run/Debug configuration:
+   - CLI: Module name = `codexctl.cli`, Parameters = `projects` (or other subcommands)
+   - TUI: Module name = `codexctl.tui` (no args)
 
-### Building and Testing
+### Building Wheels
 
 ```bash
 # Build wheel
 python -m pip install --upgrade build
 python -m build
 
-# Install in development mode
-python -m pip install -e .
-
-# Install with TUI
-python -m pip install -e '.[tui]'
+# Install in development mode (editable)
+pip install -e .
 ```
 
 ---
