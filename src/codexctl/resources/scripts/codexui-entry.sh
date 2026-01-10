@@ -44,6 +44,7 @@ echo ">> fetching CodexUI release asset ${CODEXUI_DIST_URL}"
 mkdir -p "${CODEXUI_DIR}"
 curl -fsSL "${CODEXUI_DIST_URL}" -o /tmp/codexui-dist.tar.gz
 tar -xzf /tmp/codexui-dist.tar.gz -C "${CODEXUI_DIR}"
+rm -f /tmp/codexui-dist.tar.gz
 
 cd "${CODEXUI_DIR}"
 ui_entry="${CODEXUI_DIR}/dist/server.js"
