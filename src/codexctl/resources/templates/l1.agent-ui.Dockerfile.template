@@ -4,12 +4,11 @@ FROM ${BASE_IMAGE}
 
 ENV HOST="0.0.0.0" \
     PORT="7860" \
-    CODEXUI_DIR="/opt/codexui" \
-    CODEXUI_DIST_URL="https://github.com/sliwowitz/codex-in-podman/releases/download/latest/codexui-dist.tar.gz"
+    CODEXUI_DIR="/opt/codexui"
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ssh ca-certificates python-is-python3 python3 nodejs npm curl \
+      ssh ca-certificates python-is-python3 python3 git nodejs curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \

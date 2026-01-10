@@ -36,13 +36,13 @@ if command -v git >/dev/null 2>&1 && [[ -n "${CODEXUI_BACKEND:-}" ]]; then
 fi
 
 : "${CODEXUI_DIR:=/opt/codexui}"
-: "${CODEXUI_DIST_URL:=https://github.com/sliwowitz/codex-in-podman/releases/download/latest/codexui-dist.tar.gz}"
+: "${CODEXUI_DIST_TAG:=latest}"
+: "${CODEXUI_DIST_URL:=https://github.com/sliwowitz/codex-in-podman/releases/download/${CODEXUI_DIST_TAG}/codexui-dist.tar.gz}"
 : "${HOST:=0.0.0.0}"
 : "${PORT:=7860}"
 
 echo ">> fetching CodexUI release asset ${CODEXUI_DIST_URL}"
 mkdir -p "${CODEXUI_DIR}"
-curl -fsSL "${CODEXUI_DIST_URL}" -o /tmp/codexui-dist.tar.gz
 tarball_path="/tmp/codexui-dist.tar.gz"
 curl -fsSL "${CODEXUI_DIST_URL}" -o "${tarball_path}"
 
@@ -58,6 +58,7 @@ if ! tar -tzf "${tarball_path}" >/dev/null 2>&1; then
 fi
 
 tar -xzf "${tarball_path}" -C "${CODEXUI_DIR}"
+rm -f "${tarball_path}"
 cd "${CODEXUI_DIR}"
 ui_entry="${CODEXUI_DIR}/dist/server.js"
 if [[ ! -f "${ui_entry}" ]]; then
