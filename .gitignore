@@ -6,5 +6,6 @@ __pycache__/
 
 /src/codexctl.egg-info/
 /build/
+/site/
 
 /.idea
