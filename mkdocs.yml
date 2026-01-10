@@ -1,0 +1,89 @@
+site_name: codexctl
+site_description: A tool for managing containerized AI coding agent projects using Podman
+site_url: https://sliwowitz.github.io/codexctl
+repo_url: https://github.com/sliwowitz/codexctl
+repo_name: sliwowitz/codexctl
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Getting Started: USAGE.md
+    - Shared Directories: SHARED_DIRS.md
+    - Container Layers: CONTAINER_LAYERS.md
+    - Security Modes: GIT_CACHE_AND_SECURITY_MODES.md
+    - Packaging: PACKAGING.md
+  - Developer Guide:
+    - Contributing: DEVELOPER.md
+    - Brainstorming:
+      - Agent Helpers: brainstorming/TODO_AGENT_HELPERS.md
+      - Per-Task Context Isolation: brainstorming/per-task-context-isolation.md
+  - API Reference: reference/
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sliwowitz/codexctl

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import subprocess
 import tempfile
@@ -17,7 +15,7 @@ from codexctl.lib.tasks import (
     task_new,
     task_run_ui,
 )
-from test_utils import parse_meta_value, write_project
+from test_utils import mock_git_config, parse_meta_value, write_project
 
 
 class TaskTests(unittest.TestCase):
@@ -91,7 +89,9 @@ class TaskTests(unittest.TestCase):
                 # Verify marker file exists in the workspace subdirectory
                 workspace_dir = state_dir / "tasks" / project_id / "1" / "workspace"
                 marker_path = workspace_dir / ".new-task-marker"
-                self.assertTrue(marker_path.is_file(), "Marker file should be created by task_new()")
+                self.assertTrue(
+                    marker_path.is_file(), "Marker file should be created by task_new()"
+                )
 
                 # Verify marker content explains its purpose
                 marker_content = marker_path.read_text(encoding="utf-8")
@@ -123,16 +123,16 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="7",
                 )
 
-                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z", volumes)
                 # Verify SSH is NOT mounted by default in gatekeeping mode
                 ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
                 self.assertEqual(ssh_mounts, [])
@@ -166,17 +166,17 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="9",
                 )
 
-                # Verify gatekeeping behavior: CODE_REPO is file-based cache
-                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                # Verify gatekeeping behavior: CODE_REPO is file-based gate
+                self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z", volumes)
                 # Verify SSH IS mounted when mount_in_gatekeeping is true
                 self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)
 
@@ -208,13 +208,13 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(load_project(project_id), task_id="8")
                 self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
                 self.assertEqual(env["GIT_BRANCH"], "main")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z,ro", volumes)
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z,ro", volumes)
                 self.assertIn(f"{ssh_dir}:/home/dev/.ssh:Z", volumes)
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
@@ -274,18 +274,22 @@ class TaskTests(unittest.TestCase):
                 clear=True,
             ):
                 task_new(project_id)
-                with unittest.mock.patch(
-                    "codexctl.lib.tasks._stream_initial_logs",
-                    return_value=True,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks._is_container_running",
-                    return_value=True,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks._assign_ui_port",
-                    return_value=7788,
-                ), unittest.mock.patch(
-                    "codexctl.lib.tasks.subprocess.run"
-                ) as run_mock:
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._stream_initial_logs",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._is_container_running",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "codexctl.lib.tasks._assign_ui_port",
+                        return_value=7788,
+                    ),
+                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     task_run_ui(project_id, "1", backend="CLAUDE")
 
@@ -417,7 +421,10 @@ class TaskTests(unittest.TestCase):
 
                 expected_diff = "diff --git a/file.txt b/file.txt\n+new line\n"
 
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                ):
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
                     mock_result.stdout = expected_diff
@@ -430,7 +437,7 @@ class TaskTests(unittest.TestCase):
                     result = get_workspace_git_diff(project_id, "1", "HEAD")
                     self.assertEqual(result, expected_diff)
 
-                    # Verify git command was called correctly
+                    # Verify git diff command was called correctly
                     run_mock.assert_called_once()
                     call_args = run_mock.call_args[0][0]
                     self.assertEqual(call_args[0], "git")
@@ -464,7 +471,10 @@ class TaskTests(unittest.TestCase):
 
                 expected_diff = "diff --git a/file.txt b/file.txt\n+previous commit change\n"
 
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                ):
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
                     mock_result.stdout = expected_diff
@@ -629,8 +639,8 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(
                     project=load_project(project_id),
@@ -640,8 +650,8 @@ class TaskTests(unittest.TestCase):
                 # Verify EXTERNAL_REMOTE_URL is set when expose_external_remote is enabled
                 self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
                 # Verify gatekeeping mode settings are still correct
-                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z", volumes)
 
     def test_build_task_env_gatekeeping_expose_external_remote_disabled(self) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
@@ -671,8 +681,8 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(
                     project=load_project(project_id),
@@ -682,8 +692,8 @@ class TaskTests(unittest.TestCase):
                 # Verify EXTERNAL_REMOTE_URL is NOT set when expose_external_remote is false
                 self.assertNotIn("EXTERNAL_REMOTE_URL", env)
                 # Verify gatekeeping mode settings are still correct
-                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z", volumes)
 
     def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
@@ -712,8 +722,8 @@ class TaskTests(unittest.TestCase):
                     "CODEXCTL_CONFIG_FILE": str(config_file),
                 },
             ):
-                cache_dir = state_dir / "cache" / f"{project_id}.git"
-                cache_dir.mkdir(parents=True, exist_ok=True)
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+                gate_dir.mkdir(parents=True, exist_ok=True)
 
                 env, volumes = _build_task_env_and_volumes(
                     project=load_project(project_id),
@@ -723,5 +733,5 @@ class TaskTests(unittest.TestCase):
                 # Verify EXTERNAL_REMOTE_URL is NOT set when upstream_url is missing
                 self.assertNotIn("EXTERNAL_REMOTE_URL", env)
                 # Verify gatekeeping mode settings are still correct
-                self.assertEqual(env["CODE_REPO"], "file:///git-cache/cache.git")
-                self.assertIn(f"{cache_dir}:/git-cache/cache.git:Z", volumes)
+                self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
+                self.assertIn(f"{gate_dir}:/git-gate/gate.git:Z", volumes)

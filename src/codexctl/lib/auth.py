@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import shutil
 import subprocess
 
@@ -9,8 +7,8 @@ from .images import project_cli_image
 from .podman import _podman_userns_args
 from .projects import load_project
 
-
 # ---------- Codex authentication ----------
+
 
 def _check_podman() -> None:
     """Verify podman is available."""
@@ -66,12 +64,16 @@ def codex_auth(project_id: str) -> None:
     # - Use L2 CLI image (which has the codex CLI installed)
     # - Run setup-codex-auth.sh script which handles port forwarding and codex login
     cmd = [
-        "podman", "run",
+        "podman",
+        "run",
         "--rm",
         "-it",
-        "-p", "127.0.0.1:1455:1455",
-        "-v", f"{codex_host_dir}:/home/dev/.codex:Z",
-        "--name", container_name,
+        "-p",
+        "127.0.0.1:1455:1455",
+        "-v",
+        f"{codex_host_dir}:/home/dev/.codex:Z",
+        "--name",
+        container_name,
         project_cli_image(project.id),
         "setup-codex-auth.sh",
     ]
@@ -135,17 +137,21 @@ def claude_auth(project_id: str) -> None:
     # - Mount claude config dir for persistent auth
     # - Use L2 CLI image (which has claude CLI installed)
     cmd = [
-        "podman", "run",
+        "podman",
+        "run",
         "--rm",
         "-it",
-        "-v", f"{claude_host_dir}:/home/dev/.claude:Z",
-        "--name", container_name,
+        "-v",
+        f"{claude_host_dir}:/home/dev/.claude:Z",
+        "--name",
+        container_name,
         project_cli_image(project.id),
-        "bash", "-c",
+        "bash",
+        "-c",
         "echo 'Enter your Claude API key (get one at https://console.anthropic.com/settings/keys):' && "
         "read -r -p 'ANTHROPIC_API_KEY=' api_key && "
         "mkdir -p ~/.claude && "
-        "echo '{\"api_key\": \"$api_key\"}' > ~/.claude/config.json && "
+        'echo \'{"api_key": "$api_key"}\' > ~/.claude/config.json && '
         "echo && echo 'API key saved to ~/.claude/config.json' && "
         "echo 'You can now use claude in task containers.'",
     ]
@@ -178,6 +184,7 @@ def claude_auth(project_id: str) -> None:
 
 # ---------- Mistral Vibe authentication ----------
 
+
 def mistral_auth(project_id: str) -> None:
     """Set up Mistral API key for Vibe CLI inside the L2 CLI container.
 
@@ -207,17 +214,21 @@ def mistral_auth(project_id: str) -> None:
     # - Mount vibe config dir for persistent auth
     # - Use L2 CLI image (which has mistral-vibe installed)
     cmd = [
-        "podman", "run",
+        "podman",
+        "run",
         "--rm",
         "-it",
-        "-v", f"{vibe_host_dir}:/home/dev/.vibe:Z",
-        "--name", container_name,
+        "-v",
+        f"{vibe_host_dir}:/home/dev/.vibe:Z",
+        "--name",
+        container_name,
         project_cli_image(project.id),
-        "bash", "-c",
+        "bash",
+        "-c",
         "echo 'Enter your Mistral API key (get one at https://console.mistral.ai/api-keys):' && "
         "read -r -p 'MISTRAL_API_KEY=' api_key && "
         "mkdir -p ~/.vibe && "
-        "echo \"MISTRAL_API_KEY=$api_key\" > ~/.vibe/.env && "
+        'echo "MISTRAL_API_KEY=$api_key" > ~/.vibe/.env && '
         "echo && echo 'API key saved to ~/.vibe/.env' && "
         "echo 'You can now use vibe in task containers.'",
     ]
@@ -250,6 +261,7 @@ def mistral_auth(project_id: str) -> None:
 
 # ---------- Blablador authentication ----------
 
+
 def blablador_auth(project_id: str) -> None:
     """Set up Blablador API key for OpenCode inside the L2 CLI container.
 
@@ -278,17 +290,21 @@ def blablador_auth(project_id: str) -> None:
     # - Mount blablador config dir for persistent auth
     # - Use L2 CLI image (which has OpenCode + blablador wrapper installed)
     cmd = [
-        "podman", "run",
+        "podman",
+        "run",
         "--rm",
         "-it",
-        "-v", f"{blablador_host_dir}:/home/dev/.blablador:Z",
-        "--name", container_name,
+        "-v",
+        f"{blablador_host_dir}:/home/dev/.blablador:Z",
+        "--name",
+        container_name,
         project_cli_image(project.id),
-        "bash", "-c",
+        "bash",
+        "-c",
         "echo 'Enter your Blablador API key (get one at https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens):' && "
         "read -r -p 'BLABLADOR_API_KEY=' api_key && "
         "mkdir -p ~/.blablador && "
-        "echo \"{\\\"api_key\\\": \\\"$api_key\\\"}\" > ~/.blablador/config.json && "
+        'echo "{\\"api_key\\": \\"$api_key\\"}" > ~/.blablador/config.json && '
         "echo && echo 'API key saved to ~/.blablador/config.json' && "
         "echo 'You can now use blablador in task containers.'",
     ]
@@ -297,7 +313,9 @@ def blablador_auth(project_id: str) -> None:
     print("Authenticating Blablador for project:", project.id)
     print()
     print("You will be prompted to enter your Blablador API key.")
-    print("Get your API key at: https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens")
+    print(
+        "Get your API key at: https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens"
+    )
     print()
     print("$", " ".join(map(str, cmd)))
     print()

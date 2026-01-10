@@ -1,7 +1,10 @@
-from __future__ import annotations
-
+import unittest.mock
 from pathlib import Path
-from typing import Optional
+
+
+def mock_git_config():
+    """Return a mock for _get_global_git_config that returns None (no global git config)."""
+    return unittest.mock.patch("codexctl.lib.projects._get_global_git_config", return_value=None)
 
 
 def write_project(root: Path, project_id: str, yaml_text: str) -> Path:
@@ -11,7 +14,7 @@ def write_project(root: Path, project_id: str, yaml_text: str) -> Path:
     return proj_dir
 
 
-def parse_meta_value(meta_text: str, key: str) -> Optional[str]:
+def parse_meta_value(meta_text: str, key: str) -> str | None:
     for line in meta_text.splitlines():
         if line.startswith(f"{key}:"):
             value = line.split(":", 1)[1].strip()

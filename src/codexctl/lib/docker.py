@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import shutil
 import subprocess
 from importlib import resources
@@ -18,8 +16,8 @@ from .images import (
 )
 from .projects import _effective_ssh_key_name, load_project
 
-
 # ---------- Dockerfile gen & build ----------
+
 
 def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
@@ -171,48 +169,72 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
 
     cmds = [
         [
-            "podman", "build",
-            "-f", str(l0),
-            "--build-arg", f"BASE_IMAGE={base_image}",
-            "-t", l0_image,
+            "podman",
+            "build",
+            "-f",
+            str(l0),
+            "--build-arg",
+            f"BASE_IMAGE={base_image}",
+            "-t",
+            l0_image,
             context_dir,
         ],
         [
-            "podman", "build",
-            "-f", str(l1_cli),
-            "--build-arg", f"BASE_IMAGE={l0_image}",
-            "-t", l1_cli_image,
+            "podman",
+            "build",
+            "-f",
+            str(l1_cli),
+            "--build-arg",
+            f"BASE_IMAGE={l0_image}",
+            "-t",
+            l1_cli_image,
             context_dir,
         ],
         [
-            "podman", "build",
-            "-f", str(l1_ui),
-            "--build-arg", f"BASE_IMAGE={l0_image}",
-            "-t", l1_ui_image,
+            "podman",
+            "build",
+            "-f",
+            str(l1_ui),
+            "--build-arg",
+            f"BASE_IMAGE={l0_image}",
+            "-t",
+            l1_ui_image,
             context_dir,
         ],
         [
-            "podman", "build",
-            "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={l1_cli_image}",
-            "-t", l2_cli_image,
+            "podman",
+            "build",
+            "-f",
+            str(l2),
+            "--build-arg",
+            f"BASE_IMAGE={l1_cli_image}",
+            "-t",
+            l2_cli_image,
             context_dir,
         ],
         [
-            "podman", "build",
-            "-f", str(l2),
-            "--build-arg", f"BASE_IMAGE={l1_ui_image}",
-            "-t", l2_ui_image,
+            "podman",
+            "build",
+            "-f",
+            str(l2),
+            "--build-arg",
+            f"BASE_IMAGE={l1_ui_image}",
+            "-t",
+            l2_ui_image,
             context_dir,
         ],
     ]
     if include_dev:
         cmds.append(
             [
-                "podman", "build",
-                "-f", str(l2),
-                "--build-arg", f"BASE_IMAGE={l0_image}",
-                "-t", l2_dev_image,
+                "podman",
+                "build",
+                "-f",
+                str(l2),
+                "--build-arg",
+                f"BASE_IMAGE={l0_image}",
+                "-t",
+                l2_dev_image,
                 context_dir,
             ]
         )

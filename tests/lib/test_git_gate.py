@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import subprocess
 import tempfile
@@ -8,11 +6,11 @@ import unittest.mock
 from pathlib import Path
 
 from codexctl.lib.git_gate import (
-    init_project_gate,
+    compare_gate_vs_upstream,
+    get_gate_branch_head,
     get_gate_last_commit,
     get_upstream_head,
-    get_gate_branch_head,
-    compare_gate_vs_upstream,
+    init_project_gate,
     sync_gate_branches,
 )
 from test_utils import write_project
@@ -24,6 +22,7 @@ class GitGateTests(unittest.TestCase):
             base = Path(td)
             config_root = base / "config"
             envs_dir = base / "envs"
+            state_dir = base / "state"
             config_root.mkdir(parents=True, exist_ok=True)
 
             project_id = "proj6"
@@ -36,15 +35,18 @@ class GitGateTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
-                },
+            with (
+                unittest.mock.patch.dict(
+                    os.environ,
+                    {
+                        "CODEXCTL_CONFIG_DIR": str(config_root),
+                        "CODEXCTL_CONFIG_FILE": str(config_file),
+                        "CODEXCTL_STATE_DIR": str(state_dir),
+                    },
+                ),
+                self.assertRaises(SystemExit),
             ):
-                with self.assertRaises(SystemExit):
-                    init_project_gate(project_id)
+                init_project_gate(project_id)
 
     def test_init_project_gate_https_clone(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -144,9 +146,13 @@ git:
                 # Mock the git log command to return sample commit data
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
-                mock_result.stdout = "abc123def456|2023-01-01 12:00:00 +0000|Test commit message|John Doe\n"
+                mock_result.stdout = (
+                    "abc123def456|2023-01-01 12:00:00 +0000|Test commit message|John Doe\n"
+                )
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_gate_last_commit(project_id)
 
                 self.assertIsNotNone(result)
@@ -187,7 +193,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = "abc123def456789\trefs/heads/main\n"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_upstream_head(project_id)
 
                 self.assertIsNotNone(result)
@@ -252,7 +260,9 @@ git:
                 mock_result.returncode = 128
                 mock_result.stderr = "fatal: could not read from remote repository"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_upstream_head(project_id)
 
                 self.assertIsNone(result)
@@ -288,7 +298,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = ""
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_upstream_head(project_id)
 
                 self.assertIsNone(result)
@@ -320,7 +332,10 @@ git:
                 },
             ):
                 # Mock timeout
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 30)):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run",
+                    side_effect=subprocess.TimeoutExpired("git", 30),
+                ):
                     result = get_upstream_head(project_id)
 
                 self.assertIsNone(result)
@@ -356,7 +371,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = "fedcba987654321\trefs/heads/develop\n"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_upstream_head(project_id, branch="develop")
 
                 self.assertIsNotNone(result)
@@ -402,7 +419,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = "abc123def456789\n"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_gate_branch_head(project_id)
 
                 self.assertEqual(result, "abc123def456789")
@@ -474,7 +493,9 @@ git:
                 mock_result.returncode = 128
                 mock_result.stderr = "fatal: ref does not exist"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = get_gate_branch_head(project_id, branch="nonexistent")
 
                 self.assertIsNone(result)
@@ -516,13 +537,18 @@ git:
                 commit_hash = "abc123def456789"
 
                 # Mock get_gate_branch_head
-                with unittest.mock.patch("codexctl.lib.git_gate.get_gate_branch_head", return_value=commit_hash):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=commit_hash
+                ):
                     # Mock get_upstream_head
-                    with unittest.mock.patch("codexctl.lib.git_gate.get_upstream_head", return_value={
-                        "commit_hash": commit_hash,
-                        "ref_name": "refs/heads/main",
-                        "upstream_url": "https://example.com/repo.git",
-                    }):
+                    with unittest.mock.patch(
+                        "codexctl.lib.git_gate.get_upstream_head",
+                        return_value={
+                            "commit_hash": commit_hash,
+                            "ref_name": "refs/heads/main",
+                            "upstream_url": "https://example.com/repo.git",
+                        },
+                    ):
                         result = compare_gate_vs_upstream(project_id)
 
                 self.assertEqual(result.branch, "main")
@@ -569,15 +595,22 @@ git:
                 upstream_hash = "new456"
 
                 # Mock get_gate_branch_head
-                with unittest.mock.patch("codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                ):
                     # Mock get_upstream_head
-                    with unittest.mock.patch("codexctl.lib.git_gate.get_upstream_head", return_value={
-                        "commit_hash": upstream_hash,
-                        "ref_name": "refs/heads/main",
-                        "upstream_url": "https://example.com/repo.git",
-                    }):
+                    with unittest.mock.patch(
+                        "codexctl.lib.git_gate.get_upstream_head",
+                        return_value={
+                            "commit_hash": upstream_hash,
+                            "ref_name": "refs/heads/main",
+                            "upstream_url": "https://example.com/repo.git",
+                        },
+                    ):
                         # Mock _count_commits_behind
-                        with unittest.mock.patch("codexctl.lib.git_gate._count_commits_behind", return_value=5):
+                        with unittest.mock.patch(
+                            "codexctl.lib.git_gate._count_commits_behind", return_value=5
+                        ):
                             result = compare_gate_vs_upstream(project_id)
 
                 self.assertEqual(result.branch, "main")
@@ -614,7 +647,9 @@ git:
                 },
             ):
                 # Mock get_gate_branch_head to return None
-                with unittest.mock.patch("codexctl.lib.git_gate.get_gate_branch_head", return_value=None):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=None
+                ):
                     result = compare_gate_vs_upstream(project_id)
 
                 self.assertEqual(result.branch, "main")
@@ -660,9 +695,13 @@ git:
                 gate_hash = "abc123"
 
                 # Mock get_gate_branch_head
-                with unittest.mock.patch("codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                ):
                     # Mock get_upstream_head to return None
-                    with unittest.mock.patch("codexctl.lib.git_gate.get_upstream_head", return_value=None):
+                    with unittest.mock.patch(
+                        "codexctl.lib.git_gate.get_upstream_head", return_value=None
+                    ):
                         result = compare_gate_vs_upstream(project_id)
 
                 self.assertEqual(result.branch, "main")
@@ -709,15 +748,22 @@ git:
                 upstream_hash = "new456"
 
                 # Mock get_gate_branch_head
-                with unittest.mock.patch("codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                ):
                     # Mock get_upstream_head
-                    with unittest.mock.patch("codexctl.lib.git_gate.get_upstream_head", return_value={
-                        "commit_hash": upstream_hash,
-                        "ref_name": "refs/heads/main",
-                        "upstream_url": "https://example.com/repo.git",
-                    }):
+                    with unittest.mock.patch(
+                        "codexctl.lib.git_gate.get_upstream_head",
+                        return_value={
+                            "commit_hash": upstream_hash,
+                            "ref_name": "refs/heads/main",
+                            "upstream_url": "https://example.com/repo.git",
+                        },
+                    ):
                         # Mock _count_commits_behind to return None
-                        with unittest.mock.patch("codexctl.lib.git_gate._count_commits_behind", return_value=None):
+                        with unittest.mock.patch(
+                            "codexctl.lib.git_gate._count_commits_behind", return_value=None
+                        ):
                             result = compare_gate_vs_upstream(project_id)
 
                 self.assertTrue(result.is_stale)
@@ -762,7 +808,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = "Fetching origin\n"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = sync_gate_branches(project_id)
 
                 self.assertTrue(result["success"])
@@ -839,7 +887,9 @@ git:
                 mock_result.returncode = 1
                 mock_result.stderr = "fatal: could not fetch origin"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = sync_gate_branches(project_id)
 
                 self.assertFalse(result["success"])
@@ -879,7 +929,10 @@ git:
                 },
             ):
                 # Mock timeout
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 120)):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run",
+                    side_effect=subprocess.TimeoutExpired("git", 120),
+                ):
                     result = sync_gate_branches(project_id)
 
                 self.assertFalse(result["success"])
@@ -923,7 +976,9 @@ git:
                 mock_result.returncode = 0
                 mock_result.stdout = "Fetching origin\n"
 
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run", return_value=mock_result):
+                with unittest.mock.patch(
+                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                ):
                     result = sync_gate_branches(project_id, branches=["main", "develop"])
 
                 self.assertTrue(result["success"])

@@ -1,47 +1,103 @@
- [build-system]
- requires = ["poetry-core>=1.9.0"]
- build-backend = "poetry.core.masonry.api"
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
 
- [tool.poetry]
- name = "codexctl"
- version = "0.1.1"
- description = "Manage containerized projects and per-run tasks with Podman"
- readme = "README.md"
- license = "Apache-2.0 OR MIT"
- authors = ["codexctl maintainers"]
- keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
- classifiers = [
-   "Programming Language :: Python :: 3",
-   "License :: OSI Approved :: MIT License",
-   "Environment :: Console",
-   "Operating System :: POSIX :: Linux",
-   "Topic :: System :: Systems Administration",
- ]
+[tool.poetry]
+name = "codexctl"
+version = "0.1.1"
+description = "Manage containerized projects and per-run tasks with Podman"
+readme = "README.md"
+license = "Apache-2.0 OR MIT"
+authors = ["codexctl maintainers"]
+keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: System :: Systems Administration",
+]
 
- # Use the src/ layout
- packages = [
-   { include = "codexctl", from = "src" },
- ]
+# Use the src/ layout
+packages = [
+  { include = "codexctl", from = "src" },
+]
 
- # Extra files to ship alongside the package (similar to the old MANIFEST.in
- # and setuptools data-files). These will be present in the sdist and wheel,
- # but note that Poetry does not support installing them under /usr/share;
- # they will live under the installed distribution instead.
- include = [
-   { path = "completions/codexctl" },
-   { path = "docs/*.md" },
-   { path = "examples/**" },
- ]
+# Extra files to ship alongside the package (similar to the old MANIFEST.in
+# and setuptools data-files). These will be present in the sdist and wheel,
+# but note that Poetry does not support installing them under /usr/share;
+# they will live under the installed distribution instead.
+include = [
+  { path = "completions/codexctl" },
+  { path = "docs/*.md" },
+  { path = "examples/**" },
+]
 
- [tool.poetry.dependencies]
- python = ">=3.9,<4.0"
- PyYAML = ">=6.0"
- textual = ">=6.6"
- argcomplete = ">=3.1"
- 
- [tool.poetry.group.dev.dependencies]
- pydevd-pycharm = "^253.28294.166"
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+PyYAML = ">=6.0"
+textual = ">=6.6"
+argcomplete = ">=3.1"
+
+[tool.poetry.group.dev.dependencies]
+pydevd-pycharm = "^253.28294.166"
+ruff = ">=0.8"
+
+[tool.poetry.group.test.dependencies]
+pytest = ">=7.0"
+pytest-cov = ">=4.0"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.5"
+mkdocs-material = ">=9.0"
+mkdocstrings = {extras = ["python"], version = ">=0.24"}
+mkdocs-gen-files = ">=0.5"
+mkdocs-literate-nav = ">=0.6"
+mkdocs-section-index = ">=0.3"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
 
 [tool.poetry.scripts]
 codexctl = "codexctl.cli.main:main"
 codexctl-tui = "codexctl.tui.app:main"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",      # pycodestyle errors
+  "W",      # pycodestyle warnings
+  "F",      # pyflakes
+  "I",      # isort
+  "B",      # flake8-bugbear
+  "C4",     # flake8-comprehensions
+  "UP",     # pyupgrade
+  "SIM",    # flake8-simplify
+]
+ignore = [
+  "E501",   # line too long (handled by formatter)
+  "B904",   # raise from in except (not needed for SystemExit in CLI apps)
+  "SIM102", # nested if statements (explicit can be clearer)
+  "SIM105", # contextlib.suppress vs try/except/pass (try/except is often clearer)
+  "SIM108", # use ternary operator (not always clearer)
+  "SIM117", # nested with statements (explicit nesting can be clearer)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]  # allow imports after sys.modules mocking
+
+[tool.ruff.lint.isort]
+known-first-party = ["codexctl"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

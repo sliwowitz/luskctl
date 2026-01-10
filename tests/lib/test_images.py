@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import unittest
 
 from codexctl.lib import images
@@ -166,16 +164,16 @@ class ImagesTests(unittest.TestCase):
         base_dev = images.base_dev_image(long_name)
         agent_cli = images.agent_cli_image(long_name)
         agent_ui = images.agent_ui_image(long_name)
-        
+
         # Extract tags (after the colon)
         base_dev_tag = base_dev.split(":")[1]
         agent_cli_tag = agent_cli.split(":")[1]
         agent_ui_tag = agent_ui.split(":")[1]
-        
+
         self.assertEqual(len(base_dev_tag), 120)
         self.assertEqual(len(agent_cli_tag), 120)
         self.assertEqual(len(agent_ui_tag), 120)
-        
+
         # All should use the same tag
         self.assertEqual(base_dev_tag, agent_cli_tag)
         self.assertEqual(agent_cli_tag, agent_ui_tag)

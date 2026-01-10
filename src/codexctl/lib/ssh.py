@@ -1,12 +1,9 @@
-from __future__ import annotations
-
 import getpass
 import os
 import socket
 import subprocess
 from importlib import resources
 from pathlib import Path
-from typing import Optional
 
 from .config import get_envs_base_dir
 from .fs import _ensure_dir_writable
@@ -18,7 +15,7 @@ from .template_utils import render_template
 def init_project_ssh(
     project_id: str,
     key_type: str = "ed25519",
-    key_name: Optional[str] = None,
+    key_name: str | None = None,
     force: bool = False,
 ) -> dict:
     """Initialize the shared SSH directory for a project and generate a keypair.
@@ -68,7 +65,17 @@ def init_project_ssh(
                 # Best-effort cleanup before regenerating keys.
                 pass
 
-        cmd = ["ssh-keygen", "-t", key_type, "-f", str(priv_path), "-N", "", "-C", f"codexctl {project.id} {getpass.getuser()}@{socket.gethostname()}"]
+        cmd = [
+            "ssh-keygen",
+            "-t",
+            key_type,
+            "-f",
+            str(priv_path),
+            "-N",
+            "",
+            "-C",
+            f"codexctl {project.id} {getpass.getuser()}@{socket.gethostname()}",
+        ]
         try:
             subprocess.run(cmd, check=True)
         except FileNotFoundError:
@@ -88,7 +95,7 @@ def init_project_ssh(
     if (force and cfg_path.exists()) or (not cfg_path.exists()):
         # If force, overwrite; otherwise create if missing
         # Prefer project-provided template; else use packaged default.
-        user_template_path: Optional[Path] = None
+        user_template_path: Path | None = None
         if getattr(project, "ssh_config_template", None):
             tp: Path = project.ssh_config_template  # type: ignore[assignment]
             if tp.is_file():
@@ -96,11 +103,13 @@ def init_project_ssh(
         # Packaged template (importlib.resources Traversable)
         packaged_template = None
         try:
-            packaged_template = resources.files("codexctl") / "resources" / "templates" / "ssh_config.template"
+            packaged_template = (
+                resources.files("codexctl") / "resources" / "templates" / "ssh_config.template"
+            )
         except Exception:
             packaged_template = None
 
-        config_text: Optional[str] = None
+        config_text: str | None = None
         variables = {
             "KEY_NAME": key_name,
         }
@@ -167,8 +176,12 @@ def init_project_ssh(
     # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
     # host-side while the filename is consistent everywhere.
     if not project.ssh_key_name:
-        print("Note: project.yml does not define ssh.key_name; using a derived default key filename.")
-        print(f"      To pin the SSH key filename explicitly, add to {project.root/'project.yml'}:\n        ssh:\n          key_name: {key_name}")
+        print(
+            "Note: project.yml does not define ssh.key_name; using a derived default key filename."
+        )
+        print(
+            f"      To pin the SSH key filename explicitly, add to {project.root / 'project.yml'}:\n        ssh:\n          key_name: {key_name}"
+        )
 
     return {
         "dir": str(target_dir),

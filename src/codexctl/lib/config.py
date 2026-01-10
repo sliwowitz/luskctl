@@ -1,16 +1,14 @@
-from __future__ import annotations
-
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import yaml  # pip install pyyaml
 
-from .paths import config_root as _config_root_base, state_root as _state_root_base
-
+from .paths import config_root as _config_root_base
+from .paths import state_root as _state_root_base
 
 # ---------- Prefix & roots ----------
+
 
 def get_prefix() -> Path:
     """
@@ -90,6 +88,7 @@ def global_config_path() -> Path:
 
 
 # ---------- Global config (UI base port) ----------
+
 
 def load_global_config() -> dict:
     cfg_path = global_config_path()
@@ -182,21 +181,21 @@ def get_envs_base_dir() -> Path:
     return Path(str(base)).expanduser().resolve()
 
 
-def get_global_human_name() -> Optional[str]:
+def get_global_human_name() -> str | None:
     """Return git.human_name from global config, or None if not set."""
     cfg = load_global_config()
     git_cfg = cfg.get("git", {}) or {}
     return git_cfg.get("human_name")
 
 
-def get_global_human_email() -> Optional[str]:
+def get_global_human_email() -> str | None:
     """Return git.human_email from global config, or None if not set."""
     cfg = load_global_config()
     git_cfg = cfg.get("git", {}) or {}
     return git_cfg.get("human_email")
 
 
-def get_global_default_agent() -> Optional[str]:
+def get_global_default_agent() -> str | None:
     """Return default_agent from global config, or None if not set."""
     cfg = load_global_config()
     return cfg.get("default_agent")

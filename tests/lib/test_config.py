@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import tempfile
 import unittest
@@ -53,10 +51,7 @@ class ConfigTests(unittest.TestCase):
             cfg_path = Path(td) / "config.yml"
             envs_dir = Path(td) / "envs"
             cfg_path.write_text(
-                "ui:\n"
-                "  base_port: 8123\n"
-                "envs:\n"
-                f"  base_dir: {envs_dir}\n",
+                f"ui:\n  base_port: 8123\nenvs:\n  base_dir: {envs_dir}\n",
                 encoding="utf-8",
             )
             with unittest.mock.patch.dict(os.environ, {"CODEXCTL_CONFIG_FILE": str(cfg_path)}):

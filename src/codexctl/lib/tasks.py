@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import select
 import shutil
@@ -8,25 +6,24 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
 from .fs import _ensure_dir_writable
+from .images import project_cli_image, project_ui_image
 from .podman import _podman_userns_args
 from .projects import Project, load_project
-from .images import project_cli_image, project_ui_image
 
 
-def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> Optional[str]:
+def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
     """Get git diff from a task's workspace.
-    
+
     Args:
         project_id: The project ID
         task_id: The task ID
         against: What to diff against ("HEAD" or "PREV")
-        
+
     Returns:
         The git diff output as a string, or None if failed
     """
@@ -34,15 +31,15 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
         project = load_project(project_id)
         tasks_root = project.tasks_root
         workspace_dir = tasks_root / task_id / "workspace"
-        
+
         if not workspace_dir.exists() or not workspace_dir.is_dir():
             return None
-            
+
         # Check if this is a git repository
         git_dir = workspace_dir / ".git"
         if not git_dir.exists():
             return None
-            
+
         # Determine what to diff against
         if against == "PREV":
             # Diff against previous commit
@@ -50,7 +47,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
         else:
             # Default: diff against HEAD (uncommitted changes)
             cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD"]
-            
+
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             # Non-zero return code indicates an error; treat as failure
@@ -58,8 +55,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
         # Successful run; stdout may be empty if there is no diff
         return result.stdout
-            
-            
+
     except Exception:
         # If anything goes wrong, return None - this is a best-effort operation
         return None
@@ -67,42 +63,42 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 def copy_to_clipboard(text: str) -> bool:
     """Copy text to system clipboard.
-    
+
     Tries multiple clipboard utilities in order of preference:
     1. wl-copy (Wayland)
     2. xclip (X11)
     3. pbcopy (macOS)
-    
+
     Args:
         text: Text to copy to clipboard
-        
+
     Returns:
         True if successful, False otherwise
     """
     if not text:
         return False
-        
+
     # Try wl-copy first (Wayland)
     try:
         subprocess.run(["wl-copy", "--type", "text/plain"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
-        
+
     # Try xclip (X11)
     try:
         subprocess.run(["xclip", "-selection", "clipboard"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
-        
+
     # Try pbcopy (macOS)
     try:
         subprocess.run(["pbcopy"], input=text, check=True, text=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
-        
+
     return False
 
 
@@ -151,7 +147,7 @@ def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
 
 
-def _normalize_ui_backend(backend: Optional[str]) -> Optional[str]:
+def _normalize_ui_backend(backend: str | None) -> str | None:
     if backend is None:
         return None
     backend = backend.strip()
@@ -162,8 +158,8 @@ def _normalize_ui_backend(backend: Optional[str]) -> Optional[str]:
 
 def _apply_ui_env_overrides(
     env: dict,
-    backend: Optional[str],
-    project_default_agent: Optional[str] = None,
+    backend: str | None,
+    project_default_agent: str | None = None,
 ) -> dict:
     """Return a copy of env with UI-specific overrides applied.
 
@@ -250,7 +246,7 @@ def task_new(project_id: str) -> None:
         "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
         "# It is created by 'codexctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
         "# If you see this file in an initialized workspace, something went wrong.\n",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     meta = {
@@ -298,6 +294,7 @@ def task_list(project_id: str) -> None:
 
 
 # ---------- Pod/port helpers ----------
+
 
 def _is_port_free(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -465,7 +462,7 @@ def _gpu_run_args(project: Project) -> list[str]:
     enabled = False
     try:
         proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
-        run_cfg = (proj_cfg.get("run", {}) or {})
+        run_cfg = proj_cfg.get("run", {}) or {}
         gpus = run_cfg.get("gpus", run_cfg.get("gpu"))
         if isinstance(gpus, str):
             enabled = gpus.lower() == "all"
@@ -478,9 +475,12 @@ def _gpu_run_args(project: Project) -> list[str]:
         return []
 
     args: list[str] = [
-        "--device", "nvidia.com/gpu=all",
-        "-e", "NVIDIA_VISIBLE_DEVICES=all",
-        "-e", "NVIDIA_DRIVER_CAPABILITIES=all",
+        "--device",
+        "nvidia.com/gpu=all",
+        "-e",
+        "NVIDIA_VISIBLE_DEVICES=all",
+        "-e",
+        "NVIDIA_DRIVER_CAPABILITIES=all",
     ]
     hooks_dir = Path("/usr/share/containers/oci/hooks.d")
     if hooks_dir.is_dir():
@@ -599,12 +599,16 @@ def task_run_cli(project_id: str, task_id: str) -> None:
         cmd += ["-e", f"{k}={v}"]
     # Name, workdir, image and command
     cmd += [
-        "--name", f"{project.id}-cli-{task_id}",
-        "-w", "/workspace",
+        "--name",
+        f"{project.id}-cli-{task_id}",
+        "-w",
+        "/workspace",
         project_cli_image(project.id),
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
-        "bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
+        "bash",
+        "-lc",
+        "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
     ]
     print("$", " ".join(map(str, cmd)))
     try:
@@ -634,7 +638,7 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     )
 
 
-def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) -> None:
+def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -665,8 +669,10 @@ def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) ->
     for k, v in env.items():
         cmd += ["-e", f"{k}={v}"]
     cmd += [
-        "--name", container_name,
-        "-w", "/workspace",
+        "--name",
+        container_name,
+        "-w",
+        "/workspace",
         project_ui_image(project.id),
     ]
     print("$", " ".join(map(str, cmd)))
@@ -698,10 +704,7 @@ def task_run_ui(project_id: str, task_id: str, backend: Optional[str] = None) ->
 
         # Secondary marker: log redirection message that currently appears at
         # roughly the same time as the banner above.
-        if "Logging Codex UI activity" in line:
-            return True
-
-        return False
+        return "Logging Codex UI activity" in line
 
     # Follow logs until either the Codex UI readiness marker is seen or the
     # container exits. We deliberately do *not* time out here: as long as the
@@ -759,7 +762,7 @@ def _is_container_running(container_name: str) -> bool:
     return out.lower() == "true"
 
 
-def _stream_initial_logs(container_name: str, timeout_sec: Optional[float], ready_check) -> bool:
+def _stream_initial_logs(container_name: str, timeout_sec: float | None, ready_check) -> bool:
     """Follow container logs and detach when ready, timed out, or container exits.
 
     - container_name: podman container name.

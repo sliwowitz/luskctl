@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
 import inspect
+from dataclasses import dataclass
+from typing import Any
 
 from textual.app import ComposeResult
-from textual.widgets import ListView, ListItem, Static, Button, Label
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.message import Message
+from textual.widgets import Button, Label, ListItem, ListView, Static
 
-from ..lib.projects import Project as CodexProject
 from ..lib.git_gate import GateStalenessInfo
+from ..lib.projects import Project as CodexProject
 
 
 @dataclass
 class TaskMeta:
     task_id: str
     status: str
-    mode: Optional[str]
+    mode: str | None
     workspace: str
-    ui_port: Optional[int]
+    ui_port: int | None
 
 
 class ProjectList(ListView):
@@ -33,9 +32,9 @@ class ProjectList(ListView):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.projects: List[CodexProject] = []
+        self.projects: list[CodexProject] = []
 
-    def set_projects(self, projects: List[CodexProject]) -> None:
+    def set_projects(self, projects: list[CodexProject]) -> None:
         """Populate the list with projects."""
         self.projects = projects
         self.clear()
@@ -81,18 +80,32 @@ class ProjectActions(Static):
             # normal style (which is already bold by default in Textual's
             # theme). Avoid additional [bold] tags so only the color
             # distinguishes the shortcut.
-            yield Button("[yellow]g[/yellow]en", id="btn-generate", compact=True)          # generate Dockerfiles (g)
-            yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)           # build images (b)
-            yield Button("[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True)          # init SSH dir (s)
-            yield Button("[yellow]c[/yellow] gate", id="btn-gate-init", compact=True)      # init git gate (c)
-            yield Button("[yellow]S[/yellow]ync", id="btn-sync-gate", compact=True)        # sync gate from upstream (S)
+            yield Button(
+                "[yellow]g[/yellow]en", id="btn-generate", compact=True
+            )  # generate Dockerfiles (g)
+            yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)  # build images (b)
+            yield Button(
+                "[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True
+            )  # init SSH dir (s)
+            yield Button(
+                "[yellow]c[/yellow] gate", id="btn-gate-init", compact=True
+            )  # init git gate (c)
+            yield Button(
+                "[yellow]S[/yellow]ync", id="btn-sync-gate", compact=True
+            )  # sync gate from upstream (S)
 
         # Second row of actions (task-level).
         with Horizontal():
-            yield Button("[yellow]t[/yellow] new", id="btn-new-task", compact=True)        # new task (t)
-            yield Button("[yellow]r[/yellow] cli", id="btn-task-run-cli", compact=True)    # run CLI for current task (r)
-            yield Button("[yellow]u[/yellow] ui", id="btn-task-run-ui", compact=True)      # run UI for current task (u)
-            yield Button("[yellow]d[/yellow]el", id="btn-task-delete", compact=True)       # delete current task (d)
+            yield Button("[yellow]t[/yellow] new", id="btn-new-task", compact=True)  # new task (t)
+            yield Button(
+                "[yellow]r[/yellow] cli", id="btn-task-run-cli", compact=True
+            )  # run CLI for current task (r)
+            yield Button(
+                "[yellow]u[/yellow] ui", id="btn-task-run-ui", compact=True
+            )  # run UI for current task (u)
+            yield Button(
+                "[yellow]d[/yellow]el", id="btn-task-delete", compact=True
+            )  # delete current task (d)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
         btn_id = event.button.id
@@ -133,10 +146,10 @@ class TaskList(ListView):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.project_id: Optional[str] = None
-        self.tasks: List[TaskMeta] = []
+        self.project_id: str | None = None
+        self.tasks: list[TaskMeta] = []
 
-    def set_tasks(self, project_id: str, tasks_meta: List[Dict[str, Any]]) -> None:
+    def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
         """Populate the list from raw metadata dicts."""
         self.project_id = project_id
         self.tasks = []
@@ -167,7 +180,7 @@ class TaskList(ListView):
 
             self.append(ListItem(Static(label, markup=False)))
 
-    def get_selected_task(self) -> Optional[TaskMeta]:
+    def get_selected_task(self) -> TaskMeta | None:
         idx = self.index
         if 0 <= idx < len(self.tasks):
             return self.tasks[idx]
@@ -187,6 +200,7 @@ class TaskDetails(Static):
 
     class CopyDiffRequested(Message):
         """Message sent when user requests to copy git diff."""
+
         def __init__(self, project_id: str, task_id: str, diff_type: str) -> None:
             super().__init__()
             self.project_id = project_id
@@ -195,8 +209,8 @@ class TaskDetails(Static):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.current_project_id: Optional[str] = None
-        self.current_task_id: Optional[str] = None
+        self.current_project_id: str | None = None
+        self.current_task_id: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Label("Task Details", id="task-details-title")
@@ -205,9 +219,9 @@ class TaskDetails(Static):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
             yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
 
-    def set_task(self, task: Optional[TaskMeta]) -> None:
+    def set_task(self, task: TaskMeta | None) -> None:
         content = self.query_one("#task-details-content", Static)
-        
+
         if task is None:
             content.update("No task selected.")
             self.current_project_id = None
@@ -233,15 +247,13 @@ class TaskDetails(Static):
         """Handle button presses for copy diff actions."""
         if not self.current_project_id or not self.current_task_id:
             return
-            
+
         btn_id = event.button.id
         diff_type = "HEAD" if btn_id == "btn-copy-diff-head" else "PREV"
-        
-        self.post_message(self.CopyDiffRequested(
-            self.current_project_id, 
-            self.current_task_id, 
-            diff_type
-        ))
+
+        self.post_message(
+            self.CopyDiffRequested(self.current_project_id, self.current_task_id, diff_type)
+        )
 
 
 class ProjectState(Static):
@@ -249,10 +261,10 @@ class ProjectState(Static):
 
     def set_state(
         self,
-        project: Optional[CodexProject],
-        state: Optional[dict],
-        task_count: Optional[int] = None,
-        staleness: Optional[GateStalenessInfo] = None,
+        project: CodexProject | None,
+        state: dict | None,
+        task_count: int | None = None,
+        staleness: GateStalenessInfo | None = None,
     ) -> None:
         if project is None or state is None:
             self.update("No project selected.")
@@ -289,7 +301,9 @@ class ProjectState(Static):
             lines.append(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}")
             lines.append(f"  Date:     {gate_commit.get('commit_date', 'unknown')}")
             lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
-            lines.append(f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}")
+            lines.append(
+                f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}"
+            )
 
         # Add upstream staleness info if available (gatekeeping projects only)
         if staleness is not None:
@@ -302,11 +316,17 @@ class ProjectState(Static):
                 if staleness.commits_behind is not None:
                     behind_str = str(staleness.commits_behind)
                 lines.append(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
-                lines.append(f"  Upstream: {staleness.upstream_head[:8] if staleness.upstream_head else 'unknown'}")
-                lines.append(f"  Gate:     {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}")
+                lines.append(
+                    f"  Upstream: {staleness.upstream_head[:8] if staleness.upstream_head else 'unknown'}"
+                )
+                lines.append(
+                    f"  Gate:     {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
+                )
             else:
                 lines.append(f"  Status:   Up to date on {staleness.branch}")
-                lines.append(f"  Commit:   {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}")
+                lines.append(
+                    f"  Commit:   {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
+                )
             lines.append(f"  Checked:  {staleness.last_checked}")
 
         self.update("\n".join(lines))

@@ -6,7 +6,6 @@ Fetches models from Blablador's OpenAI-compatible API, prompts for a model
 selection, and runs OpenCode with full permissions inside the container.
 """
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -15,7 +14,7 @@ import sys
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import Iterable, List, Optional
+from collections.abc import Iterable
 from urllib import request, error
 
 
