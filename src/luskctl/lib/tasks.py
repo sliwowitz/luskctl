@@ -810,30 +810,24 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Run failed: {e}")
 
-    # Stream initial logs and detach once the Codex UI server reports that it
+    # Stream initial logs and detach once the LuskUI server reports that it
     # is actually running. We intentionally rely on a *log marker* here
     # instead of just probing the TCP port, because podman exposes the host port
     # regardless of the state of the routed guest port.
-    # Codex UI currently prints stable lines when the server is ready, e.g.:
-    #   "Logging Codex UI activity to /var/log/luskui.log"
-    #   "Codex UI (SDK streaming) on http://0.0.0.0:7860 - repo /workspace"
+    # LuskUI currently prints a stable line when the server is ready, e.g.:
+    #   "LuskUI started"
     #
-    # We treat the appearance of either of these as the readiness signal.
+    # We treat the appearance of this as the readiness signal.
     def _ui_ready(line: str) -> bool:
         line = line.strip()
         if not line:
             return False
 
-        # Primary marker: the main startup banner emitted by Codex UI when
+        # Primary marker: the main startup banner emitted by LuskUI when
         # the HTTP server is ready to accept connections.
-        if "Codex UI (" in line:
-            return True
+        return "LuskUI started" in line
 
-        # Secondary marker: log redirection message that currently appears at
-        # roughly the same time as the banner above.
-        return "Logging Codex UI activity" in line
-
-    # Follow logs until either the Codex UI readiness marker is seen or the
+    # Follow logs until either the LuskUI readiness marker is seen or the
     # container exits. We deliberately do *not* time out here: as long as the
     # init script keeps making progress, the user sees the live logs and can
     # decide to Ctrl+C if it hangs.
