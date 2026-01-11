@@ -78,6 +78,26 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
     return tids
 
 
+def _supports_color() -> bool:
+    """Check if stdout supports color output."""
+    import sys
+    return sys.stdout.isatty()
+
+
+def _color(text: str, code: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"\x1b[{code}m{text}\x1b[0m"
+
+
+def _yes_no(value: bool, enabled: bool) -> str:
+    return _color("yes" if value else "no", "32" if value else "31", enabled)
+
+
+def _gray(text: str, enabled: bool) -> str:
+    return _color(text, "90", enabled)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="luskctl",
@@ -294,10 +314,15 @@ def main() -> None:
     elif args.cmd == "auth-blablador":
         blablador_auth(args.project_id)
     elif args.cmd == "config":
+        color_enabled = _supports_color()
         # READ PATHS
         print("Configuration (read):")
         gcfg = _global_config_path()
-        print(f"- Global config file: {gcfg} (exists: {'yes' if Path(gcfg).is_file() else 'no'})")
+        gcfg_exists = Path(gcfg).is_file()
+        print(
+            f"- Global config file: {_gray(str(gcfg), color_enabled)} "
+            f"(exists: {_yes_no(gcfg_exists, color_enabled)})"
+        )
         paths = _global_config_search_paths()
         if paths:
             print("- Global config search order:")

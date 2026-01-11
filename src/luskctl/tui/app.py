@@ -33,8 +33,8 @@ if _HAS_TEXTUAL:
     from textual import on
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Button, Header, Footer
     from textual.screen import ModalScreen
+    from textual.widgets import Button, Footer, Header, Label
 
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
@@ -57,7 +57,6 @@ if _HAS_TEXTUAL:
         task_run_web,
     )
     from .widgets import (
-        ProjectActions,
         ProjectList,
         ProjectState,
         StatusBar,
@@ -68,7 +67,7 @@ if _HAS_TEXTUAL:
 
     class ProjectActionsScreen(ModalScreen[str | None]):
         """Modal screen for project actions."""
-        
+
         CSS = """
         ProjectActionsScreen {
             align: center middle;
@@ -91,7 +90,7 @@ if _HAS_TEXTUAL:
             margin: 0 1;
         }
         """
-        
+
         def compose(self) -> ComposeResult:
             with Horizontal(id="action-dialog"):
                 with Vertical():
@@ -106,7 +105,7 @@ if _HAS_TEXTUAL:
                     yield Label(" ")  # Spacer
                     with Horizontal():
                         yield Button("Cancel", id="cancel", variant="default")
-        
+
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
             if button_id == "cancel":
@@ -114,7 +113,7 @@ if _HAS_TEXTUAL:
             else:
                 action_map = {
                     "generate": "generate",
-                    "build": "build", 
+                    "build": "build",
                     "build_all": "build_all",
                     "sync_gate": "sync_gate"
                 }
@@ -122,7 +121,7 @@ if _HAS_TEXTUAL:
 
     class TaskActionsScreen(ModalScreen[str | None]):
         """Modal screen for task actions."""
-        
+
         CSS = """
         TaskActionsScreen {
             align: center middle;
@@ -145,7 +144,7 @@ if _HAS_TEXTUAL:
             margin: 0 1;
         }
         """
-        
+
         def compose(self) -> ComposeResult:
             with Horizontal(id="action-dialog"):
                 with Vertical():
@@ -159,7 +158,7 @@ if _HAS_TEXTUAL:
                     yield Label(" ")  # Spacer
                     with Horizontal():
                         yield Button("Cancel", id="cancel", variant="default")
-        
+
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
             if button_id == "cancel":
@@ -167,7 +166,7 @@ if _HAS_TEXTUAL:
             else:
                 action_map = {
                     "new": "new",
-                    "cli": "cli", 
+                    "cli": "cli",
                     "web": "web",
                     "delete": "delete"
                 }
@@ -281,7 +280,7 @@ if _HAS_TEXTUAL:
         def compose(self) -> ComposeResult:
             # Use Textual's default Header which will show our title
             yield Header()
-            
+
             # Main layout using grid
             with Horizontal():
                 # Left pane: project list (top) + selected project info (bottom)
@@ -292,10 +291,10 @@ if _HAS_TEXTUAL:
                 with Vertical(id="right-pane"):
                     yield TaskList(id="task-list")
                     yield TaskDetails(id="task-details")
-            
+
             # Use Textual's default Footer which will show key bindings
             yield Footer()
-            
+
             # Custom status bar for our messages
             yield StatusBar(id="status-bar")
 
@@ -320,7 +319,7 @@ if _HAS_TEXTUAL:
 
             # Load selection state before refreshing projects
             self._load_selection_state()
-            
+
             await self.refresh_projects()
             # Defer layout logging until after the first refresh cycle so
             # widgets have real sizes. This will help compare left vs right
@@ -392,8 +391,8 @@ if _HAS_TEXTUAL:
         def _load_selection_state(self) -> None:
             """Load last selected project and tasks from persistent storage."""
             try:
-                from pathlib import Path as _Path
                 import json
+                from pathlib import Path as _Path
 
                 state_path = _Path("~/.luskctl-tui-state.json").expanduser()
                 if state_path.exists():
@@ -409,8 +408,8 @@ if _HAS_TEXTUAL:
         def _save_selection_state(self) -> None:
             """Save current selection state to persistent storage."""
             try:
-                from pathlib import Path as _Path
                 import json
+                from pathlib import Path as _Path
 
                 state_path = _Path("~/.luskctl-tui-state.json").expanduser()
                 state = {
@@ -465,7 +464,7 @@ if _HAS_TEXTUAL:
                 elif self.current_project_id is None:
                     self.current_project_id = projects[0].id
                     proj_widget.select_project(self.current_project_id)
-                
+
                 await self.refresh_tasks()
                 # Start upstream polling for the selected project
                 self._start_upstream_polling()
@@ -793,7 +792,7 @@ if _HAS_TEXTUAL:
             # Save the project selection
             self._last_selected_project = self.current_project_id
             self._save_selection_state()
-            
+
             await self.refresh_tasks()
             # Start polling for the newly selected project
             self._start_upstream_polling()
@@ -803,12 +802,12 @@ if _HAS_TEXTUAL:
             """Called when user selects a task in the list."""
             self.current_project_id = message.project_id
             self.current_task = message.task
-            
+
             # Save the task selection for this project
             if self.current_project_id and self.current_task:
                 self._last_selected_tasks[self.current_project_id] = self.current_task.task_id
                 self._save_selection_state()
-            
+
             details = self.query_one("#task-details", TaskDetails)
             details.set_task(self.current_task)
 
@@ -949,13 +948,11 @@ if _HAS_TEXTUAL:
 
         async def _sync_gate_worker(self, project_id: str) -> None:
             """Background worker to sync gate (init if needed)."""
-            import asyncio
-
             try:
                 # Check if gate exists
                 project = load_project(project_id)
                 gate_exists = project.gate_path.exists()
-                
+
                 if not gate_exists:
                     # Init gate
                     result = init_project_gate(project_id)
@@ -1098,7 +1095,7 @@ if _HAS_TEXTUAL:
                     print(
                         f"Starting UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
                     )
-                    task_run_ui(self.current_project_id, tid, backend=backend)
+                    task_run_web(self.current_project_id, tid, backend=backend)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")
