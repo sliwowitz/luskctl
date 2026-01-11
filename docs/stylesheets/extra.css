@@ -1,0 +1,79 @@
+/* Black/Red/Gold palette with subdued neutrals. */
+:root {
+  --lusk-black: #0b0b0b;
+  --lusk-red: #a31219;
+  --lusk-red-bright: #e04b3f;
+  --lusk-gold: #c79a22;
+  --lusk-gold-bright: #d8b454;
+
+  --md-text-font: "Ubuntu", sans-serif;
+  --md-code-font: "Ubuntu Mono", monospace;
+
+  --md-primary-fg-color: var(--lusk-black);
+  --md-primary-fg-color--light: #1a1a1a;
+  --md-primary-fg-color--dark: #000000;
+
+  --md-primary-bg-color: #f7f2e8;
+  --md-primary-bg-color--light: #f7f2e8;
+  --md-primary-bg-color--dark: #e7decc;
+
+  --md-accent-fg-color: var(--lusk-gold);
+  --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
+
+  --md-typeset-a-color: var(--lusk-red);
+  --md-typeset-mark-color: var(--lusk-gold-bright);
+}
+
+body,
+.md-typeset,
+.md-header,
+.md-tabs,
+.md-nav,
+.md-search__input {
+  font-family: var(--md-text-font);
+}
+
+pre,
+code,
+kbd,
+samp {
+  font-family: var(--md-code-font);
+}
+
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: #f7f2e8;
+  --md-default-fg-color: #111111;
+  --md-default-fg-color--light: #2b2b2b;
+  --md-default-fg-color--lighter: #4a4a4a;
+  --md-default-fg-color--lightest: #6a6a6a;
+  --md-code-bg-color: #efe6d6;
+  --md-code-fg-color: #111111;
+  --md-footer-bg-color: #0b0b0b;
+  --md-footer-fg-color: #f7f2e8;
+  --md-footer-fg-color--light: #d9cfbd;
+  --md-footer-fg-color--lighter: #bdb39f;
+  --md-footer-fg-color--lightest: #a79c87;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0b0b0b;
+  --md-default-fg-color: #f2ead9;
+  --md-default-fg-color--light: #d8cfbf;
+  --md-default-fg-color--lighter: #bcb4a5;
+  --md-default-fg-color--lightest: #a19a8d;
+  --md-code-bg-color: #151515;
+  --md-code-fg-color: #f2ead9;
+  --md-footer-bg-color: #000000;
+  --md-footer-fg-color: #f2ead9;
+  --md-footer-fg-color--light: #d8cfbf;
+  --md-footer-fg-color--lighter: #bcb4a5;
+  --md-footer-fg-color--lightest: #a19a8d;
+
+  --md-primary-bg-color: #f2ead9;
+  --md-primary-bg-color--light: #f2ead9;
+  --md-primary-bg-color--dark: #d8cfbf;
+
+  --md-accent-fg-color: var(--lusk-gold-bright);
+  --md-accent-fg-color--transparent: rgba(216, 180, 84, 0.14);
+  --md-typeset-a-color: var(--lusk-red-bright);
+}

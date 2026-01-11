@@ -7,8 +7,8 @@ repo_name: sliwowitz/luskctl
 theme:
   name: material
   font:
-    text: "'Ubuntu', sans-serif"
-    code: "'Ubuntu Mono', monospace"
+    text: Ubuntu
+    code: Ubuntu Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -93,3 +93,4 @@ extra:
 
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap
+  - stylesheets/extra.css
