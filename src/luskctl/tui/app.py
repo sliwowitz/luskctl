@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - textual not installed
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
-    from textual import on, screen
+    from textual import events, on, screen
     from textual.app import App, ComposeResult
 
     try:  # pragma: no cover - optional import for test stubs
@@ -82,6 +82,11 @@ if _HAS_TEXTUAL:
             _modal_binding("q", "dismiss", "Cancel"),
             _modal_binding("up", "app.focus_previous", "Previous"),
             _modal_binding("down", "app.focus_next", "Next"),
+            _modal_binding("d", "generate", "Generate dockerfiles"),
+            _modal_binding("b", "build", "Build project image"),
+            _modal_binding("a", "build_all", "Build all images"),
+            _modal_binding("s", "init_ssh", "Init SSH"),
+            _modal_binding("g", "sync_gate", "Sync git gate"),
         ]
 
         COMPACT_HEIGHT = 20
@@ -191,8 +196,59 @@ if _HAS_TEXTUAL:
                 }
                 self.dismiss(action_map.get(button_id))
 
+        def on_key(self, event: events.Key) -> None:
+            key = event.key.lower()
+            if key in {"escape", "q"}:
+                self.action_dismiss()
+                event.stop()
+                return
+            if key == "up":
+                if self.app:
+                    self.app.action_focus_previous()
+                event.stop()
+                return
+            if key == "down":
+                if self.app:
+                    self.app.action_focus_next()
+                event.stop()
+                return
+            if key == "d":
+                self.action_generate()
+                event.stop()
+                return
+            if key == "b":
+                self.action_build()
+                event.stop()
+                return
+            if key == "a":
+                self.action_build_all()
+                event.stop()
+                return
+            if key == "s":
+                self.action_init_ssh()
+                event.stop()
+                return
+            if key == "g":
+                self.action_sync_gate()
+                event.stop()
+
         def action_dismiss(self) -> None:
             self.dismiss(None)
+
+        def action_generate(self) -> None:
+            self.dismiss("generate")
+
+        def action_build(self) -> None:
+            self.dismiss("build")
+
+        def action_build_all(self) -> None:
+            self.dismiss("build_all")
+
+        def action_init_ssh(self) -> None:
+            self.dismiss("init_ssh")
+
+        def action_sync_gate(self) -> None:
+            self.dismiss("sync_gate")
 
         def on_mount(self) -> None:
             first_button = self.query_one("#action-buttons Button", Button)
@@ -213,6 +269,10 @@ if _HAS_TEXTUAL:
             _modal_binding("q", "dismiss", "Cancel"),
             _modal_binding("up", "app.focus_previous", "Previous"),
             _modal_binding("down", "app.focus_next", "Next"),
+            _modal_binding("n", "new_task", "New task"),
+            _modal_binding("c", "cli", "CLI agent"),
+            _modal_binding("w", "web", "Web UI"),
+            _modal_binding("d", "delete", "Delete task"),
         ]
 
         COMPACT_HEIGHT = 18
@@ -299,8 +359,58 @@ if _HAS_TEXTUAL:
                 action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
                 self.dismiss(action_map.get(button_id))
 
+        def on_key(self, event: events.Key) -> None:
+            key = event.key.lower()
+            if key in {"escape", "q"}:
+                self.action_dismiss()
+                event.stop()
+                return
+            if key == "up":
+                if self.app:
+                    self.app.action_focus_previous()
+                event.stop()
+                return
+            if key == "down":
+                if self.app:
+                    self.app.action_focus_next()
+                event.stop()
+                return
+            if key == "n":
+                self.action_new_task()
+                event.stop()
+                return
+            if key == "c":
+                self.action_cli()
+                event.stop()
+                return
+            if key == "w":
+                self.action_web()
+                event.stop()
+                return
+            if key == "d":
+                self.action_delete()
+                event.stop()
+
         def action_dismiss(self) -> None:
             self.dismiss(None)
+
+        def action_new_task(self) -> None:
+            self.dismiss("new")
+
+        def action_cli(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("cli")
+
+        def action_web(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("web")
+
+        def action_delete(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("delete")
 
         def on_mount(self) -> None:
             first_button = self.query_one("#action-buttons Button", Button)

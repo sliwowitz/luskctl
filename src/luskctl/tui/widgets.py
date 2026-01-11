@@ -82,6 +82,15 @@ class ProjectList(ListView):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a row, send a semantic ProjectSelected message."""
+        self._post_selected_project()
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
+        """Update selection immediately when highlight changes."""
+        if event.item is None:
+            return
+        self._post_selected_project()
+
+    def _post_selected_project(self) -> None:
         idx = self.index
         if 0 <= idx < len(self.projects):
             proj_id = self.projects[idx].id
@@ -238,6 +247,15 @@ class TaskList(ListView):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
+        self._post_selected_task()
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
+        """Update selection immediately when highlight changes."""
+        if event.item is None:
+            return
+        self._post_selected_task()
+
+    def _post_selected_task(self) -> None:
         if self.project_id is None:
             return
         task = self.get_selected_task()
