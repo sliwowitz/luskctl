@@ -35,27 +35,7 @@ pip install .
 
 # With TUI support
 pip install '.[tui]'
-
-# Test bash completions (should work automatically)
-eval "$(register-python-argcomplete luskctl)"  # Only needed if global handler not working
 ```
-
-### Bash Completions
-
-Bash completions work automatically through the **global python-argcomplete system**:
-
-1. **Automatic Detection**: When installed via pip, luskctl is registered as a console script that uses argcomplete
-2. **Global Handler**: The system's `/etc/bash_completion.d/global-python-argcomplete` automatically detects and completes Python console scripts
-3. **No Manual Setup Needed**: Completions work immediately after installation on systems with bash-completion
-
-**Troubleshooting:**
-
-If completions don't work:
-- Ensure bash-completion is installed: `sudo apt-get install bash-completion`
-- Source it in your current shell: `source /usr/share/bash-completion/bash_completion`
-- For immediate testing: `eval "$(register-python-argcomplete luskctl)"`
-
-**How it works:** The `argcomplete.autocomplete(parser)` call in luskctl's main.py enables completions when the global argcomplete handler detects the command.
 
 ### Basic Workflow
 
