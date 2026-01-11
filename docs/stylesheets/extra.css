@@ -2,6 +2,7 @@
 :root {
   --lusk-black: #0b0b0b;
   --lusk-red: #a31219;
+  --lusk-red-pure: #c00000;
   --lusk-red-bright: #e04b3f;
   --lusk-gold: #c79a22;
   --lusk-gold-bright: #d8b454;
@@ -40,6 +41,19 @@ samp {
   font-family: var(--md-code-font);
 }
 
+.md-typeset a:hover,
+.md-nav__link:hover,
+.md-tabs__link:hover,
+.md-header__button:hover {
+  color: var(--lusk-red-pure);
+}
+
+.md-nav__item--active > .md-nav__link,
+.md-nav__link--active,
+.md-tabs__link--active {
+  color: var(--lusk-gold-bright);
+}
+
 [data-md-color-scheme="default"] {
   --md-default-bg-color: #f7f2e8;
   --md-default-fg-color: #111111;
@@ -53,6 +67,9 @@ samp {
   --md-footer-fg-color--light: #d9cfbd;
   --md-footer-fg-color--lighter: #bdb39f;
   --md-footer-fg-color--lightest: #a79c87;
+  --md-accent-fg-color: var(--lusk-gold);
+  --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
+  --md-typeset-a-color: var(--lusk-red);
 }
 
 [data-md-color-scheme="slate"] {
