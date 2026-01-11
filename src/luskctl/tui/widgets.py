@@ -41,7 +41,7 @@ class ProjectList(ListView):
         for proj in projects:
             # Use emojis instead of text labels
             if proj.security_class == "gatekeeping":
-                security_emoji = "🏰"  # Castle emoji for gatekeeping
+                security_emoji = "🚪"  # Door emoji for gatekeeping
             else:
                 security_emoji = "🌐"  # Globe emoji for online
             label = f"{proj.id} {security_emoji}"
@@ -175,7 +175,14 @@ class TaskList(ListView):
             if tm.mode == "cli":
                 task_emoji = "⌨️"  # Keyboard emoji for CLI
             elif tm.mode == "web":
-                task_emoji = "🕸️"  # Spider web emoji for web
+                # Use backend-specific emojis for web tasks
+                backend = tm.task_id.split('-')[-1] if '-' in tm.task_id else "codex"
+                if backend == "mistral":
+                    task_emoji = "🏰"  # Castle emoji for Mistral
+                elif backend == "claude":
+                    task_emoji = "🌐"  # Globe emoji for Claude
+                else:  # codex or unknown
+                    task_emoji = "🕸️"  # Spider web emoji for Codex
             
             # Update status display to be more consistent
             status_display = tm.status
@@ -257,8 +264,17 @@ class TaskDetails(Static):
             task_emoji = "⌨️ "  # Keyboard emoji for CLI
             mode_display = "CLI"
         elif task.mode == "web":
-            task_emoji = "🕸️ "  # Spider web emoji for web
-            mode_display = "Web UI"
+            # Use backend-specific emojis for web tasks
+            backend = task.task_id.split('-')[-1] if '-' in task.task_id else "codex"
+            if backend == "mistral":
+                task_emoji = "🏰 "  # Castle emoji for Mistral
+                mode_display = "Web UI (Mistral)"
+            elif backend == "claude":
+                task_emoji = "🌐 "  # Globe emoji for Claude
+                mode_display = "Web UI (Claude)"
+            else:  # codex or unknown
+                task_emoji = "🕸️ "  # Spider web emoji for Codex
+                mode_display = "Web UI (Codex)"
         
         # Update status display
         status_display = task.status
@@ -322,7 +338,7 @@ class ProjectState(Static):
 
         # Use emojis for security class
         if project.security_class == "gatekeeping":
-            security_emoji = "🏰"  # Castle emoji for gatekeeping
+            security_emoji = "🚪"  # Door emoji for gatekeeping
         else:
             security_emoji = "🌐"  # Globe emoji for online
         

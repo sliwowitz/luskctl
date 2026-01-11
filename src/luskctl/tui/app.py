@@ -101,7 +101,8 @@ if _HAS_TEXTUAL:
                         yield Button("[g]enerate", id="generate", variant="primary")
                         yield Button("[b]uild", id="build", variant="primary")
                         yield Button("build [a]ll", id="build_all", variant="primary")
-                        yield Button("[s]ync gate", id="sync_gate", variant="primary")
+                        yield Button("initialize [s]sh", id="init_ssh", variant="primary")
+                        yield Button("sync [g]ate", id="sync_gate", variant="primary")
                     yield Label(" ")  # Spacer
                     with Horizontal():
                         yield Button("Cancel", id="cancel", variant="default")
@@ -890,6 +891,8 @@ if _HAS_TEXTUAL:
                 await self.action_build_images()
             elif action == "build_all":
                 await self._action_build_all_images()
+            elif action == "init_ssh":
+                await self.action_init_ssh()
             elif action == "sync_gate":
                 await self._action_sync_gate()
 
