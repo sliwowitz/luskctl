@@ -12,7 +12,7 @@ from .images import (
     base_dev_image,
     project_cli_image,
     project_dev_image,
-    project_ui_image,
+    project_web_image,
 )
 from .projects import _effective_ssh_key_name, load_project
 
@@ -164,7 +164,7 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     l1_cli_image = agent_cli_image(base_image)
     l1_ui_image = agent_ui_image(base_image)
     l2_cli_image = project_cli_image(project.id)
-    l2_ui_image = project_ui_image(project.id)
+    l2_ui_image = project_web_image(project.id)
     l2_dev_image = project_dev_image(project.id)
 
     cmds = [

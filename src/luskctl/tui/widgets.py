@@ -19,7 +19,7 @@ class TaskMeta:
     status: str
     mode: str | None
     workspace: str
-    ui_port: int | None
+    web_port: int | None
 
 
 class ProjectList(ListView):
@@ -39,7 +39,12 @@ class ProjectList(ListView):
         self.projects = projects
         self.clear()
         for proj in projects:
-            label = f"{proj.id} [{proj.security_class}]"
+            # Use emojis instead of text labels
+            if proj.security_class == "gatekeeping":
+                security_emoji = "🏰"  # Castle emoji for gatekeeping
+            else:
+                security_emoji = "🌐"  # Globe emoji for online
+            label = f"{proj.id} {security_emoji}"
             # Disable Rich markup to avoid surprises
             self.append(ListItem(Static(label, markup=False)))
 
@@ -101,8 +106,8 @@ class ProjectActions(Static):
                 "[yellow]r[/yellow] cli", id="btn-task-run-cli", compact=True
             )  # run CLI for current task (r)
             yield Button(
-                "[yellow]u[/yellow] ui", id="btn-task-run-ui", compact=True
-            )  # run UI for current task (u)
+                "[yellow]w[/yellow] web", id="btn-task-run-web", compact=True
+            )  # run web for current task (w)
             yield Button(
                 "[yellow]d[/yellow]el", id="btn-task-delete", compact=True
             )  # delete current task (d)
@@ -122,7 +127,7 @@ class ProjectActions(Static):
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
-            "btn-task-run-ui": "action_run_ui",
+            "btn-task-run-web": "action_run_web",
             "btn-task-delete": "action_delete_task",
         }
         method_name = mapping.get(btn_id)
@@ -161,19 +166,32 @@ class TaskList(ListView):
                 status=meta.get("status", "unknown"),
                 mode=meta.get("mode"),
                 workspace=meta.get("workspace", ""),
-                ui_port=meta.get("ui_port"),
+                web_port=meta.get("web_port"),
             )
             self.tasks.append(tm)
 
+            # Use emojis for task types and update status display
+            task_emoji = ""
+            if tm.mode == "cli":
+                task_emoji = "⌨️"  # Keyboard emoji for CLI
+            elif tm.mode == "web":
+                task_emoji = "🕸️"  # Spider web emoji for web
+            
+            # Update status display to be more consistent
+            status_display = tm.status
             extra_parts = []
-            if tm.mode:
-                extra_parts.append(f"mode={tm.mode}")
-            if tm.ui_port:
-                extra_parts.append(f"port={tm.ui_port}")
+            
+            # For running tasks, show "running" consistently
+            if tm.status == "created" and tm.web_port:
+                status_display = "running"
+                extra_parts.append(f"port={tm.web_port}")
+            elif tm.status == "created" and tm.mode == "cli":
+                status_display = "running"
+            
             extra_str = "; ".join(extra_parts)
 
             # This string has [...] and "mode=..." so we MUST disable markup.
-            label = f"{tm.task_id} [{tm.status}"
+            label = f"{tm.task_id} {task_emoji} [{status_display}"
             if extra_str:
                 label += f"; {extra_str}"
             label += "]"
@@ -196,7 +214,7 @@ class TaskList(ListView):
 
 
 class TaskDetails(Static):
-    """Bottom panel showing details for the currently selected task."""
+    """Panel showing details for the currently selected task."""
 
     class CopyDiffRequested(Message):
         """Message sent when user requests to copy git diff."""
@@ -232,14 +250,31 @@ class TaskDetails(Static):
         self.current_project_id = self.app.current_project_id if self.app else None
         self.current_task_id = task.task_id
 
+        # Use emojis for task types
+        task_emoji = ""
+        mode_display = task.mode or 'unset'
+        if task.mode == "cli":
+            task_emoji = "⌨️ "  # Keyboard emoji for CLI
+            mode_display = "CLI"
+        elif task.mode == "web":
+            task_emoji = "🕸️ "  # Spider web emoji for web
+            mode_display = "Web UI"
+        
+        # Update status display
+        status_display = task.status
+        if task.status == "created" and task.web_port:
+            status_display = "running"
+        elif task.status == "created" and task.mode == "cli":
+            status_display = "running"
+        
         lines = [
             f"Task ID:   {task.task_id}",
-            f"Status:    {task.status}",
-            f"Mode:      {task.mode or 'unset'}",
+            f"Status:    {status_display}",
+            f"Type:      {task_emoji}{mode_display}",
             f"Workspace: {task.workspace}",
         ]
-        if task.ui_port:
-            lines.append(f"UI URL:    http://127.0.0.1:{task.ui_port}/")
+        if task.web_port:
+            lines.append(f"Web URL:   http://127.0.0.1:{task.web_port}/")
 
         content.update("\n".join(lines))
 
@@ -257,7 +292,10 @@ class TaskDetails(Static):
 
 
 class ProjectState(Static):
-    """Small panel summarizing infrastructure state for the active project."""
+    """Panel showing detailed information about the active project."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
 
     def set_state(
         self,
@@ -282,8 +320,14 @@ class ProjectState(Static):
 
         upstream = project.upstream_url or "-"
 
+        # Use emojis for security class
+        if project.security_class == "gatekeeping":
+            security_emoji = "🏰"  # Castle emoji for gatekeeping
+        else:
+            security_emoji = "🌐"  # Globe emoji for online
+        
         lines = [
-            f"Project:   {project.id} [{project.security_class}]",
+            f"Project:   {project.id} {security_emoji}",
             upstream,
             "",
             f"Dockerfiles: {docker_s}",

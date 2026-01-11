@@ -12,7 +12,7 @@ import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
 from .fs import _ensure_dir_writable
-from .images import project_cli_image, project_ui_image
+from .images import project_cli_image, project_web_image
 from .podman import _podman_userns_args
 from .projects import Project, load_project
 
@@ -231,12 +231,10 @@ def copy_to_clipboard(text: str) -> bool:
 
 # ---------- Tasks ----------
 
-UI_BACKENDS = ("codex", "claude", "mistral")
-# Host-side env prefix for passthrough to container UI.
-# These get remapped to LUSKUI_* when exported to containers for backward
-# compatibility with the container-side scripts (luskui-entry.sh).
-UI_ENV_PASSTHROUGH_PREFIX = "LUSKUI_"
-UI_ENV_PASSTHROUGH_KEYS = (
+WEB_BACKENDS = ("codex", "claude", "mistral")
+# Host-side env prefix for passthrough to container web UI.
+WEB_ENV_PASSTHROUGH_PREFIX = "LUSKUI_"
+WEB_ENV_PASSTHROUGH_KEYS = (
     "ANTHROPIC_API_KEY",
     "CLAUDE_API_KEY",
     "MISTRAL_API_KEY",
@@ -274,7 +272,7 @@ def _ensure_dir(d: Path) -> None:
     d.mkdir(parents=True, exist_ok=True)
 
 
-def _normalize_ui_backend(backend: str | None) -> str | None:
+def _normalize_web_backend(backend: str | None) -> str | None:
     if backend is None:
         return None
     backend = backend.strip()
@@ -283,12 +281,12 @@ def _normalize_ui_backend(backend: str | None) -> str | None:
     return backend.lower()
 
 
-def _apply_ui_env_overrides(
+def _apply_web_env_overrides(
     env: dict,
     backend: str | None,
     project_default_agent: str | None = None,
 ) -> dict:
-    """Return a copy of env with UI-specific overrides applied.
+    """Return a copy of env with web-specific overrides applied.
 
     Backend precedence (highest to lowest):
     1. Explicit backend argument (from CLI --backend flag)
@@ -299,24 +297,22 @@ def _apply_ui_env_overrides(
     merged = dict(env)
 
     # Determine effective backend with precedence
-    effective_backend = _normalize_ui_backend(backend)
+    effective_backend = _normalize_web_backend(backend)
     if not effective_backend:
-        effective_backend = _normalize_ui_backend(os.environ.get("DEFAULT_AGENT"))
+        effective_backend = _normalize_web_backend(os.environ.get("DEFAULT_AGENT"))
     if not effective_backend:
-        effective_backend = _normalize_ui_backend(project_default_agent)
+        effective_backend = _normalize_web_backend(project_default_agent)
     if not effective_backend:
         effective_backend = "codex"
 
-    # Export as LUSKUI_BACKEND to the container. The container-side scripts
-    # (luskui-entry.sh) still use this name; renaming is planned but the
-    # container interface is kept stable for now.
+    # Export as LUSKUI_BACKEND to the container
     merged["LUSKUI_BACKEND"] = effective_backend
 
     for key, value in os.environ.items():
-        if key.startswith(UI_ENV_PASSTHROUGH_PREFIX) and key not in merged:
+        if key.startswith(WEB_ENV_PASSTHROUGH_PREFIX) and key not in merged:
             merged[key] = value
 
-    for key in UI_ENV_PASSTHROUGH_KEYS:
+    for key in WEB_ENV_PASSTHROUGH_KEYS:
         if key not in merged:
             val = os.environ.get(key)
             if val:
@@ -381,7 +377,7 @@ def task_new(project_id: str) -> None:
         "status": "created",
         "mode": None,
         "workspace": str(ws),
-        "ui_port": None,
+        "web_port": None,
     }
     (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
     print(f"Created task {next_id} in {ws}")
@@ -410,7 +406,7 @@ def task_list(project_id: str) -> None:
         tid = t.get("task_id", "?")
         status = t.get("status", "unknown")
         mode = t.get("mode")
-        port = t.get("ui_port")
+        port = t.get("web_port")
         extra = []
         if mode:
             extra.append(f"mode={mode}")
@@ -433,7 +429,7 @@ def _is_port_free(port: int) -> bool:
     return True
 
 
-def _collect_all_ui_ports() -> set[int]:
+def _collect_all_web_ports() -> set[int]:
     # Scan all task metas for any project
     root = state_root() / "projects"
     ports: set[int] = set()
@@ -448,14 +444,14 @@ def _collect_all_ui_ports() -> set[int]:
                 meta = yaml.safe_load(f.read_text()) or {}
             except Exception:
                 continue
-            port = meta.get("ui_port")
+            port = meta.get("web_port")
             if isinstance(port, int):
                 ports.add(port)
     return ports
 
 
-def _assign_ui_port() -> int:
-    used = _collect_all_ui_ports()
+def _assign_web_port() -> int:
+    used = _collect_all_web_ports()
     base = get_ui_base_port()
     port = base
     max_tries = 200
@@ -465,7 +461,7 @@ def _assign_ui_port() -> int:
             return port
         port += 1
         tries += 1
-    raise SystemExit("No free UI ports available")
+    raise SystemExit("No free web ports available")
 
 
 def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
@@ -639,7 +635,7 @@ def _stop_task_containers(project: "Project", task_id: str) -> None:
     # The naming scheme is kept in sync with task_run_cli/task_run_ui.
     names = [
         f"{project.id}-cli-{task_id}",
-        f"{project.id}-ui-{task_id}",
+        f"{project.id}-web-{task_id}",
     ]
 
     for name in names:
@@ -765,25 +761,25 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     )
 
 
-def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> None:
+def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
     meta = yaml.safe_load(meta_path.read_text()) or {}
-    _check_mode(meta, "ui")
+    _check_mode(meta, "web")
 
-    port = meta.get("ui_port")
+    port = meta.get("web_port")
     if not isinstance(port, int):
-        port = _assign_ui_port()
-        meta["ui_port"] = port
+        port = _assign_web_port()
+        meta["web_port"] = port
         meta_path.write_text(yaml.safe_dump(meta))
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
-    env = _apply_ui_env_overrides(env, backend, project.default_agent)
+    env = _apply_web_env_overrides(env, backend, project.default_agent)
 
-    container_name = f"{project.id}-ui-{task_id}"
+    container_name = f"{project.id}-web-{task_id}"
 
     # Start UI in background and return terminal when it's reachable
     cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
@@ -800,7 +796,7 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
         container_name,
         "-w",
         "/workspace",
-        project_ui_image(project.id),
+        project_web_image(project.id),
     ]
     print("$", " ".join(map(str, cmd)))
     try:
@@ -818,7 +814,7 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
     #   "LuskUI started"
     #
     # We treat the appearance of this as the readiness signal.
-    def _ui_ready(line: str) -> bool:
+    def _web_ready(line: str) -> bool:
         line = line.strip()
         if not line:
             return False
@@ -834,29 +830,29 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
     ready = _stream_initial_logs(
         container_name=container_name,
         timeout_sec=None,
-        ready_check=_ui_ready,
+        ready_check=_web_ready,
     )
 
     # After log streaming stops, check whether the container is actually
-    # still running. This prevents false "UI is up" messages in cases where
-    # the UI process failed to start (e.g. Node error) and the container
+    # still running. This prevents false "Web UI is up" messages in cases where
+    # the web process failed to start (e.g. Node error) and the container
     # exited before emitting the readiness marker.
     running = _is_container_running(container_name)
 
     if ready and running:
         print("\n\n>> luskctl: ")
-        print(f"UI container is up, routed to: http://127.0.0.1:{port}")
+        print(f"Web UI container is up, routed to: http://127.0.0.1:{port}")
     elif not running:
         print(
-            "UI container exited before the web UI became reachable. "
+            "Web UI container exited before the web UI became reachable. "
             "Check the container logs for errors."
         )
         print(
             f"- Last known name: {container_name}\n"
             f"- Check logs (if still available): podman logs {container_name}\n"
-            f"- You may need to re-run: luskctl task run-ui {project.id} {task_id}"
+            f"- You may need to re-run: luskctl task run-web {project.id} {task_id}"
         )
-        # Exit with non-zero status to signal that the UI did not start.
+        # Exit with non-zero status to signal that the web UI did not start.
         raise SystemExit(1)
 
     print(

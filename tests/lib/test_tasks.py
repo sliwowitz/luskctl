@@ -15,7 +15,7 @@ from luskctl.lib.tasks import (
     get_workspace_git_diff,
     task_delete,
     task_new,
-    task_run_ui,
+    task_run_web,
 )
 from test_utils import mock_git_config, parse_meta_value, write_project
 
@@ -267,7 +267,7 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(merged["CLAUDE_API_KEY"], "override")
         self.assertEqual(merged["MISTRAL_API_KEY"], "mistral-456")
 
-    def test_task_run_ui_passes_passthrough_env(self) -> None:
+    def test_task_run_web_passes_passthrough_env(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -317,7 +317,7 @@ class TaskTests(unittest.TestCase):
                     unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    task_run_ui(project_id, "1", backend="CLAUDE")
+                    task_run_web(project_id, "1", backend="CLAUDE")
 
                 cmd = run_mock.call_args[0][0]
                 env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
