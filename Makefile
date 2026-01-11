@@ -12,7 +12,7 @@ format:
 
 # Run tests with coverage
 test:
-	poetry run pytest --cov=codexctl --cov-report=term-missing
+	poetry run pytest --cov=luskctl --cov-report=term-missing
 
 # Run all checks (equivalent to CI)
 check: lint test

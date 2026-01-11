@@ -1,6 +1,6 @@
 # luskctl User Guide
 
-A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`luskctl`) and a Textual TUI (`codextui`).
+A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ pip install -e .
 pip install '.[tui]'
 ```
 
-After install, you should have console scripts: `luskctl`, `luskctl-tui`, `codextui`
+After install, you should have console scripts: `luskctl`, `luskctl-tui`
 
 ### Bash Completion
 
@@ -294,7 +294,7 @@ Loaded from Python package resources bundled with the wheel (under `luskctl/reso
 pip install 'luskctl[tui]'
 ```
 
-Then run: `luskctl-tui` or `codextui`
+Then run: `luskctl-tui`
 
 ### How do I package for Debian/RPM?
 
