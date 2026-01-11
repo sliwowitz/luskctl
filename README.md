@@ -1,6 +1,6 @@
 # luskctl
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`lusktui`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).
 

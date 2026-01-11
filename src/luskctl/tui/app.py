@@ -65,7 +65,7 @@ if _HAS_TEXTUAL:
         TaskMeta,
     )
 
-    class CodexTUI(App):
+    class LuskTUI(App):
         """Minimal TUI frontend for luskctl core modules."""
 
         CSS_PATH = None
@@ -674,7 +674,7 @@ if _HAS_TEXTUAL:
                     generate_dockerfiles(self.current_project_id)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
             self.notify(f"Generated Dockerfiles for {self.current_project_id}")
             self._refresh_project_state()
 
@@ -687,7 +687,7 @@ if _HAS_TEXTUAL:
                     build_images(self.current_project_id)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
             self.notify(f"Built images for {self.current_project_id}")
             self._refresh_project_state()
 
@@ -702,7 +702,7 @@ if _HAS_TEXTUAL:
                     init_project_ssh(self.current_project_id)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
 
             self.notify(f"Initialized SSH dir for {self.current_project_id}")
             self._refresh_project_state()
@@ -722,7 +722,7 @@ if _HAS_TEXTUAL:
                     )
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
 
             self.notify(f"Git gate initialized for {self.current_project_id}")
             self._refresh_project_state()
@@ -736,7 +736,7 @@ if _HAS_TEXTUAL:
                     task_new(self.current_project_id)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
             self.notify("Task created.")
 
@@ -751,7 +751,7 @@ if _HAS_TEXTUAL:
                     task_run_cli(self.current_project_id, tid)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
 
         async def action_run_ui(self) -> None:
@@ -768,7 +768,7 @@ if _HAS_TEXTUAL:
                     task_run_ui(self.current_project_id, tid, backend=backend)
                 except SystemExit as e:
                     print(f"Error: {e}")
-                input("\n[Press Enter to return to CodexTUI] ")
+                input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
 
         async def action_delete_task(self) -> None:
@@ -852,7 +852,7 @@ if _HAS_TEXTUAL:
             await self._copy_diff_to_clipboard("PREV", "PREV")
 
     def main() -> None:
-        CodexTUI().run()
+        LuskTUI().run()
 
 else:
 
