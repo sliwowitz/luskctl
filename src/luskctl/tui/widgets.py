@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import inspect
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,6 +46,69 @@ def get_backend_emoji(task: TaskMeta) -> str:
         "codex": "🕸️",  # Spider web emoji for Codex
     }
     return emoji_map.get(backend, "🦗")  # Cricket emoji for unknown
+
+
+def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
+    if project_id is None:
+        return None
+    if task.mode not in {"cli", "web"}:
+        return None
+
+    container_name = f"{project_id}-{task.mode}-{task.task_id}"
+    try:
+        result = subprocess.run(
+            [
+                "podman",
+                "container",
+                "inspect",
+                "--format",
+                "{{.State.Running}}\t{{.Image}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+
+    running_str, _, image_id = result.stdout.partition("\t")
+    if running_str.strip().lower() != "true":
+        return None
+    image_id = image_id.strip()
+    if not image_id:
+        return None
+
+    try:
+        from ..lib.docker import build_context_hash
+    except Exception:
+        return None
+
+    current_hash = build_context_hash(project_id)
+
+    try:
+        label_result = subprocess.run(
+            [
+                "podman",
+                "image",
+                "inspect",
+                "--format",
+                '{{index .Config.Labels "luskctl.build_context_hash"}}',
+                image_id,
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    if label_result.returncode != 0:
+        return None
+
+    label = label_result.stdout.strip()
+    if not label or label == "<no value>":
+        return True
+    return label != current_hash
 
 
 class ProjectList(ListView):
@@ -327,6 +391,10 @@ class TaskDetails(Static):
             f"Type:      {task_emoji}{mode_display}",
             f"Workspace: {task.workspace}",
         ]
+        if status_display == "running":
+            image_old = _is_task_image_old(self.current_project_id, task)
+            if image_old:
+                lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
         if task.web_port:
             lines.append(f"Web URL:   http://127.0.0.1:{task.web_port}/")
 
