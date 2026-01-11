@@ -30,10 +30,9 @@ except Exception:  # pragma: no cover - textual not installed
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
-    from textual import on
+    from textual import on, screen
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.screen import ModalScreen
     from textual.widgets import Button, Footer, Header, Label
 
     from ..lib.docker import build_images, generate_dockerfiles
@@ -65,26 +64,26 @@ if _HAS_TEXTUAL:
         TaskMeta,
     )
 
-    class ProjectActionsScreen(ModalScreen[str | None]):
+    class ProjectActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for project actions."""
 
         CSS = """
         ProjectActionsScreen {
             align: center middle;
         }
-        
+
         #action-dialog {
             width: 60;
             height: auto;
             border: heavy $primary;
             background: $surface;
         }
-        
+
         #action-buttons {
             layout: horizontal;
             padding: 1;
         }
-        
+
         Button {
             width: 100%;
             margin: 0 1;
@@ -119,26 +118,26 @@ if _HAS_TEXTUAL:
                 }
                 self.dismiss(action_map.get(button_id))
 
-    class TaskActionsScreen(ModalScreen[str | None]):
+    class TaskActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for task actions."""
 
         CSS = """
         TaskActionsScreen {
             align: center middle;
         }
-        
+
         #action-dialog {
             width: 60;
             height: auto;
             border: heavy $primary;
             background: $surface;
         }
-        
+
         #action-buttons {
             layout: horizontal;
             padding: 1;
         }
-        
+
         Button {
             width: 100%;
             margin: 0 1;
