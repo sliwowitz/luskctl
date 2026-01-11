@@ -6,6 +6,9 @@ repo_name: sliwowitz/luskctl
 
 theme:
   name: material
+  font:
+    text: "'Fira Sans', sans-serif"
+    code: "'Fira Code', monospace"
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -87,3 +90,6 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/sliwowitz/luskctl
+
+extra_css:
+  - https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap
