@@ -362,14 +362,25 @@ class ProjectState(Static):
             self.update("No project selected.")
             return
 
-        docker_s = "yes" if state.get("dockerfiles") else "no"
-        images_s = "yes" if state.get("images") else "no"
-        ssh_s = "yes" if state.get("ssh") else "no"
-        gate_s = "yes" if state.get("gate") else "no"
-        docker_s = f"[green]{docker_s}[/green]" if docker_s == "yes" else f"[red]{docker_s}[/red]"
-        images_s = f"[green]{images_s}[/green]" if images_s == "yes" else f"[red]{images_s}[/red]"
-        ssh_s = f"[green]{ssh_s}[/green]" if ssh_s == "yes" else f"[red]{ssh_s}[/red]"
-        gate_s = f"[green]{gate_s}[/green]" if gate_s == "yes" else f"[red]{gate_s}[/red]"
+        def _status(value: str) -> str:
+            if value == "yes":
+                return "[green]yes[/green]"
+            if value == "old":
+                return "[yellow3]old[/yellow3]"
+            return "[red]no[/red]"
+
+        docker_s = _status("yes" if state.get("dockerfiles") else "no")
+        images_s = _status("yes" if state.get("images") else "no")
+        ssh_s = _status("yes" if state.get("ssh") else "no")
+        gate_value = "yes" if state.get("gate") else "no"
+        if (
+            gate_value == "yes"
+            and staleness is not None
+            and not staleness.error
+            and staleness.is_stale
+        ):
+            gate_value = "old"
+        gate_s = _status(gate_value)
 
         if task_count is None:
             tasks_line = "Tasks:     unknown"
