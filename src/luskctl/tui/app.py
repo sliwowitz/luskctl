@@ -1194,11 +1194,6 @@ if _HAS_TEXTUAL:
                 return
 
             try:
-                project = load_project(self.current_project_id)
-                if project.security_class != "gatekeeping":
-                    self.notify("Sync only available for gatekeeping projects.")
-                    return
-
                 self.notify("Syncing gate...")
 
                 # Run sync in background worker
