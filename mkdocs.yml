@@ -1,8 +1,8 @@
-site_name: codexctl
+site_name: luskctl
 site_description: A tool for managing containerized AI coding agent projects using Podman
-site_url: https://sliwowitz.github.io/codexctl
-repo_url: https://github.com/sliwowitz/codexctl
-repo_name: sliwowitz/codexctl
+site_url: https://sliwowitz.github.io/luskctl
+repo_url: https://github.com/sliwowitz/luskctl
+repo_name: sliwowitz/luskctl
 
 theme:
   name: material
@@ -86,4 +86,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/sliwowitz/codexctl
+      link: https://github.com/sliwowitz/luskctl

@@ -1,4 +1,4 @@
-"""codexctl TUI package."""
+"""luskctl TUI package."""
 
 from .app import main
 

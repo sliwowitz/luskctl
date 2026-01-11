@@ -14,6 +14,6 @@ def _ensure_dir_writable(path: Path, label: str) -> None:
         gid = os.getgid()
         raise SystemExit(
             f"{label} directory is not writable: {path}\n"
-            f"Fix permissions for the user running codexctl (uid={uid}, gid={gid}). "
+            f"Fix permissions for the user running luskctl (uid={uid}, gid={gid}). "
             f"Example: sudo chown -R {uid}:{gid} {path}"
         )

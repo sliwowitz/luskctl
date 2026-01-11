@@ -5,7 +5,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.git_gate import (
+from luskctl.lib.git_gate import (
     compare_gate_vs_upstream,
     find_projects_sharing_gate,
     get_gate_branch_head,
@@ -41,9 +41,9 @@ class GitGateTests(unittest.TestCase):
                 unittest.mock.patch.dict(
                     os.environ,
                     {
-                        "CODEXCTL_CONFIG_DIR": str(config_root),
-                        "CODEXCTL_CONFIG_FILE": str(config_file),
-                        "CODEXCTL_STATE_DIR": str(state_dir),
+                        "LUSKCTL_CONFIG_DIR": str(config_root),
+                        "LUSKCTL_CONFIG_FILE": str(config_file),
+                        "LUSKCTL_STATE_DIR": str(state_dir),
                     },
                 ),
                 self.assertRaises(SystemExit),
@@ -67,11 +67,11 @@ class GitGateTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                with unittest.mock.patch("codexctl.lib.git_gate.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.git_gate.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     result = init_project_gate(project_id)
 
@@ -107,7 +107,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 result = get_gate_last_commit(project_id)
@@ -141,8 +141,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock the git log command to return sample commit data
@@ -153,7 +153,7 @@ git:
                 )
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_last_commit(project_id)
 
@@ -187,7 +187,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock successful git ls-remote
@@ -196,7 +196,7 @@ git:
                 mock_result.stdout = "abc123def456789\trefs/heads/main\n"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -225,7 +225,7 @@ project:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 result = get_upstream_head(project_id)
@@ -254,7 +254,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock failed git ls-remote
@@ -263,7 +263,7 @@ git:
                 mock_result.stderr = "fatal: could not read from remote repository"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -292,7 +292,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock empty output (branch not found)
@@ -301,7 +301,7 @@ git:
                 mock_result.stdout = ""
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -330,12 +330,12 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock timeout
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run",
+                    "luskctl.lib.git_gate.subprocess.run",
                     side_effect=subprocess.TimeoutExpired("git", 30),
                 ):
                     result = get_upstream_head(project_id)
@@ -365,7 +365,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock successful git ls-remote for develop branch
@@ -374,7 +374,7 @@ git:
                 mock_result.stdout = "fedcba987654321\trefs/heads/develop\n"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id, branch="develop")
 
@@ -412,8 +412,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock git rev-parse
@@ -422,7 +422,7 @@ git:
                 mock_result.stdout = "abc123def456789\n"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_branch_head(project_id)
 
@@ -451,7 +451,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 result = get_gate_branch_head(project_id)
@@ -486,8 +486,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock failed git rev-parse
@@ -496,7 +496,7 @@ git:
                 mock_result.stderr = "fatal: ref does not exist"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_branch_head(project_id, branch="nonexistent")
 
@@ -532,19 +532,19 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 commit_hash = "abc123def456789"
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=commit_hash
+                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=commit_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "codexctl.lib.git_gate.get_upstream_head",
+                        "luskctl.lib.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": commit_hash,
                             "ref_name": "refs/heads/main",
@@ -589,8 +589,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 gate_hash = "old123"
@@ -598,11 +598,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "codexctl.lib.git_gate.get_upstream_head",
+                        "luskctl.lib.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": upstream_hash,
                             "ref_name": "refs/heads/main",
@@ -611,7 +611,7 @@ git:
                     ):
                         # Mock _count_commits_behind
                         with unittest.mock.patch(
-                            "codexctl.lib.git_gate._count_commits_behind", return_value=5
+                            "luskctl.lib.git_gate._count_commits_behind", return_value=5
                         ):
                             result = compare_gate_vs_upstream(project_id)
 
@@ -645,12 +645,12 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 # Mock get_gate_branch_head to return None
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=None
+                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=None
                 ):
                     result = compare_gate_vs_upstream(project_id)
 
@@ -690,19 +690,19 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 gate_hash = "abc123"
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head to return None
                     with unittest.mock.patch(
-                        "codexctl.lib.git_gate.get_upstream_head", return_value=None
+                        "luskctl.lib.git_gate.get_upstream_head", return_value=None
                     ):
                         result = compare_gate_vs_upstream(project_id)
 
@@ -742,8 +742,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 gate_hash = "old123"
@@ -751,11 +751,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "codexctl.lib.git_gate.get_upstream_head",
+                        "luskctl.lib.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": upstream_hash,
                             "ref_name": "refs/heads/main",
@@ -764,7 +764,7 @@ git:
                     ):
                         # Mock _count_commits_behind to return None
                         with unittest.mock.patch(
-                            "codexctl.lib.git_gate._count_commits_behind", return_value=None
+                            "luskctl.lib.git_gate._count_commits_behind", return_value=None
                         ):
                             result = compare_gate_vs_upstream(project_id)
 
@@ -801,8 +801,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock successful git remote update
@@ -811,7 +811,7 @@ git:
                 mock_result.stdout = "Fetching origin\n"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id)
 
@@ -842,7 +842,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
                 },
             ):
                 result = sync_gate_branches(project_id)
@@ -880,8 +880,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock failed git remote update
@@ -890,7 +890,7 @@ git:
                 mock_result.stderr = "fatal: could not fetch origin"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id)
 
@@ -926,13 +926,13 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock timeout
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run",
+                    "luskctl.lib.git_gate.subprocess.run",
                     side_effect=subprocess.TimeoutExpired("git", 120),
                 ):
                     result = sync_gate_branches(project_id)
@@ -969,8 +969,8 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Mock successful git remote update
@@ -979,7 +979,7 @@ git:
                 mock_result.stdout = "Fetching origin\n"
 
                 with unittest.mock.patch(
-                    "codexctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id, branches=["main", "develop"])
 
@@ -1029,8 +1029,8 @@ gate:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 with self.assertRaises(SystemExit) as ctx:
@@ -1081,8 +1081,8 @@ gate:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Find projects sharing the gate, excluding proj-a
@@ -1132,8 +1132,8 @@ gate:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Should not raise - same upstream URL
@@ -1180,8 +1180,8 @@ gate:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Should raise SystemExit with helpful error message
@@ -1236,8 +1236,8 @@ gate:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 with self.assertRaises(SystemExit) as ctx:

@@ -1,4 +1,4 @@
-"""codexctl CLI package."""
+"""luskctl CLI package."""
 
 from .main import main
 

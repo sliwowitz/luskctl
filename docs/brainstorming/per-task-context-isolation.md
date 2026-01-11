@@ -38,7 +38,7 @@ Create separate config directories per task, with authentication files copied fr
 #### Architecture
 
 ```
-/var/lib/codexctl/envs/
+/var/lib/luskctl/envs/
 ├── _claude-config/                    # Global auth (source of truth)
 │   ├── .credentials.json
 │   └── settings.json
@@ -95,9 +95,9 @@ volumes.append(f"{claude_task_dir}:/home/dev/.claude:Z")
 
 #### CLI Commands
 
-- `codexctl task contexts <project> <task>` - List sessions created by task
-- `codexctl task import-context <project> <dest-task> --from <source-task>` - Copy sessions
-- `codexctl auth sync [--project <project>]` - Sync auth files after credential update
+- `luskctl task contexts <project> <task>` - List sessions created by task
+- `luskctl task import-context <project> <dest-task> --from <source-task>` - Copy sessions
+- `luskctl auth sync [--project <project>]` - Sync auth files after credential update
 
 #### Pros/Cons
 
@@ -128,19 +128,19 @@ Track context file creation from within the container, writing the mapping to a 
 #### Architecture
 
 ```
-/var/lib/codexctl/envs/
+/var/lib/luskctl/envs/
 └── _claude-config/                    # Shared (unchanged)
     └── projects/-workspace/           # All sessions live here
         ├── abc123.jsonl               # Created by task 1
         └── def456.jsonl               # Created by task 2
 
 <tasks_root>/myproject/1/workspace/
-└── .codexctl/
+└── .luskctl/
     └── task-1-contexts.log            # Maps task 1 to its sessions
         # 2025-01-10T14:30:00 abc123.jsonl
 
 <tasks_root>/myproject/2/workspace/
-└── .codexctl/
+└── .luskctl/
     └── task-2-contexts.log            # Maps task 2 to its sessions
         # 2025-01-10T15:45:00 def456.jsonl
 ```
@@ -151,7 +151,7 @@ Track context file creation from within the container, writing the mapping to a 
 ```bash
 #!/bin/bash
 WATCH_DIR="/home/dev/.claude/projects/-workspace"
-LOG_FILE="/workspace/.codexctl/task-${TASK_ID}-contexts.log"
+LOG_FILE="/workspace/.luskctl/task-${TASK_ID}-contexts.log"
 POLL_INTERVAL=2
 
 mkdir -p "$(dirname "$LOG_FILE")" "$WATCH_DIR"
@@ -182,7 +182,7 @@ fi
 ```python
 def get_task_contexts(project_id: str, task_id: str) -> list[str]:
     """Read context log and return list of session IDs for this task."""
-    log_file = project.tasks_root / task_id / "workspace" / ".codexctl" / f"task-{task_id}-contexts.log"
+    log_file = project.tasks_root / task_id / "workspace" / ".luskctl" / f"task-{task_id}-contexts.log"
     if not log_file.exists():
         return []
 
@@ -196,9 +196,9 @@ def get_task_contexts(project_id: str, task_id: str) -> list[str]:
 
 #### CLI Commands
 
-- `codexctl task contexts <project> <task>` - List sessions mapped to task
-- `codexctl task import-context <project> <dest-task> --from <source-task>` - Add source task's sessions to dest's mapping
-- `codexctl context list [--project <project>] [--task <task>]` - List all contexts with optional filtering
+- `luskctl task contexts <project> <task>` - List sessions mapped to task
+- `luskctl task import-context <project> <dest-task> --from <source-task>` - Add source task's sessions to dest's mapping
+- `luskctl context list [--project <project>] [--task <task>]` - List all contexts with optional filtering
 
 #### Pros/Cons
 
@@ -234,11 +234,11 @@ Both options work well with rootless podman and have no race conditions.
 ## Files to Modify
 
 ### Option 2
-- `/workspace/src/codexctl/lib/tasks.py` - Add `_setup_task_config_dir()`, modify volumes, add archival
-- `/workspace/src/codexctl/cli/main.py` - Add CLI commands
+- `/workspace/src/luskctl/lib/tasks.py` - Add `_setup_task_config_dir()`, modify volumes, add archival
+- `/workspace/src/luskctl/cli/main.py` - Add CLI commands
 
 ### Option 4
-- `/workspace/src/codexctl/resources/scripts/monitor-context-files.sh` - New script
-- `/workspace/src/codexctl/resources/scripts/init-ssh-and-repo.sh` - Start monitor
-- `/workspace/src/codexctl/lib/tasks.py` - Add `get_task_contexts()`
-- `/workspace/src/codexctl/cli/main.py` - Add CLI commands
+- `/workspace/src/luskctl/resources/scripts/monitor-context-files.sh` - New script
+- `/workspace/src/luskctl/resources/scripts/init-ssh-and-repo.sh` - Start monitor
+- `/workspace/src/luskctl/lib/tasks.py` - Add `get_task_contexts()`
+- `/workspace/src/luskctl/cli/main.py` - Add CLI commands

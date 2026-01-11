@@ -1,6 +1,6 @@
-# codexctl
+# luskctl
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`codexctl`) and a Textual TUI (`codextui`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`lusktui`).
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).
 
@@ -29,8 +29,8 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:sliwowitz/codexctl.git
-cd codexctl
+git clone git@github.com:sliwowitz/luskctl.git
+cd luskctl
 pip install .
 
 # With TUI support
@@ -41,10 +41,10 @@ pip install '.[tui]'
 
 ```bash
 # 1. Create project directory
-mkdir -p ~/.config/codexctl/projects/myproj
+mkdir -p ~/.config/luskctl/projects/myproj
 
 # 2. Create project.yml (see docs/USAGE.md for full schema)
-cat > ~/.config/codexctl/projects/myproj/project.yml << 'EOF'
+cat > ~/.config/luskctl/projects/myproj/project.yml << 'EOF'
 project:
   id: myproj
   security_class: online
@@ -54,41 +54,41 @@ git:
 EOF
 
 # 3. Generate and build images
-codexctl generate myproj
-codexctl build myproj
+luskctl generate myproj
+luskctl build myproj
 
 # 4. (Optional) Set up SSH for private repos
-codexctl ssh-init myproj
+luskctl ssh-init myproj
 
 # 5. Create and run a task
-codexctl task new myproj
-codexctl task run-cli myproj 1    # CLI mode
+luskctl task new myproj
+luskctl task run-cli myproj 1    # CLI mode
 # or
-codexctl task run-ui myproj 1     # Web UI mode
+luskctl task run-ui myproj 1     # Web UI mode
 ```
 
 ### Common Commands
 
 ```bash
-codexctl projects              # List projects
-codexctl config                # Show resolved paths
-codexctl task list <project>   # List tasks
-codexctl task delete <project> <task_id>  # Delete a task
+luskctl projects              # List projects
+luskctl config                # Show resolved paths
+luskctl task list <project>   # List tasks
+luskctl task delete <project> <task_id>  # Delete a task
 ```
 
 ## Configuration
 
 ### Global Config
 
-Location: `~/.config/codexctl/config.yml`
+Location: `~/.config/luskctl/config.yml`
 
 ```yaml
 ui:
   base_port: 7860
 
 paths:
-  user_projects_root: ~/.config/codexctl/projects
-  state_root: ~/.local/share/codexctl
+  user_projects_root: ~/.config/luskctl/projects
+  state_root: ~/.local/share/luskctl
 
 git:
   human_name: "Your Name"
@@ -99,20 +99,20 @@ git:
 
 | Variable | Purpose |
 |----------|---------|
-| `CODEXCTL_CONFIG_DIR` | Projects directory |
-| `CODEXCTL_STATE_DIR` | Writable state root |
-| `CODEXCTL_CONFIG_FILE` | Global config file path |
+| `LUSKCTL_CONFIG_DIR` | Projects directory |
+| `LUSKCTL_STATE_DIR` | Writable state root |
+| `LUSKCTL_CONFIG_FILE` | Global config file path |
 
 ## Requirements
 
 - **Podman** is required for build/run commands
-- **TUI** is optional: `pip install 'codexctl[tui]'`
+- **TUI** is optional: `pip install 'luskctl[tui]'`
 
 ## Contributing
 
 ```bash
 # Setup
-git clone git@github.com:sliwowitz/codexctl.git && cd codexctl
+git clone git@github.com:sliwowitz/luskctl.git && cd luskctl
 make install-dev
 
 # Before committing

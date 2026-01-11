@@ -1,1 +1,1 @@
-# Tests for shell scripts in codexctl resources
+# Tests for shell scripts in luskctl resources

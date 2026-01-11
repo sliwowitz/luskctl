@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG BASE_IMAGE=codexctl-l0:latest
+ARG BASE_IMAGE=luskctl-l0:latest
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -45,8 +45,8 @@ RUN set -eux; \
       'alias vibe="GIT_AUTHOR_NAME=\"Mistral Vibe\" GIT_AUTHOR_EMAIL=vibe@mistral.ai GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" vibe --auto-approve"' \
       '' \
       '# Print available agents on interactive login' \
-      'if [ -t 1 ] && [ -z "$_CODEXCTL_AGENTS_SHOWN" ]; then' \
-      '  export _CODEXCTL_AGENTS_SHOWN=1' \
+      'if [ -t 1 ] && [ -z "$_LUSKCTL_AGENTS_SHOWN" ]; then' \
+      '  export _LUSKCTL_AGENTS_SHOWN=1' \
       '  printf "\\n\\033[1mAvailable AI agents:\\033[0m\\n"' \
       '  printf "  \\033[36mcodex\\033[0m  - OpenAI Codex CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mclaude\\033[0m - Claude Code CLI (permissions skipped)\\n"' \
@@ -54,11 +54,11 @@ RUN set -eux; \
       '  printf "  \\033[36mblablador\\033[0m - OpenCode (Blablador) with full permissions\\n"' \
       '  printf "\\n"' \
       'fi' \
-      > /etc/profile.d/codexctl-agent-aliases.sh; \
+      > /etc/profile.d/luskctl-agent-aliases.sh; \
     if [ -f /etc/bash.bashrc ]; then \
-      printf '\n# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
+      printf '\n# luskctl agent aliases\n. /etc/profile.d/luskctl-agent-aliases.sh\n' >> /etc/bash.bashrc; \
     else \
-      printf '# codexctl agent aliases\n. /etc/profile.d/codexctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
+      printf '# luskctl agent aliases\n. /etc/profile.d/luskctl-agent-aliases.sh\n' > /etc/bash.bashrc; \
     fi; \
     # Add Mistral model sync to bashrc (only for interactive shells)
     printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc

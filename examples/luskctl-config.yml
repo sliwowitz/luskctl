@@ -1,11 +1,11 @@
-# Example codexctl configuration file
+# Example luskctl configuration file
 #
 # Copy this file to one of the following locations (first existing wins):
-#  - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
-#  - /etc/codexctl/config.yml (system-wide default)
+#  - ${XDG_CONFIG_HOME:-~/.config}/luskctl/config.yml (user override)
+#  - /etc/luskctl/config.yml (system-wide default)
 #
 # Notes:
-#  - The CLI command `codexctl config` shows which paths and files are used.
+#  - The CLI command `luskctl config` shows which paths and files are used.
 
 ui:
   # Default first task port for UI mode (subsequent tasks will auto-increment
@@ -18,24 +18,24 @@ envs:
   #   - <base_dir>/_codex-config         → /home/dev/.codex  (rw)
   #   - <base_dir>/_claude-config        → /home/dev/.claude (rw)
   #   - <base_dir>/_ssh-config-<project> → /home/dev/.ssh    (rw)
-  # Default for system-wide installs: /var/lib/codexctl/envs
+  # Default for system-wide installs: /var/lib/luskctl/envs
   # You can override per user or system by editing this file.
-  # base_dir: /var/lib/codexctl/envs
+  # base_dir: /var/lib/luskctl/envs
 
 paths:
   # User projects root (per-user overlays). Each project is a subdirectory
   # containing a project.yml, e.g. ${user_projects_root}/myproj/project.yml
-  # Default: ${XDG_CONFIG_HOME:-~/.config}/codexctl/projects
-  # user_projects_root: ~/.config/codexctl/projects
+  # Default: ${XDG_CONFIG_HOME:-~/.config}/luskctl/projects
+  # user_projects_root: ~/.config/luskctl/projects
 
   # Writable state root (tasks, caches, etc.).
-  # System default (root): /var/lib/codexctl
-  # User default:          ${XDG_DATA_HOME:-~/.local/share}/codexctl
-  # state_root: ~/.local/share/codexctl
+  # System default (root): /var/lib/luskctl
+  # User default:          ${XDG_DATA_HOME:-~/.local/share}/luskctl
+  # state_root: ~/.local/share/luskctl
 
   # Build artifacts root for generated files.
   # If not set, defaults to: <state_root>/build
-  # build_root: ~/.local/share/codexctl/build
+  # build_root: ~/.local/share/luskctl/build
 
 git:
   # Default human identity for git commits (committer).

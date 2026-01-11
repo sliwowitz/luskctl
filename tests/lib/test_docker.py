@@ -4,8 +4,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.config import build_root
-from codexctl.lib.docker import generate_dockerfiles
+from luskctl.lib.config import build_root
+from luskctl.lib.docker import generate_dockerfiles
 from test_utils import write_project
 
 
@@ -27,8 +27,8 @@ class DockerTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 generate_dockerfiles(project_id)
@@ -73,8 +73,8 @@ class DockerTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 generate_dockerfiles(project_id)
@@ -105,8 +105,8 @@ class DockerTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 generate_dockerfiles(project_id)

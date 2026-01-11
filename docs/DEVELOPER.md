@@ -1,10 +1,10 @@
 # Developer Guide
 
-This document covers internal architecture and implementation details for contributors and maintainers of codexctl.
+This document covers internal architecture and implementation details for contributors and maintainers of luskctl.
 
 ## Container Readiness and Log Streaming
 
-codexctl shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met. This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.
+luskctl shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met. This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.
 
 ### CLI Mode (task run-cli)
 
@@ -14,7 +14,7 @@ Readiness is determined from log output. The container initialization script emi
 
 The host follows logs and detaches when either of these markers appears, or after 60 seconds timeout.
 
-**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/codexctl/lib/tasks.py` (`task_run_cli` and `_stream_initial_logs`).
+**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/luskctl/lib/tasks.py` (`task_run_cli` and `_stream_initial_logs`).
 
 ### UI Mode (task run-ui)
 
@@ -22,11 +22,11 @@ Readiness is determined by log markers, not port probing. The host follows conta
 - Primary marker: `"Codex UI ("` (the main startup banner when HTTP server is ready)
 - Secondary marker: `"Logging Codex UI activity"` (log redirection message)
 
-This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/codexui-entry.sh` which downloads a pre-built CodexUI distribution tarball and runs the production-ready `dist/server.js` via Node.js.
+This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/luskui-entry.sh` which downloads a pre-built CodexUI distribution tarball and runs the production-ready `dist/server.js` via Node.js.
 
 **If the UI server changes its startup behavior or output format**, you may need to adjust:
-- The readiness markers in `src/codexctl/lib/tasks.py` (`_ui_ready` function)
-- The exposed/internal port and host port mapping in `src/codexctl/lib/tasks.py` (`task_run_ui`)
+- The readiness markers in `src/luskctl/lib/tasks.py` (`_ui_ready` function)
+- The exposed/internal port and host port mapping in `src/luskctl/lib/tasks.py` (`task_run_ui`)
 
 ### Timeout Behavior
 
@@ -38,23 +38,23 @@ This approach avoids false positives from port binding before actual server read
 
 | File | Purpose |
 |------|---------|
-| `src/codexctl/lib/tasks.py` | Host-side logic: `task_run_cli`, `task_run_ui`, `_stream_initial_logs`, `_ui_ready` |
-| `src/codexctl/resources/scripts/init-ssh-and-repo.sh` | CLI init marker, SSH setup, repo sync |
-| `src/codexctl/resources/scripts/codexui-entry.sh` | UI entry script (runs the UI server) |
+| `src/luskctl/lib/tasks.py` | Host-side logic: `task_run_cli`, `task_run_ui`, `_stream_initial_logs`, `_ui_ready` |
+| `src/luskctl/resources/scripts/init-ssh-and-repo.sh` | CLI init marker, SSH setup, repo sync |
+| `src/luskctl/resources/scripts/luskui-entry.sh` | UI entry script (runs the UI server) |
 
-**Important**: Changes to startup output or listening ports can affect readiness detection. Keep the readiness semantics stable or adjust codexctl's detection accordingly.
+**Important**: Changes to startup output or listening ports can affect readiness detection. Keep the readiness semantics stable or adjust luskctl's detection accordingly.
 
 ---
 
 ## Container Layer Architecture
 
-codexctl builds project containers in three logical layers:
+luskctl builds project containers in three logical layers:
 
 | Layer | Image Name | Purpose |
 |-------|------------|---------|
-| L0 | `codexctl-l0:<base-tag>` | Development base (Ubuntu 24.04, git, ssh, dev user) |
-| L1-CLI | `codexctl-l1-cli:<base-tag>` | Agent tools (Codex, Claude Code, Mistral Vibe) |
-| L1-UI | `codexctl-l1-ui:<base-tag>` | UI dependencies and entry script |
+| L0 | `luskctl-l0:<base-tag>` | Development base (Ubuntu 24.04, git, ssh, dev user) |
+| L1-CLI | `luskctl-l1-cli:<base-tag>` | Agent tools (Codex, Claude Code, Mistral Vibe) |
+| L1-UI | `luskctl-l1-ui:<base-tag>` | UI dependencies and entry script |
 | L2 | `<project>:l2-cli`, `<project>:l2-ui` | Project-specific config and user snippets |
 
 L0 and L1 are project-agnostic and cache well; L2 is project-specific.
@@ -65,7 +65,7 @@ See [CONTAINER_LAYERS.md](CONTAINER_LAYERS.md) for detailed documentation.
 
 ## Volume Mounts at Runtime
 
-When a task container starts, codexctl mounts:
+When a task container starts, luskctl mounts:
 
 | Container Path | Host Source | Purpose |
 |----------------|-------------|---------|
@@ -80,7 +80,7 @@ See [SHARED_DIRS.md](SHARED_DIRS.md) for detailed documentation.
 
 ---
 
-## Environment Variables Set by codexctl
+## Environment Variables Set by luskctl
 
 ### Core Variables (always set)
 
@@ -127,8 +127,8 @@ See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md) for detai
 
 ```bash
 # Clone the repository
-git clone git@github.com:sliwowitz/codexctl.git
-cd codexctl
+git clone git@github.com:sliwowitz/luskctl.git
+cd luskctl
 
 # Install all development dependencies
 make install-dev
@@ -176,28 +176,28 @@ make check     # Runs lint + test
 
 ```bash
 # Set up environment to use example projects
-export CODEXCTL_CONFIG_DIR=$PWD/examples
-export CODEXCTL_STATE_DIR=$PWD/tmp/dev-runtime/var-lib-codexctl
+export LUSKCTL_CONFIG_DIR=$PWD/examples
+export LUSKCTL_STATE_DIR=$PWD/tmp/dev-runtime/var-lib-luskctl
 
 # Run CLI commands
-python -m codexctl.cli projects
-python -m codexctl.cli task new uc
-python -m codexctl.cli generate uc
-python -m codexctl.cli build uc
+python -m luskctl.cli projects
+python -m luskctl.cli task new uc
+python -m luskctl.cli generate uc
+python -m luskctl.cli build uc
 
 # Run TUI
-python -m codexctl.tui
+python -m luskctl.tui
 ```
 
 ### IDE Setup (PyCharm/VSCode)
 
 1. Open the repo and set up a Python 3.12+ interpreter
 2. Set environment variables:
-   - `CODEXCTL_CONFIG_DIR` = `/path/to/this/repo/examples`
-   - Optional: `CODEXCTL_STATE_DIR` = writable path
+   - `LUSKCTL_CONFIG_DIR` = `/path/to/this/repo/examples`
+   - Optional: `LUSKCTL_STATE_DIR` = writable path
 3. For PyCharm Run/Debug configuration:
-   - CLI: Module name = `codexctl.cli`, Parameters = `projects` (or other subcommands)
-   - TUI: Module name = `codexctl.tui` (no args)
+   - CLI: Module name = `luskctl.cli`, Parameters = `projects` (or other subcommands)
+   - TUI: Module name = `luskctl.tui` (no args)
 
 ### Building Wheels
 

@@ -80,8 +80,8 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="codexctl",
-        description="codexctl – generate/build images and run per-project task containers",
+        prog="luskctl",
+        description="luskctl – generate/build images and run per-project task containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start (order of operations):\n"
@@ -330,7 +330,7 @@ def main() -> None:
 
         # Templates (package resources)
         print("Templates (read):")
-        tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
+        tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
         try:
             names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
         except Exception:
@@ -341,7 +341,7 @@ def main() -> None:
                 print(f"  • {n}")
 
         # Scripts (package resources)
-        scr_pkg = resources.files("codexctl") / "resources" / "scripts"
+        scr_pkg = resources.files("luskctl") / "resources" / "scripts"
         try:
             scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
         except Exception:
@@ -373,10 +373,10 @@ def main() -> None:
         # ENVIRONMENT
         print("Environment overrides (if set):")
         for var in (
-            "CODEXCTL_CONFIG_FILE",
-            "CODEXCTL_CONFIG_DIR",
-            "CODEXCTL_STATE_DIR",
-            "CODEXCTL_RUNTIME_DIR",
+            "LUSKCTL_CONFIG_FILE",
+            "LUSKCTL_CONFIG_DIR",
+            "LUSKCTL_STATE_DIR",
+            "LUSKCTL_RUNTIME_DIR",
             "XDG_DATA_HOME",
             "XDG_CONFIG_HOME",
         ):

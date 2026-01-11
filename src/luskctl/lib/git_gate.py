@@ -213,7 +213,7 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
             raise SystemExit(
                 "SSH upstream detected but project SSH config is missing.\n"
                 f"Expected SSH config at: {ssh_cfg_path}\n"
-                f"Run 'codexctl ssh-init {project.id}' first to generate keys and config."
+                f"Run 'luskctl ssh-init {project.id}' first to generate keys and config."
             )
 
     # Build git environment that forces use of the project's SSH config (if present)

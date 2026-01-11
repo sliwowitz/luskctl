@@ -233,9 +233,9 @@ def copy_to_clipboard(text: str) -> bool:
 
 UI_BACKENDS = ("codex", "claude", "mistral")
 # Host-side env prefix for passthrough to container UI.
-# These get remapped to CODEXUI_* when exported to containers for backward
-# compatibility with the container-side scripts (codexui-entry.sh).
-UI_ENV_PASSTHROUGH_PREFIX = "CODEXUI_"
+# These get remapped to LUSKUI_* when exported to containers for backward
+# compatibility with the container-side scripts (luskui-entry.sh).
+UI_ENV_PASSTHROUGH_PREFIX = "LUSKUI_"
 UI_ENV_PASSTHROUGH_KEYS = (
     "ANTHROPIC_API_KEY",
     "CLAUDE_API_KEY",
@@ -248,7 +248,7 @@ def _tasks_meta_dir(project_id: str) -> Path:
 
 
 def _log_debug(message: str) -> None:
-    """Append a simple debug line to the codexctl library log.
+    """Append a simple debug line to the luskctl library log.
 
     This is intentionally very small and best-effort so it never interferes
     with normal CLI or TUI behavior. It can be used to compare behavior
@@ -260,11 +260,11 @@ def _log_debug(message: str) -> None:
         from datetime import datetime as _dt
         from pathlib import Path as _Path
 
-        log_path = _Path("/tmp/codexctl-lib.log")
+        log_path = _Path("/tmp/luskctl-lib.log")
         log_path.parent.mkdir(parents=True, exist_ok=True)
         ts = _dt.now().isoformat(timespec="seconds")
         with log_path.open("a", encoding="utf-8") as _f:
-            _f.write(f"[codexctl DEBUG] {ts} {message}\n")
+            _f.write(f"[luskctl DEBUG] {ts} {message}\n")
     except Exception:
         # Logging must never change behavior of library code.
         pass
@@ -307,10 +307,10 @@ def _apply_ui_env_overrides(
     if not effective_backend:
         effective_backend = "codex"
 
-    # Export as CODEXUI_BACKEND to the container. The container-side scripts
-    # (codexui-entry.sh) still use this name; renaming is planned but the
+    # Export as LUSKUI_BACKEND to the container. The container-side scripts
+    # (luskui-entry.sh) still use this name; renaming is planned but the
     # container interface is kept stable for now.
-    merged["CODEXUI_BACKEND"] = effective_backend
+    merged["LUSKUI_BACKEND"] = effective_backend
 
     for key, value in os.environ.items():
         if key.startswith(UI_ENV_PASSTHROUGH_PREFIX) and key not in merged:
@@ -371,7 +371,7 @@ def task_new(project_id: str) -> None:
     marker_path = workspace_dir / ".new-task-marker"
     marker_path.write_text(
         "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
-        "# It is created by 'codexctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
+        "# It is created by 'luskctl task new' and removed by init-ssh-and-repo.sh after reset.\n"
         "# If you see this file in an initialized workspace, something went wrong.\n",
         encoding="utf-8",
     )
@@ -501,7 +501,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Tell init script where to clone/sync the repo
         "REPO_ROOT": "/workspace",
         # Default reset mode is none; allow overriding via container env if needed
-        "GIT_RESET_MODE": os.environ.get("CODEXCTL_GIT_RESET_MODE", "none"),
+        "GIT_RESET_MODE": os.environ.get("LUSKCTL_GIT_RESET_MODE", "none"),
         # Keep Claude Code config under the shared mount regardless of HOME.
         "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
         # Human credentials for git committer (AI agent is the author)
@@ -534,7 +534,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             raise SystemExit(
                 f"Git gate missing for project '{project.id}'.\n"
                 f"Expected at: {gate_repo}\n"
-                f"Run 'codexctl gate-init {project.id}' to create/update the local mirror."
+                f"Run 'luskctl gate-init {project.id}' to create/update the local mirror."
             )
 
         # Ensure parent exists for mount consistency (gate should already exist)
@@ -815,7 +815,7 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
     # instead of just probing the TCP port, because podman exposes the host port
     # regardless of the state of the routed guest port.
     # Codex UI currently prints stable lines when the server is ready, e.g.:
-    #   "Logging Codex UI activity to /var/log/codexui.log"
+    #   "Logging Codex UI activity to /var/log/luskui.log"
     #   "Codex UI (SDK streaming) on http://0.0.0.0:7860 - repo /workspace"
     #
     # We treat the appearance of either of these as the readiness signal.
@@ -850,7 +850,7 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
     running = _is_container_running(container_name)
 
     if ready and running:
-        print("\n\n>> codexctl: ")
+        print("\n\n>> luskctl: ")
         print(f"UI container is up, routed to: http://127.0.0.1:{port}")
     elif not running:
         print(
@@ -860,7 +860,7 @@ def task_run_ui(project_id: str, task_id: str, backend: str | None = None) -> No
         print(
             f"- Last known name: {container_name}\n"
             f"- Check logs (if still available): podman logs {container_name}\n"
-            f"- You may need to re-run: codexctl task run-ui {project.id} {task_id}"
+            f"- You may need to re-run: luskctl task run-ui {project.id} {task_id}"
         )
         # Exit with non-zero status to signal that the UI did not start.
         raise SystemExit(1)
