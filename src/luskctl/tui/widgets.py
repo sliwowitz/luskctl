@@ -369,8 +369,15 @@ class ProjectState(Static):
                 return "[yellow3]old[/yellow3]"
             return "[red]no[/red]"
 
-        docker_s = _status("yes" if state.get("dockerfiles") else "no")
-        images_s = _status("yes" if state.get("images") else "no")
+        docker_value = "yes" if state.get("dockerfiles") else "no"
+        if docker_value == "yes" and state.get("dockerfiles_old"):
+            docker_value = "old"
+        docker_s = _status(docker_value)
+
+        images_value = "yes" if state.get("images") else "no"
+        if images_value == "yes" and state.get("images_old"):
+            images_value = "old"
+        images_s = _status(images_value)
         ssh_s = _status("yes" if state.get("ssh") else "no")
         gate_value = "yes" if state.get("gate") else "no"
         if (

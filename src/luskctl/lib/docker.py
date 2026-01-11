@@ -63,19 +63,16 @@ def _load_docker_config(project_root: Path) -> dict:
         return {}
 
 
-def generate_dockerfiles(project_id: str) -> None:
-    project = load_project(project_id)
-
+def _render_dockerfiles(project) -> dict[str, str]:
     # Load templates from package resources (luskctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
     tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
-    l0_txt = (tmpl_pkg / "l0.dev.Dockerfile.template").read_text()
-    l1_cli_txt = (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text()
-    l1_ui_txt = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
-    l2_txt = (tmpl_pkg / "l2.project.Dockerfile.template").read_text()
-
-    out_dir = build_root() / project.id
-    _ensure_dir(out_dir)
+    templates = {
+        "L0.Dockerfile": (tmpl_pkg / "l0.dev.Dockerfile.template").read_text(),
+        "L1.cli.Dockerfile": (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text(),
+        "L1.ui.Dockerfile": (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text(),
+        "L2.Dockerfile": (tmpl_pkg / "l2.project.Dockerfile.template").read_text(),
+    }
 
     # Read additional docker-related settings directly from the project.yml
     docker_cfg = _load_docker_config(project.root)
@@ -121,15 +118,34 @@ def generate_dockerfiles(project_id: str) -> None:
         "USER_SNIPPET": user_snippet,
     }
 
-    # Apply simple token replacement
-    for name, content in (
-        ("L0.Dockerfile", l0_txt),
-        ("L1.cli.Dockerfile", l1_cli_txt),
-        ("L1.ui.Dockerfile", l1_ui_txt),
-        ("L2.Dockerfile", l2_txt),
-    ):
+    rendered = {}
+    for name, content in templates.items():
         for k, v in variables.items():
             content = content.replace(f"{{{{{k}}}}}", str(v))
+        rendered[name] = content
+    return rendered
+
+
+def dockerfiles_match_templates(project_id: str) -> bool:
+    project = load_project(project_id)
+    out_dir = build_root() / project.id
+    rendered = _render_dockerfiles(project)
+    for name, expected in rendered.items():
+        path = out_dir / name
+        if not path.is_file():
+            return False
+        if path.read_text() != expected:
+            return False
+    return True
+
+
+def generate_dockerfiles(project_id: str) -> None:
+    project = load_project(project_id)
+    out_dir = build_root() / project.id
+    _ensure_dir(out_dir)
+
+    rendered = _render_dockerfiles(project)
+    for name, content in rendered.items():
         (out_dir / name).write_text(content)
 
     # Stage auxiliary scripts into build context so Dockerfile COPY works.

@@ -1,5 +1,6 @@
 import subprocess
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -297,6 +298,35 @@ def get_project_state(project_id: str) -> dict:
     except (FileNotFoundError, OSError):  # podman missing or not usable
         has_images = False
 
+    dockerfiles_old = False
+    if has_dockerfiles:
+        try:
+            from .docker import dockerfiles_match_templates
+
+            dockerfiles_old = not dockerfiles_match_templates(project_id)
+        except Exception:
+            dockerfiles_old = False
+
+    images_old = False
+    if has_images and has_dockerfiles:
+        docker_mtime = None
+        try:
+            docker_mtime = max(p.stat().st_mtime for p in dockerfiles if p.is_file())
+        except Exception:
+            docker_mtime = None
+
+        if docker_mtime is not None:
+            docker_dt = datetime.fromtimestamp(docker_mtime, tz=UTC)
+            created_times = []
+            for tag in required_tags:
+                created = _get_image_created(tag)
+                if created is None:
+                    created_times = []
+                    break
+                created_times.append(created)
+            if created_times:
+                images_old = any(created < docker_dt for created in created_times)
+
     # SSH: same resolution logic as init_project_ssh(). Consider SSH
     # "ready" when the directory and its config file exist.
     ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
@@ -318,8 +348,54 @@ def get_project_state(project_id: str) -> dict:
 
     return {
         "dockerfiles": has_dockerfiles,
+        "dockerfiles_old": dockerfiles_old,
         "images": has_images,
+        "images_old": images_old,
         "ssh": has_ssh,
         "gate": has_gate,
         "gate_last_commit": gate_last_commit,
     }
+
+
+def _get_image_created(tag: str) -> datetime | None:
+    try:
+        result = subprocess.run(
+            ["podman", "image", "inspect", "--format", "{{.Created}}", tag],
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return _parse_podman_created(result.stdout)
+
+
+def _parse_podman_created(value: str) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    if "." in value:
+        head, tail = value.split(".", 1)
+        tz_sep = None
+        for sep in ("+", "-"):
+            idx = tail.find(sep)
+            if idx != -1:
+                tz_sep = idx
+                break
+        if tz_sep is None:
+            frac = tail
+            tz = ""
+        else:
+            frac = tail[:tz_sep]
+            tz = tail[tz_sep:]
+        frac = (frac[:6]).ljust(6, "0")
+        value = f"{head}.{frac}{tz}"
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None

@@ -123,7 +123,9 @@ class ProjectTests(unittest.TestCase):
                     state,
                     {
                         "dockerfiles": True,
+                        "dockerfiles_old": True,
                         "images": True,
+                        "images_old": False,
                         "ssh": True,
                         "gate": True,
                         "gate_last_commit": None,
