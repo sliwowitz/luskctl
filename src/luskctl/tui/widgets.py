@@ -176,7 +176,7 @@ class TaskList(ListView):
                 task_emoji = "⌨️"  # Keyboard emoji for CLI
             elif tm.mode == "web":
                 # Use backend-specific emojis for web tasks
-                backend = tm.task_id.split('-')[-1] if '-' in tm.task_id else "codex"
+                backend = tm.task_id.split("-")[-1] if "-" in tm.task_id else "codex"
                 if backend == "mistral":
                     task_emoji = "🏰"  # Castle emoji for Mistral
                 elif backend == "claude":
@@ -259,13 +259,13 @@ class TaskDetails(Static):
 
         # Use emojis for task types
         task_emoji = ""
-        mode_display = task.mode or 'unset'
+        mode_display = task.mode or "unset"
         if task.mode == "cli":
             task_emoji = "⌨️ "  # Keyboard emoji for CLI
             mode_display = "CLI"
         elif task.mode == "web":
             # Use backend-specific emojis for web tasks
-            backend = task.task_id.split('-')[-1] if '-' in task.task_id else "codex"
+            backend = task.task_id.split("-")[-1] if "-" in task.task_id else "codex"
             if backend == "mistral":
                 task_emoji = "🏰 "  # Castle emoji for Mistral
                 mode_display = "Web UI (Mistral)"
@@ -278,7 +278,12 @@ class TaskDetails(Static):
 
         # Update status display
         status_display = task.status
-        if task.status == "created" and task.web_port or task.status == "created" and task.mode == "cli":
+        if (
+            task.status == "created"
+            and task.web_port
+            or task.status == "created"
+            and task.mode == "cli"
+        ):
             status_display = "running"
 
         lines = [

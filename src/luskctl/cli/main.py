@@ -81,6 +81,7 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
 def _supports_color() -> bool:
     """Check if stdout supports color output."""
     import sys
+
     return sys.stdout.isatty()
 
 

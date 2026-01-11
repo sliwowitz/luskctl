@@ -114,7 +114,7 @@ if _HAS_TEXTUAL:
                     "generate": "generate",
                     "build": "build",
                     "build_all": "build_all",
-                    "sync_gate": "sync_gate"
+                    "sync_gate": "sync_gate",
                 }
                 self.dismiss(action_map.get(button_id))
 
@@ -163,12 +163,7 @@ if _HAS_TEXTUAL:
             if button_id == "cancel":
                 self.dismiss(None)
             else:
-                action_map = {
-                    "new": "new",
-                    "cli": "cli",
-                    "web": "web",
-                    "delete": "delete"
-                }
+                action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
                 self.dismiss(action_map.get(button_id))
 
     class LuskTUI(App):
@@ -413,7 +408,7 @@ if _HAS_TEXTUAL:
                 state_path = _Path("~/.luskctl-tui-state.json").expanduser()
                 state = {
                     "last_project": self.current_project_id,
-                    "last_tasks": self._last_selected_tasks
+                    "last_tasks": self._last_selected_tasks,
                 }
                 with state_path.open("w", encoding="utf-8") as f:
                     json.dump(state, f)
