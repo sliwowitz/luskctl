@@ -59,7 +59,7 @@ sys.modules["textual.message"] = mock.MagicMock()
 _widgets_mock = mock.MagicMock()
 _widgets_mock.ProjectList = MockProjectList
 _widgets_mock.TaskList = MockTaskList
-sys.modules["codexctl.tui.widgets"] = _widgets_mock
+sys.modules["luskctl.tui.widgets"] = _widgets_mock
 
 
 class TuiModuleTests(unittest.TestCase):
@@ -67,10 +67,10 @@ class TuiModuleTests(unittest.TestCase):
         import importlib
 
         # Need to reload if already imported
-        if "codexctl.tui.app" in sys.modules:
-            del sys.modules["codexctl.tui.app"]
-        if "codexctl.tui" in sys.modules:
-            del sys.modules["codexctl.tui"]
+        if "luskctl.tui.app" in sys.modules:
+            del sys.modules["luskctl.tui.app"]
+        if "luskctl.tui" in sys.modules:
+            del sys.modules["luskctl.tui"]
 
-        module = importlib.import_module("codexctl.tui.app")
+        module = importlib.import_module("luskctl.tui.app")
         self.assertTrue(callable(getattr(module, "main", None)))

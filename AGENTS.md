@@ -1,13 +1,13 @@
-# Agent Guide (codexctl)
+# Agent Guide (luskctl)
 
 ## Purpose
 
-`codexctl` manages containerized AI coding agent projects and per-run tasks using Podman. It ships both a CLI
-(`codexctl`) and a Textual TUI (`codexctl-tui`).
+`luskctl` manages containerized AI coding agent projects and per-run tasks using Podman. It ships both a CLI
+(`luskctl`) and a Textual TUI (`luskctl-tui`).
 
 ## Repo layout
 
-- `src/codexctl/`: Python package (CLI in `src/codexctl/cli/`, TUI in `src/codexctl/tui/`)
+- `src/luskctl/`: Python package (CLI in `src/luskctl/cli/`, TUI in `src/luskctl/tui/`)
 - `tests/`: `pytest` test suite
 - `docs/`: user + developer documentation
 - `examples/`, `completions/`: sample configs and shell completions

@@ -5,8 +5,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.projects import load_project
-from codexctl.lib.tasks import (
+from luskctl.lib.projects import load_project
+from luskctl.lib.tasks import (
     _apply_ui_env_overrides,
     _build_task_env_and_volumes,
     copy_to_clipboard,
@@ -23,7 +23,7 @@ from test_utils import mock_git_config, parse_meta_value, write_project
 class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.lib.tasks.shutil.which", return_value=None):
                 result = copy_to_clipboard_detailed("hello")
         self.assertFalse(result.ok)
         self.assertIsNotNone(result.hint)
@@ -35,9 +35,9 @@ class TaskTests(unittest.TestCase):
 
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", side_effect=which_side_effect
+                "luskctl.lib.tasks.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                     result = copy_to_clipboard_detailed("hello")
 
@@ -62,8 +62,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
@@ -76,7 +76,7 @@ class TaskTests(unittest.TestCase):
                 workspace = Path(parse_meta_value(meta_text, "workspace") or "")
                 self.assertTrue(workspace.is_dir())
 
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     task_delete(project_id, "1")
 
@@ -106,8 +106,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
@@ -144,9 +144,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
@@ -187,9 +187,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
@@ -229,9 +229,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
@@ -245,12 +245,12 @@ class TaskTests(unittest.TestCase):
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
-        # Host env uses CODEXUI_* prefix for passthrough to containers
+        # Host env uses LUSKUI_* prefix for passthrough to containers
         with unittest.mock.patch.dict(
             os.environ,
             {
-                "CODEXUI_TOKEN": "token-123",
-                "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
+                "LUSKUI_TOKEN": "token-123",
+                "LUSKUI_MISTRAL_API_KEY": "mistral-xyz",
                 "ANTHROPIC_API_KEY": "anthropic-456",
                 "CLAUDE_API_KEY": "from-env",
                 "MISTRAL_API_KEY": "mistral-456",
@@ -259,10 +259,10 @@ class TaskTests(unittest.TestCase):
         ):
             merged = _apply_ui_env_overrides(base_env, "CLAUDE")
 
-        # Container receives CODEXUI_* passthrough
-        self.assertEqual(merged["CODEXUI_BACKEND"], "claude")
-        self.assertEqual(merged["CODEXUI_TOKEN"], "token-123")
-        self.assertEqual(merged["CODEXUI_MISTRAL_API_KEY"], "mistral-xyz")
+        # Container receives LUSKUI_* passthrough
+        self.assertEqual(merged["LUSKUI_BACKEND"], "claude")
+        self.assertEqual(merged["LUSKUI_TOKEN"], "token-123")
+        self.assertEqual(merged["LUSKUI_MISTRAL_API_KEY"], "mistral-xyz")
         self.assertEqual(merged["ANTHROPIC_API_KEY"], "anthropic-456")
         self.assertEqual(merged["CLAUDE_API_KEY"], "override")
         self.assertEqual(merged["MISTRAL_API_KEY"], "mistral-456")
@@ -285,15 +285,15 @@ class TaskTests(unittest.TestCase):
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
 
-            # Host env uses CODEXUI_* prefix for passthrough to containers
+            # Host env uses LUSKUI_* prefix for passthrough to containers
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
-                    "CODEXUI_TOKEN": "token-xyz",
-                    "CODEXUI_MISTRAL_API_KEY": "mistral-xyz",
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "LUSKUI_TOKEN": "token-xyz",
+                    "LUSKUI_MISTRAL_API_KEY": "mistral-xyz",
                     "ANTHROPIC_API_KEY": "anthropic-abc",
                     "MISTRAL_API_KEY": "mistral-abc",
                 },
@@ -303,18 +303,18 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "codexctl.lib.tasks._stream_initial_logs",
+                        "luskctl.lib.tasks._stream_initial_logs",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "codexctl.lib.tasks._is_container_running",
+                        "luskctl.lib.tasks._is_container_running",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "codexctl.lib.tasks._assign_ui_port",
+                        "luskctl.lib.tasks._assign_ui_port",
                         return_value=7788,
                     ),
-                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     task_run_ui(project_id, "1", backend="CLAUDE")
@@ -322,10 +322,10 @@ class TaskTests(unittest.TestCase):
                 cmd = run_mock.call_args[0][0]
                 env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
 
-                # Container receives CODEXUI_* passthrough
-                self.assertIn("CODEXUI_BACKEND=claude", env_entries)
-                self.assertIn("CODEXUI_TOKEN=token-xyz", env_entries)
-                self.assertIn("CODEXUI_MISTRAL_API_KEY=mistral-xyz", env_entries)
+                # Container receives LUSKUI_* passthrough
+                self.assertIn("LUSKUI_BACKEND=claude", env_entries)
+                self.assertIn("LUSKUI_TOKEN=token-xyz", env_entries)
+                self.assertIn("LUSKUI_MISTRAL_API_KEY=mistral-xyz", env_entries)
                 self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
                 self.assertIn("MISTRAL_API_KEY=mistral-abc", env_entries)
 
@@ -347,8 +347,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 # Try to get diff for non-existent task
@@ -373,8 +373,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
@@ -400,14 +400,14 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
 
                 # Mock subprocess.run to simulate clean git repository
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
                     mock_result.stdout = ""
@@ -439,8 +439,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
@@ -449,7 +449,7 @@ class TaskTests(unittest.TestCase):
 
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                 ):
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
@@ -489,8 +489,8 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
@@ -499,7 +499,7 @@ class TaskTests(unittest.TestCase):
 
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                 ):
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 0
@@ -540,13 +540,13 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 task_new(project_id)
 
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     # Simulate git command failure
                     mock_result = unittest.mock.Mock()
                     mock_result.returncode = 1
@@ -570,9 +570,9 @@ class TaskTests(unittest.TestCase):
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/wl-copy"
+                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/wl-copy"
             ):
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard("test content")
@@ -590,9 +590,9 @@ class TaskTests(unittest.TestCase):
         """Test copy_to_clipboard uses xclip on X11 when available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/xclip"
+                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/xclip"
             ):
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard("test content")
@@ -604,11 +604,11 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
-        with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.lib.tasks.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
             ):
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -629,9 +629,9 @@ class TaskTests(unittest.TestCase):
                 return None
 
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", side_effect=which_side_effect
+                "luskctl.lib.tasks.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("codexctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.side_effect = subprocess.CalledProcessError(
                         1, ["xclip"], stderr="boom"
                     )
@@ -645,9 +645,9 @@ class TaskTests(unittest.TestCase):
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
-        with unittest.mock.patch("codexctl.lib.tasks.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.lib.tasks.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "codexctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
             ):
                 status = get_clipboard_helper_status()
                 self.assertTrue(status.available)
@@ -659,7 +659,7 @@ class TaskTests(unittest.TestCase):
         with unittest.mock.patch.dict(
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.lib.tasks.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -668,7 +668,7 @@ class TaskTests(unittest.TestCase):
     def test_get_clipboard_helper_status_no_helpers_x11(self) -> None:
         """Test get_clipboard_helper_status returns hint for X11 when no helpers available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("codexctl.lib.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.lib.tasks.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -697,9 +697,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
@@ -739,9 +739,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
@@ -780,9 +780,9 @@ class TaskTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"

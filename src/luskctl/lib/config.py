@@ -15,13 +15,13 @@ def get_prefix() -> Path:
     Minimal prefix helper used primarily for pip/venv installs.
 
     Order:
-    - If CODEXCTL_PREFIX is set, use it.
+    - If LUSKCTL_PREFIX is set, use it.
     - Otherwise, use sys.prefix.
 
     Note: Do not use this for config/data discovery - see the dedicated
     helpers below which follow common Linux/XDG conventions.
     """
-    env = os.environ.get("CODEXCTL_PREFIX")
+    env = os.environ.get("LUSKCTL_PREFIX")
     if env:
         return Path(env).expanduser().resolve()
     return Path(sys.prefix).resolve()
@@ -29,13 +29,13 @@ def get_prefix() -> Path:
 
 def config_root() -> Path:
     """
-    System projects directory. Uses FHS/XDG via codexctl.lib.paths.
+    System projects directory. Uses FHS/XDG via luskctl.lib.paths.
 
     Behavior:
     - If the base config directory contains a 'projects' subdirectory, use it.
     - Otherwise, treat the base config directory itself as the projects root.
 
-    This makes development convenient when CODEXCTL_CONFIG_DIR points directly
+    This makes development convenient when LUSKCTL_CONFIG_DIR points directly
     to a folder that already contains per-project subdirectories (like ./examples).
     """
     base = _config_root_base().resolve()
@@ -47,20 +47,20 @@ def global_config_search_paths() -> list[Path]:
     """Return the ordered list of paths that will be checked for global config.
 
     Behavior matches global_config_path():
-    - If CODEXCTL_CONFIG_FILE is set, only that single path is considered.
+    - If LUSKCTL_CONFIG_FILE is set, only that single path is considered.
     - Otherwise, check in order:
-        1) ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml
-        2) sys.prefix/etc/codexctl/config.yml
-        3) /etc/codexctl/config.yml
+        1) ${XDG_CONFIG_HOME:-~/.config}/luskctl/config.yml
+        2) sys.prefix/etc/luskctl/config.yml
+        3) /etc/luskctl/config.yml
     """
-    env_file = os.environ.get("CODEXCTL_CONFIG_FILE")
+    env_file = os.environ.get("LUSKCTL_CONFIG_FILE")
     if env_file:
         return [Path(env_file).expanduser().resolve()]
 
     xdg_home = os.environ.get("XDG_CONFIG_HOME")
-    user_cfg = (Path(xdg_home) if xdg_home else Path.home() / ".config") / "codexctl" / "config.yml"
-    sp_cfg = Path(sys.prefix) / "etc" / "codexctl" / "config.yml"
-    etc_cfg = Path("/etc/codexctl/config.yml")
+    user_cfg = (Path(xdg_home) if xdg_home else Path.home() / ".config") / "luskctl" / "config.yml"
+    sp_cfg = Path(sys.prefix) / "etc" / "luskctl" / "config.yml"
+    etc_cfg = Path("/etc/luskctl/config.yml")
     return [user_cfg, sp_cfg, etc_cfg]
 
 
@@ -69,14 +69,14 @@ def global_config_path() -> Path:
 
     Resolution order (first existing wins, except explicit override is returned even
     if missing to make intent visible to the user):
-    - CODEXCTL_CONFIG_FILE env (returned as-is)
-    - ${XDG_CONFIG_HOME:-~/.config}/codexctl/config.yml (user override)
-    - sys.prefix/etc/codexctl/config.yml (pip wheels)
-    - /etc/codexctl/config.yml (system default)
-    If none exist, return the last path (/etc/codexctl/config.yml).
+    - LUSKCTL_CONFIG_FILE env (returned as-is)
+    - ${XDG_CONFIG_HOME:-~/.config}/luskctl/config.yml (user override)
+    - sys.prefix/etc/luskctl/config.yml (pip wheels)
+    - /etc/luskctl/config.yml (system default)
+    If none exist, return the last path (/etc/luskctl/config.yml).
     """
     candidates = global_config_search_paths()
-    # If CODEXCTL_CONFIG_FILE is set, candidates has a single element and we
+    # If LUSKCTL_CONFIG_FILE is set, candidates has a single element and we
     # want to return it even if it doesn't exist.
     if len(candidates) == 1:
         return candidates[0]
@@ -101,12 +101,12 @@ def state_root() -> Path:
     """Writable state directory for tasks/cache/build.
 
     Precedence:
-    - Environment variable CODEXCTL_STATE_DIR (handled first)
+    - Environment variable LUSKCTL_STATE_DIR (handled first)
     - If set in global config (paths.state_root), use it.
-    - Otherwise, use codexctl.lib.paths.state_root() (FHS/XDG handling).
+    - Otherwise, use luskctl.lib.paths.state_root() (FHS/XDG handling).
     """
     # Environment override should always win
-    env = os.environ.get("CODEXCTL_STATE_DIR")
+    env = os.environ.get("LUSKCTL_STATE_DIR")
     if env:
         return Path(env).expanduser().resolve()
 
@@ -134,8 +134,8 @@ def user_projects_root() -> Path:
 
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
-        return Path(xdg) / "codexctl" / "projects"
-    return Path.home() / ".config" / "codexctl" / "projects"
+        return Path(xdg) / "luskctl" / "projects"
+    return Path.home() / ".config" / "luskctl" / "projects"
 
 
 def build_root() -> Path:
@@ -169,15 +169,15 @@ def get_ui_base_port() -> int:
 def get_envs_base_dir() -> Path:
     """Return the base directory for shared env mounts (codex/ssh).
 
-    Global config (codexctl-config.yml):
+    Global config (luskctl-config.yml):
       envs:
-        base_dir: /var/lib/codexctl/envs
+        base_dir: /var/lib/luskctl/envs
 
-    Default: /var/lib/codexctl/envs
+    Default: /var/lib/luskctl/envs
     """
     cfg = load_global_config()
     envs_cfg = cfg.get("envs", {}) or {}
-    base = envs_cfg.get("base_dir", "/var/lib/codexctl/envs")
+    base = envs_cfg.get("base_dir", "/var/lib/luskctl/envs")
     return Path(str(base)).expanduser().resolve()
 
 

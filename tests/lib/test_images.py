@@ -1,6 +1,6 @@
 import unittest
 
-from codexctl.lib import images
+from luskctl.lib import images
 
 
 class ImagesTests(unittest.TestCase):
@@ -109,32 +109,32 @@ class ImagesTests(unittest.TestCase):
     def test_base_dev_image(self) -> None:
         """base_dev_image should return correct L0 image name."""
         result = images.base_dev_image("ubuntu-22.04")
-        self.assertEqual(result, "codexctl-l0:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l0:ubuntu-22.04")
 
     def test_base_dev_image_with_special_chars(self) -> None:
         """base_dev_image should sanitize base_image."""
         result = images.base_dev_image("ubuntu@22.04")
-        self.assertEqual(result, "codexctl-l0:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l0:ubuntu-22.04")
 
     def test_agent_cli_image(self) -> None:
         """agent_cli_image should return correct L1 CLI image name."""
         result = images.agent_cli_image("ubuntu-22.04")
-        self.assertEqual(result, "codexctl-l1-cli:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l1-cli:ubuntu-22.04")
 
     def test_agent_cli_image_with_special_chars(self) -> None:
         """agent_cli_image should sanitize base_image."""
         result = images.agent_cli_image("ubuntu@22.04")
-        self.assertEqual(result, "codexctl-l1-cli:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l1-cli:ubuntu-22.04")
 
     def test_agent_ui_image(self) -> None:
         """agent_ui_image should return correct L1 UI image name."""
         result = images.agent_ui_image("ubuntu-22.04")
-        self.assertEqual(result, "codexctl-l1-ui:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l1-ui:ubuntu-22.04")
 
     def test_agent_ui_image_with_special_chars(self) -> None:
         """agent_ui_image should sanitize base_image."""
         result = images.agent_ui_image("ubuntu@22.04")
-        self.assertEqual(result, "codexctl-l1-ui:ubuntu-22.04")
+        self.assertEqual(result, "luskctl-l1-ui:ubuntu-22.04")
 
     def test_project_cli_image(self) -> None:
         """project_cli_image should return correct L2 CLI image name."""
@@ -153,9 +153,9 @@ class ImagesTests(unittest.TestCase):
 
     def test_all_functions_with_empty_base_image(self) -> None:
         """All base_image functions should handle empty string."""
-        self.assertEqual(images.base_dev_image(""), "codexctl-l0:ubuntu-24.04")
-        self.assertEqual(images.agent_cli_image(""), "codexctl-l1-cli:ubuntu-24.04")
-        self.assertEqual(images.agent_ui_image(""), "codexctl-l1-ui:ubuntu-24.04")
+        self.assertEqual(images.base_dev_image(""), "luskctl-l0:ubuntu-24.04")
+        self.assertEqual(images.agent_cli_image(""), "luskctl-l1-cli:ubuntu-24.04")
+        self.assertEqual(images.agent_ui_image(""), "luskctl-l1-ui:ubuntu-24.04")
 
     def test_all_functions_with_long_base_image(self) -> None:
         """All base_image functions should handle long names."""

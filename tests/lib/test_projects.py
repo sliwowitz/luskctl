@@ -4,8 +4,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from codexctl.lib.config import build_root, state_root
-from codexctl.lib.projects import get_project_state, list_projects, load_project
+from luskctl.lib.config import build_root, state_root
+from luskctl.lib.projects import get_project_state, list_projects, load_project
 from test_utils import write_project
 
 
@@ -27,8 +27,8 @@ class ProjectTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
                 proj = load_project(project_id)
@@ -46,7 +46,7 @@ class ProjectTests(unittest.TestCase):
             system_root = base / "system"
             user_root = base / "user"
             system_root.mkdir(parents=True, exist_ok=True)
-            user_projects = user_root / "codexctl" / "projects"
+            user_projects = user_root / "luskctl" / "projects"
 
             project_id = "proj2"
             write_project(
@@ -63,7 +63,7 @@ class ProjectTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(system_root),
+                    "LUSKCTL_CONFIG_DIR": str(system_root),
                     "XDG_CONFIG_HOME": str(user_root),
                 },
             ):
@@ -93,9 +93,9 @@ class ProjectTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "CODEXCTL_CONFIG_DIR": str(config_root),
-                    "CODEXCTL_STATE_DIR": str(state_dir),
-                    "CODEXCTL_CONFIG_FILE": str(config_file),
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
                 },
             ):
                 stage_dir = build_root() / project_id
@@ -115,7 +115,7 @@ class ProjectTests(unittest.TestCase):
                 gate_dir = state_root() / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                with unittest.mock.patch("codexctl.lib.projects.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.projects.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     state = get_project_state(project_id)
 

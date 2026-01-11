@@ -46,13 +46,13 @@ def _copy_package_tree(package: str, rel_path: str, dest: Path) -> None:
 def _stage_scripts_into(dest: Path) -> None:
     """Stage helper scripts from package resources into dest/scripts.
 
-    Single source of truth: codexctl/resources/scripts bundled in the wheel.
+    Single source of truth: luskctl/resources/scripts bundled in the wheel.
     """
     pkg_rel = "resources/scripts"
     # Replace destination directory atomically-ish
     if dest.exists():
         shutil.rmtree(dest)
-    _copy_package_tree("codexctl", pkg_rel, dest)
+    _copy_package_tree("luskctl", pkg_rel, dest)
 
 
 def _load_docker_config(project_root: Path) -> dict:
@@ -66,9 +66,9 @@ def _load_docker_config(project_root: Path) -> dict:
 def generate_dockerfiles(project_id: str) -> None:
     project = load_project(project_id)
 
-    # Load templates from package resources (codexctl/resources/templates). Use
+    # Load templates from package resources (luskctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
-    tmpl_pkg = resources.files("codexctl") / "resources" / "templates"
+    tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
     l0_txt = (tmpl_pkg / "l0.dev.Dockerfile.template").read_text()
     l1_cli_txt = (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text()
     l1_ui_txt = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
@@ -153,7 +153,7 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     l2 = stage_dir / "L2.Dockerfile"
 
     if not l0.is_file() or not l1_cli.is_file() or not l1_ui.is_file() or not l2.is_file():
-        raise SystemExit("Dockerfiles are missing. Run 'codexctl generate <project>' first.")
+        raise SystemExit("Dockerfiles are missing. Run 'luskctl generate <project>' first.")
 
     # Build commands (using podman). Real implementation would pass context and tags.
     # Build with the project-specific build directory as context so COPY scripts/ works

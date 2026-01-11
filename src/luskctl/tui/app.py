@@ -66,7 +66,7 @@ if _HAS_TEXTUAL:
     )
 
     class CodexTUI(App):
-        """Minimal TUI frontend for codexctl core modules."""
+        """Minimal TUI frontend for luskctl core modules."""
 
         CSS_PATH = None
 
@@ -205,7 +205,7 @@ if _HAS_TEXTUAL:
             try:
                 from pathlib import Path as _Path
 
-                log_path = _Path("/tmp/codexctl-tui.log")
+                log_path = _Path("/tmp/luskctl-tui.log")
                 log_path.parent.mkdir(parents=True, exist_ok=True)
 
                 left_pane = self.query_one("#left-pane")
@@ -216,7 +216,7 @@ if _HAS_TEXTUAL:
                 task_details = self.query_one("#task-details", TaskDetails)
 
                 with log_path.open("a", encoding="utf-8") as _f:
-                    _f.write("[codexctl DEBUG] layout snapshot after refresh:\n")
+                    _f.write("[luskctl DEBUG] layout snapshot after refresh:\n")
                     _f.write(f"  left-pane   size={left_pane.size} region={left_pane.region}\n")
                     _f.write(f"  right-pane  size={right_pane.size} region={right_pane.region}\n")
                     _f.write(
@@ -244,21 +244,21 @@ if _HAS_TEXTUAL:
                 from datetime import datetime as _dt
                 from pathlib import Path as _Path
 
-                log_path = _Path("/tmp/codexctl-tui.log")
+                log_path = _Path("/tmp/luskctl-tui.log")
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 ts = _dt.now().isoformat(timespec="seconds")
                 with log_path.open("a", encoding="utf-8") as _f:
-                    _f.write(f"[codexctl DEBUG] {ts} {message}\n")
+                    _f.write(f"[luskctl DEBUG] {ts} {message}\n")
             except Exception:
                 # Logging must never break the TUI.
                 pass
 
         def _prompt_ui_backend(self) -> str:
             backends = list(UI_BACKENDS)
-            # Check DEFAULT_AGENT first, fall back to CODEXUI_BACKEND for compatibility
+            # Check DEFAULT_AGENT first, fall back to LUSKUI_BACKEND for compatibility
             default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
             if not default:
-                default = os.environ.get("CODEXUI_BACKEND", "").strip().lower()
+                default = os.environ.get("LUSKUI_BACKEND", "").strip().lower()
             if not default:
                 default = backends[0] if backends else "codex"
 
@@ -858,8 +858,8 @@ else:
 
     def main() -> None:
         print(
-            "codexctl TUI requires the 'textual' package.\n"
-            "Install it with: pip install 'codexctl[tui]'",
+            "luskctl TUI requires the 'textual' package.\n"
+            "Install it with: pip install 'luskctl[tui]'",
             file=sys.stderr,
         )
         sys.exit(1)

@@ -13,7 +13,7 @@ except ImportError:  # optional dependency
     _user_config_dir = _user_data_dir = None  # type: ignore[assignment]
 
 
-APP_NAME = "codexctl"
+APP_NAME = "luskctl"
 
 
 def _is_root() -> bool:
@@ -28,11 +28,11 @@ def config_root() -> Path:
     Base directory for configuration (project.yml, projects/, etc.).
 
     Priority:
-      1. CODEXCTL_CONFIG_DIR
-      2. if root   → /etc/codexctl
-         else      → ~/.config/codexctl
+      1. LUSKCTL_CONFIG_DIR
+      2. if root   → /etc/luskctl
+         else      → ~/.config/luskctl
     """
-    env = os.getenv("CODEXCTL_CONFIG_DIR")
+    env = os.getenv("LUSKCTL_CONFIG_DIR")
     if env:
         return Path(env).expanduser()
 
@@ -49,11 +49,11 @@ def state_root() -> Path:
     Writable state (tasks, pods, caches).
 
     Priority:
-      1. CODEXCTL_STATE_DIR
-      2. if root   → /var/lib/codexctl
-         else      → ${XDG_DATA_HOME:-~/.local/share}/codexctl
+      1. LUSKCTL_STATE_DIR
+      2. if root   → /var/lib/luskctl
+         else      → ${XDG_DATA_HOME:-~/.local/share}/luskctl
     """
-    env = os.getenv("CODEXCTL_STATE_DIR")
+    env = os.getenv("LUSKCTL_STATE_DIR")
     if env:
         return Path(env).expanduser()
 
@@ -75,11 +75,11 @@ def runtime_root() -> Path:
     Transient runtime bits.
 
     Priority:
-      1. CODEXCTL_RUNTIME_DIR
-      2. if root   → /run/codexctl
-         else      → ~/.cache/codexctl
+      1. LUSKCTL_RUNTIME_DIR
+      2. if root   → /run/luskctl
+         else      → ~/.cache/luskctl
     """
-    env = os.getenv("CODEXCTL_RUNTIME_DIR")
+    env = os.getenv("LUSKCTL_RUNTIME_DIR")
     if env:
         return Path(env).expanduser()
 

@@ -48,7 +48,7 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
 
   # New Task Marker Protocol:
   # -------------------------
-  # The marker file (.new-task-marker) is created by 'codexctl task new' to signal
+  # The marker file (.new-task-marker) is created by 'luskctl task new' to signal
   # that this workspace should be reset to the latest remote HEAD. This handles:
   #
   # 1. NEW TASK: Marker exists -> clone or reset to latest HEAD, then remove marker
@@ -217,7 +217,7 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
           echo "NOTE: Gate is ${BEHIND_COUNT} commits behind upstream on ${TARGET_BRANCH}"
           echo "  Local:    ${LOCAL_HEAD:0:8}"
           echo "  Upstream: ${UPSTREAM_HEAD:0:8}"
-          echo "  Run 'codexctl gate-init <project>' on host to update"
+          echo "  Run 'luskctl gate-init <project>' on host to update"
           echo "=========================================="
           echo ""
         else

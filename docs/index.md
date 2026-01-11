@@ -1,6 +1,6 @@
-# codexctl
+# luskctl
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`codexctl`) and a Textual TUI (`codextui`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`codextui`).
 
 ## Features
 
@@ -23,8 +23,8 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:sliwowitz/codexctl.git
-cd codexctl
+git clone git@github.com:sliwowitz/luskctl.git
+cd luskctl
 pip install .
 
 # With TUI support
@@ -35,10 +35,10 @@ pip install '.[tui]'
 
 ```bash
 # 1. Create project directory
-mkdir -p ~/.config/codexctl/projects/myproj
+mkdir -p ~/.config/luskctl/projects/myproj
 
 # 2. Create project.yml
-cat > ~/.config/codexctl/projects/myproj/project.yml << 'EOF'
+cat > ~/.config/luskctl/projects/myproj/project.yml << 'EOF'
 project:
   id: myproj
   security_class: online
@@ -48,12 +48,12 @@ git:
 EOF
 
 # 3. Generate and build images
-codexctl generate myproj
-codexctl build myproj
+luskctl generate myproj
+luskctl build myproj
 
 # 4. Create and run a task
-codexctl task new myproj
-codexctl task run-cli myproj 1
+luskctl task new myproj
+luskctl task run-cli myproj 1
 ```
 
 ## Documentation
@@ -64,4 +64,4 @@ codexctl task run-cli myproj 1
 
 ## License
 
-See [LICENSE](https://github.com/sliwowitz/codexctl/blob/master/LICENSE) file.
+See [LICENSE](https://github.com/sliwowitz/luskctl/blob/master/LICENSE) file.

@@ -74,7 +74,7 @@ def init_project_ssh(
             "-N",
             "",
             "-C",
-            f"codexctl {project.id} {getpass.getuser()}@{socket.gethostname()}",
+            f"luskctl {project.id} {getpass.getuser()}@{socket.gethostname()}",
         ]
         try:
             subprocess.run(cmd, check=True)
@@ -104,7 +104,7 @@ def init_project_ssh(
         packaged_template = None
         try:
             packaged_template = (
-                resources.files("codexctl") / "resources" / "templates" / "ssh_config.template"
+                resources.files("luskctl") / "resources" / "templates" / "ssh_config.template"
             )
         except Exception:
             packaged_template = None

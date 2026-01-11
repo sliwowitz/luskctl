@@ -1,10 +1,10 @@
-Container layering in codexctl
+Container layering in luskctl
 
 Overview
-- codexctl builds project containers in three logical layers. L0 (dev) and L1 (agent) are project‑agnostic and cache well; L2 is project‑specific.
+- luskctl builds project containers in three logical layers. L0 (dev) and L1 (agent) are project‑agnostic and cache well; L2 is project‑specific.
 
 Layers
-0. L0 — development base (codexctl-l0:<base-tag>)
+0. L0 — development base (luskctl-l0:<base-tag>)
    - Based on Ubuntu 24.04 by default (override via docker.base_image).
    - Installs common tooling (git, openssh-client, ripgrep, vim, etc.).
    - Creates /workspace and sets WORKDIR to /workspace.
@@ -14,11 +14,11 @@ Layers
      - REPO_ROOT=/workspace
      - GIT_RESET_MODE=none
 
-1. L1 — agent images (codexctl-l1-cli:<base-tag>, codexctl-l1-ui:<base-tag>)
+1. L1 — agent images (luskctl-l1-cli:<base-tag>, luskctl-l1-ui:<base-tag>)
    - Built FROM L0.
    - CLI image installs Codex, Claude Code, Mistral Vibe, and supporting tools.
-   - UI image installs UI dependencies and sets CMD to codexui-entry.sh.
-   - codexui-entry.sh:
+   - UI image installs UI dependencies and sets CMD to luskui-entry.sh.
+   - luskui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
      - Downloads a pre-built CodexUI distribution tarball containing production-ready assets and dependencies.
      - Starts the UI server directly using the pre-built dist/server.js.
@@ -29,33 +29,33 @@ Layers
    - Adds project‑specific defaults (CODE_REPO, SSH_KEY_NAME, GIT_BRANCH) and the user snippet.
    - Optional manual dev image (<project>:l2-dev) is built FROM L0 when requested.
    - The UI backend is configurable (Codex, Claude, or Mistral). Precedence (highest to lowest):
-     1. CLI flag: `codexctl task run-ui --backend <backend>`
+     1. CLI flag: `luskctl task run-ui --backend <backend>`
      2. Environment variable: `DEFAULT_AGENT` on the host
      3. Per-project config: `default_agent` in project.yml
-     4. Global config: `default_agent` in ~/.config/codexctl/config.yml
+     4. Global config: `default_agent` in ~/.config/luskctl/config.yml
      5. Default: codex
-     - For Claude, provide CODEXUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional CODEXUI_CLAUDE_MODEL.
-     - For Mistral, provide CODEXUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional CODEXUI_MISTRAL_MODEL.
+     - For Claude, provide LUSKUI_CLAUDE_API_KEY (or ANTHROPIC_API_KEY / CLAUDE_API_KEY) and optional LUSKUI_CLAUDE_MODEL.
+     - For Mistral, provide LUSKUI_MISTRAL_API_KEY (or MISTRAL_API_KEY) and optional LUSKUI_MISTRAL_MODEL.
 
 Build flow
-- codexctl generate <project> renders four Dockerfiles (L0/L1/L2) into the per‑project build directory:
+- luskctl generate <project> renders four Dockerfiles (L0/L1/L2) into the per‑project build directory:
   - L0.Dockerfile
   - L1.cli.Dockerfile
   - L1.ui.Dockerfile
   - L2.Dockerfile
-- codexctl build <project> executes podman builds in order:
-  1) codexctl-l0:<base-tag> FROM docker.base_image (default: Ubuntu 24.04)
-  2) codexctl-l1-cli:<base-tag> FROM codexctl-l0:<base-tag>
-  3) codexctl-l1-ui:<base-tag> FROM codexctl-l0:<base-tag>
-  4) <project>:l2-cli FROM codexctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
-  5) <project>:l2-ui FROM codexctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
-  6) Optional: <project>:l2-dev FROM codexctl-l0:<base-tag> (when `codexctl build --dev` is used)
+- luskctl build <project> executes podman builds in order:
+  1) luskctl-l0:<base-tag> FROM docker.base_image (default: Ubuntu 24.04)
+  2) luskctl-l1-cli:<base-tag> FROM luskctl-l0:<base-tag>
+  3) luskctl-l1-ui:<base-tag> FROM luskctl-l0:<base-tag>
+  4) <project>:l2-cli FROM luskctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
+  5) <project>:l2-ui FROM luskctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
+  6) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --dev` is used)
   - <base-tag> is derived from docker.base_image (sanitized), e.g.:
     - ubuntu:24.04 → ubuntu-24.04
     - nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04 → nvcr-io-nvidia-nvhpc-25.9-devel-cuda13.0-ubuntu24.04
 
 Runtime behavior (tasks)
-- codexctl task run-cli starts <project>:l2-cli; codexctl task run-ui starts <project>:l2-ui.
+- luskctl task run-cli starts <project>:l2-cli; luskctl task run-ui starts <project>:l2-ui.
 - Both modes:
   - Mount a per‑task workspace directory from the host to /workspace.
   - Mount a shared codex config directory to /home/dev/.codex (rw).
@@ -67,4 +67,4 @@ Runtime behavior (tasks)
 - The init script clones or syncs the project repository into /workspace and, if configured, warms up SSH known_hosts.
 
 GPU support
-- GPU passthrough is opt‑in per project (run.gpus in project.yml). When enabled, codexctl adds the necessary Podman flags for NVIDIA GPUs.
+- GPU passthrough is opt‑in per project (run.gpus in project.yml). When enabled, luskctl adds the necessary Podman flags for NVIDIA GPUs.

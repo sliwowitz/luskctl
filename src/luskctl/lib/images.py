@@ -16,15 +16,15 @@ def _base_tag(base_image: str) -> str:
 
 
 def base_dev_image(base_image: str) -> str:
-    return f"codexctl-l0:{_base_tag(base_image)}"
+    return f"luskctl-l0:{_base_tag(base_image)}"
 
 
 def agent_cli_image(base_image: str) -> str:
-    return f"codexctl-l1-cli:{_base_tag(base_image)}"
+    return f"luskctl-l1-cli:{_base_tag(base_image)}"
 
 
 def agent_ui_image(base_image: str) -> str:
-    return f"codexctl-l1-ui:{_base_tag(base_image)}"
+    return f"luskctl-l1-ui:{_base_tag(base_image)}"
 
 
 def project_cli_image(project_id: str) -> str:

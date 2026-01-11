@@ -3,12 +3,12 @@ requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "codexctl"
+name = "luskctl"
 version = "0.1.1"
 description = "Manage containerized projects and per-run tasks with Podman"
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
-authors = ["codexctl maintainers"]
+authors = ["luskctl maintainers"]
 keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -20,7 +20,7 @@ classifiers = [
 
 # Use the src/ layout
 packages = [
-  { include = "codexctl", from = "src" },
+  { include = "luskctl", from = "src" },
 ]
 
 # Extra files to ship alongside the package (similar to the old MANIFEST.in
@@ -28,7 +28,7 @@ packages = [
 # but note that Poetry does not support installing them under /usr/share;
 # they will live under the installed distribution instead.
 include = [
-  { path = "completions/codexctl" },
+  { path = "completions/luskctl" },
   { path = "docs/*.md" },
   { path = "examples/**" },
 ]
@@ -64,8 +64,8 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
 [tool.poetry.scripts]
-codexctl = "codexctl.cli.main:main"
-codexctl-tui = "codexctl.tui.app:main"
+luskctl = "luskctl.cli.main:main"
+luskctl-tui = "luskctl.tui.app:main"
 
 [tool.ruff]
 target-version = "py312"
@@ -96,7 +96,7 @@ ignore = [
 "tests/*" = ["E402"]  # allow imports after sys.modules mocking
 
 [tool.ruff.lint.isort]
-known-first-party = ["codexctl"]
+known-first-party = ["luskctl"]
 
 [tool.ruff.format]
 quote-style = "double"

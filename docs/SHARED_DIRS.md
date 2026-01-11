@@ -1,7 +1,7 @@
-Shared directories and mounts used by codexctl tasks
+Shared directories and mounts used by luskctl tasks
 
 Overview
-- When you run a task (CLI or UI), codexctl starts a container and mounts a small set of host directories into it. This enables:
+- When you run a task (CLI or UI), luskctl starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (/workspace)
   - Shared credentials/config for Codex under /home/dev/.codex
   - Shared credentials/config for Claude Code under /home/dev/.claude
@@ -11,15 +11,15 @@ Overview
 
 Per‑task workspace (required)
 - Host path: <state_root>/tasks/<project_id>/<task_id>/workspace
-  - Created automatically by codexctl when the task runs
+  - Created automatically by luskctl when the task runs
   - Mounted as: <host_dir>:/workspace:Z
 - Purpose: The project repository is cloned or synced here by init-ssh-and-repo.sh. Because this path lives under the task’s directory on the host, you can inspect, edit, or back it up from the host.
 
 Shared envs base directory (configurable)
-- Base dir (default): /var/lib/codexctl/envs
-  - Can be overridden in the global config file (codexctl-config.yml):
+- Base dir (default): /var/lib/luskctl/envs
+  - Can be overridden in the global config file (luskctl-config.yml):
     envs:
-      base_dir: /var/lib/codexctl/envs
+      base_dir: /var/lib/luskctl/envs
 - Under this base, four subdirectories may be used:
   1) _codex-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_codex-config → /home/dev/.codex:Z (read‑write)
@@ -27,7 +27,7 @@ Shared envs base directory (configurable)
   2) _claude-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_claude-config → /home/dev/.claude:Z (read‑write)
      - Purpose: Shared credentials/config used by Claude Code in CLI mode.
-     - Note: codexctl sets CLAUDE_CONFIG_DIR=/home/dev/.claude inside containers.
+     - Note: luskctl sets CLAUDE_CONFIG_DIR=/home/dev/.claude inside containers.
   3) _vibe-config (required; created automatically if missing)
      - Mounted as: <base_dir>/_vibe-config → /home/dev/.vibe:Z (read‑write)
      - Purpose: Shared credentials/config used by Mistral Vibe (CLI + UI).
@@ -48,7 +48,7 @@ Expected contents of the optional SSH config directory
 
 How to create this directory automatically
 - Use the helper command:
-  - codexctl ssh-init <project_id> \[--key-type ed25519|rsa\] \[--key-name NAME\] \[--force\]
+  - luskctl ssh-init <project_id> \[--key-type ed25519|rsa\] \[--key-name NAME\] \[--force\]
 - What it does:
   - Resolves the target directory for <project_id> as:
     - If <project>/project.yml sets ssh.host_dir → use it; otherwise
@@ -63,14 +63,14 @@ How to create this directory automatically
     - A host section for github.com with User git (inherits IdentityFile from Host *).
   - The SSH config is rendered from a template. You can provide your own template via project.yml → ssh.config_template.
     - Supported tokens in the template: {{IDENTITY_FILE}}, {{KEY_NAME}}, {{PROJECT_ID}}
-    - If not provided, a built-in template is used (see src/codexctl/resources/templates/ssh_config.template).
+    - If not provided, a built-in template is used (see src/luskctl/resources/templates/ssh_config.template).
   - Prints the resulting paths. Use the .pub key to register a deploy key or add it to your Git host.
 
 SELinux and mount flags
-- codexctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z for read‑write access.
+- luskctl uses the :Z flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with :Z for read‑write access.
 
 Git identity configuration
-- codexctl automatically configures git author and committer identities inside containers to identify AI-generated commits.
+- luskctl automatically configures git author and committer identities inside containers to identify AI-generated commits.
 - **Git Author**: Set to the AI agent that created the commit (Codex, Claude, or Mistral Vibe)
 - **Git Committer**: Set to human credentials (configurable per project)
 - **For CLI mode**: Git identity is set via environment variables in the command aliases for each agent:
@@ -85,7 +85,7 @@ Git identity configuration
   - Unknown backends default to Author: "AI Agent <ai-agent@localhost>", Committer: human credentials
 - **Human credentials configuration** (checked in order):
   1. Per-project: `human_name` and `human_email` in the `git:` section of `project.yml`
-  2. Global codexctl config: `human_name` and `human_email` in the `git:` section of `~/.config/codexctl/config.yml`
+  2. Global luskctl config: `human_name` and `human_email` in the `git:` section of `~/.config/luskctl/config.yml`
   3. Global git config: `git config --global user.name` and `git config --global user.email`
   4. Defaults: "Nobody <nobody@localhost>"
 - Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
@@ -99,19 +99,19 @@ Quick reference (runtime mounts)
 - /home/dev/.blablador    ← <envs_base>/_blablador-config:Z
 - /home/dev/.ssh (optional) ← <envs_base>/_ssh-config-<project>:Z
 
-How codexctl discovers these paths
-- state_root: Determined by CODEXCTL_STATE_DIR or defaults (root: /var/lib/codexctl; user: ${XDG_DATA_HOME:-~/.local/share}/codexctl).
-- envs_base: Set in codexctl-config.yml under envs.base_dir; defaults to /var/lib/codexctl/envs if unspecified.
+How luskctl discovers these paths
+- state_root: Determined by LUSKCTL_STATE_DIR or defaults (root: /var/lib/luskctl; user: ${XDG_DATA_HOME:-~/.local/share}/luskctl).
+- envs_base: Set in luskctl-config.yml under envs.base_dir; defaults to /var/lib/luskctl/envs if unspecified.
 
 Minimal setup to run tasks
-1) Ensure codexctl can write to the state root (or set CODEXCTL_STATE_DIR accordingly).
-2) Optionally create the envs base dir (codexctl will create these directories automatically if missing):
-   - sudo mkdir -p /var/lib/codexctl/envs/_codex-config
-   - sudo mkdir -p /var/lib/codexctl/envs/_claude-config
-   - sudo mkdir -p /var/lib/codexctl/envs/_vibe-config
-   - sudo mkdir -p /var/lib/codexctl/envs/_blablador-config
+1) Ensure luskctl can write to the state root (or set LUSKCTL_STATE_DIR accordingly).
+2) Optionally create the envs base dir (luskctl will create these directories automatically if missing):
+   - sudo mkdir -p /var/lib/luskctl/envs/_codex-config
+   - sudo mkdir -p /var/lib/luskctl/envs/_claude-config
+   - sudo mkdir -p /var/lib/luskctl/envs/_vibe-config
+   - sudo mkdir -p /var/lib/luskctl/envs/_blablador-config
 3) If using private git repositories for a project <proj>:
-   - sudo mkdir -p /var/lib/codexctl/envs/_ssh-config-<proj>
+   - sudo mkdir -p /var/lib/luskctl/envs/_ssh-config-<proj>
    - Place SSH keys and config there (see above). Keys must match your repo host.
 
 Notes
@@ -123,4 +123,4 @@ Notes
 - Both CLI and UI containers mount the same paths and start with the working directory set to /workspace.
 
 See also
-- Run `codexctl config` to see the resolved envs base dir and other important paths.
+- Run `luskctl config` to see the resolved envs base dir and other important paths.

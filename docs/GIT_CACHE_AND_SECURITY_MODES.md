@@ -8,7 +8,7 @@ This document describes the **Git gate** concept and the distinction between **o
 
 The "cache" has been renamed to "gate" throughout the codebase because it serves as more than just a cache - it's the central gatekeeping mechanism for controlling code flow:
 
-- `codexctl cache-init` → `codexctl gate-init`
+- `luskctl cache-init` → `luskctl gate-init`
 - `cache_path` → `gate_path`
 - `/git-cache/cache.git` → `/git-gate/gate.git`
 - Config section `cache:` → `gate:`
@@ -125,9 +125,9 @@ The project's **security mode** controls how tasks interact with upstream vs gat
 ### Host-side gate lifecycle
 
 1. Generate SSH material for private upstreams (optional for public HTTPS):
-   - `codexctl ssh-init <project>`
+   - `luskctl ssh-init <project>`
 2. Initialize or update the gate mirror:
-   - `codexctl gate-init <project>` (use `--force` to recreate)
+   - `luskctl gate-init <project>` (use `--force` to recreate)
 3. Run tasks:
    - Online: container clones from gate then talks to upstream directly.
    - Gatekept: container talks only to the gate mirror.

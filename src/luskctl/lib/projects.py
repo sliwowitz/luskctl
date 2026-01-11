@@ -185,7 +185,7 @@ def load_project(project_id: str) -> Project:
     expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
     # Optional human credentials for git committer (while AI is the author)
-    # Precedence: 1) project.yml, 2) global codexctl config, 3) global git config, 4) defaults
+    # Precedence: 1) project.yml, 2) global luskctl config, 3) global git config, 4) defaults
     human_name = git_cfg.get("human_name")
     if not human_name:
         human_name = get_global_human_name()
@@ -213,7 +213,7 @@ def load_project(project_id: str) -> Project:
     auto_sync_branches = list(sync_cfg.get("branches", []))
 
     # Default agent preference (for Web UI and potentially CLI)
-    # Precedence: 1) project.yml default_agent, 2) global codexctl config, 3) None (use default)
+    # Precedence: 1) project.yml default_agent, 2) global luskctl config, 3) None (use default)
     default_agent = cfg.get("default_agent")
     if not default_agent:
         default_agent = get_global_default_agent()
