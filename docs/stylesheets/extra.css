@@ -2,6 +2,7 @@
 :root {
   --lusk-black: #0b0b0b;
   --lusk-red: #a31219;
+  --lusk-red-dark: #7f0f14;
   --lusk-red-pure: #c00000;
   --lusk-red-bright: #e04b3f;
   --lusk-gold: #c79a22;
@@ -10,9 +11,9 @@
   --md-text-font: "Ubuntu", sans-serif;
   --md-code-font: "Ubuntu Mono", monospace;
 
-  --md-primary-fg-color: var(--lusk-black);
-  --md-primary-fg-color--light: #1a1a1a;
-  --md-primary-fg-color--dark: #000000;
+  --md-primary-fg-color: var(--lusk-red-dark);
+  --md-primary-fg-color--light: #8f1117;
+  --md-primary-fg-color--dark: #650b10;
 
   --md-primary-bg-color: #f7f2e8;
   --md-primary-bg-color--light: #f7f2e8;
@@ -21,7 +22,7 @@
   --md-accent-fg-color: var(--lusk-gold);
   --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
 
-  --md-typeset-a-color: var(--lusk-red);
+  --md-typeset-a-color: var(--lusk-gold);
   --md-typeset-mark-color: var(--lusk-gold-bright);
 }
 
@@ -41,17 +42,36 @@ samp {
   font-family: var(--md-code-font);
 }
 
+.md-header,
+.md-tabs {
+  background-color: var(--lusk-red-dark);
+}
+
 .md-typeset a:hover,
 .md-nav__link:hover,
 .md-tabs__link:hover,
 .md-header__button:hover {
-  color: var(--lusk-red-pure);
+  color: var(--lusk-red-pure) !important;
 }
 
 .md-nav__item--active > .md-nav__link,
 .md-nav__link--active,
+.md-nav--secondary .md-nav__link--active {
+  color: var(--lusk-gold-bright) !important;
+}
+
+.md-nav--secondary .md-nav__link--active::before,
+.md-nav--secondary .md-nav__link--active::after {
+  background-color: var(--lusk-gold-bright);
+}
+
+.md-nav--secondary .md-nav__link--active {
+  border-left-color: var(--lusk-gold-bright);
+}
+
 .md-tabs__link--active {
-  color: var(--lusk-gold-bright);
+  color: inherit !important;
+  font-weight: 700;
 }
 
 [data-md-color-scheme="default"] {
@@ -69,7 +89,7 @@ samp {
   --md-footer-fg-color--lightest: #a79c87;
   --md-accent-fg-color: var(--lusk-gold);
   --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
-  --md-typeset-a-color: var(--lusk-red);
+  --md-typeset-a-color: var(--lusk-gold);
 }
 
 [data-md-color-scheme="slate"] {
@@ -92,5 +112,5 @@ samp {
 
   --md-accent-fg-color: var(--lusk-gold-bright);
   --md-accent-fg-color--transparent: rgba(216, 180, 84, 0.14);
-  --md-typeset-a-color: var(--lusk-red-bright);
+  --md-typeset-a-color: var(--lusk-gold-bright);
 }
