@@ -26,39 +26,25 @@ class TaskMeta:
 def get_backend_name(task: TaskMeta) -> str:
     """Get the backend name for a task.
 
-    Returns the backend name based on the task's backend field.
-    Falls back to parsing from task_id if backend is not set (for compatibility).
-    Defaults to "codex" if no backend can be determined.
+    Returns the backend name from the task's backend field, or None if not set.
     """
-    # Use the backend field if available
-    backend = task.backend
-
-    # Fallback: parse from task_id for backward compatibility with old tasks
-    if not backend and task.task_id and "-" in task.task_id:
-        backend = task.task_id.split("-")[-1]
-
-    # Default to codex if still no backend
-    if not backend:
-        backend = "codex"
-
-    return backend
+    return task.backend
 
 
 def get_backend_emoji(task: TaskMeta) -> str:
     """Get the emoji for a task's backend.
 
     Returns the appropriate emoji based on the task's backend field.
-    Falls back to parsing from task_id if backend is not set (for compatibility).
     """
     backend = get_backend_name(task)
 
     # Return emoji based on backend
-    if backend == "mistral":
-        return "🏰"  # Castle emoji for Mistral
-    elif backend == "claude":
-        return "🌐"  # Globe emoji for Claude
-    else:  # codex or unknown
-        return "🕸️"  # Spider web emoji for Codex
+    emoji_map = {
+        "mistral": "🏰",  # Castle emoji for Mistral
+        "claude": "✴️",   # Eight-point star emoji for Claude
+        "codex": "🕸️",   # Spider web emoji for Codex
+    }
+    return emoji_map.get(backend, "🦗")  # Cricket emoji for unknown
 
 
 class ProjectList(ListView):
