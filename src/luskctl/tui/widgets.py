@@ -45,7 +45,7 @@ def get_backend_emoji(task: TaskMeta) -> str:
         "claude": "✴️",  # Eight-point star emoji for Claude
         "codex": "🌸",  # Blossom emoji for Codex
     }
-    return emoji_map.get(backend, "🦗")  # Cricket emoji for unknown
+    return emoji_map.get(backend, "🕸️")  # Spider web emoji for unknown
 
 
 def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
@@ -272,6 +272,8 @@ class TaskList(ListView):
             elif tm.mode == "web":
                 # Use backend-specific emojis for web tasks
                 task_emoji = get_backend_emoji(tm)
+            elif tm.status == "created":
+                task_emoji = "🦗"
 
             # Update status display to be more consistent
             status_display = tm.status
@@ -369,6 +371,8 @@ class TaskDetails(Static):
             # Use backend-specific emojis for web tasks
             emoji = get_backend_emoji(task)
             task_emoji = f"{emoji} "
+        elif task.status == "created":
+            task_emoji = "🦗 "
 
             # Get backend for display name
             backend = get_backend_name(task)
