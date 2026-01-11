@@ -303,7 +303,7 @@ def get_project_state(project_id: str) -> dict:
     ssh_dir = Path(ssh_dir).expanduser().resolve()
     has_ssh = ssh_dir.is_dir() and (ssh_dir / "config").is_file()
 
-    # Gate: a mirror bare repo initialized by init_project_gate(). We
+    # Gate: a mirror bare repo initialized by sync_project_gate(). We
     # treat existence of the directory as "gate present".
     gate_dir = project.gate_path
     has_gate = gate_dir.is_dir()

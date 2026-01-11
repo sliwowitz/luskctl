@@ -530,7 +530,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
             raise SystemExit(
                 f"Git gate missing for project '{project.id}'.\n"
                 f"Expected at: {gate_repo}\n"
-                f"Run 'luskctl gate-init {project.id}' to create/update the local mirror."
+                f"Run 'luskctl gate-sync {project.id}' to create/update the local mirror."
             )
 
         # Ensure parent exists for mount consistency (gate should already exist)

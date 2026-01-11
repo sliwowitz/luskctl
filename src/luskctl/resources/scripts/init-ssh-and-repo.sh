@@ -217,7 +217,7 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
           echo "NOTE: Gate is ${BEHIND_COUNT} commits behind upstream on ${TARGET_BRANCH}"
           echo "  Local:    ${LOCAL_HEAD:0:8}"
           echo "  Upstream: ${UPSTREAM_HEAD:0:8}"
-          echo "  Run 'luskctl gate-init <project>' on host to update"
+          echo "  Run 'luskctl gate-sync <project>' on host to update"
           echo "=========================================="
           echo ""
         else

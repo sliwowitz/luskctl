@@ -127,9 +127,6 @@ class ProjectActions(Static):
                 "[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True
             )  # init SSH dir (s)
             yield Button(
-                "[yellow]c[/yellow] gate", id="btn-gate-init", compact=True
-            )  # init git gate (c)
-            yield Button(
                 "[yellow]S[/yellow]ync", id="btn-sync-gate", compact=True
             )  # sync gate from upstream (S)
 
@@ -157,7 +154,6 @@ class ProjectActions(Static):
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
             "btn-ssh-init": "action_init_ssh",
-            "btn-gate-init": "action_init_gate",
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",

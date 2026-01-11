@@ -8,7 +8,7 @@ This document describes the **Git gate** concept and the distinction between **o
 
 The "cache" has been renamed to "gate" throughout the codebase because it serves as more than just a cache - it's the central gatekeeping mechanism for controlling code flow:
 
-- `luskctl cache-init` → `luskctl gate-init`
+- `luskctl cache-init` → `luskctl gate-sync`
 - `cache_path` → `gate_path`
 - `/git-cache/cache.git` → `/git-gate/gate.git`
 - Config section `cache:` → `gate:`
@@ -60,7 +60,7 @@ For each project you conceptually have three Git layers:
 
 ---
 
-### 2. Online vs Gatekept projects
+### 2. Online vs Gatekeeping projects
 
 The project's **security mode** controls how tasks interact with upstream vs gate:
 
@@ -74,7 +74,7 @@ The project's **security mode** controls how tasks interact with upstream vs gat
   * If a local gate exists, the container will seed the initial clone from it (`CLONE_FROM=file:///git-gate/gate.git`) and then repoint `origin` to upstream.
   * The gate is a performance accelerator in online mode; security comes from normal upstream auth.
 
-#### Gatekept projects
+#### Gatekeeping projects
 
 * **Goal:** agent's changes must **not** reach the canonical repo directly.
   * Tasks only interact with a host-side gate mirror (no direct upstream access inside the container).
@@ -127,10 +127,10 @@ The project's **security mode** controls how tasks interact with upstream vs gat
 1. Generate SSH material for private upstreams (optional for public HTTPS):
    - `luskctl ssh-init <project>`
 2. Initialize or update the gate mirror:
-   - `luskctl gate-init <project>` (use `--force` to recreate)
+   - `luskctl gate-sync <project>` (use `--force-reinit` to recreate)
 3. Run tasks:
    - Online: container clones from gate then talks to upstream directly.
-   - Gatekept: container talks only to the gate mirror.
+   - Gatekeeping: container talks only to the gate mirror.
 
 ---
 
@@ -173,10 +173,10 @@ gatekeeping:
   * containers trust the real upstream,
   * gate is a performance optimization.
 
-* **Gatekept**:
+* **Gatekeeping**:
   * containers trust only host-local gate mirror,
   * real upstream is "air-gapped" behind human review,
   * gate serves as communication channel between host IDE and container.
 
-* **Relaxed Gatekept** (`expose_external_remote: true`):
+* **Relaxed Gatekeeping** (`expose_external_remote: true`):
   * containers know the upstream URL, but use the gate as the default remote

@@ -44,8 +44,8 @@ if _HAS_TEXTUAL:
     from ..lib.git_gate import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
-        init_project_gate,
         sync_gate_branches,
+        sync_project_gate,
     )
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
@@ -1030,27 +1030,7 @@ if _HAS_TEXTUAL:
 
         async def action_sync_gate(self) -> None:
             """Manually sync gate from upstream."""
-            if not self.current_project_id:
-                self.notify("No project selected.")
-                return
-
-            try:
-                project = load_project(self.current_project_id)
-                if project.security_class != "gatekeeping":
-                    self.notify("Sync only available for gatekeeping projects.")
-                    return
-
-                self.notify("Syncing gate from upstream...")
-
-                # Run sync in background worker
-                self.run_worker(
-                    self._sync_worker(self.current_project_id, None, is_auto=False),
-                    name="manual_sync",
-                    exclusive=True,
-                )
-
-            except Exception as e:
-                self.notify(f"Sync error: {e}")
+            await self._action_sync_gate()
 
         # ---------- Selection handlers (from widgets) ----------
 
@@ -1234,24 +1214,15 @@ if _HAS_TEXTUAL:
         async def _sync_gate_worker(self, project_id: str) -> None:
             """Background worker to sync gate (init if needed)."""
             try:
-                # Check if gate exists
-                project = load_project(project_id)
-                gate_exists = project.gate_path.exists()
-
-                if not gate_exists:
-                    # Init gate
-                    result = init_project_gate(project_id)
-                    if project_id == self.current_project_id:
-                        self.notify(f"Gate initialized at {result['path']}")
-                else:
-                    # Sync gate
-                    result = sync_gate_branches(project_id)
+                result = sync_project_gate(project_id)
+                if project_id == self.current_project_id:
                     if result["success"]:
-                        if project_id == self.current_project_id:
+                        if result["created"]:
+                            self.notify("Gate created and synced from upstream")
+                        else:
                             self.notify("Gate synced from upstream")
                     else:
-                        if project_id == self.current_project_id:
-                            self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
+                        self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
 
                 # Refresh state after gate operation
                 if project_id == self.current_project_id:
@@ -1320,26 +1291,6 @@ if _HAS_TEXTUAL:
                 input("\n[Press Enter to return to LuskTUI] ")
 
             self.notify(f"Initialized SSH dir for {self.current_project_id}")
-            self._refresh_project_state()
-
-        async def action_init_gate(self) -> None:
-            """Initialize or update the git gate mirror for the project."""
-            if not self.current_project_id:
-                self.notify("No project selected.")
-                return
-
-            with self.suspend():
-                try:
-                    res = init_project_gate(self.current_project_id)
-                    print(
-                        f"Gate ready at {res['path']} "
-                        f"(upstream: {res['upstream_url']}; created: {res['created']})"
-                    )
-                except SystemExit as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-
-            self.notify(f"Git gate initialized for {self.current_project_id}")
             self._refresh_project_state()
 
         async def action_new_task(self) -> None:
