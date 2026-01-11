@@ -20,6 +20,33 @@ class TaskMeta:
     mode: str | None
     workspace: str
     web_port: int | None
+    backend: str | None = None
+
+
+def get_backend_emoji(task: TaskMeta) -> str:
+    """Get the emoji for a task's backend.
+
+    Returns the appropriate emoji based on the task's backend field.
+    Falls back to parsing from task_id if backend is not set (for compatibility).
+    """
+    # Use the backend field if available
+    backend = task.backend
+
+    # Fallback: parse from task_id for backward compatibility with old tasks
+    if not backend and task.task_id and "-" in task.task_id:
+        backend = task.task_id.split("-")[-1]
+
+    # Default to codex if still no backend
+    if not backend:
+        backend = "codex"
+
+    # Return emoji based on backend
+    if backend == "mistral":
+        return "🏰"  # Castle emoji for Mistral
+    elif backend == "claude":
+        return "🌐"  # Globe emoji for Claude
+    else:  # codex or unknown
+        return "🕸️"  # Spider web emoji for Codex
 
 
 class ProjectList(ListView):
@@ -167,6 +194,7 @@ class TaskList(ListView):
                 mode=meta.get("mode"),
                 workspace=meta.get("workspace", ""),
                 web_port=meta.get("web_port"),
+                backend=meta.get("backend"),
             )
             self.tasks.append(tm)
 
@@ -176,13 +204,7 @@ class TaskList(ListView):
                 task_emoji = "⌨️"  # Keyboard emoji for CLI
             elif tm.mode == "web":
                 # Use backend-specific emojis for web tasks
-                backend = tm.task_id.split("-")[-1] if "-" in tm.task_id else "codex"
-                if backend == "mistral":
-                    task_emoji = "🏰"  # Castle emoji for Mistral
-                elif backend == "claude":
-                    task_emoji = "🌐"  # Globe emoji for Claude
-                else:  # codex or unknown
-                    task_emoji = "🕸️"  # Spider web emoji for Codex
+                task_emoji = get_backend_emoji(tm)
 
             # Update status display to be more consistent
             status_display = tm.status
@@ -265,16 +287,19 @@ class TaskDetails(Static):
             mode_display = "CLI"
         elif task.mode == "web":
             # Use backend-specific emojis for web tasks
-            backend = task.task_id.split("-")[-1] if "-" in task.task_id else "codex"
-            if backend == "mistral":
-                task_emoji = "🏰 "  # Castle emoji for Mistral
-                mode_display = "Web UI (Mistral)"
-            elif backend == "claude":
-                task_emoji = "🌐 "  # Globe emoji for Claude
-                mode_display = "Web UI (Claude)"
-            else:  # codex or unknown
-                task_emoji = "🕸️ "  # Spider web emoji for Codex
-                mode_display = "Web UI (Codex)"
+            emoji = get_backend_emoji(task)
+            task_emoji = f"{emoji} "
+
+            # Get backend for display name
+            backend = task.backend
+            if not backend and task.task_id and "-" in task.task_id:
+                backend = task.task_id.split("-")[-1]
+            if not backend:
+                backend = "codex"
+
+            # Capitalize backend name for display
+            backend_display = backend.capitalize()
+            mode_display = f"Web UI ({backend_display})"
 
         # Update status display
         status_display = task.status

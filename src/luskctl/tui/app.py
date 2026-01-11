@@ -1074,7 +1074,7 @@ if _HAS_TEXTUAL:
                 input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
 
-        async def action_run_ui(self) -> None:
+        async def action_run_web(self) -> None:
             if not self.current_project_id or not self.current_task:
                 self.notify("No task selected.")
                 return
@@ -1083,7 +1083,7 @@ if _HAS_TEXTUAL:
                 try:
                     backend = self._prompt_ui_backend()
                     print(
-                        f"Starting UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
+                        f"Starting Web UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
                     )
                     task_run_web(self.current_project_id, tid, backend=backend)
                 except SystemExit as e:

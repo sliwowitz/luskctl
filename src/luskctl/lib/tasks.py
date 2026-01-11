@@ -779,6 +779,12 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
     env, volumes = _build_task_env_and_volumes(project, task_id)
     env = _apply_web_env_overrides(env, backend, project.default_agent)
 
+    # Save the effective backend to task metadata for UI display
+    effective_backend = env.get("LUSKUI_BACKEND", "codex")
+    if meta.get("backend") != effective_backend:
+        meta["backend"] = effective_backend
+        meta_path.write_text(yaml.safe_dump(meta))
+
     container_name = f"{project.id}-web-{task_id}"
 
     # Start UI in background and return terminal when it's reachable
