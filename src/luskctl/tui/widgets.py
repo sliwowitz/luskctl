@@ -438,15 +438,4 @@ class StatusBar(Static):
         self._update_content()
 
     def _update_content(self) -> None:
-        # Keep the key hints very compact and leave most of the space for
-        # the dynamic status message.
-        #
-        # We use simple markup only for the shortcut keys themselves.  The
-        # message text is interpolated directly; our messages don't use
-        # Rich markup, so this is safe.
-        key_hints = "[bold]q[/bold] Quit  [bold]^P[/bold] Palette"
-        if self.message:
-            text = f"{key_hints} | {self.message}"
-        else:
-            text = key_hints
-        self.update(text)
+        self.update(self.message or "")

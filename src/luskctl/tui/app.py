@@ -33,7 +33,7 @@ if _HAS_TEXTUAL:
     from textual import on, screen
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Button, Footer, Header, Label
+    from textual.widgets import Button, Footer, Header
 
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
@@ -76,34 +76,45 @@ if _HAS_TEXTUAL:
             width: 60;
             height: auto;
             border: heavy $primary;
+            border-title-align: right;
             background: $surface;
-        }
-
-        #action-buttons {
-            layout: horizontal;
             padding: 1;
         }
 
-        Button {
-            width: 100%;
+        #action-buttons {
+            layout: vertical;
+            margin-top: 1;
+        }
+
+        #action-cancel {
+            margin-top: 1;
+        }
+
+        #action-buttons Button {
             margin: 0 1;
         }
+
         """
 
         def compose(self) -> ComposeResult:
-            with Horizontal(id="action-dialog"):
-                with Vertical():
-                    yield Label("Project Actions", id="title")
-                    yield Label(" ")  # Spacer
-                    with Horizontal(id="action-buttons"):
-                        yield Button("[g]enerate", id="generate", variant="primary")
-                        yield Button("[b]uild", id="build", variant="primary")
-                        yield Button("build [a]ll", id="build_all", variant="primary")
-                        yield Button("initialize [s]sh", id="init_ssh", variant="primary")
-                        yield Button("sync [g]ate", id="sync_gate", variant="primary")
-                    yield Label(" ")  # Spacer
+            with Vertical(id="action-dialog") as dialog:
+                with Vertical(id="action-buttons"):
                     with Horizontal():
-                        yield Button("Cancel", id="cancel", variant="default")
+                        yield Button("[yellow]g[/yellow]enerate", id="generate", variant="primary")
+                        yield Button("[yellow]b[/yellow]uild", id="build", variant="primary")
+                        yield Button(
+                            "build [yellow]a[/yellow]ll", id="build_all", variant="primary"
+                        )
+                    with Horizontal():
+                        yield Button(
+                            "initialize [yellow]s[/yellow]sh", id="init_ssh", variant="primary"
+                        )
+                        yield Button(
+                            "sync [yellow]g[/yellow]ate", id="sync_gate", variant="primary"
+                        )
+                with Horizontal(id="action-cancel"):
+                    yield Button("Cancel", id="cancel", variant="default")
+            dialog.border_title = "Project Actions"
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -131,33 +142,38 @@ if _HAS_TEXTUAL:
             width: 60;
             height: auto;
             border: heavy $primary;
+            border-title-align: right;
             background: $surface;
-        }
-
-        #action-buttons {
-            layout: horizontal;
             padding: 1;
         }
 
-        Button {
-            width: 100%;
+        #action-buttons {
+            layout: vertical;
+            margin-top: 1;
+        }
+
+        #action-cancel {
+            margin-top: 1;
+        }
+
+        #action-buttons Button {
             margin: 0 1;
         }
+
         """
 
         def compose(self) -> ComposeResult:
-            with Horizontal(id="action-dialog"):
-                with Vertical():
-                    yield Label("Task Actions", id="title")
-                    yield Label(" ")  # Spacer
-                    with Horizontal(id="action-buttons"):
-                        yield Button("[n]ew", id="new", variant="primary")
-                        yield Button("[c]li", id="cli", variant="primary")
-                        yield Button("[w]eb", id="web", variant="primary")
-                        yield Button("[d]el", id="delete", variant="primary")
-                    yield Label(" ")  # Spacer
+            with Vertical(id="action-dialog") as dialog:
+                with Vertical(id="action-buttons"):
                     with Horizontal():
-                        yield Button("Cancel", id="cancel", variant="default")
+                        yield Button("[yellow]n[/yellow]ew", id="new", variant="primary")
+                        yield Button("[yellow]c[/yellow]li", id="cli", variant="primary")
+                    with Horizontal():
+                        yield Button("[yellow]w[/yellow]eb", id="web", variant="primary")
+                        yield Button("[yellow]d[/yellow]el", id="delete", variant="primary")
+                with Horizontal(id="action-cancel"):
+                    yield Button("Cancel", id="cancel", variant="default")
+            dialog.border_title = "Task Actions"
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -175,26 +191,37 @@ if _HAS_TEXTUAL:
 
         # Layout rules for the new streamlined design with borders
         CSS = """
+        $tui-bg: #000000;
+        $tui-list-bg: #303030;
+
         Screen {
-            layout: grid;
-            grid-size: 2;
-            grid-columns: 1fr 2fr;
-            grid-rows: 1fr 3 1fr;
+            layout: vertical;
+            background: $tui-bg;
+        }
+
+        #main {
+            height: 1fr;
+            background: $tui-bg;
         }
 
         /* Main container borders */
         #left-pane {
+            width: 1fr;
             padding: 1;
+            background: $tui-bg;
         }
 
         #right-pane {
+            width: 2fr;
             padding: 1;
+            background: $tui-bg;
         }
 
         /* Projects section with embedded title */
         #project-list {
             border: round $primary;
             border-title-align: right;
+            background: $tui-list-bg;
             height: 1fr;
             min-height: 10;
         }
@@ -203,6 +230,7 @@ if _HAS_TEXTUAL:
         #project-state {
             border: round $primary;
             border-title-align: right;
+            background: $tui-bg;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -212,6 +240,7 @@ if _HAS_TEXTUAL:
         #task-list {
             border: round $primary;
             border-title-align: right;
+            background: $tui-list-bg;
             height: 1fr;
             min-height: 10;
         }
@@ -220,6 +249,7 @@ if _HAS_TEXTUAL:
         #task-details {
             border: round $primary;
             border-title-align: right;
+            background: $tui-bg;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -228,7 +258,8 @@ if _HAS_TEXTUAL:
         /* Status bar styling */
         #status-bar {
             border: solid $primary;
-            height: 1;
+            background: $tui-bg;
+            height: 3;
         }
 
         /* Task details internal layout */
@@ -270,7 +301,7 @@ if _HAS_TEXTUAL:
             yield Header()
 
             # Main layout using grid
-            with Horizontal():
+            with Horizontal(id="main"):
                 # Left pane: project list (top) + selected project info (bottom)
                 with Vertical(id="left-pane"):
                     project_list = ProjectList(id="project-list")
