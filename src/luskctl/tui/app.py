@@ -1075,21 +1075,8 @@ if _HAS_TEXTUAL:
             await self.refresh_tasks()
 
         async def action_run_web(self) -> None:
-            if not self.current_project_id or not self.current_task:
-                self.notify("No task selected.")
-                return
-            tid = self.current_task.task_id
-            with self.suspend():
-                try:
-                    backend = self._prompt_ui_backend()
-                    print(
-                        f"Starting Web UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
-                    )
-                    task_run_web(self.current_project_id, tid, backend=backend)
-                except SystemExit as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-            await self.refresh_tasks()
+            """Public action for running web UI (delegates to _action_run_web)."""
+            await self._action_run_web()
 
         async def action_delete_task(self) -> None:
             if not self.current_project_id or not self.current_task:

@@ -771,18 +771,23 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
     _check_mode(meta, "web")
 
     port = meta.get("web_port")
+    port_updated = False
     if not isinstance(port, int):
         port = _assign_web_port()
         meta["web_port"] = port
-        meta_path.write_text(yaml.safe_dump(meta))
+        port_updated = True
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
     env = _apply_web_env_overrides(env, backend, project.default_agent)
 
     # Save the effective backend to task metadata for UI display
     effective_backend = env.get("LUSKUI_BACKEND", "codex")
-    if meta.get("backend") != effective_backend:
+    backend_updated = meta.get("backend") != effective_backend
+    if backend_updated:
         meta["backend"] = effective_backend
+
+    # Write metadata once if anything was updated
+    if port_updated or backend_updated:
         meta_path.write_text(yaml.safe_dump(meta))
 
     container_name = f"{project.id}-web-{task_id}"
