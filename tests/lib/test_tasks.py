@@ -7,7 +7,7 @@ from pathlib import Path
 
 from luskctl.lib.projects import load_project
 from luskctl.lib.tasks import (
-    _apply_ui_env_overrides,
+    _apply_web_env_overrides,
     _build_task_env_and_volumes,
     copy_to_clipboard,
     copy_to_clipboard_detailed,
@@ -257,7 +257,7 @@ class TaskTests(unittest.TestCase):
             },
             clear=True,
         ):
-            merged = _apply_ui_env_overrides(base_env, "CLAUDE")
+            merged = _apply_web_env_overrides(base_env, "CLAUDE")
 
         # Container receives LUSKUI_* passthrough
         self.assertEqual(merged["LUSKUI_BACKEND"], "claude")
@@ -311,7 +311,7 @@ class TaskTests(unittest.TestCase):
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.tasks._assign_ui_port",
+                        "luskctl.lib.tasks._assign_web_port",
                         return_value=7788,
                     ),
                     unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,

@@ -144,7 +144,7 @@ class ImagesTests(unittest.TestCase):
     def test_project_web_image(self) -> None:
         """project_web_image should return correct L2 web image name."""
         result = images.project_web_image("my-project")
-        self.assertEqual(result, "my-project:l2-ui")
+        self.assertEqual(result, "my-project:l2-web")
 
     def test_project_dev_image(self) -> None:
         """project_dev_image should return correct L2 dev image name."""
