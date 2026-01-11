@@ -309,23 +309,41 @@ def get_project_state(project_id: str) -> dict:
 
     images_old = False
     if has_images and has_dockerfiles:
-        docker_mtime = None
-        try:
-            docker_mtime = max(p.stat().st_mtime for p in dockerfiles if p.is_file())
-        except Exception:
+        if dockerfiles_old:
+            images_old = True
+        else:
             docker_mtime = None
+            try:
+                docker_mtime = max(p.stat().st_mtime for p in dockerfiles if p.is_file())
+            except Exception:
+                docker_mtime = None
 
-        if docker_mtime is not None:
-            docker_dt = datetime.fromtimestamp(docker_mtime, tz=UTC)
-            created_times = []
-            for tag in required_tags:
-                created = _get_image_created(tag)
-                if created is None:
-                    created_times = []
-                    break
-                created_times.append(created)
-            if created_times:
-                images_old = any(created < docker_dt for created in created_times)
+            context_hash = None
+            try:
+                from .docker import build_context_hash
+
+                context_hash = build_context_hash(project_id)
+            except Exception:
+                context_hash = None
+
+            if docker_mtime is not None or context_hash is not None:
+                docker_dt = (
+                    datetime.fromtimestamp(docker_mtime, tz=UTC)
+                    if docker_mtime is not None
+                    else None
+                )
+                for tag in required_tags:
+                    created, label = _get_image_metadata(tag, "luskctl.build_context_hash")
+                    if created is None and label is None:
+                        images_old = True
+                        break
+                    if docker_dt is not None and created is not None and created < docker_dt:
+                        images_old = True
+                        break
+                    if context_hash is not None:
+                        if label is None or label != context_hash:
+                            images_old = True
+                            break
 
     # SSH: same resolution logic as init_project_ssh(). Consider SSH
     # "ready" when the directory and its config file exist.
@@ -357,18 +375,29 @@ def get_project_state(project_id: str) -> dict:
     }
 
 
-def _get_image_created(tag: str) -> datetime | None:
+def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str | None]:
     try:
         result = subprocess.run(
-            ["podman", "image", "inspect", "--format", "{{.Created}}", tag],
+            [
+                "podman",
+                "image",
+                "inspect",
+                "--format",
+                f'{{{{.Created}}}}\\t{{{{index .Config.Labels "{label_key}"}}}}',
+                tag,
+            ],
             capture_output=True,
             text=True,
         )
     except (FileNotFoundError, OSError):
-        return None
+        return None, None
     if result.returncode != 0:
-        return None
-    return _parse_podman_created(result.stdout)
+        return None, None
+    created_raw, _, label_raw = result.stdout.partition("\t")
+    label = label_raw.strip() or None
+    if label == "<no value>":
+        label = None
+    return _parse_podman_created(created_raw), label
 
 
 def _parse_podman_created(value: str) -> datetime | None:

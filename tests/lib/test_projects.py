@@ -125,7 +125,7 @@ class ProjectTests(unittest.TestCase):
                         "dockerfiles": True,
                         "dockerfiles_old": True,
                         "images": True,
-                        "images_old": False,
+                        "images_old": True,
                         "ssh": True,
                         "gate": True,
                         "gate_last_commit": None,

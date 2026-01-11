@@ -1,5 +1,7 @@
+import hashlib
 import shutil
 import subprocess
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
@@ -61,6 +63,30 @@ def _load_docker_config(project_root: Path) -> dict:
         return cfg.get("docker", {}) or {}
     except Exception:
         return {}
+
+
+def _hash_traversable_tree(root) -> str:
+    hasher = hashlib.sha256()
+
+    def _walk(node, prefix: str) -> None:
+        for child in sorted(node.iterdir(), key=lambda item: item.name):
+            rel = f"{prefix}{child.name}"
+            if child.is_dir():
+                _walk(child, f"{rel}/")
+            else:
+                hasher.update(rel.encode("utf-8"))
+                hasher.update(b"\0")
+                hasher.update(child.read_bytes())
+                hasher.update(b"\0")
+
+    _walk(root, "")
+    return hasher.hexdigest()
+
+
+@lru_cache(maxsize=1)
+def _scripts_hash() -> str:
+    scripts_root = resources.files("luskctl") / "resources" / "scripts"
+    return _hash_traversable_tree(scripts_root)
 
 
 def _render_dockerfiles(project) -> dict[str, str]:
@@ -126,6 +152,24 @@ def _render_dockerfiles(project) -> dict[str, str]:
     return rendered
 
 
+def build_context_hash(project_id: str) -> str:
+    project = load_project(project_id)
+    rendered = _render_dockerfiles(project)
+    docker_cfg = _load_docker_config(project.root)
+    base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
+
+    hasher = hashlib.sha256()
+    hasher.update(f"base_image={base_image}".encode())
+    hasher.update(b"\0")
+    for name in sorted(rendered):
+        hasher.update(name.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(rendered[name].encode("utf-8"))
+        hasher.update(b"\0")
+    hasher.update(_scripts_hash().encode("utf-8"))
+    return hasher.hexdigest()
+
+
 def dockerfiles_match_templates(project_id: str) -> bool:
     project = load_project(project_id)
     out_dir = build_root() / project.id
@@ -162,6 +206,7 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     project = load_project(project_id)
     docker_cfg = _load_docker_config(project.root)
     stage_dir = build_root() / project.id
+    context_hash = build_context_hash(project_id)
 
     l0 = stage_dir / "L0.Dockerfile"
     l1_cli = stage_dir / "L1.cli.Dockerfile"
@@ -224,6 +269,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
             str(l2),
             "--build-arg",
             f"BASE_IMAGE={l1_cli_image}",
+            "--label",
+            f"luskctl.build_context_hash={context_hash}",
             "-t",
             l2_cli_image,
             context_dir,
@@ -235,6 +282,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
             str(l2),
             "--build-arg",
             f"BASE_IMAGE={l1_ui_image}",
+            "--label",
+            f"luskctl.build_context_hash={context_hash}",
             "-t",
             l2_ui_image,
             context_dir,
@@ -249,6 +298,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
                 str(l2),
                 "--build-arg",
                 f"BASE_IMAGE={l0_image}",
+                "--label",
+                f"luskctl.build_context_hash={context_hash}",
                 "-t",
                 l2_dev_image,
                 context_dir,
