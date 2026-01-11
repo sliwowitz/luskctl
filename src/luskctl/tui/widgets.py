@@ -366,7 +366,7 @@ class ProjectState(Static):
             if value == "yes":
                 return "[green]yes[/green]"
             if value == "old":
-                return "[yellow3]old[/yellow3]"
+                return "[gold3]old[/gold3]"
             return "[red]no[/red]"
 
         docker_value = "yes" if state.get("dockerfiles") else "no"
