@@ -7,7 +7,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
-from textual.widgets import Button, Label, ListItem, ListView, Static
+from textual.widgets import Button, ListItem, ListView, Static
 
 from ..lib.git_gate import GateStalenessInfo
 from ..lib.projects import Project as CodexProject
