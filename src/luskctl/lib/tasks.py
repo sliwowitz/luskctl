@@ -770,6 +770,10 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "web")
 
+    mode_updated = meta.get("mode") != "web"
+    if mode_updated:
+        meta["mode"] = "web"
+
     port = meta.get("web_port")
     port_updated = False
     if not isinstance(port, int):
@@ -787,7 +791,7 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         meta["backend"] = effective_backend
 
     # Write metadata once if anything was updated
-    if port_updated or backend_updated:
+    if port_updated or backend_updated or mode_updated:
         meta_path.write_text(yaml.safe_dump(meta))
 
     container_name = f"{project.id}-web-{task_id}"
@@ -851,6 +855,9 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
     running = _is_container_running(container_name)
 
     if ready and running:
+        if meta.get("status") != "running":
+            meta["status"] = "running"
+            meta_path.write_text(yaml.safe_dump(meta))
         print("\n\n>> luskctl: ")
         print(f"Web UI container is up, routed to: http://127.0.0.1:{port}")
     elif not running:
