@@ -23,7 +23,7 @@ class TaskMeta:
     backend: str | None = None
 
 
-def get_backend_name(task: TaskMeta) -> str:
+def get_backend_name(task: TaskMeta) -> str | None:
     """Get the backend name for a task.
 
     Returns the backend name from the task's backend field, or None if not set.
@@ -292,7 +292,10 @@ class TaskDetails(Static):
             backend = get_backend_name(task)
 
             # Capitalize backend name for display
-            backend_display = backend.capitalize()
+            if backend:
+                backend_display = backend.capitalize()
+            else:
+                backend_display = "Unknown"
             mode_display = f"Web UI ({backend_display})"
 
         # Update status display
