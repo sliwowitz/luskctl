@@ -41,8 +41,8 @@ def get_backend_emoji(task: TaskMeta) -> str:
     # Return emoji based on backend
     emoji_map = {
         "mistral": "🏰",  # Castle emoji for Mistral
-        "claude": "✴️",   # Eight-point star emoji for Claude
-        "codex": "🕸️",   # Spider web emoji for Codex
+        "claude": "✴️",  # Eight-point star emoji for Claude
+        "codex": "🕸️",  # Spider web emoji for Codex
     }
     return emoji_map.get(backend, "🦗")  # Cricket emoji for unknown
 
