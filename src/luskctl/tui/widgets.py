@@ -156,6 +156,8 @@ class ProjectList(ListView):
 
     def _post_selected_project(self) -> None:
         idx = self.index
+        if idx is None:
+            return
         if 0 <= idx < len(self.projects):
             proj_id = self.projects[idx].id
             self.post_message(self.ProjectSelected(proj_id))
@@ -303,6 +305,8 @@ class TaskList(ListView):
 
     def get_selected_task(self) -> TaskMeta | None:
         idx = self.index
+        if idx is None:
+            return None
         if 0 <= idx < len(self.tasks):
             return self.tasks[idx]
         return None
