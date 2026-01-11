@@ -258,7 +258,6 @@ class TaskDetails(Static):
         self.current_task_id: str | None = None
 
     def compose(self) -> ComposeResult:
-        yield Label("Task Details", id="task-details-title")
         yield Static(id="task-details-content")
         with Horizontal(id="task-details-actions"):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
