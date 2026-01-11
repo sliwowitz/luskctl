@@ -794,7 +794,8 @@ if _HAS_TEXTUAL:
                 details.set_task(None)
                 return
             details.set_task(self.current_task)
-            self._queue_task_image_status(self.current_project_id, self.current_task)
+            if self.current_task.status != "deleting":
+                self._queue_task_image_status(self.current_project_id, self.current_task)
 
         # ---------- Status / notifications ----------
 
@@ -871,6 +872,8 @@ if _HAS_TEXTUAL:
         def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
             if not project_id or task is None:
                 return
+            if task.status == "deleting":
+                return
 
             task_id = task.task_id
             self.run_worker(
@@ -887,6 +890,22 @@ if _HAS_TEXTUAL:
         ) -> tuple[str, str, bool | None]:
             image_old = _is_task_image_old(project_id, task)
             return project_id, task.task_id, image_old
+
+        def _queue_task_delete(self, project_id: str, task_id: str) -> None:
+            self.run_worker(
+                lambda: self._delete_task(project_id, task_id),
+                name=f"task-delete:{project_id}:{task_id}",
+                group="task-delete",
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _delete_task(self, project_id: str, task_id: str) -> tuple[str, str, str | None]:
+            try:
+                task_delete(project_id, task_id)
+                return project_id, task_id, None
+            except Exception as e:
+                return project_id, task_id, str(e)
 
         # ---------- Upstream polling ----------
 
@@ -1109,7 +1128,7 @@ if _HAS_TEXTUAL:
             self._update_task_details()
 
         @on(Worker.StateChanged)
-        def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
             worker = event.worker
             if event.state != WorkerState.SUCCESS:
                 if worker.group == "project-state" and event.state == WorkerState.ERROR:
@@ -1146,6 +1165,21 @@ if _HAS_TEXTUAL:
                     return
                 details = self.query_one("#task-details", TaskDetails)
                 details.set_task(self.current_task, image_old=image_old)
+                return
+
+            if worker.group == "task-delete":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, error = result
+                if error:
+                    self.notify(f"Delete error for task {task_id}: {error}")
+                else:
+                    self.notify(f"Deleted task {task_id}")
+
+                if project_id != self.current_project_id:
+                    return
+                await self.refresh_tasks()
 
         @on(TaskDetails.CopyDiffRequested)
         async def handle_copy_diff_requested(self, message: TaskDetails.CopyDiffRequested) -> None:
@@ -1412,45 +1446,19 @@ if _HAS_TEXTUAL:
                 return
 
             tid = self.current_task.task_id
-            try:
-                self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
-                # Let the user know we're working, since stopping containers
-                # and cleaning up state can take a little while and the TUI
-                # will be blocked during this operation. We keep the logic
-                # simple and synchronous, but yield once to the event loop so
-                # the status bar has a chance to render the message before
-                # the blocking work starts.
-                self.notify(f"Deleting task {tid}...")
+            if self.current_task.status == "deleting":
+                self.notify(f"Task {tid} is already deleting.")
+                return
 
-                try:
-                    import asyncio as _asyncio
+            self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
+            self.notify(f"Deleting task {tid}...")
 
-                    # Yield control so Textual can process the notify() and
-                    # redraw the status bar before we start the blocking
-                    # delete operation.
-                    await _asyncio.sleep(0)
-                except Exception:
-                    # If asyncio isn't available for some reason, we just
-                    # proceed synchronously.
-                    pass
+            self.current_task.status = "deleting"
+            task_list = self.query_one("#task-list", TaskList)
+            task_list.mark_deleting(tid)
+            self._update_task_details()
 
-                # Use shared library helper so containers and metadata are
-                # cleaned up consistently with the CLI. This call is
-                # synchronous and may take a little while if container
-                # teardown or filesystem cleanup is slow, but both
-                # frontends share the exact same logic here.
-                self._log_debug("delete: calling task_delete()")
-                task_delete(self.current_project_id, tid)
-                self._log_debug("delete: task_delete() returned")
-                self.notify(f"Deleted task {tid}")
-            except Exception as e:
-                self._log_debug(f"delete: error {e!r}")
-                self.notify(f"Delete error: {e}")
-
-            self.current_task = None
-            self._log_debug("delete: refreshing tasks")
-            await self.refresh_tasks()
-            self._log_debug("delete: refresh_tasks() finished")
+            self._queue_task_delete(self.current_project_id, tid)
 
         async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:
             """Common helper to copy a git diff to the clipboard."""

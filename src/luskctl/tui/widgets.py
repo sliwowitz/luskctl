@@ -274,6 +274,34 @@ class TaskList(ListView):
         self.tasks: list[TaskMeta] = []
         self._generation = 0
 
+    def _format_task_label(self, task: TaskMeta) -> str:
+        task_emoji = ""
+        if task.status == "deleting":
+            task_emoji = "🗑️"
+        elif task.mode == "cli":
+            task_emoji = "⌨️"  # Keyboard emoji for CLI
+        elif task.mode == "web":
+            task_emoji = get_backend_emoji(task)
+        elif task.status == "created":
+            task_emoji = "🦗"
+
+        status_display = task.status
+        extra_parts: list[str] = []
+
+        if task.status == "created" and task.web_port:
+            status_display = "running"
+            extra_parts.append(f"port={task.web_port}")
+        elif task.status == "created" and task.mode == "cli":
+            status_display = "running"
+
+        extra_str = "; ".join(extra_parts)
+
+        label = f"{task.task_id} {task_emoji}  [{status_display}"
+        if extra_str:
+            label += f"; {extra_str}"
+        label += "]"
+        return label
+
     def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
         """Populate the list from raw metadata dicts."""
         self.project_id = project_id
@@ -292,36 +320,18 @@ class TaskList(ListView):
             )
             self.tasks.append(tm)
 
-            # Use emojis for task types and update status display
-            task_emoji = ""
-            if tm.mode == "cli":
-                task_emoji = "⌨️"  # Keyboard emoji for CLI
-            elif tm.mode == "web":
-                # Use backend-specific emojis for web tasks
-                task_emoji = get_backend_emoji(tm)
-            elif tm.status == "created":
-                task_emoji = "🦗"
-
-            # Update status display to be more consistent
-            status_display = tm.status
-            extra_parts = []
-
-            # For running tasks, show "running" consistently
-            if tm.status == "created" and tm.web_port:
-                status_display = "running"
-                extra_parts.append(f"port={tm.web_port}")
-            elif tm.status == "created" and tm.mode == "cli":
-                status_display = "running"
-
-            extra_str = "; ".join(extra_parts)
-
-            # This string has [...] and "mode=..." so we MUST disable markup.
-            label = f"{tm.task_id} {task_emoji}  [{status_display}"
-            if extra_str:
-                label += f"; {extra_str}"
-            label += "]"
-
+            label = self._format_task_label(tm)
             self.append(TaskListItem(project_id, tm, label, self._generation))
+
+    def mark_deleting(self, task_id: str) -> bool:
+        for item in self.query(TaskListItem):
+            if item.task_meta.task_id != task_id:
+                continue
+            item.task_meta.status = "deleting"
+            label = self._format_task_label(item.task_meta)
+            item.query_one(Static).update(label)
+            return True
+        return False
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
@@ -393,7 +403,10 @@ class TaskDetails(Static):
         # Use emojis for task types
         task_emoji = ""
         mode_display = task.mode or "unset"
-        if task.mode == "cli":
+        if task.status == "deleting":
+            task_emoji = "🗑️ "
+            mode_display = "Deleting"
+        elif task.mode == "cli":
             task_emoji = "⌨️ "  # Keyboard emoji for CLI
             mode_display = "CLI"
         elif task.mode == "web":
