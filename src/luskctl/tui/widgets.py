@@ -39,7 +39,7 @@ class TaskListItem(ListItem):
     def __init__(self, project_id: str, task: TaskMeta, label: str, generation: int) -> None:
         super().__init__(Static(label, markup=False))
         self.project_id = project_id
-        self.task = task
+        self.task_meta = task
         self.generation = generation
 
 
@@ -346,7 +346,7 @@ class TaskList(ListView):
             return
         if item.project_id != self.project_id:
             return
-        self.post_message(self.TaskSelected(self.project_id, item.task))
+        self.post_message(self.TaskSelected(self.project_id, item.task_meta))
 
 
 class TaskDetails(Static):
