@@ -82,6 +82,10 @@ def _supports_color() -> bool:
     """Check if stdout supports color output."""
     import sys
 
+    # Follow the NO_COLOR standard (https://no-color.org/):
+    # if NO_COLOR is present in the environment, disable color entirely.
+    if "NO_COLOR" in os.environ:
+        return False
     return sys.stdout.isatty()
 
 
