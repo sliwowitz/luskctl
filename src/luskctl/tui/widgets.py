@@ -23,11 +23,12 @@ class TaskMeta:
     backend: str | None = None
 
 
-def get_backend_emoji(task: TaskMeta) -> str:
-    """Get the emoji for a task's backend.
+def get_backend_name(task: TaskMeta) -> str:
+    """Get the backend name for a task.
 
-    Returns the appropriate emoji based on the task's backend field.
+    Returns the backend name based on the task's backend field.
     Falls back to parsing from task_id if backend is not set (for compatibility).
+    Defaults to "codex" if no backend can be determined.
     """
     # Use the backend field if available
     backend = task.backend
@@ -39,6 +40,17 @@ def get_backend_emoji(task: TaskMeta) -> str:
     # Default to codex if still no backend
     if not backend:
         backend = "codex"
+
+    return backend
+
+
+def get_backend_emoji(task: TaskMeta) -> str:
+    """Get the emoji for a task's backend.
+
+    Returns the appropriate emoji based on the task's backend field.
+    Falls back to parsing from task_id if backend is not set (for compatibility).
+    """
+    backend = get_backend_name(task)
 
     # Return emoji based on backend
     if backend == "mistral":
@@ -291,11 +303,7 @@ class TaskDetails(Static):
             task_emoji = f"{emoji} "
 
             # Get backend for display name
-            backend = task.backend
-            if not backend and task.task_id and "-" in task.task_id:
-                backend = task.task_id.split("-")[-1]
-            if not backend:
-                backend = "codex"
+            backend = get_backend_name(task)
 
             # Capitalize backend name for display
             backend_display = backend.capitalize()
