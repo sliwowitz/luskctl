@@ -446,13 +446,13 @@ if _HAS_TEXTUAL:
 
         /* Main container borders */
         #left-pane {
-            width: 2fr;
+            width: 1fr;
             padding: 1;
             background: $tui-bg;
         }
 
         #right-pane {
-            width: 3fr;
+            width: 1fr;
             padding: 1;
             background: $tui-bg;
         }

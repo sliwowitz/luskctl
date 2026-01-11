@@ -24,6 +24,25 @@ class TaskMeta:
     backend: str | None = None
 
 
+class ProjectListItem(ListItem):
+    """List item that carries project metadata."""
+
+    def __init__(self, project_id: str, label: str, generation: int) -> None:
+        super().__init__(Static(label, markup=False))
+        self.project_id = project_id
+        self.generation = generation
+
+
+class TaskListItem(ListItem):
+    """List item that carries task metadata."""
+
+    def __init__(self, project_id: str, task: TaskMeta, label: str, generation: int) -> None:
+        super().__init__(Static(label, markup=False))
+        self.project_id = project_id
+        self.task = task
+        self.generation = generation
+
+
 def get_backend_name(task: TaskMeta) -> str | None:
     """Get the backend name for a task.
 
@@ -122,10 +141,12 @@ class ProjectList(ListView):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.projects: list[CodexProject] = []
+        self._generation = 0
 
     def set_projects(self, projects: list[CodexProject]) -> None:
         """Populate the list with projects."""
         self.projects = projects
+        self._generation += 1
         self.clear()
         for proj in projects:
             # Use emojis instead of text labels
@@ -134,8 +155,7 @@ class ProjectList(ListView):
             else:
                 security_emoji = "🌐"  # Globe emoji for online
             label = f"{security_emoji} {proj.id}"
-            # Disable Rich markup to avoid surprises
-            self.append(ListItem(Static(label, markup=False)))
+            self.append(ProjectListItem(proj.id, label, self._generation))
 
     def select_project(self, project_id: str) -> None:
         """Select a project by id."""
@@ -146,21 +166,24 @@ class ProjectList(ListView):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a row, send a semantic ProjectSelected message."""
-        self._post_selected_project()
+        self._post_selected_project(event.item)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         """Update selection immediately when highlight changes."""
         if event.item is None:
             return
-        self._post_selected_project()
+        self._post_selected_project(event.item)
 
-    def _post_selected_project(self) -> None:
-        idx = self.index
-        if idx is None:
+    def _post_selected_project(self, item: ListItem | None = None) -> None:
+        if item is None:
+            item = self.highlighted_child
+        if not isinstance(item, ProjectListItem):
             return
-        if 0 <= idx < len(self.projects):
-            proj_id = self.projects[idx].id
-            self.post_message(self.ProjectSelected(proj_id))
+        if item.parent is not self:
+            return
+        if item.generation != self._generation:
+            return
+        self.post_message(self.ProjectSelected(item.project_id))
 
 
 class ProjectActions(Static):
@@ -249,11 +272,13 @@ class TaskList(ListView):
         super().__init__(**kwargs)
         self.project_id: str | None = None
         self.tasks: list[TaskMeta] = []
+        self._generation = 0
 
     def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
         """Populate the list from raw metadata dicts."""
         self.project_id = project_id
         self.tasks = []
+        self._generation += 1
         self.clear()
 
         for meta in tasks_meta:
@@ -291,42 +316,37 @@ class TaskList(ListView):
             extra_str = "; ".join(extra_parts)
 
             # This string has [...] and "mode=..." so we MUST disable markup.
-            status_gap = " "
-            if status_display == "created":
-                status_gap = "   "
-            elif status_display == "running":
-                status_gap = "  "
-            label = f"{tm.task_id} {task_emoji}{status_gap}[{status_display}"
+            label = f"{tm.task_id} {task_emoji}  [{status_display}"
             if extra_str:
                 label += f"; {extra_str}"
             label += "]"
 
-            self.append(ListItem(Static(label, markup=False)))
-
-    def get_selected_task(self) -> TaskMeta | None:
-        idx = self.index
-        if idx is None:
-            return None
-        if 0 <= idx < len(self.tasks):
-            return self.tasks[idx]
-        return None
+            self.append(TaskListItem(project_id, tm, label, self._generation))
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
-        self._post_selected_task()
+        self._post_selected_task(event.item)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         """Update selection immediately when highlight changes."""
         if event.item is None:
             return
-        self._post_selected_task()
+        self._post_selected_task(event.item)
 
-    def _post_selected_task(self) -> None:
+    def _post_selected_task(self, item: ListItem | None = None) -> None:
         if self.project_id is None:
             return
-        task = self.get_selected_task()
-        if task is not None:
-            self.post_message(self.TaskSelected(self.project_id, task))
+        if item is None:
+            item = self.highlighted_child
+        if not isinstance(item, TaskListItem):
+            return
+        if item.parent is not self:
+            return
+        if item.generation != self._generation:
+            return
+        if item.project_id != self.project_id:
+            return
+        self.post_message(self.TaskSelected(self.project_id, item.task))
 
 
 class TaskDetails(Static):
