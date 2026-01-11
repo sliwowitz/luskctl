@@ -14,7 +14,7 @@ from .config import (
     state_root,
     user_projects_root,
 )
-from .images import project_cli_image, project_ui_image
+from .images import project_cli_image, project_web_image
 
 
 def _get_global_git_config(key: str) -> str | None:
@@ -280,7 +280,7 @@ def get_project_state(project_id: str) -> dict:
     try:
         required_tags = [
             project_cli_image(project.id),
-            project_ui_image(project.id),
+            project_web_image(project.id),
         ]
         ok = True
         for tag in required_tags:

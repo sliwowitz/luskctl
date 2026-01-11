@@ -141,10 +141,10 @@ class ImagesTests(unittest.TestCase):
         result = images.project_cli_image("my-project")
         self.assertEqual(result, "my-project:l2-cli")
 
-    def test_project_ui_image(self) -> None:
-        """project_ui_image should return correct L2 UI image name."""
-        result = images.project_ui_image("my-project")
-        self.assertEqual(result, "my-project:l2-ui")
+    def test_project_web_image(self) -> None:
+        """project_web_image should return correct L2 web image name."""
+        result = images.project_web_image("my-project")
+        self.assertEqual(result, "my-project:l2-web")
 
     def test_project_dev_image(self) -> None:
         """project_dev_image should return correct L2 dev image name."""

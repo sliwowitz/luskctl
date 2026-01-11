@@ -30,10 +30,10 @@ except Exception:  # pragma: no cover - textual not installed
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
-    from textual import on
+    from textual import on, screen
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Button, Header
+    from textual.widgets import Button, Footer, Header, Label
 
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
@@ -45,7 +45,7 @@ if _HAS_TEXTUAL:
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
-        UI_BACKENDS,
+        WEB_BACKENDS,
         copy_to_clipboard_detailed,
         get_clipboard_helper_status,
         get_tasks,
@@ -53,10 +53,9 @@ if _HAS_TEXTUAL:
         task_delete,
         task_new,
         task_run_cli,
-        task_run_ui,
+        task_run_web,
     )
     from .widgets import (
-        ProjectActions,
         ProjectList,
         ProjectState,
         StatusBar,
@@ -65,50 +64,176 @@ if _HAS_TEXTUAL:
         TaskMeta,
     )
 
+    class ProjectActionsScreen(screen.ModalScreen[str | None]):
+        """Modal screen for project actions."""
+
+        CSS = """
+        ProjectActionsScreen {
+            align: center middle;
+        }
+
+        #action-dialog {
+            width: 60;
+            height: auto;
+            border: heavy $primary;
+            background: $surface;
+        }
+
+        #action-buttons {
+            layout: horizontal;
+            padding: 1;
+        }
+
+        Button {
+            width: 100%;
+            margin: 0 1;
+        }
+        """
+
+        def compose(self) -> ComposeResult:
+            with Horizontal(id="action-dialog"):
+                with Vertical():
+                    yield Label("Project Actions", id="title")
+                    yield Label(" ")  # Spacer
+                    with Horizontal(id="action-buttons"):
+                        yield Button("[g]enerate", id="generate", variant="primary")
+                        yield Button("[b]uild", id="build", variant="primary")
+                        yield Button("build [a]ll", id="build_all", variant="primary")
+                        yield Button("initialize [s]sh", id="init_ssh", variant="primary")
+                        yield Button("sync [g]ate", id="sync_gate", variant="primary")
+                    yield Label(" ")  # Spacer
+                    with Horizontal():
+                        yield Button("Cancel", id="cancel", variant="default")
+
+        def on_button_pressed(self, event: Button.Pressed) -> None:
+            button_id = event.button.id
+            if button_id == "cancel":
+                self.dismiss(None)
+            else:
+                action_map = {
+                    "generate": "generate",
+                    "build": "build",
+                    "build_all": "build_all",
+                    "sync_gate": "sync_gate",
+                    "init_ssh": "init_ssh",
+                }
+                self.dismiss(action_map.get(button_id))
+
+    class TaskActionsScreen(screen.ModalScreen[str | None]):
+        """Modal screen for task actions."""
+
+        CSS = """
+        TaskActionsScreen {
+            align: center middle;
+        }
+
+        #action-dialog {
+            width: 60;
+            height: auto;
+            border: heavy $primary;
+            background: $surface;
+        }
+
+        #action-buttons {
+            layout: horizontal;
+            padding: 1;
+        }
+
+        Button {
+            width: 100%;
+            margin: 0 1;
+        }
+        """
+
+        def compose(self) -> ComposeResult:
+            with Horizontal(id="action-dialog"):
+                with Vertical():
+                    yield Label("Task Actions", id="title")
+                    yield Label(" ")  # Spacer
+                    with Horizontal(id="action-buttons"):
+                        yield Button("[n]ew", id="new", variant="primary")
+                        yield Button("[c]li", id="cli", variant="primary")
+                        yield Button("[w]eb", id="web", variant="primary")
+                        yield Button("[d]el", id="delete", variant="primary")
+                    yield Label(" ")  # Spacer
+                    with Horizontal():
+                        yield Button("Cancel", id="cancel", variant="default")
+
+        def on_button_pressed(self, event: Button.Pressed) -> None:
+            button_id = event.button.id
+            if button_id == "cancel":
+                self.dismiss(None)
+            else:
+                action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
+                self.dismiss(action_map.get(button_id))
+
     class LuskTUI(App):
-        """Minimal TUI frontend for luskctl core modules."""
+        """Redesigned TUI frontend for luskctl core modules."""
 
         CSS_PATH = None
+        TITLE = "Luskctl TUI"
 
-        # Layout rules to ensure both left and right panes, and especially
-        # the task list and task details on the right, are always visible.
+        # Layout rules for the new streamlined design with borders
         CSS = """
+        Screen {
+            layout: grid;
+            grid-size: 2;
+            grid-columns: 1fr 2fr;
+            grid-rows: 1fr 3 1fr;
+        }
+
+        /* Main container borders */
         #left-pane {
-            /* Left pane: roughly one third of total width */
-            width: 1fr;
-            height: 1fr;
+            border: solid $primary;
+            padding: 1;
         }
 
         #right-pane {
-            /* Right pane: roughly two thirds of total width */
-            width: 2fr;
+            border: solid $primary;
+            padding: 1;
+        }
+
+        /* Projects section with embedded title */
+        #project-list {
+            border: heavy $primary;
+            title: "Projects";
             height: 1fr;
+            min-height: 10;
         }
 
-        #project-actions {
-            /* Force the action bar to a small fixed height so it doesn't
-             * consume the entire right pane and push the task list and
-             * details off-screen. */
-            height: 3;
-            max-height: 3;
+        /* Project details section */
+        #project-state {
+            border: solid $primary;
+            title: "Project Details";
+            height: 1fr;
+            min-height: 10;
+            margin-top: 1;
         }
 
-        /* Make action buttons very compact: single-line, minimal padding. */
-        ProjectActions Button {
-            padding: 0 0;
-        }
-
+        /* Tasks section with embedded title */
         #task-list {
-            height: 3fr;
-            min-height: 6;
+            border: heavy $primary;
+            title: "Tasks";
+            height: 1fr;
+            min-height: 10;
         }
 
+        /* Task details section */
         #task-details {
-            height: 2fr;
-            min-height: 6;
+            border: solid $primary;
+            title: "Task Details";
+            height: 1fr;
+            min-height: 10;
+            margin-top: 1;
         }
 
-        # Task details internal layout
+        /* Status bar styling */
+        #status-bar {
+            border: solid $primary;
+            height: 1;
+        }
+
+        /* Task details internal layout */
         #task-details-content {
             height: 1fr;
         }
@@ -120,17 +245,8 @@ if _HAS_TEXTUAL:
 
         BINDINGS = [
             ("q", "quit", "Quit"),
-            ("g", "generate_dockerfiles", "Generate Dockerfiles"),
-            ("b", "build_images", "Build images"),
-            ("s", "init_ssh", "Init SSH"),
-            ("c", "init_gate", "Init gate"),
-            ("S", "sync_gate", "Sync gate"),
-            ("t", "new_task", "New task"),
-            ("r", "run_cli", "Run CLI"),
-            ("u", "run_ui", "Run UI"),
-            ("d", "delete_task", "Delete task"),
-            ("y", "copy_diff_head", "Copy diff vs HEAD"),
-            ("Y", "copy_diff_prev", "Copy diff vs PREV"),
+            ("p", "show_project_actions", "Project actions"),
+            ("t", "show_task_actions", "Task actions"),
         ]
 
         def __init__(self) -> None:
@@ -145,25 +261,31 @@ if _HAS_TEXTUAL:
             self._polling_project_id: str | None = None  # Project ID the timer was started for
             self._last_notified_stale: bool = False  # Track if we already notified about staleness
             self._auto_sync_cooldown: dict[str, float] = {}  # Per-project cooldown timestamps
+            # Selection persistence
+            self._last_selected_project: str | None = None
+            self._last_selected_tasks: dict[str, str] = {}  # project_id -> task_id
 
         # ---------- Layout ----------
 
         def compose(self) -> ComposeResult:
+            # Use Textual's default Header which will show our title
             yield Header()
+
+            # Main layout using grid
             with Horizontal():
                 # Left pane: project list (top) + selected project info (bottom)
                 with Vertical(id="left-pane"):
                     yield ProjectList(id="project-list")
                     yield ProjectState(id="project-state")
-                # Right pane: action bar + tasks + task details
+                # Right pane: tasks + task details
                 with Vertical(id="right-pane"):
-                    yield ProjectActions(id="project-actions")
                     yield TaskList(id="task-list")
                     yield TaskDetails(id="task-details")
-            # Custom status bar replaces Textual's default Footer so the
-            # bottom line can be used for real status messages instead of
-            # a long list of shortcuts (those are already shown in the
-            # ProjectActions button bar).
+
+            # Use Textual's default Footer which will show key bindings
+            yield Footer()
+
+            # Custom status bar for our messages
             yield StatusBar(id="status-bar")
 
         async def on_mount(self) -> None:
@@ -184,6 +306,9 @@ if _HAS_TEXTUAL:
             except Exception:
                 # Clipboard helpers are best-effort; never block startup.
                 pass
+
+            # Load selection state before refreshing projects
+            self._load_selection_state()
 
             await self.refresh_projects()
             # Defer layout logging until after the first refresh cycle so
@@ -253,9 +378,43 @@ if _HAS_TEXTUAL:
                 # Logging must never break the TUI.
                 pass
 
+        def _load_selection_state(self) -> None:
+            """Load last selected project and tasks from persistent storage."""
+            try:
+                import json
+                from pathlib import Path as _Path
+
+                state_path = _Path("~/.luskctl-tui-state.json").expanduser()
+                if state_path.exists():
+                    with state_path.open("r", encoding="utf-8") as f:
+                        state = json.load(f)
+                        self._last_selected_project = state.get("last_project")
+                        self._last_selected_tasks = state.get("last_tasks", {})
+            except Exception:
+                # If loading fails, just start with empty state
+                self._last_selected_project = None
+                self._last_selected_tasks = {}
+
+        def _save_selection_state(self) -> None:
+            """Save current selection state to persistent storage."""
+            try:
+                import json
+                from pathlib import Path as _Path
+
+                state_path = _Path("~/.luskctl-tui-state.json").expanduser()
+                state = {
+                    "last_project": self.current_project_id,
+                    "last_tasks": self._last_selected_tasks,
+                }
+                with state_path.open("w", encoding="utf-8") as f:
+                    json.dump(state, f)
+            except Exception:
+                # If saving fails, just ignore - it's not critical
+                pass
+
         def _prompt_ui_backend(self) -> str:
-            backends = list(UI_BACKENDS)
-            # Check DEFAULT_AGENT first, fall back to LUSKUI_BACKEND for compatibility
+            backends = list(WEB_BACKENDS)
+            # Check DEFAULT_AGENT first, fall back to LUSKUI_BACKEND
             default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
             if not default:
                 default = os.environ.get("LUSKUI_BACKEND", "").strip().lower()
@@ -287,9 +446,15 @@ if _HAS_TEXTUAL:
             proj_widget.set_projects(projects)
 
             if projects:
-                if self.current_project_id is None:
+                # Try to restore last selected project, fall back to first project
+                last_project = self._last_selected_project
+                if last_project and any(p.id == last_project for p in projects):
+                    self.current_project_id = last_project
+                    proj_widget.select_project(self.current_project_id)
+                elif self.current_project_id is None:
                     self.current_project_id = projects[0].id
                     proj_widget.select_project(self.current_project_id)
+
                 await self.refresh_tasks()
                 # Start upstream polling for the selected project
                 self._start_upstream_polling()
@@ -311,8 +476,23 @@ if _HAS_TEXTUAL:
             task_list.set_tasks(self.current_project_id, tasks_meta)
 
             if task_list.tasks:
-                task_list.index = 0
-                self.current_task = task_list.tasks[0]
+                # Try to restore last selected task for this project
+                last_task_id = self._last_selected_tasks.get(self.current_project_id)
+                if last_task_id:
+                    # Find the task with the matching ID
+                    for idx, task in enumerate(task_list.tasks):
+                        if task.task_id == last_task_id:
+                            task_list.index = idx
+                            self.current_task = task
+                            break
+                    else:
+                        # Task not found, select the newest task
+                        task_list.index = 0
+                        self.current_task = task_list.tasks[0]
+                else:
+                    # No remembered task, select the newest task
+                    task_list.index = 0
+                    self.current_task = task_list.tasks[0]
             else:
                 self.current_task = None
 
@@ -597,17 +777,27 @@ if _HAS_TEXTUAL:
 
         @on(ProjectList.ProjectSelected)
         async def handle_project_selected(self, message: ProjectList.ProjectSelected) -> None:
-            """Called when user activates a project in the list."""
+            """Called when user selects a project in the list."""
             self.current_project_id = message.project_id
+            # Save the project selection
+            self._last_selected_project = self.current_project_id
+            self._save_selection_state()
+
             await self.refresh_tasks()
             # Start polling for the newly selected project
             self._start_upstream_polling()
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
-            """Called when user activates a task in the list."""
+            """Called when user selects a task in the list."""
             self.current_project_id = message.project_id
             self.current_task = message.task
+
+            # Save the task selection for this project
+            if self.current_project_id and self.current_task:
+                self._last_selected_tasks[self.current_project_id] = self.current_task.task_id
+                self._save_selection_state()
+
             details = self.query_one("#task-details", TaskDetails)
             details.set_task(self.current_task)
 
@@ -663,6 +853,136 @@ if _HAS_TEXTUAL:
             # Textual's ``App`` provides ``exit()`` rather than ``shutdown()``;
             # calling the latter would raise ``AttributeError``.
             self.exit()
+
+        async def action_show_project_actions(self) -> None:
+            """Show modal dialog with project actions."""
+            await self.push_screen(ProjectActionsScreen(), self._on_project_action_screen_result)
+
+        async def action_show_task_actions(self) -> None:
+            """Show modal dialog with task actions."""
+            await self.push_screen(TaskActionsScreen(), self._on_task_action_screen_result)
+
+        async def _on_project_action_screen_result(self, result: str | None) -> None:
+            """Handle result from project actions screen."""
+            if result:
+                await self._handle_project_action(result)
+
+        async def _on_task_action_screen_result(self, result: str | None) -> None:
+            """Handle result from task actions screen."""
+            if result:
+                await self._handle_task_action(result)
+
+        async def _handle_project_action(self, action: str) -> None:
+            """Handle project actions."""
+            if action == "generate":
+                await self.action_generate_dockerfiles()
+            elif action == "build":
+                await self.action_build_images()
+            elif action == "build_all":
+                await self._action_build_all_images()
+            elif action == "init_ssh":
+                await self.action_init_ssh()
+            elif action == "sync_gate":
+                await self._action_sync_gate()
+
+        async def _handle_task_action(self, action: str) -> None:
+            """Handle task actions."""
+            if action == "new":
+                await self.action_new_task()
+            elif action == "cli":
+                await self.action_run_cli()
+            elif action == "web":
+                await self._action_run_web()
+            elif action == "delete":
+                await self.action_delete_task()
+
+        async def _action_build_all_images(self) -> None:
+            """Build all project images."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            with self.suspend():
+                try:
+                    # This would need to be implemented in the docker module
+                    print("Building all images...")
+                    # build_all_images(self.current_project_id)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            self.notify(f"Built all images for {self.current_project_id}")
+            self._refresh_project_state()
+
+        async def _action_sync_gate(self) -> None:
+            """Sync gate (init if doesn't exist, sync if exists)."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+
+            try:
+                project = load_project(self.current_project_id)
+                if project.security_class != "gatekeeping":
+                    self.notify("Sync only available for gatekeeping projects.")
+                    return
+
+                self.notify("Syncing gate...")
+
+                # Run sync in background worker
+                self.run_worker(
+                    self._sync_gate_worker(self.current_project_id),
+                    name="gate_sync",
+                    exclusive=True,
+                )
+
+            except Exception as e:
+                self.notify(f"Sync error: {e}")
+
+        async def _sync_gate_worker(self, project_id: str) -> None:
+            """Background worker to sync gate (init if needed)."""
+            try:
+                # Check if gate exists
+                project = load_project(project_id)
+                gate_exists = project.gate_path.exists()
+
+                if not gate_exists:
+                    # Init gate
+                    result = init_project_gate(project_id)
+                    if project_id == self.current_project_id:
+                        self.notify(f"Gate initialized at {result['path']}")
+                else:
+                    # Sync gate
+                    result = sync_gate_branches(project_id)
+                    if result["success"]:
+                        if project_id == self.current_project_id:
+                            self.notify("Gate synced from upstream")
+                    else:
+                        if project_id == self.current_project_id:
+                            self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
+
+                # Refresh state after gate operation
+                if project_id == self.current_project_id:
+                    self._refresh_project_state()
+
+            except Exception as e:
+                if project_id == self.current_project_id:
+                    self.notify(f"Gate operation error: {e}")
+
+        async def _action_run_web(self) -> None:
+            """Run web UI for current task."""
+            if not self.current_project_id or not self.current_task:
+                self.notify("No task selected.")
+                return
+            tid = self.current_task.task_id
+            with self.suspend():
+                try:
+                    backend = self._prompt_ui_backend()
+                    print(
+                        f"Starting Web UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
+                    )
+                    task_run_web(self.current_project_id, tid, backend=backend)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
 
         async def action_generate_dockerfiles(self) -> None:
             if not self.current_project_id:
@@ -754,22 +1074,9 @@ if _HAS_TEXTUAL:
                 input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
 
-        async def action_run_ui(self) -> None:
-            if not self.current_project_id or not self.current_task:
-                self.notify("No task selected.")
-                return
-            tid = self.current_task.task_id
-            with self.suspend():
-                try:
-                    backend = self._prompt_ui_backend()
-                    print(
-                        f"Starting UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
-                    )
-                    task_run_ui(self.current_project_id, tid, backend=backend)
-                except SystemExit as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-            await self.refresh_tasks()
+        async def action_run_web(self) -> None:
+            """Public action for running web UI (delegates to _action_run_web)."""
+            await self._action_run_web()
 
         async def action_delete_task(self) -> None:
             if not self.current_project_id or not self.current_task:

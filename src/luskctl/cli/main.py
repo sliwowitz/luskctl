@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import sys
 from importlib import resources
 from pathlib import Path
 
@@ -36,12 +35,12 @@ from ..lib.git_gate import init_project_gate
 from ..lib.projects import list_projects
 from ..lib.ssh import init_project_ssh
 from ..lib.tasks import (
-    UI_BACKENDS,
+    WEB_BACKENDS,
     task_delete,
     task_list,
     task_new,
     task_run_cli,
-    task_run_ui,
+    task_run_web,
 )
 from ..lib.tasks import (
     get_tasks as _get_tasks,
@@ -80,9 +79,14 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
 
 
 def _supports_color() -> bool:
-    if not sys.stdout.isatty():
+    """Check if stdout supports color output."""
+    import sys
+
+    # Follow the NO_COLOR standard (https://no-color.org/):
+    # if NO_COLOR is present in the environment, disable color entirely.
+    if "NO_COLOR" in os.environ:
         return False
-    return not os.environ.get("NO_COLOR")
+    return sys.stdout.isatty()
 
 
 def _color(text: str, code: str, enabled: bool) -> str:
@@ -93,10 +97,6 @@ def _color(text: str, code: str, enabled: bool) -> str:
 
 def _yes_no(value: bool, enabled: bool) -> str:
     return _color("yes" if value else "no", "32" if value else "31", enabled)
-
-
-def _violet(text: str, enabled: bool) -> str:
-    return _color(text, "35", enabled)
 
 
 def _gray(text: str, enabled: bool) -> str:
@@ -255,7 +255,7 @@ def main() -> None:
     except Exception:
         pass
 
-    t_run_ui = tsub.add_parser("run-ui", help="Run task in UI (web) mode")
+    t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
     _a = t_run_ui.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
@@ -266,11 +266,11 @@ def main() -> None:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
         pass
-    known_backends = ", ".join(UI_BACKENDS)
+    known_backends = ", ".join(WEB_BACKENDS)
     t_run_ui.add_argument(
         "--backend",
         dest="ui_backend",
-        help=f"UI backend ({known_backends})",
+        help=f"Web backend ({known_backends})",
     )
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
@@ -336,26 +336,19 @@ def main() -> None:
                 print(
                     f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})"
                 )
-        print(f"- UI base port: {_get_ui_base_port()}")
+        print(f"- Web base port: {_get_ui_base_port()}")
 
         # Envs base dir
         try:
-            print(
-                f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}"
-            )
+            print(f"- Envs base dir (for mounts): {_get_envs_base_dir()}")
         except Exception:
             pass
 
         uproj = _user_projects_root()
         sproj = _config_root()
-        uproj_exists = Path(uproj).is_dir()
+        print(f"- User projects root: {uproj} (exists: {'yes' if Path(uproj).is_dir() else 'no'})")
         print(
-            f"- User projects root: {_gray(str(uproj), color_enabled)} "
-            f"(exists: {_yes_no(uproj_exists, color_enabled)})"
-        )
-        print(
-            f"- System projects root: {_gray(str(sproj), color_enabled)} "
-            f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
+            f"- System projects root: {sproj} (exists: {'yes' if Path(sproj).is_dir() else 'no'})"
         )
 
         # Project configs discovered
@@ -363,10 +356,7 @@ def main() -> None:
         if projs:
             print("- Project configs:")
             for p in projs:
-                print(
-                    f"  • {_violet(str(p.id), color_enabled)}: "
-                    f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
-                )
+                print(f"  • {p.id}: {p.root / 'project.yml'}")
         else:
             print("- Project configs: none found")
 
@@ -377,10 +367,10 @@ def main() -> None:
             names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
         except Exception:
             names = []
-        print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
+        print(f"- Package templates dir: {tmpl_pkg}")
         if names:
             for n in sorted(names):
-                print(f"  • {_gray(str(n), color_enabled)}")
+                print(f"  • {n}")
 
         # Scripts (package resources)
         scr_pkg = resources.files("luskctl") / "resources" / "scripts"
@@ -388,21 +378,17 @@ def main() -> None:
             scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
         except Exception:
             scr_names = []
-        print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
+        print(f"Scripts (read):\n- Package scripts dir: {scr_pkg}")
         if scr_names:
             for n in sorted(scr_names):
-                print(f"  • {_gray(str(n), color_enabled)}")
+                print(f"  • {n}")
 
         # WRITE PATHS
         print("Writable locations (write):")
         sroot = _state_root()
-        sroot_exists = Path(sroot).is_dir()
-        print(
-            f"- State root: {_gray(str(sroot), color_enabled)} "
-            f"(exists: {_yes_no(sroot_exists, color_enabled)})"
-        )
+        print(f"- State root: {sroot} (exists: {'yes' if Path(sroot).is_dir() else 'no'})")
         build_root = _build_root()
-        print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
+        print(f"- Build root for generated files: {build_root}")
         if projs:
             print("- Expected generated files per project:")
             for p in projs:
@@ -414,11 +400,7 @@ def main() -> None:
                     "L2.Dockerfile",
                 ):
                     path = base / fname
-                    print(
-                        f"  • {_violet(str(p.id), color_enabled)}: "
-                        f"{_gray(str(path), color_enabled)} "
-                        f"(exists: {_yes_no(path.is_file(), color_enabled)})"
-                    )
+                    print(f"  • {p.id}: {path} (exists: {'yes' if path.is_file() else 'no'})")
 
         # ENVIRONMENT
         print("Environment overrides (if set):")
@@ -432,7 +414,7 @@ def main() -> None:
         ):
             val = os.environ.get(var)
             if val is not None:
-                print(f"- {var}={_gray(val, color_enabled)}")
+                print(f"- {var}={val}")
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:
@@ -449,8 +431,8 @@ def main() -> None:
             task_list(args.project_id)
         elif args.task_cmd == "run-cli":
             task_run_cli(args.project_id, args.task_id)
-        elif args.task_cmd == "run-ui":
-            task_run_ui(args.project_id, args.task_id, backend=getattr(args, "ui_backend", None))
+        elif args.task_cmd == "run-web":
+            task_run_web(args.project_id, args.task_id, backend=getattr(args, "ui_backend", None))
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
         else:

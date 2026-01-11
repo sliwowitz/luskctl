@@ -31,8 +31,8 @@ def project_cli_image(project_id: str) -> str:
     return f"{project_id}:l2-cli"
 
 
-def project_ui_image(project_id: str) -> str:
-    return f"{project_id}:l2-ui"
+def project_web_image(project_id: str) -> str:
+    return f"{project_id}:l2-web"
 
 
 def project_dev_image(project_id: str) -> str:
