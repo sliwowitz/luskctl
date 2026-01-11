@@ -6,6 +6,9 @@ repo_name: sliwowitz/luskctl
 
 theme:
   name: material
+  font:
+    text: "'Ubuntu', sans-serif"
+    code: "'Ubuntu Mono', monospace"
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -87,3 +90,6 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/sliwowitz/luskctl
+
+extra_css:
+  - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap
