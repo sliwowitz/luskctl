@@ -372,7 +372,12 @@ class TaskDetails(Static):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
             yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
 
-    def set_task(self, task: TaskMeta | None, empty_message: str | None = None) -> None:
+    def set_task(
+        self,
+        task: TaskMeta | None,
+        empty_message: str | None = None,
+        image_old: bool | None = None,
+    ) -> None:
         content = self.query_one("#task-details-content", Static)
 
         if task is None:
@@ -419,10 +424,8 @@ class TaskDetails(Static):
             f"Type:      {task_emoji}{mode_display}",
             f"Workspace: {task.workspace}",
         ]
-        if status_display == "running":
-            image_old = _is_task_image_old(self.current_project_id, task)
-            if image_old:
-                lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
+        if status_display == "running" and image_old:
+            lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
         if task.web_port:
             lines.append(f"Web URL:   http://127.0.0.1:{task.web_port}/")
 
@@ -446,6 +449,33 @@ class ProjectState(Static):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+
+    def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
+        if project is None:
+            self.update("No project selected.")
+            return
+
+        upstream = project.upstream_url or "-"
+
+        # Use emojis for security class
+        if project.security_class == "gatekeeping":
+            security_emoji = "🚪"  # Door emoji for gatekeeping
+        else:
+            security_emoji = "🌐"  # Globe emoji for online
+
+        if task_count is None:
+            tasks_line = "Tasks:     loading"
+        else:
+            tasks_line = f"Tasks:     {task_count}"
+
+        lines = [
+            f"Project:   {project.id} {security_emoji}",
+            upstream,
+            "",
+            "Loading details...",
+            tasks_line,
+        ]
+        self.update("\n".join(lines))
 
     def set_state(
         self,

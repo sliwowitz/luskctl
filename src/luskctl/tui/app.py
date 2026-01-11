@@ -39,6 +39,7 @@ if _HAS_TEXTUAL:
         Binding = None  # type: ignore[assignment]
     from textual.containers import Horizontal, Vertical
     from textual.widgets import Button, Footer, Header
+    from textual.worker import Worker, WorkerState
 
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
@@ -47,6 +48,7 @@ if _HAS_TEXTUAL:
         sync_gate_branches,
         sync_project_gate,
     )
+    from ..lib.projects import Project as CodexProject
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
@@ -67,6 +69,7 @@ if _HAS_TEXTUAL:
         TaskDetails,
         TaskList,
         TaskMeta,
+        _is_task_image_old,
     )
 
     def _modal_binding(key: str, action: str, description: str):
@@ -524,6 +527,8 @@ if _HAS_TEXTUAL:
             super().__init__()
             self.current_project_id: str | None = None
             self.current_task: TaskMeta | None = None
+            self._projects_by_id: dict[str, CodexProject] = {}
+            self._last_task_count: int | None = None
             # Set on mount; used to display status / notifications.
             self._status_bar: StatusBar | None = None
             # Upstream polling state
@@ -722,6 +727,7 @@ if _HAS_TEXTUAL:
         async def refresh_projects(self) -> None:
             proj_widget = self.query_one("#project-list", ProjectList)
             projects = list_projects()
+            self._projects_by_id = {proj.id: proj for proj in projects}
             proj_widget.set_projects(projects)
 
             if projects:
@@ -775,14 +781,20 @@ if _HAS_TEXTUAL:
             else:
                 self.current_task = None
 
-            task_details = self.query_one("#task-details", TaskDetails)
-            if self.current_task is None:
-                task_details.set_task(None)
-            else:
-                task_details.set_task(self.current_task)
+            self._update_task_details()
 
+            task_count = len(task_list.tasks)
+            self._last_task_count = task_count
             # Update project state panel (Dockerfiles/images/SSH/cache + task count)
-            self._refresh_project_state(task_count=len(task_list.tasks))
+            self._refresh_project_state(task_count=task_count)
+
+        def _update_task_details(self) -> None:
+            details = self.query_one("#task-details", TaskDetails)
+            if self.current_task is None:
+                details.set_task(None)
+                return
+            details.set_task(self.current_task)
+            self._queue_task_image_status(self.current_project_id, self.current_task)
 
         # ---------- Status / notifications ----------
 
@@ -825,16 +837,56 @@ if _HAS_TEXTUAL:
             if not self.current_project_id:
                 state_widget.set_state(None, None, None)
                 return
+            if task_count is not None:
+                self._last_task_count = task_count
 
+            project_id = self.current_project_id
+            project = self._projects_by_id.get(project_id)
+            if project is not None:
+                state_widget.set_loading(project, self._last_task_count)
+            else:
+                state_widget.update("Loading project details...")
+
+            self.run_worker(
+                lambda: self._load_project_state(project_id),
+                name=f"project-state:{project_id}",
+                group="project-state",
+                exclusive=True,
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _load_project_state(
+            self, project_id: str
+        ) -> tuple[str, CodexProject | None, dict | None, str | None]:
             try:
-                project = load_project(self.current_project_id)
-                state = get_project_state(self.current_project_id)
+                project = load_project(project_id)
+                state = get_project_state(project_id)
+                return project_id, project, state, None
             except SystemExit as e:
-                # Surface configuration/state problems directly in the TUI.
-                state_widget.update(f"Project state error: {e}")
+                return project_id, None, None, str(e)
+            except Exception as e:
+                return project_id, None, None, str(e)
+
+        def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
+            if not project_id or task is None:
                 return
 
-            state_widget.set_state(project, state, task_count, self._staleness_info)
+            task_id = task.task_id
+            self.run_worker(
+                lambda: self._load_task_image_status(project_id, task),
+                name=f"task-image:{project_id}:{task_id}",
+                group="task-image",
+                exclusive=True,
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _load_task_image_status(
+            self, project_id: str, task: TaskMeta
+        ) -> tuple[str, str, bool | None]:
+            image_old = _is_task_image_old(project_id, task)
+            return project_id, task.task_id, image_old
 
         # ---------- Upstream polling ----------
 
@@ -1054,8 +1106,46 @@ if _HAS_TEXTUAL:
                 self._last_selected_tasks[self.current_project_id] = self.current_task.task_id
                 self._save_selection_state()
 
-            details = self.query_one("#task-details", TaskDetails)
-            details.set_task(self.current_task)
+            self._update_task_details()
+
+        @on(Worker.StateChanged)
+        def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
+            worker = event.worker
+            if event.state != WorkerState.SUCCESS:
+                if worker.group == "project-state" and event.state == WorkerState.ERROR:
+                    state_widget = self.query_one("#project-state", ProjectState)
+                    state_widget.update(f"Project state error: {worker.error}")
+                return
+
+            if worker.group == "project-state":
+                result = worker.result
+                if not result:
+                    return
+                project_id, project, state, error = result
+                if project_id != self.current_project_id:
+                    return
+                state_widget = self.query_one("#project-state", ProjectState)
+                if error:
+                    state_widget.update(f"Project state error: {error}")
+                    return
+                if project is None or state is None:
+                    state_widget.set_state(None, None, None)
+                    return
+                self._projects_by_id[project_id] = project
+                state_widget.set_state(project, state, self._last_task_count, self._staleness_info)
+                return
+
+            if worker.group == "task-image":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, image_old = result
+                if project_id != self.current_project_id:
+                    return
+                if not self.current_task or self.current_task.task_id != task_id:
+                    return
+                details = self.query_one("#task-details", TaskDetails)
+                details.set_task(self.current_task, image_old=image_old)
 
         @on(TaskDetails.CopyDiffRequested)
         async def handle_copy_diff_requested(self, message: TaskDetails.CopyDiffRequested) -> None:
