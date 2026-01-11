@@ -47,6 +47,11 @@ samp {
   background-color: var(--lusk-red-dark);
 }
 
+.md-typeset a,
+.md-typeset a:visited {
+  color: var(--lusk-gold);
+}
+
 .md-typeset a:hover,
 .md-nav__link:hover,
 .md-tabs__link:hover,
@@ -112,5 +117,5 @@ samp {
 
   --md-accent-fg-color: var(--lusk-gold-bright);
   --md-accent-fg-color--transparent: rgba(216, 180, 84, 0.14);
-  --md-typeset-a-color: var(--lusk-gold-bright);
+  --md-typeset-a-color: var(--lusk-gold);
 }
