@@ -115,6 +115,7 @@ if _HAS_TEXTUAL:
                     "build": "build",
                     "build_all": "build_all",
                     "sync_gate": "sync_gate",
+                    "init_ssh": "init_ssh",
                 }
                 self.dismiss(action_map.get(button_id))
 
