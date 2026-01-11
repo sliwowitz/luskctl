@@ -7,7 +7,7 @@ from typing import Any
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
-from textual.widgets import Button, Label, ListItem, ListView, Static
+from textual.widgets import Button, ListItem, ListView, Static
 
 from ..lib.git_gate import GateStalenessInfo
 from ..lib.projects import Project as CodexProject
@@ -258,7 +258,6 @@ class TaskDetails(Static):
         self.current_task_id: str | None = None
 
     def compose(self) -> ComposeResult:
-        yield Label("Task Details", id="task-details-title")
         yield Static(id="task-details-content")
         with Horizontal(id="task-details-actions"):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")

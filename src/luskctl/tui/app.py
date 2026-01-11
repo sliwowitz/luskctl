@@ -184,27 +184,25 @@ if _HAS_TEXTUAL:
 
         /* Main container borders */
         #left-pane {
-            border: solid $primary;
             padding: 1;
         }
 
         #right-pane {
-            border: solid $primary;
             padding: 1;
         }
 
         /* Projects section with embedded title */
         #project-list {
-            border: heavy $primary;
-            title: "Projects";
+            border: round $primary;
+            border-title-align: right;
             height: 1fr;
             min-height: 10;
         }
 
         /* Project details section */
         #project-state {
-            border: solid $primary;
-            title: "Project Details";
+            border: round $primary;
+            border-title-align: right;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -212,16 +210,16 @@ if _HAS_TEXTUAL:
 
         /* Tasks section with embedded title */
         #task-list {
-            border: heavy $primary;
-            title: "Tasks";
+            border: round $primary;
+            border-title-align: right;
             height: 1fr;
             min-height: 10;
         }
 
         /* Task details section */
         #task-details {
-            border: solid $primary;
-            title: "Task Details";
+            border: round $primary;
+            border-title-align: right;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -275,12 +273,20 @@ if _HAS_TEXTUAL:
             with Horizontal():
                 # Left pane: project list (top) + selected project info (bottom)
                 with Vertical(id="left-pane"):
-                    yield ProjectList(id="project-list")
-                    yield ProjectState(id="project-state")
+                    project_list = ProjectList(id="project-list")
+                    project_list.border_title = "Projects"
+                    yield project_list
+                    project_state = ProjectState(id="project-state")
+                    project_state.border_title = "Project Details"
+                    yield project_state
                 # Right pane: tasks + task details
                 with Vertical(id="right-pane"):
-                    yield TaskList(id="task-list")
-                    yield TaskDetails(id="task-details")
+                    task_list = TaskList(id="task-list")
+                    task_list.border_title = "Tasks"
+                    yield task_list
+                    task_details = TaskDetails(id="task-details")
+                    task_details.border_title = "Task Details"
+                    yield task_details
 
             # Use Textual's default Footer which will show key bindings
             yield Footer()
