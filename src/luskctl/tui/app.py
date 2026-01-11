@@ -21,9 +21,9 @@ def enable_pycharm_debugger():
 # widgets module at import time so the package can be installed without the
 # optional TUI dependencies.
 try:  # pragma: no cover - simple availability probe
-    import importlib  # noqa: F401
+    import importlib.util
 
-    _HAS_TEXTUAL = True
+    _HAS_TEXTUAL = importlib.util.find_spec("textual") is not None
 except Exception:  # pragma: no cover - textual not installed
     _HAS_TEXTUAL = False
 
@@ -32,6 +32,11 @@ if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
     from textual import on, screen
     from textual.app import App, ComposeResult
+
+    try:  # pragma: no cover - optional import for test stubs
+        from textual.binding import Binding
+    except Exception:  # pragma: no cover - textual may be a stub module
+        Binding = None  # type: ignore[assignment]
     from textual.containers import Horizontal, Vertical
     from textual.widgets import Button, Footer, Header
 
@@ -64,57 +69,113 @@ if _HAS_TEXTUAL:
         TaskMeta,
     )
 
+    def _modal_binding(key: str, action: str, description: str):
+        if Binding is None:
+            return (key, action, description)
+        return Binding(key, action, description, show=False)
+
     class ProjectActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for project actions."""
+
+        BINDINGS = [
+            _modal_binding("escape", "dismiss", "Cancel"),
+            _modal_binding("q", "dismiss", "Cancel"),
+            _modal_binding("up", "app.focus_previous", "Previous"),
+            _modal_binding("down", "app.focus_next", "Next"),
+        ]
+
+        COMPACT_HEIGHT = 20
 
         CSS = """
         ProjectActionsScreen {
             align: center middle;
+            padding: 1 0;
         }
 
         #action-dialog {
             width: 60;
             height: auto;
+            max-height: 100%;
             border: heavy $primary;
             border-title-align: right;
             background: $surface;
-            padding: 1;
+            padding: 1 1 0 1;
+            overflow-y: auto;
         }
 
         #action-buttons {
             layout: vertical;
             margin-top: 1;
+            align: center middle;
+            width: 100%;
         }
 
         #action-cancel {
-            margin-top: 1;
+            margin-top: 0;
+            align: center middle;
+            width: 100%;
         }
 
         #action-buttons Button {
-            margin: 0 1;
+            margin: 0 0 1 0;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #action-dialog Button {
+            width: 100%;
+            min-width: 0;
+        }
+
+        ProjectActionsScreen.compact #action-dialog {
+            padding: 0 1;
+        }
+
+        ProjectActionsScreen.compact #action-buttons {
+            margin-top: 0;
+        }
+
+        ProjectActionsScreen.compact #action-dialog Button {
+            border: none;
+            height: 1;
+            padding: 0 1;
         }
 
         """
 
+        def __init__(self, title: str | None = None) -> None:
+            super().__init__()
+            self._dialog_title = title or "Project Actions"
+
         def compose(self) -> ComposeResult:
             with Vertical(id="action-dialog") as dialog:
                 with Vertical(id="action-buttons"):
-                    with Horizontal():
-                        yield Button("[yellow]g[/yellow]enerate", id="generate", variant="primary")
-                        yield Button("[yellow]b[/yellow]uild", id="build", variant="primary")
-                        yield Button(
-                            "build [yellow]a[/yellow]ll", id="build_all", variant="primary"
-                        )
-                    with Horizontal():
-                        yield Button(
-                            "initialize [yellow]s[/yellow]sh", id="init_ssh", variant="primary"
-                        )
-                        yield Button(
-                            "sync [yellow]g[/yellow]ate", id="sync_gate", variant="primary"
-                        )
+                    yield Button(
+                        "generate [yellow]d[/yellow]ockerfiles",
+                        id="generate",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "[yellow]b[/yellow]uild project image",
+                        id="build",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "build [yellow]a[/yellow]ll images",
+                        id="build_all",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "initialize [yellow]s[/yellow]sh", id="init_ssh", variant="primary"
+                    )
+                    yield Button(
+                        "sync [yellow]g[/yellow]it gate",
+                        id="sync_gate",
+                        variant="primary",
+                    )
                 with Horizontal(id="action-cancel"):
                     yield Button("Cancel", id="cancel", variant="default")
-            dialog.border_title = "Project Actions"
+            dialog.border_title = self._dialog_title
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -130,50 +191,105 @@ if _HAS_TEXTUAL:
                 }
                 self.dismiss(action_map.get(button_id))
 
+        def action_dismiss(self) -> None:
+            self.dismiss(None)
+
+        def on_mount(self) -> None:
+            first_button = self.query_one("#action-buttons Button", Button)
+            first_button.focus()
+            self._update_density()
+
+        def on_resize(self, _event: object) -> None:
+            self._update_density()
+
+        def _update_density(self) -> None:
+            self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
+
     class TaskActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for task actions."""
+
+        BINDINGS = [
+            _modal_binding("escape", "dismiss", "Cancel"),
+            _modal_binding("q", "dismiss", "Cancel"),
+            _modal_binding("up", "app.focus_previous", "Previous"),
+            _modal_binding("down", "app.focus_next", "Next"),
+        ]
+
+        COMPACT_HEIGHT = 18
 
         CSS = """
         TaskActionsScreen {
             align: center middle;
+            padding: 1 0;
         }
 
         #action-dialog {
             width: 60;
             height: auto;
+            max-height: 100%;
             border: heavy $primary;
             border-title-align: right;
             background: $surface;
-            padding: 1;
+            padding: 1 1 0 1;
+            overflow-y: auto;
         }
 
         #action-buttons {
             layout: vertical;
             margin-top: 1;
+            align: center middle;
+            width: 100%;
         }
 
         #action-cancel {
-            margin-top: 1;
+            margin-top: 0;
+            align: center middle;
+            width: 100%;
         }
 
         #action-buttons Button {
-            margin: 0 1;
+            margin: 0 0 1 0;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #action-dialog Button {
+            width: 100%;
+            min-width: 0;
+        }
+
+        TaskActionsScreen.compact #action-dialog {
+            padding: 0 1;
+        }
+
+        TaskActionsScreen.compact #action-buttons {
+            margin-top: 0;
+        }
+
+        TaskActionsScreen.compact #action-dialog Button {
+            border: none;
+            height: 1;
+            padding: 0 1;
         }
 
         """
 
+        def __init__(self, title: str | None = None, *, has_tasks: bool = True) -> None:
+            super().__init__()
+            self._dialog_title = title or "Task Actions"
+            self._has_tasks = has_tasks
+
         def compose(self) -> ComposeResult:
             with Vertical(id="action-dialog") as dialog:
                 with Vertical(id="action-buttons"):
-                    with Horizontal():
-                        yield Button("[yellow]n[/yellow]ew", id="new", variant="primary")
-                        yield Button("[yellow]c[/yellow]li", id="cli", variant="primary")
-                    with Horizontal():
-                        yield Button("[yellow]w[/yellow]eb", id="web", variant="primary")
-                        yield Button("[yellow]d[/yellow]el", id="delete", variant="primary")
+                    yield Button("[yellow]n[/yellow]ew task", id="new", variant="primary")
+                    if self._has_tasks:
+                        yield Button("[yellow]c[/yellow]li agent", id="cli", variant="primary")
+                        yield Button("[yellow]w[/yellow]eb ui", id="web", variant="primary")
+                        yield Button("[yellow]d[/yellow]elete task", id="delete", variant="primary")
                 with Horizontal(id="action-cancel"):
                     yield Button("Cancel", id="cancel", variant="default")
-            dialog.border_title = "Task Actions"
+            dialog.border_title = self._dialog_title
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -182,6 +298,20 @@ if _HAS_TEXTUAL:
             else:
                 action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
                 self.dismiss(action_map.get(button_id))
+
+        def action_dismiss(self) -> None:
+            self.dismiss(None)
+
+        def on_mount(self) -> None:
+            first_button = self.query_one("#action-buttons Button", Button)
+            first_button.focus()
+            self._update_density()
+
+        def on_resize(self, _event: object) -> None:
+            self._update_density()
+
+        def _update_density(self) -> None:
+            self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
 
     class LuskTUI(App):
         """Redesigned TUI frontend for luskctl core modules."""
@@ -206,13 +336,13 @@ if _HAS_TEXTUAL:
 
         /* Main container borders */
         #left-pane {
-            width: 1fr;
+            width: 2fr;
             padding: 1;
             background: $tui-bg;
         }
 
         #right-pane {
-            width: 2fr;
+            width: 3fr;
             padding: 1;
             background: $tui-bg;
         }
@@ -260,6 +390,8 @@ if _HAS_TEXTUAL:
             border: solid $primary;
             background: $tui-bg;
             height: 3;
+            padding: 0 1;
+            margin: 0 1;
         }
 
         /* Task details internal layout */
@@ -893,11 +1025,27 @@ if _HAS_TEXTUAL:
 
         async def action_show_project_actions(self) -> None:
             """Show modal dialog with project actions."""
-            await self.push_screen(ProjectActionsScreen(), self._on_project_action_screen_result)
+            title = self.current_project_id or "Project Actions"
+            await self.push_screen(
+                ProjectActionsScreen(title=title),
+                self._on_project_action_screen_result,
+            )
 
         async def action_show_task_actions(self) -> None:
             """Show modal dialog with task actions."""
-            await self.push_screen(TaskActionsScreen(), self._on_task_action_screen_result)
+            title = "Task Actions"
+            if self.current_task is not None:
+                backend = self.current_task.backend or self.current_task.mode or "unknown"
+                title = f"Task ID: {self.current_task.task_id}, {backend}"
+            try:
+                task_list = self.query_one("#task-list", TaskList)
+                has_tasks = bool(task_list.tasks)
+            except Exception:
+                has_tasks = True
+            await self.push_screen(
+                TaskActionsScreen(title=title, has_tasks=has_tasks),
+                self._on_task_action_screen_result,
+            )
 
         async def _on_project_action_screen_result(self, result: str | None) -> None:
             """Handle result from project actions screen."""

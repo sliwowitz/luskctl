@@ -69,7 +69,7 @@ class ProjectList(ListView):
                 security_emoji = "🚪"  # Door emoji for gatekeeping
             else:
                 security_emoji = "🌐"  # Globe emoji for online
-            label = f"{proj.id} {security_emoji}"
+            label = f"{security_emoji} {proj.id}"
             # Disable Rich markup to avoid surprises
             self.append(ListItem(Static(label, markup=False)))
 
@@ -218,7 +218,12 @@ class TaskList(ListView):
             extra_str = "; ".join(extra_parts)
 
             # This string has [...] and "mode=..." so we MUST disable markup.
-            label = f"{tm.task_id} {task_emoji} [{status_display}"
+            status_gap = " "
+            if status_display == "created":
+                status_gap = "   "
+            elif status_display == "running":
+                status_gap = "  "
+            label = f"{tm.task_id} {task_emoji}{status_gap}[{status_display}"
             if extra_str:
                 label += f"; {extra_str}"
             label += "]"
@@ -347,6 +352,10 @@ class ProjectState(Static):
         images_s = "yes" if state.get("images") else "no"
         ssh_s = "yes" if state.get("ssh") else "no"
         gate_s = "yes" if state.get("gate") else "no"
+        docker_s = f"[green]{docker_s}[/green]" if docker_s == "yes" else f"[red]{docker_s}[/red]"
+        images_s = f"[green]{images_s}[/green]" if images_s == "yes" else f"[red]{images_s}[/red]"
+        ssh_s = f"[green]{ssh_s}[/green]" if ssh_s == "yes" else f"[red]{ssh_s}[/red]"
+        gate_s = f"[green]{gate_s}[/green]" if gate_s == "yes" else f"[red]{gate_s}[/red]"
 
         if task_count is None:
             tasks_line = "Tasks:     unknown"
