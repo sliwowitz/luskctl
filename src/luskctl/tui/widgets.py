@@ -278,12 +278,7 @@ class TaskDetails(Static):
 
         # Update status display
         status_display = task.status
-        if (
-            task.status == "created"
-            and task.web_port
-            or task.status == "created"
-            and task.mode == "cli"
-        ):
+        if task.status == "created" and (task.web_port or task.mode == "cli"):
             status_display = "running"
 
         lines = [
