@@ -183,18 +183,18 @@ class TaskList(ListView):
                     task_emoji = "🌐"  # Globe emoji for Claude
                 else:  # codex or unknown
                     task_emoji = "🕸️"  # Spider web emoji for Codex
-            
+
             # Update status display to be more consistent
             status_display = tm.status
             extra_parts = []
-            
+
             # For running tasks, show "running" consistently
             if tm.status == "created" and tm.web_port:
                 status_display = "running"
                 extra_parts.append(f"port={tm.web_port}")
             elif tm.status == "created" and tm.mode == "cli":
                 status_display = "running"
-            
+
             extra_str = "; ".join(extra_parts)
 
             # This string has [...] and "mode=..." so we MUST disable markup.
@@ -275,14 +275,12 @@ class TaskDetails(Static):
             else:  # codex or unknown
                 task_emoji = "🕸️ "  # Spider web emoji for Codex
                 mode_display = "Web UI (Codex)"
-        
+
         # Update status display
         status_display = task.status
-        if task.status == "created" and task.web_port:
+        if task.status == "created" and task.web_port or task.status == "created" and task.mode == "cli":
             status_display = "running"
-        elif task.status == "created" and task.mode == "cli":
-            status_display = "running"
-        
+
         lines = [
             f"Task ID:   {task.task_id}",
             f"Status:    {status_display}",
@@ -341,7 +339,7 @@ class ProjectState(Static):
             security_emoji = "🚪"  # Door emoji for gatekeeping
         else:
             security_emoji = "🌐"  # Globe emoji for online
-        
+
         lines = [
             f"Project:   {project.id} {security_emoji}",
             upstream,
