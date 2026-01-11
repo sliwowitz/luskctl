@@ -777,10 +777,7 @@ if _HAS_TEXTUAL:
 
             task_details = self.query_one("#task-details", TaskDetails)
             if self.current_task is None:
-                # Be explicit so users understand why the right side is empty.
-                task_details.update(
-                    "No tasks for this project yet.\nPress 't' to create a new task."
-                )
+                task_details.set_task(None)
             else:
                 task_details.set_task(self.current_task)
 

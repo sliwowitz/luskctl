@@ -372,11 +372,11 @@ class TaskDetails(Static):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
             yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
 
-    def set_task(self, task: TaskMeta | None) -> None:
+    def set_task(self, task: TaskMeta | None, empty_message: str | None = None) -> None:
         content = self.query_one("#task-details-content", Static)
 
         if task is None:
-            content.update("No task selected.")
+            content.update(empty_message or "")
             self.current_project_id = None
             self.current_task_id = None
             return
