@@ -232,11 +232,6 @@ if _HAS_TEXTUAL:
             height: 1;
         }
 
-        /* Make action buttons very compact: single-line, minimal padding. */
-        ProjectActions Button {
-            padding: 0 0;
-        }
-
         /* Task details internal layout */
         #task-details-content {
             height: 1fr;
