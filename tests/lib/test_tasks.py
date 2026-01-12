@@ -618,9 +618,7 @@ class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
         """Test copy_to_clipboard uses xclip on X11 when available."""
         # Ensure Wayland environment variables are not set to force X11 detection
-        env = {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}
-        if "WAYLAND_DISPLAY" in os.environ:
-            env["WAYLAND_DISPLAY"] = ""
+        env = {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0", "WAYLAND_DISPLAY": ""}
 
         with unittest.mock.patch.dict(os.environ, env, clear=False):
             with unittest.mock.patch(
