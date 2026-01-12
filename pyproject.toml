@@ -43,9 +43,9 @@ requests = ">=2.31"
 [tool.poetry.group.dev.dependencies]
 pydevd-pycharm = "253.29346.142"
 ruff = ">=0.8"
-markdown-it-py = "4.0.0"
-mdit-py-plugins = "0.5.0"
-platformdirs = "4.5.1"
+markdown-it-py = ">=4.0.0"
+mdit-py-plugins = ">=0.5.0"
+platformdirs = ">=4.5.1"
 textual-dev = "^1.8.0"
 
 [tool.poetry.group.test.dependencies]
