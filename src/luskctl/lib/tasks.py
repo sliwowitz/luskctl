@@ -17,20 +17,6 @@ from .podman import _podman_userns_args
 from .projects import Project, load_project
 
 
-def _get_selinux_volume_suffix(is_shared: bool) -> str:
-    """Return appropriate SELinux volume suffix based on sharing intent.
-
-    Args:
-        is_shared: True if the volume should be shared between containers,
-                  False if it's container-specific.
-
-    Returns:
-        ":Z" for shared volumes (accessible by multiple containers)
-        ":z" for private volumes (container-specific)
-    """
-    return ":Z" if is_shared else ":z"
-
-
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
     """Get git diff from a task's workspace.
 
@@ -522,16 +508,16 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes: list[str] = []
 
     # Per-task workspace mount (container-specific, not shared)
-    volumes.append(f"{repo_dir}:/workspace{_get_selinux_volume_suffix(is_shared=False)}")
+    volumes.append(f"{repo_dir}:/workspace:z")
 
     # Shared codex credentials/config (shared between containers)
-    volumes.append(f"{codex_host_dir}:/home/dev/.codex{_get_selinux_volume_suffix(is_shared=True)}")
+    volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
     # Shared Claude credentials/config (shared between containers)
-    volumes.append(f"{claude_host_dir}:/home/dev/.claude{_get_selinux_volume_suffix(is_shared=True)}")
+    volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
     # Shared Mistral Vibe credentials/config (shared between containers)
-    volumes.append(f"{vibe_host_dir}:/home/dev/.vibe{_get_selinux_volume_suffix(is_shared=True)}")
+    volumes.append(f"{vibe_host_dir}:/home/dev/.vibe:Z")
     # Shared Blablador credentials/config (OpenCode wrapper, shared between containers)
-    volumes.append(f"{blablador_host_dir}:/home/dev/.blablador{_get_selinux_volume_suffix(is_shared=True)}")
+    volumes.append(f"{blablador_host_dir}:/home/dev/.blablador:Z")
 
     # Security mode specific wiring
     gate_repo = project.gate_path
@@ -551,7 +537,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Ensure parent exists for mount consistency (gate should already exist)
         gate_parent.mkdir(parents=True, exist_ok=True)
         # Mount gate read-write so tasks can push branches for review (shared between project containers)
-        volumes.append(f"{gate_repo}:{gate_mount_inside}{_get_selinux_volume_suffix(is_shared=True)}")
+        volumes.append(f"{gate_repo}:{gate_mount_inside}:Z")
         env["CODE_REPO"] = f"file://{gate_mount_inside}"
         env["GIT_BRANCH"] = project.default_branch or "main"
         # Optionally expose the upstream URL as an "external" remote.
@@ -560,13 +546,13 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Optional SSH mount in gatekeeping mode (shared between project containers)
         if project.ssh_mount_in_gatekeeping and ssh_host_dir.is_dir():
             _ensure_dir_writable(ssh_host_dir, "SSH config")
-            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh{_get_selinux_volume_suffix(is_shared=True)}")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
     else:
         # Online mode: clone from gate if present, then set upstream to real URL
         if gate_repo.exists():
             gate_parent.mkdir(parents=True, exist_ok=True)
             # Mount gate read-only (shared between project containers)
-            volumes.append(f"{gate_repo}:{gate_mount_inside}{_get_selinux_volume_suffix(is_shared=True)},ro")
+            volumes.append(f"{gate_repo}:{gate_mount_inside}:Z,ro")
             env["CLONE_FROM"] = f"file://{gate_mount_inside}"
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
@@ -574,7 +560,7 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Optional SSH config mount in online mode (configurable, shared between project containers)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
             _ensure_dir_writable(ssh_host_dir, "SSH config")
-            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh{_get_selinux_volume_suffix(is_shared=True)}")
+            volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
 
     return env, volumes
 
