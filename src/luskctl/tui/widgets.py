@@ -102,8 +102,9 @@ def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
             ],
             capture_output=True,
             text=True,
+            timeout=10,
         )
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode != 0:
         return None
@@ -117,12 +118,12 @@ def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
 
     try:
         from ..lib.docker import build_context_hash
+
         current_hash = build_context_hash(project_id)
     except Exception:
         return None
 
     try:
-        label_result = subprocess.run(
         label_result = subprocess.run(
             [
                 "podman",
@@ -134,8 +135,9 @@ def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
             ],
             capture_output=True,
             text=True,
+            timeout=10,
         )
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return None
     if label_result.returncode != 0:
         return None
@@ -387,6 +389,7 @@ class TaskList(ListView):
             found = True
 
         return found
+
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
         self._post_selected_task(event.item)

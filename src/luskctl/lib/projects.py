@@ -388,8 +388,9 @@ def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str 
             ],
             capture_output=True,
             text=True,
+            timeout=10,
         )
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return None, None
     if result.returncode != 0:
         return None, None
