@@ -5,6 +5,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from rich.cells import cell_len
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
@@ -65,6 +66,19 @@ def get_backend_emoji(task: TaskMeta) -> str:
         "codex": "🌸",  # Blossom emoji for Codex
     }
     return emoji_map.get(backend, "🕸️")  # Spider web emoji for unknown
+
+
+def draw_emoji(emoji: str, width: int = 2) -> str:
+    """Pad emojis to a consistent cell width for list alignment."""
+    if not emoji:
+        return ""
+    try:
+        emoji_width = cell_len(emoji)
+    except Exception:
+        return emoji
+    if emoji_width >= width:
+        return emoji
+    return f"{emoji}{' ' * (width - emoji_width)}"
 
 
 def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
@@ -154,7 +168,8 @@ class ProjectList(ListView):
                 security_emoji = "🚪"  # Door emoji for gatekeeping
             else:
                 security_emoji = "🌐"  # Globe emoji for online
-            label = f"{security_emoji} {proj.id}"
+            emoji_display = draw_emoji(security_emoji)
+            label = f"{emoji_display} {proj.id}"
             self.append(ProjectListItem(proj.id, label, self._generation))
 
     def select_project(self, project_id: str) -> None:
@@ -296,7 +311,8 @@ class TaskList(ListView):
 
         extra_str = "; ".join(extra_parts)
 
-        label = f"{task.task_id} {task_emoji}  [{status_display}"
+        emoji_display = draw_emoji(task_emoji)
+        label = f"{task.task_id} {emoji_display} [{status_display}"
         if extra_str:
             label += f"; {extra_str}"
         label += "]"
