@@ -35,7 +35,7 @@ def _assert_volume_mount(volumes: list[str], expected_base: str, expected_suffix
     for volume in volumes:
         if volume.startswith(expected_full):
             # Check if it's either exactly the expected full string, or has additional options
-            remaining = volume[len(expected_full):]
+            remaining = volume[len(expected_full) :]
             if not remaining or remaining.startswith(","):
                 found = True
                 break
