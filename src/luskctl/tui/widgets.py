@@ -117,12 +117,12 @@ def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
 
     try:
         from ..lib.docker import build_context_hash
+        current_hash = build_context_hash(project_id)
     except Exception:
         return None
 
-    current_hash = build_context_hash(project_id)
-
     try:
+        label_result = subprocess.run(
         label_result = subprocess.run(
             [
                 "podman",
