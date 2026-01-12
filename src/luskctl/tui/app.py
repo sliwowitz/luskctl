@@ -21,27 +21,34 @@ def enable_pycharm_debugger():
 # widgets module at import time so the package can be installed without the
 # optional TUI dependencies.
 try:  # pragma: no cover - simple availability probe
-    import importlib  # noqa: F401
+    import importlib.util
 
-    _HAS_TEXTUAL = True
+    _HAS_TEXTUAL = importlib.util.find_spec("textual") is not None
 except Exception:  # pragma: no cover - textual not installed
     _HAS_TEXTUAL = False
 
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
-    from textual import on, screen
+    from textual import events, on, screen
     from textual.app import App, ComposeResult
+
+    try:  # pragma: no cover - optional import for test stubs
+        from textual.binding import Binding
+    except Exception:  # pragma: no cover - textual may be a stub module
+        Binding = None  # type: ignore[assignment]
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Button, Footer, Header, Label
+    from textual.widgets import Button, Footer, Header
+    from textual.worker import Worker, WorkerState
 
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
-        init_project_gate,
         sync_gate_branches,
+        sync_project_gate,
     )
+    from ..lib.projects import Project as CodexProject
     from ..lib.projects import get_project_state, list_projects, load_project
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
@@ -62,48 +69,121 @@ if _HAS_TEXTUAL:
         TaskDetails,
         TaskList,
         TaskMeta,
+        _is_task_image_old,
     )
+
+    def _modal_binding(key: str, action: str, description: str):
+        if Binding is None:
+            return (key, action, description)
+        return Binding(key, action, description, show=False)
 
     class ProjectActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for project actions."""
 
+        BINDINGS = [
+            _modal_binding("escape", "dismiss", "Cancel"),
+            _modal_binding("q", "dismiss", "Cancel"),
+            _modal_binding("up", "app.focus_previous", "Previous"),
+            _modal_binding("down", "app.focus_next", "Next"),
+            _modal_binding("d", "generate", "Generate dockerfiles"),
+            _modal_binding("b", "build", "Build project image"),
+            _modal_binding("a", "build_all", "Build all images"),
+            _modal_binding("s", "init_ssh", "Init SSH"),
+            _modal_binding("g", "sync_gate", "Sync git gate"),
+        ]
+
+        COMPACT_HEIGHT = 20
+
         CSS = """
         ProjectActionsScreen {
             align: center middle;
+            padding: 1 0;
         }
 
         #action-dialog {
             width: 60;
             height: auto;
+            max-height: 100%;
             border: heavy $primary;
+            border-title-align: right;
             background: $surface;
+            padding: 1 1 0 1;
+            overflow-y: auto;
         }
 
         #action-buttons {
-            layout: horizontal;
-            padding: 1;
+            layout: vertical;
+            margin-top: 1;
+            align: center middle;
+            width: 100%;
         }
 
-        Button {
+        #action-cancel {
+            margin-top: 0;
+            align: center middle;
             width: 100%;
-            margin: 0 1;
         }
+
+        #action-buttons Button {
+            margin: 0 0 1 0;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #action-dialog Button {
+            width: 100%;
+            min-width: 0;
+        }
+
+        ProjectActionsScreen.compact #action-dialog {
+            padding: 0 1;
+        }
+
+        ProjectActionsScreen.compact #action-buttons {
+            margin-top: 0;
+        }
+
+        ProjectActionsScreen.compact #action-dialog Button {
+            border: none;
+            height: 1;
+            padding: 0 1;
+        }
+
         """
 
+        def __init__(self, title: str | None = None) -> None:
+            super().__init__()
+            self._dialog_title = title or "Project Actions"
+
         def compose(self) -> ComposeResult:
-            with Horizontal(id="action-dialog"):
-                with Vertical():
-                    yield Label("Project Actions", id="title")
-                    yield Label(" ")  # Spacer
-                    with Horizontal(id="action-buttons"):
-                        yield Button("[g]enerate", id="generate", variant="primary")
-                        yield Button("[b]uild", id="build", variant="primary")
-                        yield Button("build [a]ll", id="build_all", variant="primary")
-                        yield Button("initialize [s]sh", id="init_ssh", variant="primary")
-                        yield Button("sync [g]ate", id="sync_gate", variant="primary")
-                    yield Label(" ")  # Spacer
-                    with Horizontal():
-                        yield Button("Cancel", id="cancel", variant="default")
+            with Vertical(id="action-dialog") as dialog:
+                with Vertical(id="action-buttons"):
+                    yield Button(
+                        "generate [yellow]d[/yellow]ockerfiles",
+                        id="generate",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "[yellow]b[/yellow]uild project image",
+                        id="build",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "build [yellow]a[/yellow]ll images",
+                        id="build_all",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "initialize [yellow]s[/yellow]sh", id="init_ssh", variant="primary"
+                    )
+                    yield Button(
+                        "sync [yellow]g[/yellow]it gate",
+                        id="sync_gate",
+                        variant="primary",
+                    )
+                with Horizontal(id="action-cancel"):
+                    yield Button("Cancel", id="cancel", variant="default")
+            dialog.border_title = self._dialog_title
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -119,45 +199,160 @@ if _HAS_TEXTUAL:
                 }
                 self.dismiss(action_map.get(button_id))
 
+        def on_key(self, event: events.Key) -> None:
+            key = event.key.lower()
+            if key in {"escape", "q"}:
+                self.action_dismiss()
+                event.stop()
+                return
+            if key == "up":
+                if self.app:
+                    self.app.action_focus_previous()
+                event.stop()
+                return
+            if key == "down":
+                if self.app:
+                    self.app.action_focus_next()
+                event.stop()
+                return
+            if key == "d":
+                self.action_generate()
+                event.stop()
+                return
+            if key == "b":
+                self.action_build()
+                event.stop()
+                return
+            if key == "a":
+                self.action_build_all()
+                event.stop()
+                return
+            if key == "s":
+                self.action_init_ssh()
+                event.stop()
+                return
+            if key == "g":
+                self.action_sync_gate()
+                event.stop()
+
+        def action_dismiss(self) -> None:
+            self.dismiss(None)
+
+        def action_generate(self) -> None:
+            self.dismiss("generate")
+
+        def action_build(self) -> None:
+            self.dismiss("build")
+
+        def action_build_all(self) -> None:
+            self.dismiss("build_all")
+
+        def action_init_ssh(self) -> None:
+            self.dismiss("init_ssh")
+
+        def action_sync_gate(self) -> None:
+            self.dismiss("sync_gate")
+
+        def on_mount(self) -> None:
+            first_button = self.query_one("#action-buttons Button", Button)
+            first_button.focus()
+            self._update_density()
+
+        def on_resize(self, _event: object) -> None:
+            self._update_density()
+
+        def _update_density(self) -> None:
+            self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
+
     class TaskActionsScreen(screen.ModalScreen[str | None]):
         """Modal screen for task actions."""
+
+        BINDINGS = [
+            _modal_binding("escape", "dismiss", "Cancel"),
+            _modal_binding("q", "dismiss", "Cancel"),
+            _modal_binding("up", "app.focus_previous", "Previous"),
+            _modal_binding("down", "app.focus_next", "Next"),
+            _modal_binding("n", "new_task", "New task"),
+            _modal_binding("c", "cli", "CLI agent"),
+            _modal_binding("w", "web", "Web UI"),
+            _modal_binding("d", "delete", "Delete task"),
+        ]
+
+        COMPACT_HEIGHT = 18
 
         CSS = """
         TaskActionsScreen {
             align: center middle;
+            padding: 1 0;
         }
 
         #action-dialog {
             width: 60;
             height: auto;
+            max-height: 100%;
             border: heavy $primary;
+            border-title-align: right;
             background: $surface;
+            padding: 1 1 0 1;
+            overflow-y: auto;
         }
 
         #action-buttons {
-            layout: horizontal;
-            padding: 1;
+            layout: vertical;
+            margin-top: 1;
+            align: center middle;
+            width: 100%;
         }
 
-        Button {
+        #action-cancel {
+            margin-top: 0;
+            align: center middle;
             width: 100%;
-            margin: 0 1;
         }
+
+        #action-buttons Button {
+            margin: 0 0 1 0;
+            width: 100%;
+            min-width: 0;
+        }
+
+        #action-dialog Button {
+            width: 100%;
+            min-width: 0;
+        }
+
+        TaskActionsScreen.compact #action-dialog {
+            padding: 0 1;
+        }
+
+        TaskActionsScreen.compact #action-buttons {
+            margin-top: 0;
+        }
+
+        TaskActionsScreen.compact #action-dialog Button {
+            border: none;
+            height: 1;
+            padding: 0 1;
+        }
+
         """
 
+        def __init__(self, title: str | None = None, *, has_tasks: bool = True) -> None:
+            super().__init__()
+            self._dialog_title = title or "Task Actions"
+            self._has_tasks = has_tasks
+
         def compose(self) -> ComposeResult:
-            with Horizontal(id="action-dialog"):
-                with Vertical():
-                    yield Label("Task Actions", id="title")
-                    yield Label(" ")  # Spacer
-                    with Horizontal(id="action-buttons"):
-                        yield Button("[n]ew", id="new", variant="primary")
-                        yield Button("[c]li", id="cli", variant="primary")
-                        yield Button("[w]eb", id="web", variant="primary")
-                        yield Button("[d]el", id="delete", variant="primary")
-                    yield Label(" ")  # Spacer
-                    with Horizontal():
-                        yield Button("Cancel", id="cancel", variant="default")
+            with Vertical(id="action-dialog") as dialog:
+                with Vertical(id="action-buttons"):
+                    yield Button("[yellow]n[/yellow]ew task", id="new", variant="primary")
+                    if self._has_tasks:
+                        yield Button("[yellow]c[/yellow]li agent", id="cli", variant="primary")
+                        yield Button("[yellow]w[/yellow]eb ui", id="web", variant="primary")
+                        yield Button("[yellow]d[/yellow]elete task", id="delete", variant="primary")
+                with Horizontal(id="action-cancel"):
+                    yield Button("Cancel", id="cancel", variant="default")
+            dialog.border_title = self._dialog_title
 
         def on_button_pressed(self, event: Button.Pressed) -> None:
             button_id = event.button.id
@@ -166,6 +361,70 @@ if _HAS_TEXTUAL:
             else:
                 action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
                 self.dismiss(action_map.get(button_id))
+
+        def on_key(self, event: events.Key) -> None:
+            key = event.key.lower()
+            if key in {"escape", "q"}:
+                self.action_dismiss()
+                event.stop()
+                return
+            if key == "up":
+                if self.app:
+                    self.app.action_focus_previous()
+                event.stop()
+                return
+            if key == "down":
+                if self.app:
+                    self.app.action_focus_next()
+                event.stop()
+                return
+            if key == "n":
+                self.action_new_task()
+                event.stop()
+                return
+            if key == "c":
+                self.action_cli()
+                event.stop()
+                return
+            if key == "w":
+                self.action_web()
+                event.stop()
+                return
+            if key == "d":
+                self.action_delete()
+                event.stop()
+
+        def action_dismiss(self) -> None:
+            self.dismiss(None)
+
+        def action_new_task(self) -> None:
+            self.dismiss("new")
+
+        def action_cli(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("cli")
+
+        def action_web(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("web")
+
+        def action_delete(self) -> None:
+            if not self._has_tasks:
+                return
+            self.dismiss("delete")
+
+        def on_mount(self) -> None:
+            first_button = self.query_one("#action-buttons Button", Button)
+            first_button.focus()
+            self._update_density()
+
+        def on_resize(self, _event: object) -> None:
+            self._update_density()
+
+        def _update_density(self) -> None:
+            self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
 
     class LuskTUI(App):
         """Redesigned TUI frontend for luskctl core modules."""
@@ -176,25 +435,33 @@ if _HAS_TEXTUAL:
         # Layout rules for the new streamlined design with borders
         CSS = """
         Screen {
-            layout: grid;
-            grid-size: 2;
-            grid-columns: 1fr 2fr;
-            grid-rows: 1fr 3 1fr;
+            layout: vertical;
+            background: $background;
+        }
+
+        #main {
+            height: 1fr;
+            background: $background;
         }
 
         /* Main container borders */
         #left-pane {
+            width: 1fr;
             padding: 1;
+            background: $background;
         }
 
         #right-pane {
+            width: 1fr;
             padding: 1;
+            background: $background;
         }
 
         /* Projects section with embedded title */
         #project-list {
             border: round $primary;
             border-title-align: right;
+            background: $surface;
             height: 1fr;
             min-height: 10;
         }
@@ -203,6 +470,7 @@ if _HAS_TEXTUAL:
         #project-state {
             border: round $primary;
             border-title-align: right;
+            background: $background;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -212,6 +480,7 @@ if _HAS_TEXTUAL:
         #task-list {
             border: round $primary;
             border-title-align: right;
+            background: $surface;
             height: 1fr;
             min-height: 10;
         }
@@ -220,6 +489,7 @@ if _HAS_TEXTUAL:
         #task-details {
             border: round $primary;
             border-title-align: right;
+            background: $background;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -228,7 +498,10 @@ if _HAS_TEXTUAL:
         /* Status bar styling */
         #status-bar {
             border: solid $primary;
-            height: 1;
+            background: $background;
+            height: 3;
+            padding: 0 1;
+            margin: 0 1;
         }
 
         /* Task details internal layout */
@@ -251,6 +524,8 @@ if _HAS_TEXTUAL:
             super().__init__()
             self.current_project_id: str | None = None
             self.current_task: TaskMeta | None = None
+            self._projects_by_id: dict[str, CodexProject] = {}
+            self._last_task_count: int | None = None
             # Set on mount; used to display status / notifications.
             self._status_bar: StatusBar | None = None
             # Upstream polling state
@@ -270,7 +545,7 @@ if _HAS_TEXTUAL:
             yield Header()
 
             # Main layout using grid
-            with Horizontal():
+            with Horizontal(id="main"):
                 # Left pane: project list (top) + selected project info (bottom)
                 with Vertical(id="left-pane"):
                     project_list = ProjectList(id="project-list")
@@ -449,6 +724,7 @@ if _HAS_TEXTUAL:
         async def refresh_projects(self) -> None:
             proj_widget = self.query_one("#project-list", ProjectList)
             projects = list_projects()
+            self._projects_by_id = {proj.id: proj for proj in projects}
             proj_widget.set_projects(projects)
 
             if projects:
@@ -502,17 +778,21 @@ if _HAS_TEXTUAL:
             else:
                 self.current_task = None
 
-            task_details = self.query_one("#task-details", TaskDetails)
-            if self.current_task is None:
-                # Be explicit so users understand why the right side is empty.
-                task_details.update(
-                    "No tasks for this project yet.\nPress 't' to create a new task."
-                )
-            else:
-                task_details.set_task(self.current_task)
+            self._update_task_details()
 
+            task_count = len(task_list.tasks)
+            self._last_task_count = task_count
             # Update project state panel (Dockerfiles/images/SSH/cache + task count)
-            self._refresh_project_state(task_count=len(task_list.tasks))
+            self._refresh_project_state(task_count=task_count)
+
+        def _update_task_details(self) -> None:
+            details = self.query_one("#task-details", TaskDetails)
+            if self.current_task is None:
+                details.set_task(None)
+                return
+            details.set_task(self.current_task)
+            if self.current_task.status != "deleting":
+                self._queue_task_image_status(self.current_project_id, self.current_task)
 
         # ---------- Status / notifications ----------
 
@@ -555,16 +835,74 @@ if _HAS_TEXTUAL:
             if not self.current_project_id:
                 state_widget.set_state(None, None, None)
                 return
+            if task_count is not None:
+                self._last_task_count = task_count
 
+            project_id = self.current_project_id
+            project = self._projects_by_id.get(project_id)
+            if project is not None:
+                state_widget.set_loading(project, self._last_task_count)
+            else:
+                state_widget.update("Loading project details...")
+
+            self.run_worker(
+                lambda: self._load_project_state(project_id),
+                name=f"project-state:{project_id}",
+                group="project-state",
+                exclusive=True,
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _load_project_state(
+            self, project_id: str
+        ) -> tuple[str, CodexProject | None, dict | None, str | None]:
             try:
-                project = load_project(self.current_project_id)
-                state = get_project_state(self.current_project_id)
+                project = load_project(project_id)
+                state = get_project_state(project_id)
+                return project_id, project, state, None
             except SystemExit as e:
-                # Surface configuration/state problems directly in the TUI.
-                state_widget.update(f"Project state error: {e}")
+                return project_id, None, None, str(e)
+            except Exception as e:
+                return project_id, None, None, str(e)
+
+        def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
+            if not project_id or task is None:
+                return
+            if task.status == "deleting":
                 return
 
-            state_widget.set_state(project, state, task_count, self._staleness_info)
+            task_id = task.task_id
+            self.run_worker(
+                lambda: self._load_task_image_status(project_id, task),
+                name=f"task-image:{project_id}:{task_id}",
+                group="task-image",
+                exclusive=True,
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _load_task_image_status(
+            self, project_id: str, task: TaskMeta
+        ) -> tuple[str, str, bool | None]:
+            image_old = _is_task_image_old(project_id, task)
+            return project_id, task.task_id, image_old
+
+        def _queue_task_delete(self, project_id: str, task_id: str) -> None:
+            self.run_worker(
+                lambda: self._delete_task(project_id, task_id),
+                name=f"task-delete:{project_id}:{task_id}",
+                group="task-delete",
+                thread=True,
+                exit_on_error=False,
+            )
+
+        def _delete_task(self, project_id: str, task_id: str) -> tuple[str, str, str | None]:
+            try:
+                task_delete(project_id, task_id)
+                return project_id, task_id, None
+            except Exception as e:
+                return project_id, task_id, str(e)
 
         # ---------- Upstream polling ----------
 
@@ -757,27 +1095,7 @@ if _HAS_TEXTUAL:
 
         async def action_sync_gate(self) -> None:
             """Manually sync gate from upstream."""
-            if not self.current_project_id:
-                self.notify("No project selected.")
-                return
-
-            try:
-                project = load_project(self.current_project_id)
-                if project.security_class != "gatekeeping":
-                    self.notify("Sync only available for gatekeeping projects.")
-                    return
-
-                self.notify("Syncing gate from upstream...")
-
-                # Run sync in background worker
-                self.run_worker(
-                    self._sync_worker(self.current_project_id, None, is_auto=False),
-                    name="manual_sync",
-                    exclusive=True,
-                )
-
-            except Exception as e:
-                self.notify(f"Sync error: {e}")
+            await self._action_sync_gate()
 
         # ---------- Selection handlers (from widgets) ----------
 
@@ -804,8 +1122,61 @@ if _HAS_TEXTUAL:
                 self._last_selected_tasks[self.current_project_id] = self.current_task.task_id
                 self._save_selection_state()
 
-            details = self.query_one("#task-details", TaskDetails)
-            details.set_task(self.current_task)
+            self._update_task_details()
+
+        @on(Worker.StateChanged)
+        async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
+            worker = event.worker
+            if event.state != WorkerState.SUCCESS:
+                if worker.group == "project-state" and event.state == WorkerState.ERROR:
+                    state_widget = self.query_one("#project-state", ProjectState)
+                    state_widget.update(f"Project state error: {worker.error}")
+                return
+
+            if worker.group == "project-state":
+                result = worker.result
+                if not result:
+                    return
+                project_id, project, state, error = result
+                if project_id != self.current_project_id:
+                    return
+                state_widget = self.query_one("#project-state", ProjectState)
+                if error:
+                    state_widget.update(f"Project state error: {error}")
+                    return
+                if project is None or state is None:
+                    state_widget.set_state(None, None, None)
+                    return
+                self._projects_by_id[project_id] = project
+                state_widget.set_state(project, state, self._last_task_count, self._staleness_info)
+                return
+
+            if worker.group == "task-image":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, image_old = result
+                if project_id != self.current_project_id:
+                    return
+                if not self.current_task or self.current_task.task_id != task_id:
+                    return
+                details = self.query_one("#task-details", TaskDetails)
+                details.set_task(self.current_task, image_old=image_old)
+                return
+
+            if worker.group == "task-delete":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, error = result
+                if error:
+                    self.notify(f"Delete error for task {task_id}: {error}")
+                else:
+                    self.notify(f"Deleted task {task_id}")
+
+                if project_id != self.current_project_id:
+                    return
+                await self.refresh_tasks()
 
         @on(TaskDetails.CopyDiffRequested)
         async def handle_copy_diff_requested(self, message: TaskDetails.CopyDiffRequested) -> None:
@@ -862,11 +1233,27 @@ if _HAS_TEXTUAL:
 
         async def action_show_project_actions(self) -> None:
             """Show modal dialog with project actions."""
-            await self.push_screen(ProjectActionsScreen(), self._on_project_action_screen_result)
+            title = self.current_project_id or "Project Actions"
+            await self.push_screen(
+                ProjectActionsScreen(title=title),
+                self._on_project_action_screen_result,
+            )
 
         async def action_show_task_actions(self) -> None:
             """Show modal dialog with task actions."""
-            await self.push_screen(TaskActionsScreen(), self._on_task_action_screen_result)
+            title = "Task Actions"
+            if self.current_task is not None:
+                backend = self.current_task.backend or self.current_task.mode or "unknown"
+                title = f"Task ID: {self.current_task.task_id}, {backend}"
+            try:
+                task_list = self.query_one("#task-list", TaskList)
+                has_tasks = bool(task_list.tasks)
+            except Exception:
+                has_tasks = True
+            await self.push_screen(
+                TaskActionsScreen(title=title, has_tasks=has_tasks),
+                self._on_task_action_screen_result,
+            )
 
         async def _on_project_action_screen_result(self, result: str | None) -> None:
             """Handle result from project actions screen."""
@@ -925,11 +1312,6 @@ if _HAS_TEXTUAL:
                 return
 
             try:
-                project = load_project(self.current_project_id)
-                if project.security_class != "gatekeeping":
-                    self.notify("Sync only available for gatekeeping projects.")
-                    return
-
                 self.notify("Syncing gate...")
 
                 # Run sync in background worker
@@ -945,24 +1327,15 @@ if _HAS_TEXTUAL:
         async def _sync_gate_worker(self, project_id: str) -> None:
             """Background worker to sync gate (init if needed)."""
             try:
-                # Check if gate exists
-                project = load_project(project_id)
-                gate_exists = project.gate_path.exists()
-
-                if not gate_exists:
-                    # Init gate
-                    result = init_project_gate(project_id)
-                    if project_id == self.current_project_id:
-                        self.notify(f"Gate initialized at {result['path']}")
-                else:
-                    # Sync gate
-                    result = sync_gate_branches(project_id)
+                result = sync_project_gate(project_id)
+                if project_id == self.current_project_id:
                     if result["success"]:
-                        if project_id == self.current_project_id:
+                        if result["created"]:
+                            self.notify("Gate created and synced from upstream")
+                        else:
                             self.notify("Gate synced from upstream")
                     else:
-                        if project_id == self.current_project_id:
-                            self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
+                        self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
 
                 # Refresh state after gate operation
                 if project_id == self.current_project_id:
@@ -1033,26 +1406,6 @@ if _HAS_TEXTUAL:
             self.notify(f"Initialized SSH dir for {self.current_project_id}")
             self._refresh_project_state()
 
-        async def action_init_gate(self) -> None:
-            """Initialize or update the git gate mirror for the project."""
-            if not self.current_project_id:
-                self.notify("No project selected.")
-                return
-
-            with self.suspend():
-                try:
-                    res = init_project_gate(self.current_project_id)
-                    print(
-                        f"Gate ready at {res['path']} "
-                        f"(upstream: {res['upstream_url']}; created: {res['created']})"
-                    )
-                except SystemExit as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-
-            self.notify(f"Git gate initialized for {self.current_project_id}")
-            self._refresh_project_state()
-
         async def action_new_task(self) -> None:
             if not self.current_project_id:
                 self.notify("No project selected.")
@@ -1090,45 +1443,19 @@ if _HAS_TEXTUAL:
                 return
 
             tid = self.current_task.task_id
-            try:
-                self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
-                # Let the user know we're working, since stopping containers
-                # and cleaning up state can take a little while and the TUI
-                # will be blocked during this operation. We keep the logic
-                # simple and synchronous, but yield once to the event loop so
-                # the status bar has a chance to render the message before
-                # the blocking work starts.
-                self.notify(f"Deleting task {tid}...")
+            if self.current_task.status == "deleting":
+                self.notify(f"Task {tid} is already deleting.")
+                return
 
-                try:
-                    import asyncio as _asyncio
+            self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
+            self.notify(f"Deleting task {tid}...")
 
-                    # Yield control so Textual can process the notify() and
-                    # redraw the status bar before we start the blocking
-                    # delete operation.
-                    await _asyncio.sleep(0)
-                except Exception:
-                    # If asyncio isn't available for some reason, we just
-                    # proceed synchronously.
-                    pass
+            self.current_task.status = "deleting"
+            task_list = self.query_one("#task-list", TaskList)
+            task_list.mark_deleting(tid)
+            self._update_task_details()
 
-                # Use shared library helper so containers and metadata are
-                # cleaned up consistently with the CLI. This call is
-                # synchronous and may take a little while if container
-                # teardown or filesystem cleanup is slow, but both
-                # frontends share the exact same logic here.
-                self._log_debug("delete: calling task_delete()")
-                task_delete(self.current_project_id, tid)
-                self._log_debug("delete: task_delete() returned")
-                self.notify(f"Deleted task {tid}")
-            except Exception as e:
-                self._log_debug(f"delete: error {e!r}")
-                self.notify(f"Delete error: {e}")
-
-            self.current_task = None
-            self._log_debug("delete: refreshing tasks")
-            await self.refresh_tasks()
-            self._log_debug("delete: refresh_tasks() finished")
+            self._queue_task_delete(self.current_project_id, tid)
 
         async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:
             """Common helper to copy a git diff to the clipboard."""

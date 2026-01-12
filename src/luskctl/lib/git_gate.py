@@ -94,7 +94,7 @@ def validate_gate_upstream_match(project_id: str) -> None:
             )
 
 
-# ---------- Git gate initialization (host-side) ----------
+# ---------- Git gate sync (host-side) ----------
 
 
 def _git_env_with_ssh(project) -> dict:
@@ -124,6 +124,33 @@ def _git_env_with_ssh(project) -> dict:
         # Also clear SSH_AUTH_SOCK so agent identities are not considered
         env["SSH_AUTH_SOCK"] = ""
     return env
+
+
+def _require_project_ssh_config(project) -> None:
+    upstream = project.upstream_url or ""
+    is_ssh_upstream = upstream.startswith("git@") or upstream.startswith("ssh://")
+    if not is_ssh_upstream:
+        return
+
+    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    ssh_cfg_path = Path(ssh_dir) / "config"
+    if not ssh_cfg_path.is_file():
+        raise SystemExit(
+            "SSH upstream detected but project SSH config is missing.\n"
+            f"Expected SSH config at: {ssh_cfg_path}\n"
+            f"Run 'luskctl ssh-init {project.id}' first to generate keys and config."
+        )
+
+
+def _clone_gate_mirror(project, gate_dir: Path) -> None:
+    env = _git_env_with_ssh(project)
+    cmd = ["git", "clone", "--mirror", project.upstream_url, str(gate_dir)]
+    try:
+        subprocess.run(cmd, check=True, env=env)
+    except FileNotFoundError:
+        raise SystemExit("git not found on host; please install git")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"git clone --mirror failed: {e}")
 
 
 def get_gate_last_commit(project_id: str) -> dict | None:
@@ -176,14 +203,18 @@ def get_gate_last_commit(project_id: str) -> dict | None:
         return None
 
 
-def init_project_gate(project_id: str, force: bool = False) -> dict:
-    """Create or update a host-side git mirror gate for a project.
+def sync_project_gate(
+    project_id: str,
+    branches: list[str] | None = None,
+    force_reinit: bool = False,
+) -> dict:
+    """Sync a host-side git mirror gate for a project.
 
     - Uses the project's SSH configuration (from ssh-init) via GIT_SSH_COMMAND.
-    - If gate doesn't exist or --force is given, performs a fresh `git clone --mirror`.
-    - Otherwise, runs `git remote update --prune` to sync.
+    - If gate doesn't exist (or --force-reinit), performs a fresh `git clone --mirror`.
+    - Always runs the sync logic afterward for consistent side effects.
 
-    Returns a dict with keys: path, upstream_url, created (bool).
+    Returns a dict with keys: path, upstream_url, created (bool), success, updated_branches, errors.
     """
     project = load_project(project_id)
     if not project.upstream_url:
@@ -193,34 +224,13 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
     validate_gate_upstream_match(project_id)
 
     gate_dir = project.gate_path
+    gate_exists = gate_dir.exists()
     gate_dir.parent.mkdir(parents=True, exist_ok=True)
 
-    # Determine if upstream requires SSH and ensure we only use the project's SSH dir
-    upstream = project.upstream_url
-    is_ssh_upstream = False
-    try:
-        is_ssh_upstream = upstream.startswith("git@") or upstream.startswith("ssh://")
-    except Exception:
-        is_ssh_upstream = False
-
-    # Resolve the project's ssh dir and config path (created by ssh-init)
-    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
-    ssh_cfg_path = Path(ssh_dir) / "config"
-
-    if is_ssh_upstream:
-        # For SSH upstreams, require the project-specific config; do NOT fall back to ~/.ssh
-        if not ssh_cfg_path.is_file():
-            raise SystemExit(
-                "SSH upstream detected but project SSH config is missing.\n"
-                f"Expected SSH config at: {ssh_cfg_path}\n"
-                f"Run 'luskctl ssh-init {project.id}' first to generate keys and config."
-            )
-
-    # Build git environment that forces use of the project's SSH config (if present)
-    env = _git_env_with_ssh(project)
+    _require_project_ssh_config(project)
 
     created = False
-    if force and gate_dir.exists():
+    if force_reinit and gate_exists:
         # Remove to ensure clean mirror
         try:
             if gate_dir.is_dir():
@@ -228,27 +238,22 @@ def init_project_gate(project_id: str, force: bool = False) -> dict:
         except Exception:
             # Best-effort cleanup; ignore delete failures.
             pass
+        gate_exists = False
 
-    if not gate_dir.exists():
+    if not gate_exists:
         # Create a mirror clone
-        cmd = ["git", "clone", "--mirror", project.upstream_url, str(gate_dir)]
-        try:
-            subprocess.run(cmd, check=True, env=env)
-        except FileNotFoundError:
-            raise SystemExit("git not found on host; please install git")
-        except subprocess.CalledProcessError as e:
-            raise SystemExit(f"git clone --mirror failed: {e}")
+        _clone_gate_mirror(project, gate_dir)
         created = True
-    else:
-        # Update existing mirror
-        try:
-            subprocess.run(
-                ["git", "-C", str(gate_dir), "remote", "update", "--prune"], check=True, env=env
-            )
-        except subprocess.CalledProcessError as e:
-            raise SystemExit(f"git remote update failed: {e}")
 
-    return {"path": str(gate_dir), "upstream_url": project.upstream_url, "created": created}
+    sync_result = sync_gate_branches(project_id, branches)
+    return {
+        "path": str(gate_dir),
+        "upstream_url": project.upstream_url,
+        "created": created,
+        "success": sync_result["success"],
+        "updated_branches": sync_result["updated_branches"],
+        "errors": sync_result["errors"],
+    }
 
 
 # ---------- Upstream comparison functions ----------

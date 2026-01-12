@@ -164,7 +164,7 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(ssh_mounts, [])
 
     def test_build_task_env_gatekeeping_with_ssh(self) -> None:
-        """Gatekept mode with mount_in_gatekeeping enabled should mount SSH."""
+        """Gatekeeping mode with mount_in_gatekeeping enabled should mount SSH."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"

@@ -31,7 +31,7 @@ from ..lib.config import (
     user_projects_root as _user_projects_root,
 )
 from ..lib.docker import build_images, generate_dockerfiles
-from ..lib.git_gate import init_project_gate
+from ..lib.git_gate import sync_project_gate
 from ..lib.projects import list_projects
 from ..lib.ssh import init_project_ssh
 from ..lib.tasks import (
@@ -110,9 +110,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Quick start (order of operations):\n"
-            "- Online (HTTPS): generate → build → gate-init (optional) → task new → task run-*\n"
-            "- Online (SSH):   generate → build → ssh-init → gate-init (recommended) → task new → task run-*\n"
-            "- Gatekept:       generate → build → ssh-init → gate-init (required) →  task new → task run-*\n"
+            "- Online (HTTPS): generate → build → gate-sync (optional) → task new → task run-*\n"
+            "- Online (SSH):   generate → build → ssh-init → gate-sync (recommended) → task new → task run-*\n"
+            "- Gatekeeping:    generate → build → ssh-init → gate-sync (required) →  task new → task run-*\n"
         ),
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -166,11 +166,11 @@ def main() -> None:
     )
     p_ssh.add_argument("--force", action="store_true", help="Overwrite existing key and config")
 
-    # gate-init
+    # gate-sync
     p_gate = sub.add_parser(
-        "gate-init",
+        "gate-sync",
         help=(
-            "Initialize or update the host-side git gate for a project. "
+            "Sync the host-side git gate for a project (creates it if missing). "
             "For SSH upstreams this uses ONLY the project's ssh dir created by 'ssh-init' (not ~/.ssh)."
         ),
     )
@@ -179,7 +179,12 @@ def main() -> None:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
         pass
-    p_gate.add_argument("--force", action="store_true", help="Recreate the mirror from scratch")
+    p_gate.add_argument(
+        "--force-reinit",
+        dest="force_reinit",
+        action="store_true",
+        help="Recreate the mirror from scratch",
+    )
 
     # auth-codex
     p_auth_codex = sub.add_parser(
@@ -305,8 +310,13 @@ def main() -> None:
             key_name=getattr(args, "key_name", None),
             force=getattr(args, "force", False),
         )
-    elif args.cmd == "gate-init":
-        res = init_project_gate(args.project_id, force=getattr(args, "force", False))
+    elif args.cmd == "gate-sync":
+        res = sync_project_gate(
+            args.project_id,
+            force_reinit=getattr(args, "force_reinit", False),
+        )
+        if not res["success"]:
+            raise SystemExit(f"Gate sync failed: {', '.join(res['errors'])}")
         print(
             f"Gate ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})"
         )

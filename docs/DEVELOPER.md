@@ -189,6 +189,10 @@ python -m luskctl.cli build uc
 python -m luskctl.tui
 ```
 
+### TUI Notes
+
+- When rendering emoji glyphs in list labels, use `draw_emoji` from `src/luskctl/tui/widgets.py` to pad to a consistent width across terminals.
+
 ### IDE Setup (PyCharm/VSCode)
 
 1. Open the repo and set up a Python 3.12+ interpreter

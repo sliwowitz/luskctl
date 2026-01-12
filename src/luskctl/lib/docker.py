@@ -1,5 +1,7 @@
+import hashlib
 import shutil
 import subprocess
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
@@ -63,19 +65,40 @@ def _load_docker_config(project_root: Path) -> dict:
         return {}
 
 
-def generate_dockerfiles(project_id: str) -> None:
-    project = load_project(project_id)
+def _hash_traversable_tree(root) -> str:
+    hasher = hashlib.sha256()
 
+    def _walk(node, prefix: str) -> None:
+        for child in sorted(node.iterdir(), key=lambda item: item.name):
+            rel = f"{prefix}{child.name}"
+            if child.is_dir():
+                _walk(child, f"{rel}/")
+            else:
+                hasher.update(rel.encode("utf-8"))
+                hasher.update(b"\0")
+                hasher.update(child.read_bytes())
+                hasher.update(b"\0")
+
+    _walk(root, "")
+    return hasher.hexdigest()
+
+
+@lru_cache(maxsize=1)
+def _scripts_hash() -> str:
+    scripts_root = resources.files("luskctl") / "resources" / "scripts"
+    return _hash_traversable_tree(scripts_root)
+
+
+def _render_dockerfiles(project) -> dict[str, str]:
     # Load templates from package resources (luskctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
     tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
-    l0_txt = (tmpl_pkg / "l0.dev.Dockerfile.template").read_text()
-    l1_cli_txt = (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text()
-    l1_ui_txt = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
-    l2_txt = (tmpl_pkg / "l2.project.Dockerfile.template").read_text()
-
-    out_dir = build_root() / project.id
-    _ensure_dir(out_dir)
+    templates = {
+        "L0.Dockerfile": (tmpl_pkg / "l0.dev.Dockerfile.template").read_text(),
+        "L1.cli.Dockerfile": (tmpl_pkg / "l1.agent-cli.Dockerfile.template").read_text(),
+        "L1.ui.Dockerfile": (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text(),
+        "L2.Dockerfile": (tmpl_pkg / "l2.project.Dockerfile.template").read_text(),
+    }
 
     # Read additional docker-related settings directly from the project.yml
     docker_cfg = _load_docker_config(project.root)
@@ -121,15 +144,52 @@ def generate_dockerfiles(project_id: str) -> None:
         "USER_SNIPPET": user_snippet,
     }
 
-    # Apply simple token replacement
-    for name, content in (
-        ("L0.Dockerfile", l0_txt),
-        ("L1.cli.Dockerfile", l1_cli_txt),
-        ("L1.ui.Dockerfile", l1_ui_txt),
-        ("L2.Dockerfile", l2_txt),
-    ):
+    rendered = {}
+    for name, content in templates.items():
         for k, v in variables.items():
             content = content.replace(f"{{{{{k}}}}}", str(v))
+        rendered[name] = content
+    return rendered
+
+
+def build_context_hash(project_id: str) -> str:
+    project = load_project(project_id)
+    rendered = _render_dockerfiles(project)
+    docker_cfg = _load_docker_config(project.root)
+    base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
+
+    hasher = hashlib.sha256()
+    hasher.update(f"base_image={base_image}".encode())
+    hasher.update(b"\0")
+    for name in sorted(rendered):
+        hasher.update(name.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(rendered[name].encode("utf-8"))
+        hasher.update(b"\0")
+    hasher.update(_scripts_hash().encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def dockerfiles_match_templates(project_id: str) -> bool:
+    project = load_project(project_id)
+    out_dir = build_root() / project.id
+    rendered = _render_dockerfiles(project)
+    for name, expected in rendered.items():
+        path = out_dir / name
+        if not path.is_file():
+            return False
+        if path.read_text() != expected:
+            return False
+    return True
+
+
+def generate_dockerfiles(project_id: str) -> None:
+    project = load_project(project_id)
+    out_dir = build_root() / project.id
+    _ensure_dir(out_dir)
+
+    rendered = _render_dockerfiles(project)
+    for name, content in rendered.items():
         (out_dir / name).write_text(content)
 
     # Stage auxiliary scripts into build context so Dockerfile COPY works.
@@ -146,6 +206,7 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     project = load_project(project_id)
     docker_cfg = _load_docker_config(project.root)
     stage_dir = build_root() / project.id
+    context_hash = build_context_hash(project_id)
 
     l0 = stage_dir / "L0.Dockerfile"
     l1_cli = stage_dir / "L1.cli.Dockerfile"
@@ -208,6 +269,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
             str(l2),
             "--build-arg",
             f"BASE_IMAGE={l1_cli_image}",
+            "--label",
+            f"luskctl.build_context_hash={context_hash}",
             "-t",
             l2_cli_image,
             context_dir,
@@ -219,6 +282,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
             str(l2),
             "--build-arg",
             f"BASE_IMAGE={l1_ui_image}",
+            "--label",
+            f"luskctl.build_context_hash={context_hash}",
             "-t",
             l2_ui_image,
             context_dir,
@@ -233,6 +298,8 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
                 str(l2),
                 "--build-arg",
                 f"BASE_IMAGE={l0_image}",
+                "--label",
+                f"luskctl.build_context_hash={context_hash}",
                 "-t",
                 l2_dev_image,
                 context_dir,

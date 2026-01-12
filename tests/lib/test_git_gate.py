@@ -11,15 +11,15 @@ from luskctl.lib.git_gate import (
     get_gate_branch_head,
     get_gate_last_commit,
     get_upstream_head,
-    init_project_gate,
     sync_gate_branches,
+    sync_project_gate,
     validate_gate_upstream_match,
 )
 from test_utils import write_project
 
 
 class GitGateTests(unittest.TestCase):
-    def test_init_project_gate_ssh_requires_config(self) -> None:
+    def test_sync_project_gate_ssh_requires_config(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -48,9 +48,9 @@ class GitGateTests(unittest.TestCase):
                 ),
                 self.assertRaises(SystemExit),
             ):
-                init_project_gate(project_id)
+                sync_project_gate(project_id)
 
-    def test_init_project_gate_https_clone(self) -> None:
+    def test_sync_project_gate_https_clone(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -71,18 +71,45 @@ class GitGateTests(unittest.TestCase):
                     "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
+                gate_dir = state_dir / "gate" / f"{project_id}.git"
+
                 with unittest.mock.patch("luskctl.lib.git_gate.subprocess.run") as run_mock:
-                    run_mock.return_value.returncode = 0
-                    result = init_project_gate(project_id)
+                    config_result = unittest.mock.Mock()
+                    config_result.returncode = 1
+                    config_result.stdout = ""
+                    config_result.stderr = ""
+                    clone_result = unittest.mock.Mock()
+                    clone_result.returncode = 0
+                    sync_result = unittest.mock.Mock()
+                    sync_result.returncode = 0
+                    sync_result.stdout = "Fetching origin\n"
+                    sync_result.stderr = ""
+
+                    def _run_side_effect(*args, **kwargs):
+                        cmd = args[0]
+                        if cmd[:3] == ["git", "clone", "--mirror"]:
+                            gate_dir.mkdir(parents=True, exist_ok=True)
+                            return clone_result
+                        if cmd[:4] == ["git", "-C", str(gate_dir), "remote"]:
+                            return sync_result
+                        return config_result
+
+                    run_mock.side_effect = _run_side_effect
+                    result = sync_project_gate(project_id)
 
                 self.assertTrue(result["created"])
+                self.assertTrue(result["success"])
                 self.assertIn("path", result)
                 self.assertEqual(result["upstream_url"], "https://example.com/repo.git")
 
-                call = run_mock.call_args
-                self.assertIsNotNone(call)
-                args, kwargs = call
-                self.assertEqual(args[0][:3], ["git", "clone", "--mirror"])
+                clone_call = None
+                for call in run_mock.call_args_list:
+                    args, kwargs = call
+                    if args and args[0][:3] == ["git", "clone", "--mirror"]:
+                        clone_call = call
+                        break
+                self.assertIsNotNone(clone_call)
+                args, kwargs = clone_call
                 self.assertIn("env", kwargs)
 
     def test_get_gate_last_commit_no_gate(self) -> None:
@@ -1195,8 +1222,8 @@ gate:
                 self.assertIn("repo-A.git", error_msg)
                 self.assertIn("repo-B.git", error_msg)
 
-    def test_init_project_gate_rejects_mismatched_upstream(self) -> None:
-        """Test init_project_gate refuses when another project uses gate with different upstream."""
+    def test_sync_project_gate_rejects_mismatched_upstream(self) -> None:
+        """Test sync_project_gate refuses when another project uses gate with different upstream."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -1241,7 +1268,7 @@ gate:
                 },
             ):
                 with self.assertRaises(SystemExit) as ctx:
-                    init_project_gate("new-proj")
+                    sync_project_gate("new-proj")
 
                 error_msg = str(ctx.exception)
                 self.assertIn("Gate path conflict", error_msg)

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
 import inspect
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from rich.cells import cell_len
+from rich.style import Style
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
@@ -21,6 +25,25 @@ class TaskMeta:
     workspace: str
     web_port: int | None
     backend: str | None = None
+
+
+class ProjectListItem(ListItem):
+    """List item that carries project metadata."""
+
+    def __init__(self, project_id: str, label: str, generation: int) -> None:
+        super().__init__(Static(label, markup=False))
+        self.project_id = project_id
+        self.generation = generation
+
+
+class TaskListItem(ListItem):
+    """List item that carries task metadata."""
+
+    def __init__(self, project_id: str, task: TaskMeta, label: str, generation: int) -> None:
+        super().__init__(Static(label, markup=False))
+        self.project_id = project_id
+        self.task_meta = task
+        self.generation = generation
 
 
 def get_backend_name(task: TaskMeta) -> str | None:
@@ -42,9 +65,87 @@ def get_backend_emoji(task: TaskMeta) -> str:
     emoji_map = {
         "mistral": "🏰",  # Castle emoji for Mistral
         "claude": "✴️",  # Eight-point star emoji for Claude
-        "codex": "🕸️",  # Spider web emoji for Codex
+        "codex": "🌸",  # Blossom emoji for Codex
     }
-    return emoji_map.get(backend, "🦗")  # Cricket emoji for unknown
+    return emoji_map.get(backend, "🕸️")  # Spider web emoji for unknown
+
+
+def draw_emoji(emoji: str, width: int = 2) -> str:
+    """Pad emojis to a consistent cell width for list alignment."""
+    if not emoji:
+        return ""
+    try:
+        emoji_width = cell_len(emoji)
+    except Exception:
+        return emoji
+    if emoji_width >= width:
+        return emoji
+    return f"{emoji}{' ' * (width - emoji_width)}"
+
+
+def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
+    if project_id is None:
+        return None
+    if task.mode not in {"cli", "web"}:
+        return None
+
+    container_name = f"{project_id}-{task.mode}-{task.task_id}"
+    try:
+        result = subprocess.run(
+            [
+                "podman",
+                "container",
+                "inspect",
+                "--format",
+                "{{.State.Running}}\t{{.Image}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+
+    running_str, _, image_id = result.stdout.partition("\t")
+    if running_str.strip().lower() != "true":
+        return None
+    image_id = image_id.strip()
+    if not image_id:
+        return None
+
+    try:
+        from ..lib.docker import build_context_hash
+
+        current_hash = build_context_hash(project_id)
+    except Exception:
+        return None
+
+    try:
+        label_result = subprocess.run(
+            [
+                "podman",
+                "image",
+                "inspect",
+                "--format",
+                '{{index .Config.Labels "luskctl.build_context_hash"}}',
+                image_id,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+    if label_result.returncode != 0:
+        return None
+
+    label = label_result.stdout.strip()
+    if not label or label == "<no value>":
+        return True
+    return label != current_hash
 
 
 class ProjectList(ListView):
@@ -58,10 +159,12 @@ class ProjectList(ListView):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.projects: list[CodexProject] = []
+        self._generation = 0
 
     def set_projects(self, projects: list[CodexProject]) -> None:
         """Populate the list with projects."""
         self.projects = projects
+        self._generation += 1
         self.clear()
         for proj in projects:
             # Use emojis instead of text labels
@@ -69,9 +172,9 @@ class ProjectList(ListView):
                 security_emoji = "🚪"  # Door emoji for gatekeeping
             else:
                 security_emoji = "🌐"  # Globe emoji for online
-            label = f"{proj.id} {security_emoji}"
-            # Disable Rich markup to avoid surprises
-            self.append(ListItem(Static(label, markup=False)))
+            emoji_display = draw_emoji(security_emoji)
+            label = f"{emoji_display} {proj.id}"
+            self.append(ProjectListItem(proj.id, label, self._generation))
 
     def select_project(self, project_id: str) -> None:
         """Select a project by id."""
@@ -82,10 +185,24 @@ class ProjectList(ListView):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a row, send a semantic ProjectSelected message."""
-        idx = self.index
-        if 0 <= idx < len(self.projects):
-            proj_id = self.projects[idx].id
-            self.post_message(self.ProjectSelected(proj_id))
+        self._post_selected_project(event.item)
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
+        """Update selection immediately when highlight changes."""
+        if event.item is None:
+            return
+        self._post_selected_project(event.item)
+
+    def _post_selected_project(self, item: ListItem | None = None) -> None:
+        if item is None:
+            item = self.highlighted_child
+        if not isinstance(item, ProjectListItem):
+            return
+        if item.parent is not self:
+            return
+        if item.generation != self._generation:
+            return
+        self.post_message(self.ProjectSelected(item.project_id))
 
 
 class ProjectActions(Static):
@@ -118,9 +235,6 @@ class ProjectActions(Static):
                 "[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True
             )  # init SSH dir (s)
             yield Button(
-                "[yellow]c[/yellow] gate", id="btn-gate-init", compact=True
-            )  # init git gate (c)
-            yield Button(
                 "[yellow]S[/yellow]ync", id="btn-sync-gate", compact=True
             )  # sync gate from upstream (S)
 
@@ -148,7 +262,6 @@ class ProjectActions(Static):
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
             "btn-ssh-init": "action_init_ssh",
-            "btn-gate-init": "action_init_gate",
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
             "btn-task-run-cli": "action_run_cli",
@@ -178,11 +291,42 @@ class TaskList(ListView):
         super().__init__(**kwargs)
         self.project_id: str | None = None
         self.tasks: list[TaskMeta] = []
+        self._generation = 0
+
+    def _format_task_label(self, task: TaskMeta) -> str:
+        task_emoji = ""
+        if task.status == "deleting":
+            task_emoji = "🗑️"
+        elif task.mode == "cli":
+            task_emoji = "⌨️"  # Keyboard emoji for CLI
+        elif task.mode == "web":
+            task_emoji = get_backend_emoji(task)
+        elif task.status == "created":
+            task_emoji = "🦗"
+
+        status_display = task.status
+        extra_parts: list[str] = []
+
+        if task.status == "created" and task.web_port:
+            status_display = "running"
+            extra_parts.append(f"port={task.web_port}")
+        elif task.status == "created" and task.mode == "cli":
+            status_display = "running"
+
+        extra_str = "; ".join(extra_parts)
+
+        emoji_display = draw_emoji(task_emoji)
+        label = f"{task.task_id} {emoji_display} [{status_display}"
+        if extra_str:
+            label += f"; {extra_str}"
+        label += "]"
+        return label
 
     def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
         """Populate the list from raw metadata dicts."""
         self.project_id = project_id
         self.tasks = []
+        self._generation += 1
         self.clear()
 
         for meta in tasks_meta:
@@ -196,48 +340,80 @@ class TaskList(ListView):
             )
             self.tasks.append(tm)
 
-            # Use emojis for task types and update status display
-            task_emoji = ""
-            if tm.mode == "cli":
-                task_emoji = "⌨️"  # Keyboard emoji for CLI
-            elif tm.mode == "web":
-                # Use backend-specific emojis for web tasks
-                task_emoji = get_backend_emoji(tm)
+            label = self._format_task_label(tm)
+            self.append(TaskListItem(project_id, tm, label, self._generation))
 
-            # Update status display to be more consistent
-            status_display = tm.status
-            extra_parts = []
+    def mark_deleting(self, task_id: str) -> bool:
+        # Create a new TaskMeta instance with updated status instead of mutating
+        # the existing shared instance in place.
+        new_meta: TaskMeta | None = None
 
-            # For running tasks, show "running" consistently
-            if tm.status == "created" and tm.web_port:
-                status_display = "running"
-                extra_parts.append(f"port={tm.web_port}")
-            elif tm.status == "created" and tm.mode == "cli":
-                status_display = "running"
+        # First, update the entry in the internal tasks list if present.
+        for index, tm in enumerate(self.tasks):
+            if tm.task_id == task_id:
+                new_meta = TaskMeta(
+                    task_id=tm.task_id,
+                    status="deleting",
+                    mode=tm.mode,
+                    workspace=tm.workspace,
+                    web_port=tm.web_port,
+                    backend=tm.backend,
+                )
+                self.tasks[index] = new_meta
+                break
 
-            extra_str = "; ".join(extra_parts)
+        found = False
 
-            # This string has [...] and "mode=..." so we MUST disable markup.
-            label = f"{tm.task_id} {task_emoji} [{status_display}"
-            if extra_str:
-                label += f"; {extra_str}"
-            label += "]"
+        # Then, update any visible list items for this task to point at the new
+        # TaskMeta instance and refresh their labels.
+        for item in self.query(TaskListItem):
+            if item.task_meta.task_id != task_id:
+                continue
 
-            self.append(ListItem(Static(label, markup=False)))
+            # If we didn't find the task in self.tasks for some reason, fall back
+            # to cloning from the item's TaskMeta.
+            if new_meta is None:
+                tm = item.task_meta
+                new_meta = TaskMeta(
+                    task_id=tm.task_id,
+                    status="deleting",
+                    mode=tm.mode,
+                    workspace=tm.workspace,
+                    web_port=tm.web_port,
+                    backend=tm.backend,
+                )
 
-    def get_selected_task(self) -> TaskMeta | None:
-        idx = self.index
-        if 0 <= idx < len(self.tasks):
-            return self.tasks[idx]
-        return None
+            item.task_meta = new_meta
+            label = self._format_task_label(new_meta)
+            item.query_one(Static).update(label)
+            found = True
+
+        return found
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
+        self._post_selected_task(event.item)
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
+        """Update selection immediately when highlight changes."""
+        if event.item is None:
+            return
+        self._post_selected_task(event.item)
+
+    def _post_selected_task(self, item: ListItem | None = None) -> None:
         if self.project_id is None:
             return
-        task = self.get_selected_task()
-        if task is not None:
-            self.post_message(self.TaskSelected(self.project_id, task))
+        if item is None:
+            item = self.highlighted_child
+        if not isinstance(item, TaskListItem):
+            return
+        if item.parent is not self:
+            return
+        if item.generation != self._generation:
+            return
+        if item.project_id != self.project_id:
+            return
+        self.post_message(self.TaskSelected(self.project_id, item.task_meta))
 
 
 class TaskDetails(Static):
@@ -263,11 +439,16 @@ class TaskDetails(Static):
             yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
             yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
 
-    def set_task(self, task: TaskMeta | None) -> None:
+    def set_task(
+        self,
+        task: TaskMeta | None,
+        empty_message: str | None = None,
+        image_old: bool | None = None,
+    ) -> None:
         content = self.query_one("#task-details-content", Static)
 
         if task is None:
-            content.update("No task selected.")
+            content.update(empty_message or "")
             self.current_project_id = None
             self.current_task_id = None
             return
@@ -279,13 +460,18 @@ class TaskDetails(Static):
         # Use emojis for task types
         task_emoji = ""
         mode_display = task.mode or "unset"
-        if task.mode == "cli":
+        if task.status == "deleting":
+            task_emoji = "🗑️ "
+            mode_display = "Deleting"
+        elif task.mode == "cli":
             task_emoji = "⌨️ "  # Keyboard emoji for CLI
             mode_display = "CLI"
         elif task.mode == "web":
             # Use backend-specific emojis for web tasks
             emoji = get_backend_emoji(task)
             task_emoji = f"{emoji} "
+        elif task.status == "created":
+            task_emoji = "🦗 "
 
             # Get backend for display name
             backend = get_backend_name(task)
@@ -308,6 +494,8 @@ class TaskDetails(Static):
             f"Type:      {task_emoji}{mode_display}",
             f"Workspace: {task.workspace}",
         ]
+        if status_display == "running" and image_old:
+            lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
         if task.web_port:
             lines.append(f"Web URL:   http://127.0.0.1:{task.web_port}/")
 
@@ -332,6 +520,33 @@ class ProjectState(Static):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
+    def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
+        if project is None:
+            self.update("No project selected.")
+            return
+
+        upstream = project.upstream_url or "-"
+
+        # Use emojis for security class
+        if project.security_class == "gatekeeping":
+            security_emoji = "🚪"  # Door emoji for gatekeeping
+        else:
+            security_emoji = "🌐"  # Globe emoji for online
+
+        if task_count is None:
+            tasks_line = "Tasks:     loading"
+        else:
+            tasks_line = f"Tasks:     {task_count}"
+
+        lines = [
+            f"Project:   {project.id} {security_emoji}",
+            upstream,
+            "",
+            "Loading details...",
+            tasks_line,
+        ]
+        self.update("\n".join(lines))
+
     def set_state(
         self,
         project: CodexProject | None,
@@ -343,15 +558,50 @@ class ProjectState(Static):
             self.update("No project selected.")
             return
 
-        docker_s = "yes" if state.get("dockerfiles") else "no"
-        images_s = "yes" if state.get("images") else "no"
-        ssh_s = "yes" if state.get("ssh") else "no"
-        gate_s = "yes" if state.get("gate") else "no"
+        variables = {}
+        if self.app is not None:
+            try:
+                variables = self.app.get_css_variables()
+            except Exception:
+                variables = {}
+        success_color = variables.get("success", "green")
+        error_color = variables.get("error", "red")
+        warning_color = variables.get("warning", "yellow")
+
+        status_styles = {
+            "yes": Style(color=success_color),
+            "no": Style(color=error_color),
+            "old": Style(color=warning_color),
+        }
+
+        def _status_text(value: str) -> Text:
+            style = status_styles.get(value, Style(color=error_color))
+            return Text(value, style=style)
+
+        docker_value = "yes" if state.get("dockerfiles") else "no"
+        if docker_value == "yes" and state.get("dockerfiles_old"):
+            docker_value = "old"
+        docker_s = _status_text(docker_value)
+
+        images_value = "yes" if state.get("images") else "no"
+        if images_value == "yes" and state.get("images_old"):
+            images_value = "old"
+        images_s = _status_text(images_value)
+        ssh_s = _status_text("yes" if state.get("ssh") else "no")
+        gate_value = "yes" if state.get("gate") else "no"
+        if (
+            gate_value == "yes"
+            and staleness is not None
+            and not staleness.error
+            and staleness.is_stale
+        ):
+            gate_value = "old"
+        gate_s = _status_text(gate_value)
 
         if task_count is None:
-            tasks_line = "Tasks:     unknown"
+            tasks_line = Text("Tasks:     unknown")
         else:
-            tasks_line = f"Tasks:     {task_count}"
+            tasks_line = Text(f"Tasks:     {task_count}")
 
         upstream = project.upstream_url or "-"
 
@@ -362,53 +612,54 @@ class ProjectState(Static):
             security_emoji = "🌐"  # Globe emoji for online
 
         lines = [
-            f"Project:   {project.id} {security_emoji}",
-            upstream,
-            "",
-            f"Dockerfiles: {docker_s}",
-            f"Images:      {images_s}",
-            f"SSH dir:     {ssh_s}",
-            f"Git gate:    {gate_s}",
+            Text(f"Project:   {project.id} {security_emoji}"),
+            Text(upstream),
+            Text(""),
+            Text.assemble("Dockerfiles: ", docker_s),
+            Text.assemble("Images:      ", images_s),
+            Text.assemble("SSH dir:     ", ssh_s),
+            Text.assemble("Git gate:    ", gate_s),
             tasks_line,
         ]
 
         # Add gate commit info if available
         gate_commit = state.get("gate_last_commit")
         if gate_commit:
-            lines.append("")
-            lines.append("Gate info:")
-            lines.append(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}")
-            lines.append(f"  Date:     {gate_commit.get('commit_date', 'unknown')}")
-            lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
-            lines.append(
-                f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}"
-            )
+            lines.append(Text(""))
+            lines.append(Text("Gate info:"))
+            lines.append(Text(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}"))
+            lines.append(Text(f"  Date:     {gate_commit.get('commit_date', 'unknown')}"))
+            lines.append(Text(f"  Author:   {gate_commit.get('commit_author', 'unknown')}"))
+            message = gate_commit.get("commit_message", "unknown")
+            message = message[:50] + ("..." if len(message) > 50 else "")
+            lines.append(Text(f"  Message:  {message}"))
 
         # Add upstream staleness info if available (gatekeeping projects only)
         if staleness is not None:
-            lines.append("")
-            lines.append("Upstream status:")
+            lines.append(Text(""))
+            lines.append(Text("Upstream status:"))
             if staleness.error:
-                lines.append(f"  Error:    {staleness.error}")
+                lines.append(Text(f"  Error:    {staleness.error}"))
             elif staleness.is_stale:
                 behind_str = "unknown"
                 if staleness.commits_behind is not None:
                     behind_str = str(staleness.commits_behind)
-                lines.append(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
                 lines.append(
-                    f"  Upstream: {staleness.upstream_head[:8] if staleness.upstream_head else 'unknown'}"
+                    Text(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
                 )
-                lines.append(
-                    f"  Gate:     {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
+                upstream_head = (
+                    staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
                 )
+                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+                lines.append(Text(f"  Upstream: {upstream_head}"))
+                lines.append(Text(f"  Gate:     {gate_head}"))
             else:
-                lines.append(f"  Status:   Up to date on {staleness.branch}")
-                lines.append(
-                    f"  Commit:   {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
-                )
-            lines.append(f"  Checked:  {staleness.last_checked}")
+                lines.append(Text(f"  Status:   Up to date on {staleness.branch}"))
+                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+                lines.append(Text(f"  Commit:   {gate_head}"))
+            lines.append(Text(f"  Checked:  {staleness.last_checked}"))
 
-        self.update("\n".join(lines))
+        self.update(Text("\n").join(lines))
 
 
 class StatusBar(Static):
@@ -438,15 +689,4 @@ class StatusBar(Static):
         self._update_content()
 
     def _update_content(self) -> None:
-        # Keep the key hints very compact and leave most of the space for
-        # the dynamic status message.
-        #
-        # We use simple markup only for the shortcut keys themselves.  The
-        # message text is interpolated directly; our messages don't use
-        # Rich markup, so this is safe.
-        key_hints = "[bold]q[/bold] Quit  [bold]^P[/bold] Palette"
-        if self.message:
-            text = f"{key_hints} | {self.message}"
-        else:
-            text = key_hints
-        self.update(text)
+        self.update(self.message or "")

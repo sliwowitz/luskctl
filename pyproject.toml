@@ -36,13 +36,17 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
 PyYAML = ">=6.0"
-textual = ">=6.6"
+textual = "7.1.0"
 argcomplete = ">=3.1"
 requests = ">=2.31"
 
 [tool.poetry.group.dev.dependencies]
-pydevd-pycharm = "^253.28294.166"
+pydevd-pycharm = "253.29346.142"
 ruff = ">=0.8"
+markdown-it-py = ">=4.0.0"
+mdit-py-plugins = ">=0.5.0"
+platformdirs = ">=4.5.1"
+textual-dev = "^1.8.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=7.0"
