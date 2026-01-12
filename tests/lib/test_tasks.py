@@ -187,7 +187,7 @@ class TaskTests(unittest.TestCase):
                 )
 
                 self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
                 # Verify SSH is NOT mounted by default in gatekeeping mode
                 ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
                 self.assertEqual(ssh_mounts, [])
@@ -231,9 +231,9 @@ class TaskTests(unittest.TestCase):
 
                 # Verify gatekeeping behavior: CODE_REPO is file-based gate
                 self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
                 # Verify SSH IS mounted when mount_in_gatekeeping is true
-                _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":Z")
+                _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     def test_build_task_env_online(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -269,8 +269,8 @@ class TaskTests(unittest.TestCase):
                 env, volumes = _build_task_env_and_volumes(load_project(project_id), task_id="8")
                 self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
                 self.assertEqual(env["GIT_BRANCH"], "main")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
-                _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
+                _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
@@ -743,7 +743,7 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
                 # Verify gatekeeping mode settings are still correct
                 self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
 
     def test_build_task_env_gatekeeping_expose_external_remote_disabled(self) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
@@ -785,7 +785,7 @@ class TaskTests(unittest.TestCase):
                 self.assertNotIn("EXTERNAL_REMOTE_URL", env)
                 # Verify gatekeeping mode settings are still correct
                 self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
 
     def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
@@ -826,4 +826,4 @@ class TaskTests(unittest.TestCase):
                 self.assertNotIn("EXTERNAL_REMOTE_URL", env)
                 # Verify gatekeeping mode settings are still correct
                 self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
-                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":Z")
+                _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
