@@ -31,11 +31,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-3.12-${{ hashFiles('**/pyproject.toml') }}
+          key: venv-${{ runner.os }}-3.12-release-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root
+        run: poetry install --no-interaction
 
       - name: Build distributions
         run: poetry build
