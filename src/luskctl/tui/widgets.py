@@ -342,15 +342,51 @@ class TaskList(ListView):
             self.append(TaskListItem(project_id, tm, label, self._generation))
 
     def mark_deleting(self, task_id: str) -> bool:
+        # Create a new TaskMeta instance with updated status instead of mutating
+        # the existing shared instance in place.
+        new_meta: TaskMeta | None = None
+
+        # First, update the entry in the internal tasks list if present.
+        for index, tm in enumerate(self.tasks):
+            if tm.task_id == task_id:
+                new_meta = TaskMeta(
+                    task_id=tm.task_id,
+                    status="deleting",
+                    mode=tm.mode,
+                    workspace=tm.workspace,
+                    web_port=tm.web_port,
+                    backend=tm.backend,
+                )
+                self.tasks[index] = new_meta
+                break
+
+        found = False
+
+        # Then, update any visible list items for this task to point at the new
+        # TaskMeta instance and refresh their labels.
         for item in self.query(TaskListItem):
             if item.task_meta.task_id != task_id:
                 continue
-            item.task_meta.status = "deleting"
-            label = self._format_task_label(item.task_meta)
-            item.query_one(Static).update(label)
-            return True
-        return False
 
+            # If we didn't find the task in self.tasks for some reason, fall back
+            # to cloning from the item's TaskMeta.
+            if new_meta is None:
+                tm = item.task_meta
+                new_meta = TaskMeta(
+                    task_id=tm.task_id,
+                    status="deleting",
+                    mode=tm.mode,
+                    workspace=tm.workspace,
+                    web_port=tm.web_port,
+                    backend=tm.backend,
+                )
+
+            item.task_meta = new_meta
+            label = self._format_task_label(new_meta)
+            item.query_one(Static).update(label)
+            found = True
+
+        return found
     def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """When user selects a task row, send a semantic TaskSelected message."""
         self._post_selected_task(event.item)
