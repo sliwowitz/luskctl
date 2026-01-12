@@ -506,16 +506,17 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     }
 
     volumes: list[str] = []
-    # Per-task workspace mount
-    volumes.append(f"{repo_dir}:/workspace:Z")
 
-    # Shared codex credentials/config
+    # Per-task workspace mount (container-specific, not shared)
+    volumes.append(f"{repo_dir}:/workspace:z")
+
+    # Shared codex credentials/config (shared between containers)
     volumes.append(f"{codex_host_dir}:/home/dev/.codex:Z")
-    # Shared Claude credentials/config
+    # Shared Claude credentials/config (shared between containers)
     volumes.append(f"{claude_host_dir}:/home/dev/.claude:Z")
-    # Shared Mistral Vibe credentials/config
+    # Shared Mistral Vibe credentials/config (shared between containers)
     volumes.append(f"{vibe_host_dir}:/home/dev/.vibe:Z")
-    # Shared Blablador credentials/config (OpenCode wrapper)
+    # Shared Blablador credentials/config (OpenCode wrapper, shared between containers)
     volumes.append(f"{blablador_host_dir}:/home/dev/.blablador:Z")
 
     # Security mode specific wiring
@@ -535,14 +536,14 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
 
         # Ensure parent exists for mount consistency (gate should already exist)
         gate_parent.mkdir(parents=True, exist_ok=True)
-        # Mount gate read-write so tasks can push branches for review
+        # Mount gate read-write so tasks can push branches for review (shared between project containers)
         volumes.append(f"{gate_repo}:{gate_mount_inside}:Z")
         env["CODE_REPO"] = f"file://{gate_mount_inside}"
         env["GIT_BRANCH"] = project.default_branch or "main"
         # Optionally expose the upstream URL as an "external" remote.
         if project.expose_external_remote and project.upstream_url:
             env["EXTERNAL_REMOTE_URL"] = project.upstream_url
-        # Optional SSH mount in gatekeeping mode
+        # Optional SSH mount in gatekeeping mode (shared between project containers)
         if project.ssh_mount_in_gatekeeping and ssh_host_dir.is_dir():
             _ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
@@ -550,13 +551,13 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
         # Online mode: clone from gate if present, then set upstream to real URL
         if gate_repo.exists():
             gate_parent.mkdir(parents=True, exist_ok=True)
-            # Mount gate read-only
+            # Mount gate read-only (shared between project containers)
             volumes.append(f"{gate_repo}:{gate_mount_inside}:Z,ro")
             env["CLONE_FROM"] = f"file://{gate_mount_inside}"
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
             env["GIT_BRANCH"] = project.default_branch or "main"
-        # Optional SSH config mount in online mode (configurable)
+        # Optional SSH config mount in online mode (configurable, shared between project containers)
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
             _ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:Z")
