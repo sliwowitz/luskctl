@@ -434,37 +434,34 @@ if _HAS_TEXTUAL:
 
         # Layout rules for the new streamlined design with borders
         CSS = """
-        $tui-bg: #000000;
-        $tui-list-bg: #303030;
-
         Screen {
             layout: vertical;
-            background: $tui-bg;
+            background: $background;
         }
 
         #main {
             height: 1fr;
-            background: $tui-bg;
+            background: $background;
         }
 
         /* Main container borders */
         #left-pane {
             width: 1fr;
             padding: 1;
-            background: $tui-bg;
+            background: $background;
         }
 
         #right-pane {
             width: 1fr;
             padding: 1;
-            background: $tui-bg;
+            background: $background;
         }
 
         /* Projects section with embedded title */
         #project-list {
             border: round $primary;
             border-title-align: right;
-            background: $tui-list-bg;
+            background: $surface;
             height: 1fr;
             min-height: 10;
         }
@@ -473,7 +470,7 @@ if _HAS_TEXTUAL:
         #project-state {
             border: round $primary;
             border-title-align: right;
-            background: $tui-bg;
+            background: $background;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -483,7 +480,7 @@ if _HAS_TEXTUAL:
         #task-list {
             border: round $primary;
             border-title-align: right;
-            background: $tui-list-bg;
+            background: $surface;
             height: 1fr;
             min-height: 10;
         }
@@ -492,7 +489,7 @@ if _HAS_TEXTUAL:
         #task-details {
             border: round $primary;
             border-title-align: right;
-            background: $tui-bg;
+            background: $background;
             height: 1fr;
             min-height: 10;
             margin-top: 1;
@@ -501,7 +498,7 @@ if _HAS_TEXTUAL:
         /* Status bar styling */
         #status-bar {
             border: solid $primary;
-            background: $tui-bg;
+            background: $background;
             height: 3;
             padding: 0 1;
             margin: 0 1;

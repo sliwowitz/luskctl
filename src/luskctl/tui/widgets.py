@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from rich.cells import cell_len
+from rich.style import Style
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
@@ -517,23 +519,36 @@ class ProjectState(Static):
             self.update("No project selected.")
             return
 
-        def _status(value: str) -> str:
-            if value == "yes":
-                return "[green]yes[/green]"
-            if value == "old":
-                return "[darkgoldenrod]old[/darkgoldenrod]"
-            return "[red]no[/red]"
+        variables = {}
+        if self.app is not None:
+            try:
+                variables = self.app.get_css_variables()
+            except Exception:
+                variables = {}
+        success_color = variables.get("success", "green")
+        error_color = variables.get("error", "red")
+        warning_color = variables.get("warning", "yellow")
+
+        status_styles = {
+            "yes": Style(color=success_color),
+            "no": Style(color=error_color),
+            "old": Style(color=warning_color),
+        }
+
+        def _status_text(value: str) -> Text:
+            style = status_styles.get(value, Style(color=error_color))
+            return Text(value, style=style)
 
         docker_value = "yes" if state.get("dockerfiles") else "no"
         if docker_value == "yes" and state.get("dockerfiles_old"):
             docker_value = "old"
-        docker_s = _status(docker_value)
+        docker_s = _status_text(docker_value)
 
         images_value = "yes" if state.get("images") else "no"
         if images_value == "yes" and state.get("images_old"):
             images_value = "old"
-        images_s = _status(images_value)
-        ssh_s = _status("yes" if state.get("ssh") else "no")
+        images_s = _status_text(images_value)
+        ssh_s = _status_text("yes" if state.get("ssh") else "no")
         gate_value = "yes" if state.get("gate") else "no"
         if (
             gate_value == "yes"
@@ -542,12 +557,12 @@ class ProjectState(Static):
             and staleness.is_stale
         ):
             gate_value = "old"
-        gate_s = _status(gate_value)
+        gate_s = _status_text(gate_value)
 
         if task_count is None:
-            tasks_line = "Tasks:     unknown"
+            tasks_line = Text("Tasks:     unknown")
         else:
-            tasks_line = f"Tasks:     {task_count}"
+            tasks_line = Text(f"Tasks:     {task_count}")
 
         upstream = project.upstream_url or "-"
 
@@ -558,53 +573,54 @@ class ProjectState(Static):
             security_emoji = "🌐"  # Globe emoji for online
 
         lines = [
-            f"Project:   {project.id} {security_emoji}",
-            upstream,
-            "",
-            f"Dockerfiles: {docker_s}",
-            f"Images:      {images_s}",
-            f"SSH dir:     {ssh_s}",
-            f"Git gate:    {gate_s}",
+            Text(f"Project:   {project.id} {security_emoji}"),
+            Text(upstream),
+            Text(""),
+            Text.assemble("Dockerfiles: ", docker_s),
+            Text.assemble("Images:      ", images_s),
+            Text.assemble("SSH dir:     ", ssh_s),
+            Text.assemble("Git gate:    ", gate_s),
             tasks_line,
         ]
 
         # Add gate commit info if available
         gate_commit = state.get("gate_last_commit")
         if gate_commit:
-            lines.append("")
-            lines.append("Gate info:")
-            lines.append(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}")
-            lines.append(f"  Date:     {gate_commit.get('commit_date', 'unknown')}")
-            lines.append(f"  Author:   {gate_commit.get('commit_author', 'unknown')}")
-            lines.append(
-                f"  Message:  {gate_commit.get('commit_message', 'unknown')[:50]}{'...' if len(gate_commit.get('commit_message', '')) > 50 else ''}"
-            )
+            lines.append(Text(""))
+            lines.append(Text("Gate info:"))
+            lines.append(Text(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}"))
+            lines.append(Text(f"  Date:     {gate_commit.get('commit_date', 'unknown')}"))
+            lines.append(Text(f"  Author:   {gate_commit.get('commit_author', 'unknown')}"))
+            message = gate_commit.get("commit_message", "unknown")
+            message = message[:50] + ("..." if len(message) > 50 else "")
+            lines.append(Text(f"  Message:  {message}"))
 
         # Add upstream staleness info if available (gatekeeping projects only)
         if staleness is not None:
-            lines.append("")
-            lines.append("Upstream status:")
+            lines.append(Text(""))
+            lines.append(Text("Upstream status:"))
             if staleness.error:
-                lines.append(f"  Error:    {staleness.error}")
+                lines.append(Text(f"  Error:    {staleness.error}"))
             elif staleness.is_stale:
                 behind_str = "unknown"
                 if staleness.commits_behind is not None:
                     behind_str = str(staleness.commits_behind)
-                lines.append(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
                 lines.append(
-                    f"  Upstream: {staleness.upstream_head[:8] if staleness.upstream_head else 'unknown'}"
+                    Text(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
                 )
-                lines.append(
-                    f"  Gate:     {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
+                upstream_head = (
+                    staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
                 )
+                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+                lines.append(Text(f"  Upstream: {upstream_head}"))
+                lines.append(Text(f"  Gate:     {gate_head}"))
             else:
-                lines.append(f"  Status:   Up to date on {staleness.branch}")
-                lines.append(
-                    f"  Commit:   {staleness.gate_head[:8] if staleness.gate_head else 'unknown'}"
-                )
-            lines.append(f"  Checked:  {staleness.last_checked}")
+                lines.append(Text(f"  Status:   Up to date on {staleness.branch}"))
+                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+                lines.append(Text(f"  Commit:   {gate_head}"))
+            lines.append(Text(f"  Checked:  {staleness.last_checked}"))
 
-        self.update("\n".join(lines))
+        self.update(Text("\n").join(lines))
 
 
 class StatusBar(Static):
