@@ -61,7 +61,7 @@ def get_version_info() -> tuple[str, str | None]:
         tuple: (version_string, branch_name) where branch_name is None for releases
                or when branch info is not available/meaningful
     """
-    # Determine the repository root (3 levels up: version.py -> lib -> luskctl -> src -> repo)
+    # Determine the repository root (4 levels up: version.py -> lib -> luskctl -> src -> repo)
     # This path is only meaningful in development mode; after pip install it points elsewhere
     repo_root = Path(__file__).parent.parent.parent.parent
 
