@@ -72,6 +72,97 @@ if _HAS_TEXTUAL:
         _is_task_image_old,
     )
 
+    def _get_version_info() -> tuple[str, str | None]:
+        """Get version and branch information.
+
+        Returns:
+            tuple: (version_string, branch_name) where branch_name is None for releases
+        """
+        import subprocess
+        import tomllib
+        from pathlib import Path
+
+        # Try to get version from installed package first
+        version = "unknown"
+        try:
+            # Try importing to get __version__ (for installed packages)
+            from luskctl import __version__ as pkg_version
+
+            version = pkg_version
+        except ImportError:
+            # Fall back to reading from pyproject.toml (for development)
+            try:
+                pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+                if pyproject_path.exists():
+                    with open(pyproject_path, "rb") as f:
+                        pyproject_data = tomllib.load(f)
+                        version = pyproject_data["tool"]["poetry"]["version"]
+            except Exception:
+                version = "unknown"
+
+        # Check if this is a git repository and get branch info
+        branch_name = None
+
+        # First, try to get branch info from preserved file (for pip/pipx installs from git)
+        try:
+            from luskctl import _branch_info
+
+            if hasattr(_branch_info, "BRANCH_NAME"):
+                branch_name = _branch_info.BRANCH_NAME
+                # If we found branch info from the preserved file, we're done
+                return version, branch_name
+        except ImportError:
+            # _branch_info module doesn't exist, continue with other methods
+            pass
+
+        # Then check if we're likely running from source by looking for pyproject.toml
+        is_likely_source = False
+        try:
+            pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+            is_likely_source = pyproject_path.exists()
+        except Exception:
+            pass
+
+        # Only try git detection if we're likely running from source
+        if is_likely_source:
+            try:
+                # Check if we're in a git repo
+                result = subprocess.run(
+                    ["git", "rev-parse", "--is-inside-work-tree"],
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
+                    cwd=str(Path(__file__).parent.parent.parent.parent),
+                )
+                if result.returncode == 0 and result.stdout.strip() == "true":
+                    # Get current branch name
+                    branch_result = subprocess.run(
+                        ["git", "branch", "--show-current"],
+                        capture_output=True,
+                        text=True,
+                        timeout=1,
+                        cwd=str(Path(__file__).parent.parent.parent.parent),
+                    )
+                if branch_result.returncode == 0:
+                    branch_name = branch_result.stdout.strip()
+
+                    # Check if this is a tagged release (vX.Y.Z format)
+                    tag_result = subprocess.run(
+                        ["git", "describe", "--exact-match", "--tags", "HEAD"],
+                        capture_output=True,
+                        text=True,
+                        timeout=1,
+                        cwd=str(Path(__file__).parent.parent.parent.parent),
+                    )
+                    if tag_result.returncode == 0 and tag_result.stdout.strip().startswith("v"):
+                        # This is a tagged release, don't show branch
+                        branch_name = None
+            except Exception:
+                # If git commands fail, we're likely not in a git repo or git isn't available
+                pass
+
+        return version, branch_name
+
     def _modal_binding(key: str, action: str, description: str):
         if Binding is None:
             return (key, action, description)
@@ -430,7 +521,6 @@ if _HAS_TEXTUAL:
         """Redesigned TUI frontend for luskctl core modules."""
 
         CSS_PATH = None
-        TITLE = "Luskctl TUI"
 
         # Layout rules for the new streamlined design with borders
         CSS = """
@@ -522,6 +612,9 @@ if _HAS_TEXTUAL:
 
         def __init__(self) -> None:
             super().__init__()
+            # Set dynamic title with version and branch info
+            self._update_title()
+
             self.current_project_id: str | None = None
             self.current_task: TaskMeta | None = None
             self._projects_by_id: dict[str, CodexProject] = {}
@@ -537,6 +630,19 @@ if _HAS_TEXTUAL:
             # Selection persistence
             self._last_selected_project: str | None = None
             self._last_selected_tasks: dict[str, str] = {}  # project_id -> task_id
+
+        def _update_title(self):
+            """Update the TUI title with version and branch information."""
+            version, branch_name = _get_version_info()
+
+            if branch_name:
+                # Development version - show version and branch name
+                title = f"Luskctl TUI v{version} [{branch_name}]"
+            else:
+                # Release version - show just version
+                title = f"Luskctl TUI v{version}"
+
+            self.title = title
 
         # ---------- Layout ----------
 

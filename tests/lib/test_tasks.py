@@ -407,10 +407,10 @@ class TaskTests(unittest.TestCase):
                         task_run_cli(project_id, "1")
 
                 output = buffer.getvalue()
-                expected_enter = (
-                    f"\x1b[33m- To enter: podman exec -it {project_id}-cli-1 bash\x1b[0m"
-                )
-                expected_stop = f"\x1b[33m- To stop:  podman stop {project_id}-cli-1\x1b[0m"
+                expected_name = f"\x1b[32m{project_id}-cli-1\x1b[0m"
+                expected_enter = f"\x1b[34mpodman exec -it {project_id}-cli-1 bash\x1b[0m"
+                expected_stop = f"\x1b[31mpodman stop {project_id}-cli-1\x1b[0m"
+                self.assertIn(expected_name, output)
                 self.assertIn(expected_enter, output)
                 self.assertIn(expected_stop, output)
 
@@ -468,11 +468,13 @@ class TaskTests(unittest.TestCase):
                         task_run_web(project_id, "1")
 
                 output = buffer.getvalue()
-                expected_url = (
-                    "\x1b[33mWeb UI container is up, routed to: http://127.0.0.1:7788\x1b[0m"
-                )
-                expected_stop = f"\x1b[33m- Stop:       podman stop {project_id}-web-1\x1b[0m"
+                expected_name = f"\x1b[32m{project_id}-web-1\x1b[0m"
+                expected_url = "\x1b[34mhttp://127.0.0.1:7788/\x1b[0m"
+                expected_logs = f"\x1b[33mpodman logs -f {project_id}-web-1\x1b[0m"
+                expected_stop = f"\x1b[31mpodman stop {project_id}-web-1\x1b[0m"
+                self.assertIn(expected_name, output)
                 self.assertIn(expected_url, output)
+                self.assertIn(expected_logs, output)
                 self.assertIn(expected_stop, output)
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:

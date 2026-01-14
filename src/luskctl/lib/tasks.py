@@ -33,6 +33,18 @@ def _yellow(text: str, enabled: bool) -> str:
     return _color(text, "33", enabled)
 
 
+def _blue(text: str, enabled: bool) -> str:
+    return _color(text, "34", enabled)
+
+
+def _green(text: str, enabled: bool) -> str:
+    return _color(text, "32", enabled)
+
+
+def _red(text: str, enabled: bool) -> str:
+    return _color(text, "31", enabled)
+
+
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
     """Get git diff from a task's workspace.
 
@@ -771,16 +783,15 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
-    login_line = _yellow(
-        f"- To enter: podman exec -it {project.id}-cli-{task_id} bash",
-        color_enabled,
-    )
-    stop_line = _yellow(f"- To stop:  podman stop {project.id}-cli-{task_id}", color_enabled)
+    container_name = f"{project.id}-cli-{task_id}"
+    login_command = f"podman exec -it {container_name} bash"
+    stop_command = f"podman stop {container_name}"
+
     print(
-        "\nCLI container is running in the background.\n"
-        f"- Name: {project.id}-cli-{task_id}\n"
-        f"{login_line}\n"
-        f"{stop_line}\n"
+        "\nCLI container is running in the background."
+        f"\n- Name: {_green(container_name, color_enabled)}"
+        f"\n- To enter: {_blue(login_command, color_enabled)}"
+        f"\n- To stop:  {_red(stop_command, color_enabled)}\n"
     )
 
 
@@ -883,12 +894,7 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
             meta_path.write_text(yaml.safe_dump(meta))
         color_enabled = _supports_color()
         print("\n\n>> luskctl: ")
-        print(
-            _yellow(
-                f"Web UI container is up, routed to: http://127.0.0.1:{port}",
-                color_enabled,
-            )
-        )
+        print("Web UI container is up")
     elif not running:
         print(
             "Web UI container exited before the web UI became reachable. "
@@ -903,8 +909,16 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         raise SystemExit(1)
 
     color_enabled = _supports_color()
-    stop_line = _yellow(f"- Stop:       podman stop {container_name}", color_enabled)
-    print(f"- Name: {container_name}\n- Check logs: podman logs -f {container_name}\n{stop_line}")
+    url = f"http://127.0.0.1:{port}/"
+    log_command = f"podman logs -f {container_name}"
+    stop_command = f"podman stop {container_name}"
+
+    print(
+        f"- Name: {_green(container_name, color_enabled)}"
+        f"\n- Routed URL: {_blue(url, color_enabled)}"
+        f"\n- Check logs: {_yellow(log_command, color_enabled)}"
+        f"\n- Stop:       {_red(stop_command, color_enabled)}"
+    )
 
 
 def _is_container_running(container_name: str) -> bool:
