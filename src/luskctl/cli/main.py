@@ -99,6 +99,10 @@ def _yes_no(value: bool, enabled: bool) -> str:
     return _color("yes" if value else "no", "32" if value else "31", enabled)
 
 
+def _violet(text: str, enabled: bool) -> str:
+    return _color(text, "35", enabled)
+
+
 def _gray(text: str, enabled: bool) -> str:
     return _color(text, "90", enabled)
 
@@ -350,15 +354,22 @@ def main() -> None:
 
         # Envs base dir
         try:
-            print(f"- Envs base dir (for mounts): {_get_envs_base_dir()}")
+            print(
+                f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}"
+            )
         except Exception:
             pass
 
         uproj = _user_projects_root()
         sproj = _config_root()
-        print(f"- User projects root: {uproj} (exists: {'yes' if Path(uproj).is_dir() else 'no'})")
+        uproj_exists = Path(uproj).is_dir()
         print(
-            f"- System projects root: {sproj} (exists: {'yes' if Path(sproj).is_dir() else 'no'})"
+            f"- User projects root: {_gray(str(uproj), color_enabled)} "
+            f"(exists: {_yes_no(uproj_exists, color_enabled)})"
+        )
+        print(
+            f"- System projects root: {_gray(str(sproj), color_enabled)} "
+            f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
         )
 
         # Project configs discovered
@@ -366,7 +377,10 @@ def main() -> None:
         if projs:
             print("- Project configs:")
             for p in projs:
-                print(f"  • {p.id}: {p.root / 'project.yml'}")
+                print(
+                    f"  • {_violet(str(p.id), color_enabled)}: "
+                    f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
+                )
         else:
             print("- Project configs: none found")
 
@@ -377,10 +391,10 @@ def main() -> None:
             names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
         except Exception:
             names = []
-        print(f"- Package templates dir: {tmpl_pkg}")
+        print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
         if names:
             for n in sorted(names):
-                print(f"  • {n}")
+                print(f"  • {_gray(str(n), color_enabled)}")
 
         # Scripts (package resources)
         scr_pkg = resources.files("luskctl") / "resources" / "scripts"
@@ -388,17 +402,21 @@ def main() -> None:
             scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
         except Exception:
             scr_names = []
-        print(f"Scripts (read):\n- Package scripts dir: {scr_pkg}")
+        print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
         if scr_names:
             for n in sorted(scr_names):
-                print(f"  • {n}")
+                print(f"  • {_gray(str(n), color_enabled)}")
 
         # WRITE PATHS
         print("Writable locations (write):")
         sroot = _state_root()
-        print(f"- State root: {sroot} (exists: {'yes' if Path(sroot).is_dir() else 'no'})")
+        sroot_exists = Path(sroot).is_dir()
+        print(
+            f"- State root: {_gray(str(sroot), color_enabled)} "
+            f"(exists: {_yes_no(sroot_exists, color_enabled)})"
+        )
         build_root = _build_root()
-        print(f"- Build root for generated files: {build_root}")
+        print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
         if projs:
             print("- Expected generated files per project:")
             for p in projs:
@@ -410,7 +428,11 @@ def main() -> None:
                     "L2.Dockerfile",
                 ):
                     path = base / fname
-                    print(f"  • {p.id}: {path} (exists: {'yes' if path.is_file() else 'no'})")
+                    print(
+                        f"  • {_violet(str(p.id), color_enabled)}: "
+                        f"{_gray(str(path), color_enabled)} "
+                        f"(exists: {_yes_no(path.is_file(), color_enabled)})"
+                    )
 
         # ENVIRONMENT
         print("Environment overrides (if set):")
@@ -424,7 +446,7 @@ def main() -> None:
         ):
             val = os.environ.get(var)
             if val is not None:
-                print(f"- {var}={val}")
+                print(f"- {var}={_gray(val, color_enabled)}")
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:
