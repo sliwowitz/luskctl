@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "luskctl"
-version = "0.3.1"
+version = "0.3.2"
 description = "Manage containerized projects and per-run tasks with Podman"
 readme = "README.md"
 license = "Apache-2.0 OR MIT"
@@ -70,6 +70,9 @@ addopts = "-v --tb=short"
 [tool.poetry.scripts]
 luskctl = "luskctl.cli.main:main"
 luskctl-tui = "luskctl.tui.app:main"
+
+[tool.poetry.build]
+script = "build_script.py"
 
 [tool.ruff]
 target-version = "py312"

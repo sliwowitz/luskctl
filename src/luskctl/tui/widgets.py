@@ -83,6 +83,15 @@ def draw_emoji(emoji: str, width: int = 2) -> str:
     return f"{emoji}{' ' * (width - emoji_width)}"
 
 
+def _get_css_variables(widget: Static) -> dict[str, str]:
+    if widget.app is None:
+        return {}
+    try:
+        return widget.app.get_css_variables()
+    except Exception:
+        return {}
+
+
 def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
     if project_id is None:
         return None
@@ -479,21 +488,40 @@ class TaskDetails(Static):
         if task.status == "created" and (task.web_port or task.mode == "cli"):
             status_display = "running"
 
+        variables = _get_css_variables(self)
+        accent_style = Style(color=variables.get("primary", "cyan"))
+        warning_style = Style(color=variables.get("warning", "yellow"))
+
         lines = [
-            f"Task ID:   {task.task_id}",
-            f"Status:    {status_display}",
-            f"Type:      {task_emoji}{mode_display}",
-            f"Workspace: {task.workspace}",
+            Text(f"Task ID:   {task.task_id}"),
+            Text(f"Status:    {status_display}"),
+            Text(f"Type:      {task_emoji}{mode_display}"),
+            Text(f"Workspace: {task.workspace}"),
         ]
         if status_display == "running" and image_old:
-            lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
+            lines.append(
+                Text.assemble(
+                    "Image:     ",
+                    Text("old", style=warning_style),
+                )
+            )
         if task.web_port:
-            lines.append(f"Web URL:   [accent]http://127.0.0.1:{task.web_port}/[/accent]")
+            lines.append(
+                Text.assemble(
+                    "Web URL:   ",
+                    Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
+                )
+            )
         if task.mode == "cli" and self.current_project_id:
             container_name = f"{self.current_project_id}-cli-{task.task_id}"
-            lines.append(f"Log in:    [accent]podman exec -it {container_name} bash[/accent]")
+            lines.append(
+                Text.assemble(
+                    "Log in:    ",
+                    Text(f"podman exec -it {container_name} bash", style=accent_style),
+                )
+            )
 
-        content.update("\n".join(lines))
+        content.update(Text("\n").join(lines))
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses for copy diff actions."""
@@ -516,7 +544,7 @@ class ProjectState(Static):
 
     def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
         if project is None:
-            self.update("No project selected.")
+            self.update(Text("No project selected."))
             return
 
         upstream = project.upstream_url or "-"
@@ -528,18 +556,18 @@ class ProjectState(Static):
             security_emoji = "🌐"  # Globe emoji for online
 
         if task_count is None:
-            tasks_line = "Tasks:     loading"
+            tasks_line = Text("Tasks:     loading")
         else:
-            tasks_line = f"Tasks:     {task_count}"
+            tasks_line = Text(f"Tasks:     {task_count}")
 
         lines = [
-            f"Project:   {project.id} {security_emoji}",
-            upstream,
-            "",
-            "Loading details...",
+            Text(f"Project:   {project.id} {security_emoji}"),
+            Text(upstream),
+            Text(""),
+            Text("Loading details..."),
             tasks_line,
         ]
-        self.update("\n".join(lines))
+        self.update(Text("\n").join(lines))
 
     def set_state(
         self,
@@ -549,15 +577,10 @@ class ProjectState(Static):
         staleness: GateStalenessInfo | None = None,
     ) -> None:
         if project is None or state is None:
-            self.update("No project selected.")
+            self.update(Text("No project selected."))
             return
 
-        variables = {}
-        if self.app is not None:
-            try:
-                variables = self.app.get_css_variables()
-            except Exception:
-                variables = {}
+        variables = _get_css_variables(self)
         success_color = variables.get("success", "green")
         error_color = variables.get("error", "red")
         warning_color = variables.get("warning", "yellow")
@@ -683,4 +706,4 @@ class StatusBar(Static):
         self._update_content()
 
     def _update_content(self) -> None:
-        self.update(self.message or "")
+        self.update(Text(self.message or ""))

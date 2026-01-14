@@ -13,3 +13,24 @@ __all__ = [
     "lib",
     "tui",
 ]
+
+# Version information - single source of truth using importlib.metadata
+try:
+    from importlib.metadata import version
+
+    __version__ = version("luskctl")
+except Exception:
+    # Fallback for development mode when package is not installed
+    try:
+        import tomllib
+        from pathlib import Path
+
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+                __version__ = pyproject_data["tool"]["poetry"]["version"]
+        else:
+            __version__ = "unknown"
+    except Exception:
+        __version__ = "unknown"

@@ -2,13 +2,13 @@
 
 # Run linter and format checker (fast, run before commits)
 lint:
-	poetry run ruff check src/ tests/
-	poetry run ruff format --check src/ tests/
+	poetry run ruff check .
+	poetry run ruff format --check .
 
 # Auto-fix lint issues and format code
 format:
-	poetry run ruff check --fix src/ tests/
-	poetry run ruff format src/ tests/
+	poetry run ruff check --fix .
+	poetry run ruff format .
 
 # Run tests with coverage
 test:
