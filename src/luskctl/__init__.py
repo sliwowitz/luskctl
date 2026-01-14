@@ -14,18 +14,23 @@ __all__ = [
     "tui",
 ]
 
-# Version information
+# Version information - single source of truth using importlib.metadata
 try:
-    # Try to read from pyproject.toml during development
-    import tomllib
-    from pathlib import Path
+    from importlib.metadata import version
 
-    pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
-    if pyproject_path.exists():
-        with open(pyproject_path, "rb") as f:
-            pyproject_data = tomllib.load(f)
-            __version__ = pyproject_data["tool"]["poetry"]["version"]
-    else:
-        __version__ = "0.3.2"  # Fallback to current version
+    __version__ = version("luskctl")
 except Exception:
-    __version__ = "0.3.2"  # Fallback to current version
+    # Fallback for development mode when package is not installed
+    try:
+        import tomllib
+        from pathlib import Path
+
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+                __version__ = pyproject_data["tool"]["poetry"]["version"]
+        else:
+            __version__ = "unknown"
+    except Exception:
+        __version__ = "unknown"

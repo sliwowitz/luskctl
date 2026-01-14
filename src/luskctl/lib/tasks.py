@@ -908,7 +908,6 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         # Exit with non-zero status to signal that the web UI did not start.
         raise SystemExit(1)
 
-    color_enabled = _supports_color()
     url = f"http://127.0.0.1:{port}/"
     log_command = f"podman logs -f {container_name}"
     stop_command = f"podman stop {container_name}"
