@@ -122,7 +122,6 @@ if _HAS_TEXTUAL:
                    or when branch info is not available/meaningful
         """
         import subprocess
-        import tomllib
         from pathlib import Path
 
         # Determine the repository root (4 levels up: app.py -> tui -> luskctl -> src -> repo)
@@ -130,21 +129,13 @@ if _HAS_TEXTUAL:
         repo_root = Path(__file__).parent.parent.parent.parent
 
         # --- VERSION DETECTION ---
-        version = "unknown"
+        # Import version from luskctl package (single source of truth)
         try:
-            from luskctl import __version__ as pkg_version
+            from luskctl import __version__
 
-            version = pkg_version
-        except ImportError:
-            # Fall back to pyproject.toml (development mode)
-            try:
-                pyproject_path = repo_root / "pyproject.toml"
-                if pyproject_path.exists():
-                    with open(pyproject_path, "rb") as f:
-                        pyproject_data = tomllib.load(f)
-                        version = pyproject_data["tool"]["poetry"]["version"]
-            except Exception:
-                version = "unknown"
+            version = __version__
+        except (ImportError, AttributeError):
+            version = "unknown"
 
         # --- BRANCH DETECTION ---
         branch_name = None
@@ -198,7 +189,8 @@ if _HAS_TEXTUAL:
                             is_release = (
                                 tag_result.returncode == 0
                                 and tag_result.stdout.strip().startswith("v")
-                                and tag_result.stdout.strip()[1:2].isdigit()
+                                and len(tag_result.stdout.strip()) > 1
+                                and tag_result.stdout.strip()[1].isdigit()
                             )
                             if not is_release:
                                 branch_name = detected_branch
