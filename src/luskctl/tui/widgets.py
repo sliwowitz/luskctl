@@ -479,21 +479,42 @@ class TaskDetails(Static):
         if task.status == "created" and (task.web_port or task.mode == "cli"):
             status_display = "running"
 
+        accent_color = "cyan"
+        if self.app is not None:
+            try:
+                variables = self.app.get_css_variables()
+            except Exception:
+                variables = {}
+            accent_color = variables.get("accent", accent_color)
+        accent_style = Style(color=accent_color)
+
         lines = [
-            f"Task ID:   {task.task_id}",
-            f"Status:    {status_display}",
-            f"Type:      {task_emoji}{mode_display}",
-            f"Workspace: {task.workspace}",
+            Text(f"Task ID:   {task.task_id}"),
+            Text(f"Status:    {status_display}"),
+            Text(f"Type:      {task_emoji}{mode_display}"),
+            Text(f"Workspace: {task.workspace}"),
         ]
         if status_display == "running" and image_old:
-            lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
+            lines.append(
+                Text.assemble("Image:     ", Text("old", style=Style(color="darkgoldenrod")))
+            )
         if task.web_port:
-            lines.append(f"Web URL:   [accent]http://127.0.0.1:{task.web_port}/[/accent]")
+            lines.append(
+                Text.assemble(
+                    "Web URL:   ",
+                    Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
+                )
+            )
         if task.mode == "cli" and self.current_project_id:
             container_name = f"{self.current_project_id}-cli-{task.task_id}"
-            lines.append(f"Log in:    [accent]podman exec -it {container_name} bash[/accent]")
+            lines.append(
+                Text.assemble(
+                    "Log in:    ",
+                    Text(f"podman exec -it {container_name} bash", style=accent_style),
+                )
+            )
 
-        content.update("\n".join(lines))
+        content.update(Text("\n").join(lines))
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses for copy diff actions."""
