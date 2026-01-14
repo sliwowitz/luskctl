@@ -3,6 +3,8 @@ import subprocess
 import tempfile
 import unittest
 import unittest.mock
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from luskctl.lib.projects import load_project
@@ -15,6 +17,7 @@ from luskctl.lib.tasks import (
     get_workspace_git_diff,
     task_delete,
     task_new,
+    task_run_cli,
     task_run_web,
 )
 from test_utils import mock_git_config, parse_meta_value, write_project
@@ -357,6 +360,120 @@ class TaskTests(unittest.TestCase):
                 self.assertIn("LUSKUI_MISTRAL_API_KEY=mistral-xyz", env_entries)
                 self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
                 self.assertIn("MISTRAL_API_KEY=mistral-abc", env_entries)
+
+    def test_task_run_cli_colors_login_lines_when_tty(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_cli_color"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                task_new(project_id)
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._stream_initial_logs",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._supports_color",
+                        return_value=True,
+                    ),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_cli(project_id, "1")
+
+                output = buffer.getvalue()
+                expected_enter = (
+                    f"\x1b[33m- To enter: podman exec -it {project_id}-cli-1 bash\x1b[0m"
+                )
+                expected_stop = f"\x1b[33m- To stop:  podman stop {project_id}-cli-1\x1b[0m"
+                self.assertIn(expected_enter, output)
+                self.assertIn(expected_stop, output)
+
+    def test_task_run_web_colors_url_and_stop_when_tty(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_web_color"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                task_new(project_id)
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._stream_initial_logs",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._is_container_running",
+                        return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._assign_web_port",
+                        return_value=7788,
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._supports_color",
+                        return_value=True,
+                    ),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_web(project_id, "1")
+
+                output = buffer.getvalue()
+                expected_url = (
+                    "\x1b[33mWeb UI container is up, routed to: http://127.0.0.1:7788\x1b[0m"
+                )
+                expected_stop = f"\x1b[33m- Stop:       podman stop {project_id}-web-1\x1b[0m"
+                self.assertIn(expected_url, output)
+                self.assertIn(expected_stop, output)
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
