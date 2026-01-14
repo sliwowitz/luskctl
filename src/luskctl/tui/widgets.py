@@ -83,6 +83,15 @@ def draw_emoji(emoji: str, width: int = 2) -> str:
     return f"{emoji}{' ' * (width - emoji_width)}"
 
 
+def _get_css_variables(widget: Static) -> dict[str, str]:
+    if widget.app is None:
+        return {}
+    try:
+        return widget.app.get_css_variables()
+    except Exception:
+        return {}
+
+
 def _is_task_image_old(project_id: str | None, task: TaskMeta) -> bool | None:
     if project_id is None:
         return None
@@ -479,14 +488,9 @@ class TaskDetails(Static):
         if task.status == "created" and (task.web_port or task.mode == "cli"):
             status_display = "running"
 
-        accent_color = "cyan"
-        if self.app is not None:
-            try:
-                variables = self.app.get_css_variables()
-            except Exception:
-                variables = {}
-            accent_color = variables.get("accent", accent_color)
-        accent_style = Style(color=accent_color)
+        variables = _get_css_variables(self)
+        accent_style = Style(color=variables.get("accent", "cyan"))
+        warning_style = Style(color=variables.get("warning", "yellow"))
 
         lines = [
             Text(f"Task ID:   {task.task_id}"),
@@ -496,7 +500,10 @@ class TaskDetails(Static):
         ]
         if status_display == "running" and image_old:
             lines.append(
-                Text.assemble("Image:     ", Text("old", style=Style(color="darkgoldenrod")))
+                Text.assemble(
+                    "Image:     ",
+                    Text("old", style=warning_style),
+                )
             )
         if task.web_port:
             lines.append(
@@ -537,7 +544,7 @@ class ProjectState(Static):
 
     def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
         if project is None:
-            self.update("No project selected.")
+            self.update(Text("No project selected."))
             return
 
         upstream = project.upstream_url or "-"
@@ -549,18 +556,18 @@ class ProjectState(Static):
             security_emoji = "🌐"  # Globe emoji for online
 
         if task_count is None:
-            tasks_line = "Tasks:     loading"
+            tasks_line = Text("Tasks:     loading")
         else:
-            tasks_line = f"Tasks:     {task_count}"
+            tasks_line = Text(f"Tasks:     {task_count}")
 
         lines = [
-            f"Project:   {project.id} {security_emoji}",
-            upstream,
-            "",
-            "Loading details...",
+            Text(f"Project:   {project.id} {security_emoji}"),
+            Text(upstream),
+            Text(""),
+            Text("Loading details..."),
             tasks_line,
         ]
-        self.update("\n".join(lines))
+        self.update(Text("\n").join(lines))
 
     def set_state(
         self,
@@ -570,15 +577,10 @@ class ProjectState(Static):
         staleness: GateStalenessInfo | None = None,
     ) -> None:
         if project is None or state is None:
-            self.update("No project selected.")
+            self.update(Text("No project selected."))
             return
 
-        variables = {}
-        if self.app is not None:
-            try:
-                variables = self.app.get_css_variables()
-            except Exception:
-                variables = {}
+        variables = _get_css_variables(self)
         success_color = variables.get("success", "green")
         error_color = variables.get("error", "red")
         warning_color = variables.get("warning", "yellow")
@@ -704,4 +706,4 @@ class StatusBar(Static):
         self._update_content()
 
     def _update_content(self) -> None:
-        self.update(self.message or "")
+        self.update(Text(self.message or ""))
