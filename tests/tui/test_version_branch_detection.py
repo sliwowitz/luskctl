@@ -1,6 +1,5 @@
 """Tests for version and branch detection functionality."""
 
-import subprocess
 import sys
 import tempfile
 import unittest
