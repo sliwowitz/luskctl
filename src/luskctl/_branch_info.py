@@ -1,3 +1,5 @@
-# This file is generated during build to preserve git branch information
-# when installing from a git directory using pip/pipx
-BRANCH_NAME = "feature/task-details-accent"
+# Placeholder for branch information - overwritten by build_script.py during pip/pipx install
+# When installing from a git directory, build_script.py populates this with the branch name.
+# For PyPI releases or when not in a git repo, this remains None.
+# See build_script.py and src/luskctl/tui/app.py for details.
+BRANCH_NAME = None
