@@ -51,7 +51,7 @@ RUN set -eux; \
       '  printf "  \\033[36mcodex\\033[0m  - OpenAI Codex CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mclaude\\033[0m - Claude Code CLI (permissions skipped)\\n"' \
       '  printf "  \\033[36mvibe\\033[0m   - Mistral Vibe CLI (auto-approve enabled)\\n"' \
-      '  printf "  \\033[36mblablador\\033[0m - OpenCode (Blablador) with full permissions\\n"' \
+      '  printf "  \\033[36mblablador\\033[0m - OpenCode (Blablador) with full permissions (not yet implemented)\\n"' \
       '  printf "\\n"' \
       'fi' \
       > /etc/profile.d/luskctl-agent-aliases.sh; \
