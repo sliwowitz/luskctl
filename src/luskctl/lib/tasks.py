@@ -17,6 +17,22 @@ from .podman import _podman_userns_args
 from .projects import Project, load_project
 
 
+def _supports_color() -> bool:
+    if "NO_COLOR" in os.environ:
+        return False
+    return sys.stdout.isatty()
+
+
+def _color(text: str, code: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"\x1b[{code}m{text}\x1b[0m"
+
+
+def _yellow(text: str, enabled: bool) -> str:
+    return _color(text, "33", enabled)
+
+
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
     """Get git diff from a task's workspace.
 
@@ -754,11 +770,17 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     meta["mode"] = "cli"
     meta_path.write_text(yaml.safe_dump(meta))
 
+    color_enabled = _supports_color()
+    login_line = _yellow(
+        f"- To enter: podman exec -it {project.id}-cli-{task_id} bash",
+        color_enabled,
+    )
+    stop_line = _yellow(f"- To stop:  podman stop {project.id}-cli-{task_id}", color_enabled)
     print(
         "\nCLI container is running in the background.\n"
         f"- Name: {project.id}-cli-{task_id}\n"
-        f"- To enter: podman exec -it {project.id}-cli-{task_id} bash\n"
-        f"- To stop:  podman stop {project.id}-cli-{task_id}\n"
+        f"{login_line}\n"
+        f"{stop_line}\n"
     )
 
 
@@ -859,8 +881,14 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         if meta.get("status") != "running":
             meta["status"] = "running"
             meta_path.write_text(yaml.safe_dump(meta))
+        color_enabled = _supports_color()
         print("\n\n>> luskctl: ")
-        print(f"Web UI container is up, routed to: http://127.0.0.1:{port}")
+        print(
+            _yellow(
+                f"Web UI container is up, routed to: http://127.0.0.1:{port}",
+                color_enabled,
+            )
+        )
     elif not running:
         print(
             "Web UI container exited before the web UI became reachable. "
@@ -874,11 +902,9 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         # Exit with non-zero status to signal that the web UI did not start.
         raise SystemExit(1)
 
-    print(
-        f"- Name: {container_name}\n"
-        f"- Check logs: podman logs -f {container_name}\n"
-        f"- Stop:       podman stop {container_name}"
-    )
+    color_enabled = _supports_color()
+    stop_line = _yellow(f"- Stop:       podman stop {container_name}", color_enabled)
+    print(f"- Name: {container_name}\n- Check logs: podman logs -f {container_name}\n{stop_line}")
 
 
 def _is_container_running(container_name: str) -> bool:

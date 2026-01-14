@@ -472,16 +472,7 @@ class TaskDetails(Static):
             task_emoji = f"{emoji} "
         elif task.status == "created":
             task_emoji = "🦗 "
-
-            # Get backend for display name
-            backend = get_backend_name(task)
-
-            # Capitalize backend name for display
-            if backend:
-                backend_display = backend.capitalize()
-            else:
-                backend_display = "Unknown"
-            mode_display = f"Web UI ({backend_display})"
+            mode_display = "Not assigned (choose CLI or Web mode)"
 
         # Update status display
         status_display = task.status
@@ -497,7 +488,10 @@ class TaskDetails(Static):
         if status_display == "running" and image_old:
             lines.append("Image:     [darkgoldenrod]old[/darkgoldenrod]")
         if task.web_port:
-            lines.append(f"Web URL:   http://127.0.0.1:{task.web_port}/")
+            lines.append(f"Web URL:   [accent]http://127.0.0.1:{task.web_port}/[/accent]")
+        if task.mode == "cli" and self.current_project_id:
+            container_name = f"{self.current_project_id}-cli-{task.task_id}"
+            lines.append(f"Log in:    [accent]podman exec -it {container_name} bash[/accent]")
 
         content.update("\n".join(lines))
 
