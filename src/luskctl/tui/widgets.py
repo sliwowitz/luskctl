@@ -489,7 +489,7 @@ class TaskDetails(Static):
             status_display = "running"
 
         variables = _get_css_variables(self)
-        accent_style = Style(color=variables.get("accent", "cyan"))
+        accent_style = Style(color=variables.get("primary", "cyan"))
         warning_style = Style(color=variables.get("warning", "yellow"))
 
         lines = [
