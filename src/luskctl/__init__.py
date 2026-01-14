@@ -26,6 +26,6 @@ try:
             pyproject_data = tomllib.load(f)
             __version__ = pyproject_data["tool"]["poetry"]["version"]
     else:
-        __version__ = "0.3.1"  # Fallback to current version
+        __version__ = "0.3.2"  # Fallback to current version
 except Exception:
-    __version__ = "0.3.1"  # Fallback to current version
+    __version__ = "0.3.2"  # Fallback to current version
