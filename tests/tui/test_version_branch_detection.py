@@ -220,5 +220,122 @@ class BuildScriptTests(unittest.TestCase):
                 os.chdir(original_cwd)
 
 
+class VersionModuleTests(unittest.TestCase):
+    """Test luskctl.lib.version module."""
+
+    def test_format_version_string_with_branch(self) -> None:
+        """Test format_version_string with a branch name."""
+        from luskctl.lib.version import format_version_string
+
+        result = format_version_string("1.2.3", "feature-branch")
+        self.assertEqual(result, "1.2.3 [feature-branch]")
+
+    def test_format_version_string_without_branch(self) -> None:
+        """Test format_version_string without a branch name."""
+        from luskctl.lib.version import format_version_string
+
+        result = format_version_string("1.2.3", None)
+        self.assertEqual(result, "1.2.3")
+
+    def test_get_version_info_returns_tuple(self) -> None:
+        """Test that get_version_info returns a tuple of (version, branch)."""
+        from luskctl.lib.version import get_version_info
+
+        result = get_version_info()
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        version, branch = result
+        self.assertIsInstance(version, str)
+        self.assertTrue(branch is None or isinstance(branch, str))
+
+    def test_get_version_info_with_branch_info_set(self) -> None:
+        """Test get_version_info when _branch_info.BRANCH_NAME is set."""
+        # Import the actual _branch_info and patch its BRANCH_NAME attribute
+        import luskctl._branch_info
+
+        original_value = luskctl._branch_info.BRANCH_NAME
+        try:
+            luskctl._branch_info.BRANCH_NAME = "test-branch"
+
+            from luskctl.lib.version import get_version_info
+
+            version, branch = get_version_info()
+            self.assertEqual(branch, "test-branch")
+        finally:
+            # Restore original value
+            luskctl._branch_info.BRANCH_NAME = original_value
+
+    def test_get_version_info_with_branch_info_none(self) -> None:
+        """Test get_version_info when _branch_info.BRANCH_NAME is None (release/tarball)."""
+        # Import the actual _branch_info and patch its BRANCH_NAME attribute
+        import luskctl._branch_info
+
+        original_value = luskctl._branch_info.BRANCH_NAME
+        try:
+            luskctl._branch_info.BRANCH_NAME = None
+
+            # Also mock subprocess to fail git detection (simulating tarball install)
+            with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+                mock_run.side_effect = FileNotFoundError("git not found")
+
+                from luskctl.lib.version import get_version_info
+
+                version, branch = get_version_info()
+                # Branch should be None when _branch_info is None and git detection fails
+                self.assertIsNone(branch)
+        finally:
+            # Restore original value
+            luskctl._branch_info.BRANCH_NAME = original_value
+
+
+class CLIVersionTests(unittest.TestCase):
+    """Test CLI --version flag."""
+
+    def test_cli_version_flag(self) -> None:
+        """Test that luskctl --version outputs version info."""
+        import subprocess
+
+        result = subprocess.run(
+            ["python", "-m", "luskctl.cli.main", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        # --version exits with code 0
+        self.assertEqual(result.returncode, 0)
+        # Output should contain "luskctl" and version number
+        self.assertIn("luskctl", result.stdout)
+        # Should have some version-like string
+        self.assertRegex(result.stdout, r"\d+\.\d+")
+
+    def test_cli_version_matches_module_version(self) -> None:
+        """Test that CLI --version matches the module version."""
+        import subprocess
+
+        from luskctl.lib.version import format_version_string, get_version_info
+
+        version, branch = get_version_info()
+        expected_version_str = format_version_string(version, branch)
+
+        result = subprocess.run(
+            ["python", "-m", "luskctl.cli.main", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(expected_version_str, result.stdout)
+
+
+class BranchInfoPlaceholderTests(unittest.TestCase):
+    """Test that _branch_info.py placeholder is correctly set."""
+
+    def test_branch_info_placeholder_is_none(self) -> None:
+        """Test that the committed _branch_info.py has BRANCH_NAME = None."""
+        branch_info_path = (
+            Path(__file__).parent.parent.parent / "src" / "luskctl" / "_branch_info.py"
+        )
+        content = branch_info_path.read_text()
+        # The placeholder should have BRANCH_NAME = None
+        self.assertIn("BRANCH_NAME = None", content)
+
+
 if __name__ == "__main__":
     unittest.main()
