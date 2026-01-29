@@ -156,6 +156,20 @@ class BlabladorScriptTests(unittest.TestCase):
 
         self.assertEqual(models, ["alpha-model", "beta-model", "zebra-model"])
 
+    def test_fetch_models_returns_none_on_error(self) -> None:
+        """Test that _fetch_models returns None on API error."""
+        blablador = load_blablador_module()
+
+        with unittest.mock.patch(
+            "blablador.request.urlopen",
+            side_effect=blablador.error.URLError("Connection failed"),
+        ):
+            result = blablador._fetch_models(
+                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
+            )
+
+        self.assertIsNone(result)
+
     def test_build_config_structure(self) -> None:
         """Test that _build_config generates correct OpenCode configuration."""
         blablador = load_blablador_module()
@@ -422,29 +436,6 @@ class BlabladorPersistentConfigTests(unittest.TestCase):
         blablador = load_blablador_module()
         self.assertEqual(blablador._get_configured_models({}), set())
         self.assertEqual(blablador._get_configured_models({"provider": {}}), set())
-
-    def test_get_configured_model_extracts_model(self) -> None:
-        """Test that _get_configured_model extracts the current model."""
-        blablador = load_blablador_module()
-
-        config = {"model": "blablador/test-model"}
-        self.assertEqual(blablador._get_configured_model(config), "test-model")
-
-    def test_get_configured_model_returns_none_for_non_blablador(self) -> None:
-        """Test that _get_configured_model returns None for non-blablador models."""
-        blablador = load_blablador_module()
-
-        self.assertIsNone(blablador._get_configured_model({"model": "openai/gpt-4"}))
-        self.assertIsNone(blablador._get_configured_model(None))
-        self.assertIsNone(blablador._get_configured_model({}))
-
-    def test_prompt_update_models_returns_false_without_tty(self) -> None:
-        """Test that _prompt_update_models returns False without TTY."""
-        blablador = load_blablador_module()
-
-        with unittest.mock.patch.object(sys.stdin, "isatty", return_value=False):
-            result = blablador._prompt_update_models({"new-model"}, set())
-            self.assertFalse(result)
 
     def test_load_opencode_config_returns_none_for_missing_file(self) -> None:
         """Test that _load_opencode_config returns None if file doesn't exist."""

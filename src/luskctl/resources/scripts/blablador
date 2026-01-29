@@ -2,16 +2,14 @@
 """
 Blablador launcher for OpenCode.
 
-Fetches models from Blablador's OpenAI-compatible API, prompts for a model
-selection, and runs OpenCode with full permissions inside the container.
+Fetches models from Blablador's OpenAI-compatible API and runs OpenCode
+with full permissions. Model selection can be done inside OpenCode.
 """
-
 
 import argparse
 import json
 import os
 import subprocess
-import sys
 from collections.abc import Iterable
 from pathlib import Path
 from urllib import request, error
@@ -44,7 +42,8 @@ def _load_api_key() -> str | None:
     return val if isinstance(val, str) and val.strip() else None
 
 
-def _fetch_models(base_url: str, api_key: str) -> list[str]:
+def _fetch_models(base_url: str, api_key: str) -> list[str] | None:
+    """Fetch available models from the API. Returns None on failure."""
     url = base_url.rstrip("/") + "/models"
     req = request.Request(
         url,
@@ -56,12 +55,8 @@ def _fetch_models(base_url: str, api_key: str) -> list[str]:
     try:
         with request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        raise SystemExit(f"Failed to fetch models ({exc.code}): {exc.reason}")
-    except error.URLError as exc:
-        raise SystemExit(f"Failed to fetch models: {exc.reason}")
-    except json.JSONDecodeError:
-        raise SystemExit("Failed to parse models response as JSON")
+    except (error.HTTPError, error.URLError, json.JSONDecodeError):
+        return None
 
     items: Iterable[object] = []
     if isinstance(payload, dict):
@@ -77,34 +72,7 @@ def _fetch_models(base_url: str, api_key: str) -> list[str]:
             if isinstance(model_id, str) and model_id:
                 models.append(model_id)
 
-    models = sorted({m for m in models})
-    if not models:
-        raise SystemExit("No models returned from Blablador /v1/models")
-    return models
-
-
-def _print_models(models: list[str]) -> None:
-    for model in models:
-        print(model)
-
-
-def _choose_model(models: list[str]) -> str:
-    if not sys.stdin.isatty():
-        raise SystemExit("No TTY available. Pass --model or set BLABLADOR_MODEL.")
-    print("Available Blablador models:")
-    for idx, model in enumerate(models, start=1):
-        print(f"  {idx:>2}) {model}")
-    while True:
-        choice = input(f"Select model [1-{len(models)}] (default 1): ").strip()
-        if not choice:
-            return models[0]
-        if choice.isdigit():
-            pick = int(choice)
-            if 1 <= pick <= len(models):
-                return models[pick - 1]
-        if choice in models:
-            return choice
-        print("Invalid selection. Try again.")
+    return sorted(set(models)) if models else None
 
 
 def _build_config(base_url: str, api_key: str, model: str, models: list[str] | None) -> dict:
@@ -135,7 +103,7 @@ def _build_config(base_url: str, api_key: str, model: str, models: list[str] | N
 
 
 def _opencode_config_path() -> Path:
-    """Return the standard OpenCode config path (~/.config/opencode/opencode.json)."""
+    """Return the standard OpenCode config path."""
     return Path.home() / ".config" / "opencode" / "opencode.json"
 
 
@@ -161,34 +129,6 @@ def _get_configured_models(config: dict | None) -> set[str]:
         return set()
 
 
-def _get_configured_model(config: dict | None) -> str | None:
-    """Get the currently configured model from config."""
-    if not config:
-        return None
-    model = config.get("model", "")
-    if isinstance(model, str) and model.startswith("blablador/"):
-        return model[len("blablador/"):]
-    return None
-
-
-def _prompt_update_models(new_models: set[str], removed_models: set[str]) -> bool:
-    """Prompt user whether to update the model list. Returns True if user wants to update."""
-    if not sys.stdin.isatty():
-        return False
-    print("\nModel list has changed:")
-    if new_models:
-        print(f"  New models: {', '.join(sorted(new_models))}")
-    if removed_models:
-        print(f"  Removed models: {', '.join(sorted(removed_models))}")
-    while True:
-        choice = input("Update config with new model list? [Y/n]: ").strip().lower()
-        if choice in ("", "y", "yes"):
-            return True
-        if choice in ("n", "no"):
-            return False
-        print("Please enter 'y' or 'n'.")
-
-
 def _write_opencode_config(config: dict) -> Path:
     """Write config to OpenCode's standard location."""
     config_path = _opencode_config_path()
@@ -204,18 +144,12 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            f"  blablador                # use default model ({DEFAULT_MODEL})\n"
-            "  blablador --model <id>   # use a specific model\n"
+            f"  blablador                # launch with default model ({DEFAULT_MODEL})\n"
             "  blablador --list-models  # list available models\n"
-            "  blablador --update-models  # update the model list in config\n"
             "  blablador -- --help      # pass flags to opencode\n"
         ),
     )
-    parser.add_argument("--model", "-m", help=f"Model ID from /v1/models (default: {DEFAULT_MODEL})")
     parser.add_argument("--list-models", action="store_true", help="List available models and exit")
-    parser.add_argument(
-        "--update-models", action="store_true", help="Update model list in config and exit"
-    )
     parser.add_argument(
         "--base-url",
         default=None,
@@ -234,62 +168,33 @@ def main() -> int:
     base_url = args.base_url or os.environ.get("BLABLADOR_BASE_URL") or DEFAULT_BASE_URL
     base_url = base_url.rstrip("/")
 
+    # Fetch models from API
+    fetched_models = _fetch_models(base_url, api_key)
+
     if args.list_models:
-        models = _fetch_models(base_url, api_key)
-        _print_models(models)
+        if fetched_models:
+            for model in fetched_models:
+                print(model)
+        else:
+            raise SystemExit("Failed to fetch models from Blablador API")
         return 0
 
-    # Load existing config
+    # Load existing config and check if update is needed
     existing_config = _load_opencode_config()
     configured_models = _get_configured_models(existing_config)
-    configured_model = _get_configured_model(existing_config)
 
-    # Handle --update-models flag
-    if args.update_models:
-        fetched_models = _fetch_models(base_url, api_key)
-        model = configured_model or DEFAULT_MODEL
-        config = _build_config(base_url, api_key, model, fetched_models)
-        _write_opencode_config(config)
-        print(f"Updated config with {len(fetched_models)} models.")
-        return 0
-
-    # Determine model to use (priority: CLI arg > env var > config > default)
-    model = args.model or os.environ.get("BLABLADOR_MODEL") or configured_model or DEFAULT_MODEL
-    fetched_models: list[str] | None = None
-
-    # Fetch models from API
-    try:
-        fetched_models = _fetch_models(base_url, api_key)
-    except SystemExit:
-        # If we have an existing config and model, continue without fresh model list
-        if model and configured_models:
-            fetched_models = sorted(configured_models)
-        else:
-            raise
-
-    # Check for model list changes and prompt to update
-    if fetched_models and configured_models:
+    # Update config if we have new models or no config exists
+    if fetched_models:
         fetched_set = set(fetched_models)
-        new_models = fetched_set - configured_models
-        removed_models = configured_models - fetched_set
-        if new_models or removed_models:
-            if _prompt_update_models(new_models, removed_models):
-                config = _build_config(base_url, api_key, model or fetched_models[0], fetched_models)
-                _write_opencode_config(config)
-                print("Config updated.")
-
-    # Validate model exists in available models (if we have the list)
-    if fetched_models and model not in fetched_models:
-        print(f"Warning: Model '{model}' not in available models list.")
-        print(f"Available: {', '.join(fetched_models)}")
-        if sys.stdin.isatty():
-            model = _choose_model(fetched_models)
-        else:
-            print(f"Proceeding with '{model}' anyway.")
-
-    # Write or update config if needed
-    if not configured_models or model != configured_model:
-        config = _build_config(base_url, api_key, model, fetched_models)
+        if fetched_set != configured_models:
+            new_models = fetched_set - configured_models
+            if new_models:
+                print(f"New models available: {', '.join(sorted(new_models))}")
+            config = _build_config(base_url, api_key, DEFAULT_MODEL, fetched_models)
+            _write_opencode_config(config)
+    elif not configured_models:
+        # No fetched models and no existing config - create minimal config
+        config = _build_config(base_url, api_key, DEFAULT_MODEL, [DEFAULT_MODEL])
         _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args
