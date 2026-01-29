@@ -60,6 +60,14 @@ class BlabladorScriptTests(unittest.TestCase):
             f"Blablador script must exist at {self.script_path}. "
             "This is a required artifact for the feature.",
         )
+        # Clean up any previously loaded blablador module for test isolation
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
+
+    def tearDown(self) -> None:
+        # Clean up the blablador module after each test
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
 
     def test_script_is_valid_python(self) -> None:
         """Verify that the blablador script is syntactically valid Python."""
@@ -94,7 +102,7 @@ class BlabladorScriptTests(unittest.TestCase):
         mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
         mock_response.__exit__ = unittest.mock.Mock(return_value=False)
 
-        with unittest.mock.patch("urllib.request.urlopen", return_value=mock_response):
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
                 "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
             )
@@ -114,7 +122,7 @@ class BlabladorScriptTests(unittest.TestCase):
         mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
         mock_response.__exit__ = unittest.mock.Mock(return_value=False)
 
-        with unittest.mock.patch("urllib.request.urlopen", return_value=mock_response):
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
                 "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
             )
@@ -141,7 +149,7 @@ class BlabladorScriptTests(unittest.TestCase):
         mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
         mock_response.__exit__ = unittest.mock.Mock(return_value=False)
 
-        with unittest.mock.patch("urllib.request.urlopen", return_value=mock_response):
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
                 "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
             )
