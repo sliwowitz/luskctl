@@ -28,10 +28,12 @@ RUN set -eux; \
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
 
-# Copy blablador wrapper (OpenCode-based)
+# Copy OpenCode scripts (shared module and wrappers)
+COPY scripts/opencode_common.py /usr/local/bin/opencode_common.py
 COPY scripts/blablador /usr/local/bin/blablador
+COPY scripts/opencode-custom /usr/local/bin/opencode-custom
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
-RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
+RUN chmod +x /usr/local/bin/blablador /usr/local/bin/opencode-custom /usr/local/bin/vibe-model-sync
 
 # Install OpenCode CLI as dev user (installs to ~/.opencode/bin/opencode)
 USER dev
@@ -44,6 +46,7 @@ RUN set -eux; \
       'alias claude="GIT_AUTHOR_NAME=Claude GIT_AUTHOR_EMAIL=noreply@anthropic.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" claude --dangerously-skip-permissions"' \
       'alias vibe="GIT_AUTHOR_NAME=\"Mistral Vibe\" GIT_AUTHOR_EMAIL=vibe@mistral.ai GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" vibe --auto-approve"' \
       'alias blablador="GIT_AUTHOR_NAME=Blablador GIT_AUTHOR_EMAIL=blablador@helmholtz.de GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" blablador"' \
+      'alias opencode-custom="GIT_AUTHOR_NAME="Custom LLM" GIT_AUTHOR_EMAIL=custom-llm@localhost GIT_COMMITTER_NAME="${HUMAN_GIT_NAME:-Nobody}" GIT_COMMITTER_EMAIL="${HUMAN_GIT_EMAIL:-nobody@localhost}" opencode-custom"' \
       '' \
       '# Print available agents on interactive login' \
       'if [ -t 1 ] && [ -z "$_LUSKCTL_AGENTS_SHOWN" ]; then' \
@@ -53,6 +56,8 @@ RUN set -eux; \
       '  printf "  \\033[36mclaude\\033[0m    - Claude Code CLI (permissions skipped)\\n"' \
       '  printf "  \\033[36mvibe\\033[0m      - Mistral Vibe CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mblablador\\033[0m - OpenCode with Helmholtz Blablador (full permissions)\\n"' \
+      '  printf "  \\033[36mopencode-custom\\033[0m - OpenCode with custom local LLM (full permissions)\n"' \
+"' \
       '  printf "\\n"' \
       'fi' \
       > /etc/profile.d/luskctl-agent-aliases.sh; \

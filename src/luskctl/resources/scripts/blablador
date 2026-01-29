@@ -9,10 +9,22 @@ with full permissions. Model selection can be done inside OpenCode.
 import argparse
 import json
 import os
-import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 from urllib import request, error
+
+# Import shared OpenCode functionality
+import sys
+import os
+
+# Add the directory containing opencode_common.py to the path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
+
+try:
+    from opencode_common import _write_opencode_config, _ensure_full_permissions, run_opencode
+except ImportError as e:
+    raise ImportError(f"Failed to import opencode_common: {e}") from e
 
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
@@ -203,17 +215,14 @@ def main() -> int:
             if new_models:
                 print(f"New models available: {', '.join(sorted(new_models))}")
             config = _build_config(base_url, api_key, model, fetched_models)
-            _write_opencode_config(config)
+            _write_opencode_config(_ensure_full_permissions(config))
     elif not configured_models:
         # No fetched models and no existing config - create minimal config
         config = _build_config(base_url, api_key, model, [model])
-        _write_opencode_config(config)
+        _write_opencode_config(_ensure_full_permissions(config))
 
-    cmd = ["opencode"] + opencode_args
-    try:
-        return subprocess.call(cmd)
-    except FileNotFoundError:
-        raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
+    # Use shared function to run OpenCode
+    return run_opencode()
 
 
 if __name__ == "__main__":
