@@ -7,6 +7,9 @@
   - Shared credentials/config for Claude Code under `/home/dev/.claude`
   - Shared credentials/config for Mistral Vibe under `/home/dev/.vibe`
   - Shared credentials/config for Blablador (OpenCode) under `/home/dev/.blablador`
+  - Shared config directory for OpenCode under `/home/dev/.config/opencode`
+  - Shared data directory for OpenCode under `/home/dev/.local/share/opencode`
+  - Shared state directory for OpenCode/Bun under `/home/dev/.local/state`
   - Optional per-project SSH configuration under `/home/dev/.ssh` (read-write)
 
 ## Per-task workspace (required)
@@ -24,22 +27,31 @@ envs:
   base_dir: /var/lib/luskctl/envs
 ```
 
-- Under this base, five subdirectories may be used:
+- Under this base, eight subdirectories may be used:
   1. `_codex-config` (required; created automatically if missing)
-     - Mounted as: `<base_dir>/_codex-config:/home/dev/.codex:Z` (read-write)
+     - Mounted as: `<base_dir>/_codex-config:/home/dev/.codex:z` (read-write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
   2. `_claude-config` (required; created automatically if missing)
-     - Mounted as: `<base_dir>/_claude-config:/home/dev/.claude:Z` (read-write)
+     - Mounted as: `<base_dir>/_claude-config:/home/dev/.claude:z` (read-write)
      - Purpose: Shared credentials/config used by Claude Code in CLI mode.
      - Note: luskctl sets `CLAUDE_CONFIG_DIR=/home/dev/.claude` inside containers.
   3. `_vibe-config` (required; created automatically if missing)
-     - Mounted as: `<base_dir>/_vibe-config:/home/dev/.vibe:Z` (read-write)
+     - Mounted as: `<base_dir>/_vibe-config:/home/dev/.vibe:z` (read-write)
      - Purpose: Shared credentials/config used by Mistral Vibe (CLI + UI).
   4. `_blablador-config` (required; created automatically if missing)
-     - Mounted as: `<base_dir>/_blablador-config:/home/dev/.blablador:Z` (read-write)
+     - Mounted as: `<base_dir>/_blablador-config:/home/dev/.blablador:z` (read-write)
      - Purpose: Shared credentials/config used by Blablador (OpenCode wrapper) inside the containers.
-  5. `_ssh-config-<project_id>` (optional)
-     - Mounted as: `<base_dir>/_ssh-config-<project_id>:/home/dev/.ssh:Z` (read-write)
+  5. `_opencode-config` (required; created automatically if missing)
+     - Mounted as: `<base_dir>/_opencode-config:/home/dev/.config/opencode:z` (read-write)
+     - Purpose: Shared config directory for OpenCode (contains opencode.json with provider settings).
+  6. `_opencode-data` (required; created automatically if missing)
+     - Mounted as: `<base_dir>/_opencode-data:/home/dev/.local/share/opencode:z` (read-write)
+     - Purpose: Shared data directory used by OpenCode (invoked via the Blablador wrapper) for caches and runtime data.
+  7. `_opencode-state` (required; created automatically if missing)
+     - Mounted as: `<base_dir>/_opencode-state:/home/dev/.local/state:z` (read-write)
+     - Purpose: Shared state directory used by OpenCode and Bun runtime.
+  8. `_ssh-config-<project_id>` (optional)
+     - Mounted as: `<base_dir>/_ssh-config-<project_id>:/home/dev/.ssh:z` (read-write)
      - Purpose: If your project uses private git URLs (for example, `git@github.com:...`), provide SSH keys and config here so the container can fetch the repository.
 
 ## Expected contents of the optional SSH config directory
@@ -75,7 +87,9 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
   - Prints the resulting paths. Use the `.pub` key to register a deploy key or add it to your Git host.
 
 ## SELinux and mount flags
-- luskctl uses the `:Z` flag for all volume mounts to ensure correct SELinux labeling. The SSH directory is mounted with `:Z` for read-write access.
+- luskctl uses SELinux mount flags to ensure correct labeling:
+  - `:Z` for the workspace mount (container-specific, private labeling)
+  - `:z` for all shared directories (shared labeling across containers)
 
 ## Git identity configuration
 - luskctl automatically configures git author and committer identities inside containers to identify AI-generated commits.
@@ -101,11 +115,14 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
 
 ## Quick reference (runtime mounts)
 - `/workspace` <- `<state_root>/tasks/<project>/<task>/workspace:Z`
-- `/home/dev/.codex` <- `<envs_base>/_codex-config:Z`
-- `/home/dev/.claude` <- `<envs_base>/_claude-config:Z`
-- `/home/dev/.vibe` <- `<envs_base>/_vibe-config:Z`
-- `/home/dev/.blablador` <- `<envs_base>/_blablador-config:Z`
-- `/home/dev/.ssh` (optional) <- `<envs_base>/_ssh-config-<project>:Z`
+- `/home/dev/.codex` <- `<envs_base>/_codex-config:z`
+- `/home/dev/.claude` <- `<envs_base>/_claude-config:z`
+- `/home/dev/.vibe` <- `<envs_base>/_vibe-config:z`
+- `/home/dev/.blablador` <- `<envs_base>/_blablador-config:z`
+- `/home/dev/.config/opencode` <- `<envs_base>/_opencode-config:z`
+- `/home/dev/.local/share/opencode` <- `<envs_base>/_opencode-data:z`
+- `/home/dev/.local/state` <- `<envs_base>/_opencode-state:z`
+- `/home/dev/.ssh` (optional) <- `<envs_base>/_ssh-config-<project>:z`
 
 ## How luskctl discovers these paths
 - `state_root`: Determined by `LUSKCTL_STATE_DIR` or defaults (root: `/var/lib/luskctl`; user: `${XDG_DATA_HOME:-~/.local/share}/luskctl`).
@@ -120,6 +137,9 @@ sudo mkdir -p /var/lib/luskctl/envs/_codex-config
 sudo mkdir -p /var/lib/luskctl/envs/_claude-config
 sudo mkdir -p /var/lib/luskctl/envs/_vibe-config
 sudo mkdir -p /var/lib/luskctl/envs/_blablador-config
+sudo mkdir -p /var/lib/luskctl/envs/_opencode-config
+sudo mkdir -p /var/lib/luskctl/envs/_opencode-data
+sudo mkdir -p /var/lib/luskctl/envs/_opencode-state
 ```
 
 3. If using private git repositories for a project `<proj>`:

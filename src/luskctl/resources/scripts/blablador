@@ -2,23 +2,24 @@
 """
 Blablador launcher for OpenCode.
 
-Fetches models from Blablador's OpenAI-compatible API, prompts for a model
-selection, and runs OpenCode with full permissions inside the container.
+Fetches models from Blablador's OpenAI-compatible API and runs OpenCode
+with full permissions. Model selection can be done inside OpenCode.
 """
-
 
 import argparse
 import json
 import os
-import sys
-import tempfile
 import subprocess
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
 from urllib import request, error
 
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
+# Preferred model with reliable tool calling support
+PREFERRED_MODEL = "7 - Qwen3-Coder-30B-A3B-Instruct - A code model from August 2025"
+# Fallback if preferred model is no longer available
+FALLBACK_MODEL = "alias-code"
 
 
 def _config_dir() -> Path:
@@ -29,7 +30,7 @@ def _config_path() -> Path:
     return _config_dir() / "config.json"
 
 
-def _load_api_key() -> Optional[str]:
+def _load_api_key() -> str | None:
     api_key = os.environ.get("BLABLADOR_API_KEY")
     if api_key:
         return api_key
@@ -44,7 +45,8 @@ def _load_api_key() -> Optional[str]:
     return val if isinstance(val, str) and val.strip() else None
 
 
-def _fetch_models(base_url: str, api_key: str) -> List[str]:
+def _fetch_models(base_url: str, api_key: str) -> list[str] | None:
+    """Fetch available models from the API. Returns None on failure."""
     url = base_url.rstrip("/") + "/models"
     req = request.Request(
         url,
@@ -56,12 +58,8 @@ def _fetch_models(base_url: str, api_key: str) -> List[str]:
     try:
         with request.urlopen(req, timeout=30) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        raise SystemExit(f"Failed to fetch models ({exc.code}): {exc.reason}")
-    except error.URLError as exc:
-        raise SystemExit(f"Failed to fetch models: {exc.reason}")
-    except json.JSONDecodeError:
-        raise SystemExit("Failed to parse models response as JSON")
+    except (error.HTTPError, error.URLError, json.JSONDecodeError):
+        return None
 
     items: Iterable[object] = []
     if isinstance(payload, dict):
@@ -70,44 +68,17 @@ def _fetch_models(base_url: str, api_key: str) -> List[str]:
         elif isinstance(payload.get("models"), list):
             items = payload["models"]
 
-    models: List[str] = []
+    models: list[str] = []
     for item in items:
         if isinstance(item, dict):
             model_id = item.get("id")
             if isinstance(model_id, str) and model_id:
                 models.append(model_id)
 
-    models = sorted({m for m in models})
-    if not models:
-        raise SystemExit("No models returned from Blablador /v1/models")
-    return models
+    return sorted(set(models)) if models else None
 
 
-def _print_models(models: List[str]) -> None:
-    for model in models:
-        print(model)
-
-
-def _choose_model(models: List[str]) -> str:
-    if not sys.stdin.isatty():
-        raise SystemExit("No TTY available. Pass --model or set BLABLADOR_MODEL.")
-    print("Available Blablador models:")
-    for idx, model in enumerate(models, start=1):
-        print(f"  {idx:>2}) {model}")
-    while True:
-        choice = input(f"Select model [1-{len(models)}] (default 1): ").strip()
-        if not choice:
-            return models[0]
-        if choice.isdigit():
-            pick = int(choice)
-            if 1 <= pick <= len(models):
-                return models[pick - 1]
-        if choice in models:
-            return choice
-        print("Invalid selection. Try again.")
-
-
-def _build_config(base_url: str, api_key: str, model: str, models: Optional[List[str]]) -> dict:
+def _build_config(base_url: str, api_key: str, model: str, models: list[str] | None) -> dict:
     model_map = {model: {"name": model}}
     if models:
         for mid in models:
@@ -133,11 +104,39 @@ def _build_config(base_url: str, api_key: str, model: str, models: Optional[List
     }
 
 
-def _write_temp_config(config: dict) -> Path:
-    tmp = tempfile.NamedTemporaryFile(prefix="opencode-blablador-", suffix=".json", delete=False)
-    with tmp:
-        tmp.write(json.dumps(config, indent=2).encode("utf-8"))
-    return Path(tmp.name)
+def _opencode_config_path() -> Path:
+    """Return the standard OpenCode config path."""
+    return Path.home() / ".config" / "opencode" / "opencode.json"
+
+
+def _load_opencode_config() -> dict | None:
+    """Load existing OpenCode config if present."""
+    config_path = _opencode_config_path()
+    if not config_path.is_file():
+        return None
+    try:
+        return json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _get_configured_models(config: dict | None) -> set[str]:
+    """Extract model IDs from an existing blablador provider config."""
+    if not config:
+        return set()
+    try:
+        models = config.get("provider", {}).get("blablador", {}).get("models", {})
+        return set(models.keys()) if isinstance(models, dict) else set()
+    except (AttributeError, TypeError):
+        return set()
+
+
+def _write_opencode_config(config: dict) -> Path:
+    """Write config to OpenCode's standard location."""
+    config_path = _opencode_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return config_path
 
 
 def main() -> int:
@@ -147,13 +146,11 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  blablador                # prompt for a model, then launch\n"
-            "  blablador --model <id>   # use a specific model\n"
+            "  blablador                # launch with preferred model\n"
             "  blablador --list-models  # list available models\n"
             "  blablador -- --help      # pass flags to opencode\n"
         ),
     )
-    parser.add_argument("--model", "-m", help="Model ID from /v1/models")
     parser.add_argument("--list-models", action="store_true", help="List available models and exit")
     parser.add_argument(
         "--base-url",
@@ -173,40 +170,50 @@ def main() -> int:
     base_url = args.base_url or os.environ.get("BLABLADOR_BASE_URL") or DEFAULT_BASE_URL
     base_url = base_url.rstrip("/")
 
+    # Fetch models from API
+    fetched_models = _fetch_models(base_url, api_key)
+
     if args.list_models:
-        models = _fetch_models(base_url, api_key)
-        _print_models(models)
+        if fetched_models:
+            for model in fetched_models:
+                print(model)
+        else:
+            raise SystemExit("Failed to fetch models from Blablador API")
         return 0
 
-    model = args.model or os.environ.get("BLABLADOR_MODEL")
-    fetched_models: Optional[List[str]] = None
-    try:
-        fetched_models = _fetch_models(base_url, api_key)
-    except SystemExit:
-        if not model:
-            raise
+    # Load existing config and check if update is needed
+    existing_config = _load_opencode_config()
+    configured_models = _get_configured_models(existing_config)
 
-    if not model:
-        if not fetched_models:
-            raise SystemExit("No models available. Pass --model to continue.")
-        model = _choose_model(fetched_models)
+    # Determine which model to use
+    model = PREFERRED_MODEL
+    if fetched_models and PREFERRED_MODEL not in fetched_models:
+        print(
+            f"Warning: Preferred model '{PREFERRED_MODEL}' is no longer available.\n"
+            f"Falling back to '{FALLBACK_MODEL}'.\n"
+            "Check for new upstream versions of luskctl to update the default model."
+        )
+        model = FALLBACK_MODEL
 
-    config = _build_config(base_url, api_key, model, fetched_models)
-    config_path = _write_temp_config(config)
-
-    env = os.environ.copy()
-    env["OPENCODE_CONFIG"] = str(config_path)
+    # Update config if we have new models or no config exists
+    if fetched_models:
+        fetched_set = set(fetched_models)
+        if fetched_set != configured_models:
+            new_models = fetched_set - configured_models
+            if new_models:
+                print(f"New models available: {', '.join(sorted(new_models))}")
+            config = _build_config(base_url, api_key, model, fetched_models)
+            _write_opencode_config(config)
+    elif not configured_models:
+        # No fetched models and no existing config - create minimal config
+        config = _build_config(base_url, api_key, model, [model])
+        _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args
     try:
-        return subprocess.call(cmd, env=env)
+        return subprocess.call(cmd)
     except FileNotFoundError:
         raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
-    finally:
-        try:
-            config_path.unlink()
-        except OSError:
-            pass
 
 
 if __name__ == "__main__":

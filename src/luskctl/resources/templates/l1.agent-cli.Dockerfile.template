@@ -24,11 +24,6 @@ RUN set -eux; \
     pipx install mistral-vibe; \
     pipx inject mistral-vibe mistralai
 
-# Install OpenCode CLI (used by the Blablador wrapper)
-RUN set -eux; \
-    export OPENCODE_INSTALL_DIR=/usr/local/bin; \
-    curl -fsSL https://opencode.ai/install | bash
-
 # Copy setup script for codex auth (port forwarding for OAuth callbacks)
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
@@ -38,20 +33,26 @@ COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
 
+# Install OpenCode CLI as dev user (installs to ~/.opencode/bin/opencode)
+USER dev
+RUN curl -fsSL https://opencode.ai/install | bash
+USER root
+
 RUN set -eux; \
     printf '%s\n' \
       'alias codex="GIT_AUTHOR_NAME=Codex GIT_AUTHOR_EMAIL=codex@openai.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" codex --dangerously-bypass-approvals-and-sandbox"' \
       'alias claude="GIT_AUTHOR_NAME=Claude GIT_AUTHOR_EMAIL=noreply@anthropic.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" claude --dangerously-skip-permissions"' \
       'alias vibe="GIT_AUTHOR_NAME=\"Mistral Vibe\" GIT_AUTHOR_EMAIL=vibe@mistral.ai GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" vibe --auto-approve"' \
+      'alias blablador="GIT_AUTHOR_NAME=Blablador GIT_AUTHOR_EMAIL=blablador@helmholtz.de GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" blablador"' \
       '' \
       '# Print available agents on interactive login' \
       'if [ -t 1 ] && [ -z "$_LUSKCTL_AGENTS_SHOWN" ]; then' \
       '  export _LUSKCTL_AGENTS_SHOWN=1' \
       '  printf "\\n\\033[1mAvailable AI agents:\\033[0m\\n"' \
-      '  printf "  \\033[36mcodex\\033[0m  - OpenAI Codex CLI (auto-approve enabled)\\n"' \
-      '  printf "  \\033[36mclaude\\033[0m - Claude Code CLI (permissions skipped)\\n"' \
-      '  printf "  \\033[36mvibe\\033[0m   - Mistral Vibe CLI (auto-approve enabled)\\n"' \
-      '  printf "  \\033[36mblablador\\033[0m - OpenCode (Blablador) with full permissions (not yet implemented)\\n"' \
+      '  printf "  \\033[36mcodex\\033[0m     - OpenAI Codex CLI (auto-approve enabled)\\n"' \
+      '  printf "  \\033[36mclaude\\033[0m    - Claude Code CLI (permissions skipped)\\n"' \
+      '  printf "  \\033[36mvibe\\033[0m      - Mistral Vibe CLI (auto-approve enabled)\\n"' \
+      '  printf "  \\033[36mblablador\\033[0m - OpenCode with Helmholtz Blablador (full permissions)\\n"' \
       '  printf "\\n"' \
       'fi' \
       > /etc/profile.d/luskctl-agent-aliases.sh; \
