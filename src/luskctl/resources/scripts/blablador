@@ -29,7 +29,7 @@ def _config_path() -> Path:
     return _config_dir() / "config.json"
 
 
-def _load_api_key() -> Optional[str]:
+def _load_api_key() -> str | None:
     api_key = os.environ.get("BLABLADOR_API_KEY")
     if api_key:
         return api_key
@@ -44,7 +44,7 @@ def _load_api_key() -> Optional[str]:
     return val if isinstance(val, str) and val.strip() else None
 
 
-def _fetch_models(base_url: str, api_key: str) -> List[str]:
+def _fetch_models(base_url: str, api_key: str) -> list[str]:
     url = base_url.rstrip("/") + "/models"
     req = request.Request(
         url,
@@ -70,7 +70,7 @@ def _fetch_models(base_url: str, api_key: str) -> List[str]:
         elif isinstance(payload.get("models"), list):
             items = payload["models"]
 
-    models: List[str] = []
+    models: list[str] = []
     for item in items:
         if isinstance(item, dict):
             model_id = item.get("id")
@@ -83,12 +83,12 @@ def _fetch_models(base_url: str, api_key: str) -> List[str]:
     return models
 
 
-def _print_models(models: List[str]) -> None:
+def _print_models(models: list[str]) -> None:
     for model in models:
         print(model)
 
 
-def _choose_model(models: List[str]) -> str:
+def _choose_model(models: list[str]) -> str:
     if not sys.stdin.isatty():
         raise SystemExit("No TTY available. Pass --model or set BLABLADOR_MODEL.")
     print("Available Blablador models:")
@@ -107,7 +107,7 @@ def _choose_model(models: List[str]) -> str:
         print("Invalid selection. Try again.")
 
 
-def _build_config(base_url: str, api_key: str, model: str, models: Optional[List[str]]) -> dict:
+def _build_config(base_url: str, api_key: str, model: str, models: list[str] | None) -> dict:
     model_map = {model: {"name": model}}
     if models:
         for mid in models:
@@ -179,7 +179,7 @@ def main() -> int:
         return 0
 
     model = args.model or os.environ.get("BLABLADOR_MODEL")
-    fetched_models: Optional[List[str]] = None
+    fetched_models: list[str] | None = None
     try:
         fetched_models = _fetch_models(base_url, api_key)
     except SystemExit:
