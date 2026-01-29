@@ -7,6 +7,8 @@
   - Shared credentials/config for Claude Code under `/home/dev/.claude`
   - Shared credentials/config for Mistral Vibe under `/home/dev/.vibe`
   - Shared credentials/config for Blablador (OpenCode) under `/home/dev/.blablador`
+  - Shared data directory for OpenCode under `/home/dev/.local/share/opencode`
+  - Shared state directory for OpenCode/Bun under `/home/dev/.local/state`
   - Optional per-project SSH configuration under `/home/dev/.ssh` (read-write)
 
 ## Per-task workspace (required)
@@ -24,7 +26,7 @@ envs:
   base_dir: /var/lib/luskctl/envs
 ```
 
-- Under this base, five subdirectories may be used:
+- Under this base, seven subdirectories may be used:
   1. `_codex-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_codex-config:/home/dev/.codex:Z` (read-write)
      - Purpose: Shared credentials/config used by Codex-enabled tools inside the containers.
@@ -38,7 +40,13 @@ envs:
   4. `_blablador-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_blablador-config:/home/dev/.blablador:Z` (read-write)
      - Purpose: Shared credentials/config used by Blablador (OpenCode wrapper) inside the containers.
-  5. `_ssh-config-<project_id>` (optional)
+  5. `_opencode-data` (required; created automatically if missing)
+     - Mounted as: `<base_dir>/_opencode-data:/home/dev/.local/share/opencode:Z` (read-write)
+     - Purpose: Shared data directory used by OpenCode (invoked via the Blablador wrapper) for caches and runtime data.
+  6. `_opencode-state` (required; created automatically if missing)
+     - Mounted as: `<base_dir>/_opencode-state:/home/dev/.local/state:Z` (read-write)
+     - Purpose: Shared state directory used by OpenCode and Bun runtime.
+  7. `_ssh-config-<project_id>` (optional)
      - Mounted as: `<base_dir>/_ssh-config-<project_id>:/home/dev/.ssh:Z` (read-write)
      - Purpose: If your project uses private git URLs (for example, `git@github.com:...`), provide SSH keys and config here so the container can fetch the repository.
 
@@ -105,6 +113,8 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
 - `/home/dev/.claude` <- `<envs_base>/_claude-config:Z`
 - `/home/dev/.vibe` <- `<envs_base>/_vibe-config:Z`
 - `/home/dev/.blablador` <- `<envs_base>/_blablador-config:Z`
+- `/home/dev/.local/share/opencode` <- `<envs_base>/_opencode-data:Z`
+- `/home/dev/.local/state` <- `<envs_base>/_opencode-state:Z`
 - `/home/dev/.ssh` (optional) <- `<envs_base>/_ssh-config-<project>:Z`
 
 ## How luskctl discovers these paths
@@ -120,6 +130,8 @@ sudo mkdir -p /var/lib/luskctl/envs/_codex-config
 sudo mkdir -p /var/lib/luskctl/envs/_claude-config
 sudo mkdir -p /var/lib/luskctl/envs/_vibe-config
 sudo mkdir -p /var/lib/luskctl/envs/_blablador-config
+sudo mkdir -p /var/lib/luskctl/envs/_opencode-data
+sudo mkdir -p /var/lib/luskctl/envs/_opencode-state
 ```
 
 3. If using private git repositories for a project `<proj>`:
