@@ -137,34 +137,62 @@ def _opencode_config_path() -> Path:
     return Path.home() / ".config" / "opencode" / "opencode.json"
 
 
-def _write_opencode_config(config: dict) -> tuple[Path, str | None]:
-    """Write config to OpenCode's standard location, returning (path, original_content).
+def _load_opencode_config() -> dict | None:
+    """Load existing OpenCode config if present."""
+    config_path = _opencode_config_path()
+    if not config_path.is_file():
+        return None
+    try:
+        return json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
 
-    If a config already exists, its content is returned so it can be restored later.
-    """
+
+def _get_configured_models(config: dict | None) -> set[str]:
+    """Extract model IDs from an existing blablador provider config."""
+    if not config:
+        return set()
+    try:
+        models = config.get("provider", {}).get("blablador", {}).get("models", {})
+        return set(models.keys()) if isinstance(models, dict) else set()
+    except (AttributeError, TypeError):
+        return set()
+
+
+def _get_configured_model(config: dict | None) -> str | None:
+    """Get the currently configured model from config."""
+    if not config:
+        return None
+    model = config.get("model", "")
+    if isinstance(model, str) and model.startswith("blablador/"):
+        return model[len("blablador/"):]
+    return None
+
+
+def _prompt_update_models(new_models: set[str], removed_models: set[str]) -> bool:
+    """Prompt user whether to update the model list. Returns True if user wants to update."""
+    if not sys.stdin.isatty():
+        return False
+    print("\nModel list has changed:")
+    if new_models:
+        print(f"  New models: {', '.join(sorted(new_models))}")
+    if removed_models:
+        print(f"  Removed models: {', '.join(sorted(removed_models))}")
+    while True:
+        choice = input("Update config with new model list? [Y/n]: ").strip().lower()
+        if choice in ("", "y", "yes"):
+            return True
+        if choice in ("n", "no"):
+            return False
+        print("Please enter 'y' or 'n'.")
+
+
+def _write_opencode_config(config: dict) -> Path:
+    """Write config to OpenCode's standard location."""
     config_path = _opencode_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    original_content = None
-    if config_path.is_file():
-        try:
-            original_content = config_path.read_text(encoding="utf-8")
-        except OSError:
-            pass
-
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    return config_path, original_content
-
-
-def _restore_opencode_config(config_path: Path, original_content: str | None) -> None:
-    """Restore the original OpenCode config, or remove if there was none."""
-    try:
-        if original_content is not None:
-            config_path.write_text(original_content, encoding="utf-8")
-        else:
-            config_path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    return config_path
 
 
 def main() -> int:
@@ -177,11 +205,15 @@ def main() -> int:
             "  blablador                # prompt for a model, then launch\n"
             "  blablador --model <id>   # use a specific model\n"
             "  blablador --list-models  # list available models\n"
+            "  blablador --update-models  # update the model list in config\n"
             "  blablador -- --help      # pass flags to opencode\n"
         ),
     )
     parser.add_argument("--model", "-m", help="Model ID from /v1/models")
     parser.add_argument("--list-models", action="store_true", help="List available models and exit")
+    parser.add_argument(
+        "--update-models", action="store_true", help="Update model list in config and exit"
+    )
     parser.add_argument(
         "--base-url",
         default=None,
@@ -205,29 +237,61 @@ def main() -> int:
         _print_models(models)
         return 0
 
-    model = args.model or os.environ.get("BLABLADOR_MODEL")
+    # Load existing config
+    existing_config = _load_opencode_config()
+    configured_models = _get_configured_models(existing_config)
+    configured_model = _get_configured_model(existing_config)
+
+    # Handle --update-models flag
+    if args.update_models:
+        fetched_models = _fetch_models(base_url, api_key)
+        model = configured_model or fetched_models[0]
+        config = _build_config(base_url, api_key, model, fetched_models)
+        _write_opencode_config(config)
+        print(f"Updated config with {len(fetched_models)} models.")
+        return 0
+
+    # Determine model to use
+    model = args.model or os.environ.get("BLABLADOR_MODEL") or configured_model
     fetched_models: list[str] | None = None
+
+    # Fetch models from API
     try:
         fetched_models = _fetch_models(base_url, api_key)
     except SystemExit:
-        if not model:
+        # If we have an existing config and model, continue without fresh model list
+        if model and configured_models:
+            fetched_models = sorted(configured_models)
+        else:
             raise
 
+    # Check for model list changes and prompt to update
+    if fetched_models and configured_models:
+        fetched_set = set(fetched_models)
+        new_models = fetched_set - configured_models
+        removed_models = configured_models - fetched_set
+        if new_models or removed_models:
+            if _prompt_update_models(new_models, removed_models):
+                config = _build_config(base_url, api_key, model or fetched_models[0], fetched_models)
+                _write_opencode_config(config)
+                print("Config updated.")
+
+    # If no model selected yet, prompt user
     if not model:
         if not fetched_models:
             raise SystemExit("No models available. Pass --model to continue.")
         model = _choose_model(fetched_models)
 
-    config = _build_config(base_url, api_key, model, fetched_models)
-    config_path, original_content = _write_opencode_config(config)
+    # Write or update config if needed
+    if not configured_models or model != configured_model:
+        config = _build_config(base_url, api_key, model, fetched_models)
+        _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args
     try:
         return subprocess.call(cmd)
     except FileNotFoundError:
         raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
-    finally:
-        _restore_opencode_config(config_path, original_content)
 
 
 if __name__ == "__main__":

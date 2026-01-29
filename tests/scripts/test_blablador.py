@@ -383,6 +383,111 @@ git:
                 )
 
 
+class BlabladorPersistentConfigTests(unittest.TestCase):
+    """Tests for persistent configuration management."""
+
+    def setUp(self) -> None:
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
+
+    def tearDown(self) -> None:
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
+
+    def test_get_configured_models_extracts_model_ids(self) -> None:
+        """Test that _get_configured_models extracts model IDs from config."""
+        blablador = load_blablador_module()
+
+        config = {
+            "provider": {
+                "blablador": {
+                    "models": {
+                        "model-a": {"name": "Model A"},
+                        "model-b": {"name": "Model B"},
+                    }
+                }
+            }
+        }
+
+        models = blablador._get_configured_models(config)
+        self.assertEqual(models, {"model-a", "model-b"})
+
+    def test_get_configured_models_returns_empty_for_no_config(self) -> None:
+        """Test that _get_configured_models returns empty set for None config."""
+        blablador = load_blablador_module()
+        self.assertEqual(blablador._get_configured_models(None), set())
+
+    def test_get_configured_models_returns_empty_for_missing_provider(self) -> None:
+        """Test that _get_configured_models handles missing provider."""
+        blablador = load_blablador_module()
+        self.assertEqual(blablador._get_configured_models({}), set())
+        self.assertEqual(blablador._get_configured_models({"provider": {}}), set())
+
+    def test_get_configured_model_extracts_model(self) -> None:
+        """Test that _get_configured_model extracts the current model."""
+        blablador = load_blablador_module()
+
+        config = {"model": "blablador/test-model"}
+        self.assertEqual(blablador._get_configured_model(config), "test-model")
+
+    def test_get_configured_model_returns_none_for_non_blablador(self) -> None:
+        """Test that _get_configured_model returns None for non-blablador models."""
+        blablador = load_blablador_module()
+
+        self.assertIsNone(blablador._get_configured_model({"model": "openai/gpt-4"}))
+        self.assertIsNone(blablador._get_configured_model(None))
+        self.assertIsNone(blablador._get_configured_model({}))
+
+    def test_prompt_update_models_returns_false_without_tty(self) -> None:
+        """Test that _prompt_update_models returns False without TTY."""
+        blablador = load_blablador_module()
+
+        with unittest.mock.patch.object(sys.stdin, "isatty", return_value=False):
+            result = blablador._prompt_update_models({"new-model"}, set())
+            self.assertFalse(result)
+
+    def test_load_opencode_config_returns_none_for_missing_file(self) -> None:
+        """Test that _load_opencode_config returns None if file doesn't exist."""
+        blablador = load_blablador_module()
+
+        with tempfile.TemporaryDirectory() as td:
+            fake_home = Path(td)
+            with unittest.mock.patch.object(
+                blablador, "_opencode_config_path", return_value=fake_home / "nonexistent.json"
+            ):
+                result = blablador._load_opencode_config()
+                self.assertIsNone(result)
+
+    def test_load_opencode_config_returns_parsed_json(self) -> None:
+        """Test that _load_opencode_config returns parsed config."""
+        blablador = load_blablador_module()
+
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "opencode.json"
+            config_data = {"model": "blablador/test", "provider": {"blablador": {}}}
+            config_path.write_text(json.dumps(config_data))
+
+            with unittest.mock.patch.object(
+                blablador, "_opencode_config_path", return_value=config_path
+            ):
+                result = blablador._load_opencode_config()
+                self.assertEqual(result, config_data)
+
+    def test_write_opencode_config_creates_directories(self) -> None:
+        """Test that _write_opencode_config creates parent directories."""
+        blablador = load_blablador_module()
+
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "nested" / "dir" / "opencode.json"
+
+            with unittest.mock.patch.object(
+                blablador, "_opencode_config_path", return_value=config_path
+            ):
+                blablador._write_opencode_config({"test": "config"})
+                self.assertTrue(config_path.exists())
+                self.assertEqual(json.loads(config_path.read_text()), {"test": "config"})
+
+
 class BlabladorConfigTests(unittest.TestCase):
     """Tests for Blablador configuration structure."""
 
