@@ -18,6 +18,7 @@ from urllib import request, error
 
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
+DEFAULT_MODEL = "alias-code"
 
 
 def _config_dir() -> Path:
@@ -203,14 +204,14 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  blablador                # prompt for a model, then launch\n"
+            f"  blablador                # use default model ({DEFAULT_MODEL})\n"
             "  blablador --model <id>   # use a specific model\n"
             "  blablador --list-models  # list available models\n"
             "  blablador --update-models  # update the model list in config\n"
             "  blablador -- --help      # pass flags to opencode\n"
         ),
     )
-    parser.add_argument("--model", "-m", help="Model ID from /v1/models")
+    parser.add_argument("--model", "-m", help=f"Model ID from /v1/models (default: {DEFAULT_MODEL})")
     parser.add_argument("--list-models", action="store_true", help="List available models and exit")
     parser.add_argument(
         "--update-models", action="store_true", help="Update model list in config and exit"
@@ -246,14 +247,14 @@ def main() -> int:
     # Handle --update-models flag
     if args.update_models:
         fetched_models = _fetch_models(base_url, api_key)
-        model = configured_model or fetched_models[0]
+        model = configured_model or DEFAULT_MODEL
         config = _build_config(base_url, api_key, model, fetched_models)
         _write_opencode_config(config)
         print(f"Updated config with {len(fetched_models)} models.")
         return 0
 
-    # Determine model to use
-    model = args.model or os.environ.get("BLABLADOR_MODEL") or configured_model
+    # Determine model to use (priority: CLI arg > env var > config > default)
+    model = args.model or os.environ.get("BLABLADOR_MODEL") or configured_model or DEFAULT_MODEL
     fetched_models: list[str] | None = None
 
     # Fetch models from API
@@ -277,11 +278,14 @@ def main() -> int:
                 _write_opencode_config(config)
                 print("Config updated.")
 
-    # If no model selected yet, prompt user
-    if not model:
-        if not fetched_models:
-            raise SystemExit("No models available. Pass --model to continue.")
-        model = _choose_model(fetched_models)
+    # Validate model exists in available models (if we have the list)
+    if fetched_models and model not in fetched_models:
+        print(f"Warning: Model '{model}' not in available models list.")
+        print(f"Available: {', '.join(fetched_models)}")
+        if sys.stdin.isatty():
+            model = _choose_model(fetched_models)
+        else:
+            print(f"Proceeding with '{model}' anyway.")
 
     # Write or update config if needed
     if not configured_models or model != configured_model:
