@@ -91,7 +91,6 @@ def _build_config(base_url: str, api_key: str, model: str, models: list[str] | N
                 "options": {
                     "baseURL": base_url,
                     "apiKey": api_key,
-                    "supportsStructuredOutputs": True,
                 },
                 "models": model_map,
             }
@@ -196,6 +195,9 @@ def main() -> int:
         # No fetched models and no existing config - create minimal config
         config = _build_config(base_url, api_key, DEFAULT_MODEL, [DEFAULT_MODEL])
         _write_opencode_config(config)
+
+    # Note about tool calling limitations
+    print("Note: Tool calling support varies by model. Use /model in OpenCode to switch.")
 
     cmd = ["opencode"] + opencode_args
     try:
