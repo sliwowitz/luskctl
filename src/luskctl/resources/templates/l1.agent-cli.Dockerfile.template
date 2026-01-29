@@ -24,11 +24,6 @@ RUN set -eux; \
     pipx install mistral-vibe; \
     pipx inject mistral-vibe mistralai
 
-# Install OpenCode CLI (used by the Blablador wrapper)
-RUN set -eux; \
-    export OPENCODE_INSTALL_DIR=/usr/local/bin; \
-    curl -fsSL https://opencode.ai/install | bash
-
 # Copy setup script for codex auth (port forwarding for OAuth callbacks)
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
@@ -37,6 +32,11 @@ RUN chmod +x /usr/local/bin/setup-codex-auth.sh
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
+
+# Install OpenCode CLI as dev user (installs to ~/.opencode/bin/opencode)
+USER dev
+RUN curl -fsSL https://opencode.ai/install | bash
+USER root
 
 RUN set -eux; \
     printf '%s\n' \

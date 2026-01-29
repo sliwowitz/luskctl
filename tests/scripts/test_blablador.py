@@ -339,9 +339,8 @@ git:
 
                 content = l1_cli.read_text(encoding="utf-8")
 
-                # Verify OpenCode installation
+                # Verify OpenCode installation (runs as dev user)
                 self.assertIn("opencode.ai/install", content)
-                self.assertIn("OPENCODE_INSTALL_DIR", content)
 
     def test_l1_cli_blablador_script_copied(self) -> None:
         """Verify the blablador wrapper script is copied to the image."""
