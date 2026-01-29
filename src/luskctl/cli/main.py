@@ -45,6 +45,7 @@ from ..lib.tasks import (
 from ..lib.tasks import (
     get_tasks as _get_tasks,
 )
+from ..lib.version import format_version_string, get_version_info
 
 # Optional: bash completion via argcomplete
 try:
@@ -108,6 +109,10 @@ def _gray(text: str, enabled: bool) -> str:
 
 
 def main() -> None:
+    # Get version info for --version flag
+    version, branch = get_version_info()
+    version_string = format_version_string(version, branch)
+
     parser = argparse.ArgumentParser(
         prog="luskctl",
         description="luskctl – generate/build images and run per-project task containers",
@@ -119,6 +124,7 @@ def main() -> None:
             "- Gatekeeping:    generate → build → ssh-init → gate-sync (required) →  task new → task run-*\n"
         ),
     )
+    parser.add_argument("--version", action="version", version=f"luskctl {version_string}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # projects
