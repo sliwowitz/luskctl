@@ -66,6 +66,7 @@ def get_backend_emoji(task: TaskMeta) -> str:
         "mistral": "🏰",  # Castle emoji for Mistral
         "claude": "✴️",  # Eight-point star emoji for Claude
         "codex": "🌸",  # Blossom emoji for Codex
+        "copilot": "🤖",  # Robot emoji for GitHub Copilot
     }
     return emoji_map.get(backend, "🕸️")  # Spider web emoji for unknown
 

@@ -259,7 +259,7 @@ def copy_to_clipboard(text: str) -> bool:
 
 # ---------- Tasks ----------
 
-WEB_BACKENDS = ("codex", "claude", "mistral")
+WEB_BACKENDS = ("codex", "claude", "copilot", "mistral")
 # Host-side env prefix for passthrough to container web UI.
 WEB_ENV_PASSTHROUGH_PREFIX = "LUSKUI_"
 WEB_ENV_PASSTHROUGH_KEYS = (
