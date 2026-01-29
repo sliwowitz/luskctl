@@ -10,11 +10,10 @@ selection, and runs OpenCode with full permissions inside the container.
 import argparse
 import json
 import os
-import sys
-import tempfile
 import subprocess
-from pathlib import Path
+import sys
 from collections.abc import Iterable
+from pathlib import Path
 from urllib import request, error
 
 
@@ -133,11 +132,39 @@ def _build_config(base_url: str, api_key: str, model: str, models: list[str] | N
     }
 
 
-def _write_temp_config(config: dict) -> Path:
-    tmp = tempfile.NamedTemporaryFile(prefix="opencode-blablador-", suffix=".json", delete=False)
-    with tmp:
-        tmp.write(json.dumps(config, indent=2).encode("utf-8"))
-    return Path(tmp.name)
+def _opencode_config_path() -> Path:
+    """Return the standard OpenCode config path (~/.config/opencode/opencode.json)."""
+    return Path.home() / ".config" / "opencode" / "opencode.json"
+
+
+def _write_opencode_config(config: dict) -> tuple[Path, str | None]:
+    """Write config to OpenCode's standard location, returning (path, original_content).
+
+    If a config already exists, its content is returned so it can be restored later.
+    """
+    config_path = _opencode_config_path()
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    original_content = None
+    if config_path.is_file():
+        try:
+            original_content = config_path.read_text(encoding="utf-8")
+        except OSError:
+            pass
+
+    config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    return config_path, original_content
+
+
+def _restore_opencode_config(config_path: Path, original_content: str | None) -> None:
+    """Restore the original OpenCode config, or remove if there was none."""
+    try:
+        if original_content is not None:
+            config_path.write_text(original_content, encoding="utf-8")
+        else:
+            config_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def main() -> int:
@@ -192,21 +219,15 @@ def main() -> int:
         model = _choose_model(fetched_models)
 
     config = _build_config(base_url, api_key, model, fetched_models)
-    config_path = _write_temp_config(config)
-
-    env = os.environ.copy()
-    env["OPENCODE_CONFIG"] = str(config_path)
+    config_path, original_content = _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args
     try:
-        return subprocess.call(cmd, env=env)
+        return subprocess.call(cmd)
     except FileNotFoundError:
         raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
     finally:
-        try:
-            config_path.unlink()
-        except OSError:
-            pass
+        _restore_opencode_config(config_path, original_content)
 
 
 if __name__ == "__main__":
