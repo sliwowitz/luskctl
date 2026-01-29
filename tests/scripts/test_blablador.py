@@ -7,8 +7,11 @@ These tests verify that:
 """
 
 import ast
+import importlib.machinery
+import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 import unittest.mock
@@ -31,13 +34,40 @@ def get_blablador_script_path() -> Path:
     )
 
 
+def load_blablador_module():
+    """Load the blablador script as a Python module."""
+    script_path = get_blablador_script_path()
+
+    # Create a custom loader for scripts without .py extension
+    loader = importlib.machinery.SourceFileLoader("blablador", str(script_path))
+    spec = importlib.util.spec_from_file_location("blablador", script_path, loader=loader)
+    if spec is None:
+        raise ImportError(f"Could not load spec from {script_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["blablador"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class BlabladorScriptTests(unittest.TestCase):
     """Tests for the blablador wrapper script."""
 
     def setUp(self) -> None:
         self.script_path = get_blablador_script_path()
-        if not self.script_path.exists():
-            self.skipTest(f"Blablador script not found at {self.script_path}")
+        self.assertTrue(
+            self.script_path.exists(),
+            f"Blablador script must exist at {self.script_path}. "
+            "This is a required artifact for the feature.",
+        )
+        # Clean up any previously loaded blablador module for test isolation
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
+
+    def tearDown(self) -> None:
+        # Clean up the blablador module after each test
+        if "blablador" in sys.modules:
+            del sys.modules["blablador"]
 
     def test_script_is_valid_python(self) -> None:
         """Verify that the blablador script is syntactically valid Python."""
@@ -53,38 +83,110 @@ class BlabladorScriptTests(unittest.TestCase):
             "Script should start with #!/usr/bin/env python3",
         )
 
-    def test_script_has_default_base_url(self) -> None:
-        """Verify the script has the correct Blablador API base URL."""
-        content = self.script_path.read_text(encoding="utf-8")
-        self.assertIn(
-            'DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"',
-            content,
-            "Script should have the correct Blablador API base URL",
+    def test_fetch_models_with_data_array(self) -> None:
+        """Test _fetch_models with OpenAI-compatible 'data' array response."""
+        blablador = load_blablador_module()
+
+        mock_response_data = json.dumps(
+            {
+                "data": [
+                    {"id": "model-1", "object": "model"},
+                    {"id": "model-2", "object": "model"},
+                    {"id": "model-3", "object": "model"},
+                ]
+            }
+        ).encode("utf-8")
+
+        mock_response = unittest.mock.Mock()
+        mock_response.read.return_value = mock_response_data
+        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
+            models = blablador._fetch_models(
+                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
+            )
+
+        self.assertEqual(models, ["model-1", "model-2", "model-3"])
+
+    def test_fetch_models_with_models_array(self) -> None:
+        """Test _fetch_models with alternative 'models' array response format."""
+        blablador = load_blablador_module()
+
+        mock_response_data = json.dumps(
+            {"models": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]}
+        ).encode("utf-8")
+
+        mock_response = unittest.mock.Mock()
+        mock_response.read.return_value = mock_response_data
+        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
+            models = blablador._fetch_models(
+                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
+            )
+
+        self.assertEqual(models, ["custom-model-1", "custom-model-2"])
+
+    def test_fetch_models_deduplicates_and_sorts(self) -> None:
+        """Test that _fetch_models deduplicates and sorts model IDs."""
+        blablador = load_blablador_module()
+
+        mock_response_data = json.dumps(
+            {
+                "data": [
+                    {"id": "zebra-model"},
+                    {"id": "alpha-model"},
+                    {"id": "zebra-model"},  # duplicate
+                    {"id": "beta-model"},
+                ]
+            }
+        ).encode("utf-8")
+
+        mock_response = unittest.mock.Mock()
+        mock_response.read.return_value = mock_response_data
+        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
+        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+
+        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
+            models = blablador._fetch_models(
+                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
+            )
+
+        self.assertEqual(models, ["alpha-model", "beta-model", "zebra-model"])
+
+    def test_build_config_structure(self) -> None:
+        """Test that _build_config generates correct OpenCode configuration."""
+        blablador = load_blablador_module()
+
+        config = blablador._build_config(
+            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
+            api_key="test-key-123",
+            model="test-model",
+            models=["test-model", "other-model"],
         )
 
-    def test_script_uses_openai_compatible_npm_package(self) -> None:
-        """Verify the script uses @ai-sdk/openai-compatible for OpenCode integration."""
-        content = self.script_path.read_text(encoding="utf-8")
-        self.assertIn(
-            '"npm": "@ai-sdk/openai-compatible"',
-            content,
-            "Script should use @ai-sdk/openai-compatible npm package",
+        # Verify schema and model
+        self.assertEqual(config["$schema"], "https://opencode.ai/config.json")
+        self.assertEqual(config["model"], "blablador/test-model")
+
+        # Verify provider configuration
+        self.assertIn("blablador", config["provider"])
+        provider = config["provider"]["blablador"]
+        self.assertEqual(provider["npm"], "@ai-sdk/openai-compatible")
+        self.assertEqual(provider["name"], "Helmholtz Blablador")
+        self.assertEqual(
+            provider["options"]["baseURL"], "https://api.helmholtz-blablador.fz-juelich.de/v1"
         )
+        self.assertEqual(provider["options"]["apiKey"], "test-key-123")
 
-    def test_script_config_dir_is_blablador(self) -> None:
-        """Verify the script uses ~/.blablador as config directory."""
-        content = self.script_path.read_text(encoding="utf-8")
-        self.assertIn('".blablador"', content, "Script should use ~/.blablador config directory")
+        # Verify models map includes both models
+        self.assertIn("test-model", provider["models"])
+        self.assertIn("other-model", provider["models"])
 
-    def test_script_builds_opencode_config(self) -> None:
-        """Verify the script builds proper OpenCode config structure."""
-        content = self.script_path.read_text(encoding="utf-8")
-        # Check for key config elements
-        self.assertIn('"$schema": "https://opencode.ai/config.json"', content)
-        self.assertIn('"provider":', content)
-        self.assertIn('"blablador":', content)
-        self.assertIn('"permission":', content)
-        self.assertIn('"*": "allow"', content)
+        # Verify permission is set to allow all
+        self.assertEqual(config["permission"]["*"], "allow")
 
 
 class BlabladorDockerfileTests(unittest.TestCase):
@@ -286,36 +388,37 @@ class BlabladorConfigTests(unittest.TestCase):
     """Tests for Blablador configuration structure."""
 
     def test_config_json_structure(self) -> None:
-        """Test that the expected config JSON structure is valid."""
-        # This is the structure that blablador generates for OpenCode
-        config = {
-            "$schema": "https://opencode.ai/config.json",
-            "model": "blablador/alias-code",
-            "provider": {
-                "blablador": {
-                    "npm": "@ai-sdk/openai-compatible",
-                    "name": "Helmholtz Blablador",
-                    "options": {
-                        "baseURL": "https://api.helmholtz-blablador.fz-juelich.de/v1",
-                        "apiKey": "test-key",
-                    },
-                    "models": {"alias-code": {"name": "alias-code"}},
-                }
-            },
-            "permission": {
-                "*": "allow",
-            },
-        }
+        """Test that _build_config generates valid and correctly structured config."""
+        blablador = load_blablador_module()
+
+        # Call the actual _build_config function
+        config = blablador._build_config(
+            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
+            api_key="test-api-key-456",
+            model="alias-code",
+            models=["alias-code", "other-model"],
+        )
 
         # Verify it's valid JSON by serializing and deserializing
         json_str = json.dumps(config, indent=2)
         parsed = json.loads(json_str)
 
+        # Assert on key fields from the actual implementation
         self.assertEqual(parsed["$schema"], "https://opencode.ai/config.json")
         self.assertEqual(parsed["model"], "blablador/alias-code")
         self.assertIn("blablador", parsed["provider"])
         self.assertEqual(parsed["provider"]["blablador"]["npm"], "@ai-sdk/openai-compatible")
+        self.assertEqual(parsed["provider"]["blablador"]["name"], "Helmholtz Blablador")
+        self.assertEqual(
+            parsed["provider"]["blablador"]["options"]["baseURL"],
+            "https://api.helmholtz-blablador.fz-juelich.de/v1",
+        )
+        self.assertEqual(parsed["provider"]["blablador"]["options"]["apiKey"], "test-api-key-456")
         self.assertEqual(parsed["permission"]["*"], "allow")
+
+        # Verify model map includes the models we passed
+        self.assertIn("alias-code", parsed["provider"]["blablador"]["models"])
+        self.assertIn("other-model", parsed["provider"]["blablador"]["models"])
 
 
 if __name__ == "__main__":
