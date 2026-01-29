@@ -16,7 +16,10 @@ from urllib import request, error
 
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
-DEFAULT_MODEL = "alias-code"
+# Preferred model with reliable tool calling support
+PREFERRED_MODEL = "7 - Qwen3-Coder-30B-A3B-Instruct - A code model from August 2025"
+# Fallback if preferred model is no longer available
+FALLBACK_MODEL = "alias-code"
 
 
 def _config_dir() -> Path:
@@ -143,7 +146,7 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            f"  blablador                # launch with default model ({DEFAULT_MODEL})\n"
+            "  blablador                # launch with preferred model\n"
             "  blablador --list-models  # list available models\n"
             "  blablador -- --help      # pass flags to opencode\n"
         ),
@@ -182,6 +185,16 @@ def main() -> int:
     existing_config = _load_opencode_config()
     configured_models = _get_configured_models(existing_config)
 
+    # Determine which model to use
+    model = PREFERRED_MODEL
+    if fetched_models and PREFERRED_MODEL not in fetched_models:
+        print(
+            f"Warning: Preferred model '{PREFERRED_MODEL}' is no longer available.\n"
+            f"Falling back to '{FALLBACK_MODEL}'.\n"
+            "Check for new upstream versions of luskctl to update the default model."
+        )
+        model = FALLBACK_MODEL
+
     # Update config if we have new models or no config exists
     if fetched_models:
         fetched_set = set(fetched_models)
@@ -189,15 +202,12 @@ def main() -> int:
             new_models = fetched_set - configured_models
             if new_models:
                 print(f"New models available: {', '.join(sorted(new_models))}")
-            config = _build_config(base_url, api_key, DEFAULT_MODEL, fetched_models)
+            config = _build_config(base_url, api_key, model, fetched_models)
             _write_opencode_config(config)
     elif not configured_models:
         # No fetched models and no existing config - create minimal config
-        config = _build_config(base_url, api_key, DEFAULT_MODEL, [DEFAULT_MODEL])
+        config = _build_config(base_url, api_key, model, [model])
         _write_opencode_config(config)
-
-    # Note about tool calling limitations
-    print("Note: Tool calling support varies by model. Use /model in OpenCode to switch.")
 
     cmd = ["opencode"] + opencode_args
     try:
