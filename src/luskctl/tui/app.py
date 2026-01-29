@@ -1308,19 +1308,17 @@ if _HAS_TEXTUAL:
                 await self.action_delete_task()
 
         async def _action_build_all_images(self) -> None:
-            """Build all project images."""
+            """Build all project images (L0, L1, L2)."""
             if not self.current_project_id:
                 self.notify("No project selected.")
                 return
             with self.suspend():
                 try:
-                    # This would need to be implemented in the docker module
-                    print("Building all images...")
-                    # build_all_images(self.current_project_id)
+                    build_images(self.current_project_id, build_all=True)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")
-            self.notify(f"Built all images for {self.current_project_id}")
+            self.notify(f"Built all images (L0, L1, L2) for {self.current_project_id}")
             self._refresh_project_state()
 
         async def _action_sync_gate(self) -> None:
@@ -1396,16 +1394,17 @@ if _HAS_TEXTUAL:
             self._refresh_project_state()
 
         async def action_build_images(self) -> None:
+            """Build only L2 project images (reuses existing L0/L1)."""
             if not self.current_project_id:
                 self.notify("No project selected.")
                 return
             with self.suspend():
                 try:
-                    build_images(self.current_project_id)
+                    build_images(self.current_project_id, build_all=False)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")
-            self.notify(f"Built images for {self.current_project_id}")
+            self.notify(f"Built L2 project images for {self.current_project_id}")
             self._refresh_project_state()
 
         async def action_init_ssh(self) -> None:

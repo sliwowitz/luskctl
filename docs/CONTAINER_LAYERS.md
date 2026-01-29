@@ -43,13 +43,17 @@ Build flow
   - L1.cli.Dockerfile
   - L1.ui.Dockerfile
   - L2.Dockerfile
-- luskctl build <project> executes podman builds in order:
+- luskctl build <project> builds only the L2 project images (reuses existing L0/L1 images):
+  1) <project>:l2-cli FROM luskctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
+  2) <project>:l2-ui FROM luskctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
+  3) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --dev` is used)
+- luskctl build --all <project> rebuilds all images from L0 to L2 in order:
   1) luskctl-l0:<base-tag> FROM docker.base_image (default: Ubuntu 24.04)
   2) luskctl-l1-cli:<base-tag> FROM luskctl-l0:<base-tag>
   3) luskctl-l1-ui:<base-tag> FROM luskctl-l0:<base-tag>
   4) <project>:l2-cli FROM luskctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
   5) <project>:l2-ui FROM luskctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
-  6) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --dev` is used)
+  6) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --all --dev` is used)
   - <base-tag> is derived from docker.base_image (sanitized), e.g.:
     - ubuntu:24.04 → ubuntu-24.04
     - nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04 → nvcr-io-nvidia-nvhpc-25.9-devel-cuda13.0-ubuntu24.04

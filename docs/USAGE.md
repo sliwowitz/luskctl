@@ -183,11 +183,18 @@ luskctl generate myproj
 ### Step 5: Build Images
 
 ```bash
+# Build only L2 project images (faster, reuses existing L0/L1 layers)
 luskctl build myproj
+
+# Build all layers from L0 to L2 (use when you've updated base or agent layers)
+luskctl build --all myproj
 
 # Optional: build a dev image from L0 as well
 luskctl build myproj --dev
+luskctl build --all myproj --dev
 ```
+
+The default `luskctl build` command only rebuilds the project-specific L2 images, reusing the existing L0 (base) and L1 (agent) images. This is much faster when you've only changed project-specific settings. Use `--all` when you need to rebuild the base or agent layers.
 
 ### Step 6: Initialize SSH (for private repos)
 

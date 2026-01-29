@@ -120,3 +120,71 @@ class DockerTests(unittest.TestCase):
                 # Verify that pipx commands use these environment variables (no inline vars)
                 self.assertIn("pipx install mistral-vibe", content)
                 self.assertIn("pipx inject mistral-vibe mistralai", content)
+
+    def test_build_images_build_all_parameter(self) -> None:
+        """Test that build_images respects the build_all parameter."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_build_test"
+            write_project(
+                config_root,
+                project_id,
+                f"""\nproject:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n  default_branch: main\n""".lstrip(),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                from luskctl.lib.docker import build_images
+
+                generate_dockerfiles(project_id)
+
+                # Mock subprocess.run to capture build commands
+                build_commands = []
+
+                def mock_run(cmd, **kwargs):
+                    if isinstance(cmd, list) and "podman" in cmd and "build" in cmd:
+                        build_commands.append(cmd)
+                    # Create a mock result
+                    result = unittest.mock.Mock()
+                    result.returncode = 0
+                    return result
+
+                with unittest.mock.patch("subprocess.run", side_effect=mock_run):
+                    # Test build_all=False (default)
+                    build_commands.clear()
+                    try:
+                        build_images(project_id, build_all=False)
+                    except Exception:
+                        pass  # We're mocking, so it might fail
+
+                    # Should only build L2 images (2 commands: l2-cli and l2-ui)
+                    self.assertEqual(len(build_commands), 2)
+                    for cmd in build_commands:
+                        self.assertIn("L2.Dockerfile", " ".join(cmd))
+
+                    # Test build_all=True
+                    build_commands.clear()
+                    try:
+                        build_images(project_id, build_all=True)
+                    except Exception:
+                        pass  # We're mocking, so it might fail
+
+                    # Should build all images (5 commands: L0, L1-cli, L1-ui, L2-cli, L2-ui)
+                    self.assertEqual(len(build_commands), 5)
+                    # First command should be L0
+                    self.assertIn("L0.Dockerfile", " ".join(build_commands[0]))
+                    # Second and third should be L1
+                    self.assertIn("L1.cli.Dockerfile", " ".join(build_commands[1]))
+                    self.assertIn("L1.ui.Dockerfile", " ".join(build_commands[2]))
+                    # Fourth and fifth should be L2
+                    self.assertIn("L2.Dockerfile", " ".join(build_commands[3]))
+                    self.assertIn("L2.Dockerfile", " ".join(build_commands[4]))

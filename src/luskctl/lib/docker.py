@@ -202,7 +202,7 @@ def generate_dockerfiles(project_id: str) -> None:
     print(f"Generated Dockerfiles in {out_dir}")
 
 
-def build_images(project_id: str, include_dev: bool = False) -> None:
+def build_images(project_id: str, include_dev: bool = False, build_all: bool = False) -> None:
     project = load_project(project_id)
     docker_cfg = _load_docker_config(project.root)
     stage_dir = build_root() / project.id
@@ -228,67 +228,79 @@ def build_images(project_id: str, include_dev: bool = False) -> None:
     l2_ui_image = project_web_image(project.id)
     l2_dev_image = project_dev_image(project.id)
 
-    cmds = [
+    cmds = []
+
+    # Only build L0 and L1 layers when build_all is True
+    if build_all:
+        cmds.extend(
+            [
+                [
+                    "podman",
+                    "build",
+                    "-f",
+                    str(l0),
+                    "--build-arg",
+                    f"BASE_IMAGE={base_image}",
+                    "-t",
+                    l0_image,
+                    context_dir,
+                ],
+                [
+                    "podman",
+                    "build",
+                    "-f",
+                    str(l1_cli),
+                    "--build-arg",
+                    f"BASE_IMAGE={l0_image}",
+                    "-t",
+                    l1_cli_image,
+                    context_dir,
+                ],
+                [
+                    "podman",
+                    "build",
+                    "-f",
+                    str(l1_ui),
+                    "--build-arg",
+                    f"BASE_IMAGE={l0_image}",
+                    "-t",
+                    l1_ui_image,
+                    context_dir,
+                ],
+            ]
+        )
+
+    # Always build L2 project images
+    cmds.extend(
         [
-            "podman",
-            "build",
-            "-f",
-            str(l0),
-            "--build-arg",
-            f"BASE_IMAGE={base_image}",
-            "-t",
-            l0_image,
-            context_dir,
-        ],
-        [
-            "podman",
-            "build",
-            "-f",
-            str(l1_cli),
-            "--build-arg",
-            f"BASE_IMAGE={l0_image}",
-            "-t",
-            l1_cli_image,
-            context_dir,
-        ],
-        [
-            "podman",
-            "build",
-            "-f",
-            str(l1_ui),
-            "--build-arg",
-            f"BASE_IMAGE={l0_image}",
-            "-t",
-            l1_ui_image,
-            context_dir,
-        ],
-        [
-            "podman",
-            "build",
-            "-f",
-            str(l2),
-            "--build-arg",
-            f"BASE_IMAGE={l1_cli_image}",
-            "--label",
-            f"luskctl.build_context_hash={context_hash}",
-            "-t",
-            l2_cli_image,
-            context_dir,
-        ],
-        [
-            "podman",
-            "build",
-            "-f",
-            str(l2),
-            "--build-arg",
-            f"BASE_IMAGE={l1_ui_image}",
-            "--label",
-            f"luskctl.build_context_hash={context_hash}",
-            "-t",
-            l2_ui_image,
-            context_dir,
-        ],
-    ]
+            [
+                "podman",
+                "build",
+                "-f",
+                str(l2),
+                "--build-arg",
+                f"BASE_IMAGE={l1_cli_image}",
+                "--label",
+                f"luskctl.build_context_hash={context_hash}",
+                "-t",
+                l2_cli_image,
+                context_dir,
+            ],
+            [
+                "podman",
+                "build",
+                "-f",
+                str(l2),
+                "--build-arg",
+                f"BASE_IMAGE={l1_ui_image}",
+                "--label",
+                f"luskctl.build_context_hash={context_hash}",
+                "-t",
+                l2_ui_image,
+                context_dir,
+            ],
+        ]
+    )
     if include_dev:
         cmds.append(
             [

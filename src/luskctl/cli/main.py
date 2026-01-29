@@ -149,6 +149,11 @@ def main() -> None:
     except Exception:
         pass
     p_build.add_argument(
+        "--all",
+        action="store_true",
+        help="Build all layers (L0, L1, L2). Default: build only L2 project images",
+    )
+    p_build.add_argument(
         "--dev",
         action="store_true",
         help="Also build a manual dev image from L0 (tagged as <project>:l2-dev)",
@@ -312,7 +317,11 @@ def main() -> None:
     if args.cmd == "generate":
         generate_dockerfiles(args.project_id)
     elif args.cmd == "build":
-        build_images(args.project_id, include_dev=getattr(args, "dev", False))
+        build_images(
+            args.project_id,
+            include_dev=getattr(args, "dev", False),
+            build_all=getattr(args, "all", False),
+        )
     elif args.cmd == "ssh-init":
         init_project_ssh(
             args.project_id,

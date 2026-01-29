@@ -241,6 +241,9 @@ class ProjectActions(Static):
             )  # generate Dockerfiles (g)
             yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)  # build images (b)
             yield Button(
+                "b[yellow]A[/yellow]ll", id="btn-build-all", compact=True
+            )  # build all images (A)
+            yield Button(
                 "[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True
             )  # init SSH dir (s)
             yield Button(
@@ -270,6 +273,7 @@ class ProjectActions(Static):
         mapping = {
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
+            "btn-build-all": "_action_build_all_images",
             "btn-ssh-init": "action_init_ssh",
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",
