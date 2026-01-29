@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "local-llm/model-name",
+  "provider": {
+    "local-llm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local LLM",
+      "options": {
+        "baseURL": "http://localhost:8000/v1/",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "model-name": {
+          "name": "Local Model",
+          "contextLength": 120000
+        }
+      }
+    }
+  },
+  "permission": {
+    "*": "allow"
+  }
+}

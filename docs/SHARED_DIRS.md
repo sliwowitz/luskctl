@@ -50,6 +50,10 @@ envs:
   7. `_opencode-state` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_opencode-state:/home/dev/.local/state:z` (read-write)
      - Purpose: Shared state directory used by OpenCode and Bun runtime.
+  8. `_opencode-custom-config` (optional)
+     - Mounted as: `<base_dir>/_opencode-custom-config:/home/dev/.config/opencode-custom:z` (read-write)
+     - Purpose: Custom OpenCode provider configurations for local LLM instances.
+     - Example: Place your `opencode-custom.json` file here and point to it in `luskctl-config.yml`.
   8. `_ssh-config-<project_id>` (optional)
      - Mounted as: `<base_dir>/_ssh-config-<project_id>:/home/dev/.ssh:z` (read-write)
      - Purpose: If your project uses private git URLs (for example, `git@github.com:...`), provide SSH keys and config here so the container can fetch the repository.

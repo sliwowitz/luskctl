@@ -50,6 +50,13 @@ git:
 # Valid values: codex, claude, mistral
 # default_agent: claude
 
+# OpenCode custom provider configuration
+# Uncomment and configure to use custom OpenCode providers (e.g., local vLLM instances)
+# opencode:
+#   # Path to custom OpenCode provider config file (JSON format)
+#   # Default recommended location: ~/.config/luskctl/opencode-custom.json
+#   custom_config_path: "~/.config/luskctl/opencode-custom.json"
+
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no
 # global or environment switch.
