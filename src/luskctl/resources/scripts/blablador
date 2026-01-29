@@ -122,6 +122,7 @@ def _build_config(base_url: str, api_key: str, model: str, models: list[str] | N
                 "options": {
                     "baseURL": base_url,
                     "apiKey": api_key,
+                    "supportsStructuredOutputs": True,
                 },
                 "models": model_map,
             }
