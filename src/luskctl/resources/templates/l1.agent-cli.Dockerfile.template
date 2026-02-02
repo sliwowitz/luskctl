@@ -15,7 +15,6 @@ RUN set -eux; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
     npm install -g @openai/codex; \
-    npm install -g @anthropic-ai/claude-code; \
     npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 
@@ -36,6 +35,9 @@ RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
 # Install OpenCode CLI as dev user (installs to ~/.opencode/bin/opencode)
 USER dev
 RUN curl -fsSL https://opencode.ai/install | bash
+
+# Install Claude Code CLI as dev user (installs to ~/.local/share/claude/)
+RUN mkdir -p ~/.local/share && curl -fsSL https://claude.ai/install.sh | bash
 USER root
 
 RUN set -eux; \
