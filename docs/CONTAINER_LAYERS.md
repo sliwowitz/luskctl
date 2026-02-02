@@ -17,10 +17,10 @@ Layers
 1. L1 — agent images (luskctl-l1-cli:<base-tag>, luskctl-l1-ui:<base-tag>)
    - Built FROM L0.
    - CLI image installs Codex, Claude Code, Mistral Vibe, and supporting tools.
-   - UI image installs UI dependencies and sets CMD to luskui-entry.sh.
+   - UI image installs UI dependencies, prefetches the LuskUI distribution, and sets CMD to luskui-entry.sh.
    - luskui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
-     - Downloads a pre-built CodexUI distribution tarball containing production-ready assets and dependencies.
+     - Uses the pre-built CodexUI distribution baked into the image; downloads it at runtime only if missing.
      - Starts the UI server directly using the pre-built dist/server.js.
      - If REPO_ROOT exists, cd into it so the UI starts in the project root.
 
