@@ -16,8 +16,8 @@ from urllib import request, error
 
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
-# Preferred model with reliable tool calling support
-PREFERRED_MODEL = "7 - Qwen3-Coder-30B-A3B-Instruct - A code model from August 2025"
+# Preferred model - alias-huge provides the largest available model
+PREFERRED_MODEL = "alias-huge"
 # Fallback if preferred model is no longer available
 FALLBACK_MODEL = "alias-code"
 
