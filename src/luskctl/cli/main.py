@@ -149,9 +149,14 @@ def main() -> None:
     except Exception:
         pass
     p_build.add_argument(
-        "--all",
+        "--agents",
         action="store_true",
-        help="Build all layers (L0, L1, L2). Default: build only L2 project images",
+        help="Rebuild L0+L1+L2 with fresh agent installs (codex, claude, opencode, vibe)",
+    )
+    p_build.add_argument(
+        "--full-rebuild",
+        action="store_true",
+        help="Full rebuild with no cache (includes base image pull and apt packages)",
     )
     p_build.add_argument(
         "--dev",
@@ -320,7 +325,8 @@ def main() -> None:
         build_images(
             args.project_id,
             include_dev=getattr(args, "dev", False),
-            build_all=getattr(args, "all", False),
+            rebuild_agents=getattr(args, "agents", False),
+            full_rebuild=getattr(args, "full_rebuild", False),
         )
     elif args.cmd == "ssh-init":
         init_project_ssh(
