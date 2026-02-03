@@ -6,7 +6,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIPX_HOME=/opt/pipx \
     PIPX_BIN_DIR=/usr/local/bin
 
+# === Root operations ===
 USER root
+ENV HOME=/root
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -14,8 +17,6 @@ RUN set -eux; \
             python-is-python3 python3 python3-pip python3-venv pipx ; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
-    npm install -g @openai/codex; \
-    npm cache clean --force; \
     rm -rf /var/lib/apt/lists/*
 
 # Install mistral-vibe and mistralai SDK using pipx as root, ensuring PATH is set up
@@ -32,16 +33,12 @@ COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
 RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
 
-# Install OpenCode CLI as dev user (installs to ~/.opencode/bin/opencode)
-USER dev
-RUN curl -fsSL https://opencode.ai/install | bash
-
-# Install Claude Code CLI as dev user (installs to ~/.local/share/claude/)
-RUN mkdir -p ~/.local/share && curl -fsSL https://claude.ai/install.sh | bash
-USER root
-
+# Configure shell aliases and PATH for agent CLIs
 RUN set -eux; \
     printf '%s\n' \
+      '# Add user-installed agent CLIs to PATH' \
+      'export PATH="$HOME/.npm-packages/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH"' \
+      '' \
       'alias codex="GIT_AUTHOR_NAME=Codex GIT_AUTHOR_EMAIL=codex@openai.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" codex --dangerously-bypass-approvals-and-sandbox"' \
       'alias claude="GIT_AUTHOR_NAME=Claude GIT_AUTHOR_EMAIL=noreply@anthropic.com GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" claude --dangerously-skip-permissions"' \
       'alias vibe="GIT_AUTHOR_NAME=\"Mistral Vibe\" GIT_AUTHOR_EMAIL=vibe@mistral.ai GIT_COMMITTER_NAME=\"\${HUMAN_GIT_NAME:-Nobody}\" GIT_COMMITTER_EMAIL=\"\${HUMAN_GIT_EMAIL:-nobody@localhost}\" vibe --auto-approve"' \
@@ -66,5 +63,15 @@ RUN set -eux; \
     # Add Mistral model sync to bashrc (only for interactive shells)
     printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
+# === User operations ===
 USER dev
+ENV HOME=/home/dev
+WORKDIR /home/dev
+
+# Install AI agent CLIs as dev user
+RUN npm install -g @openai/codex
+RUN curl -fsSL https://claude.ai/install.sh | bash
+RUN curl -fsSL https://opencode.ai/install | bash
+
+WORKDIR /workspace
 # No CMD: reuse init-ssh-and-repo.sh from base image

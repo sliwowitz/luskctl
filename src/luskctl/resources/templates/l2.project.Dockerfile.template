@@ -7,10 +7,12 @@ ENV CODE_REPO="{{CODE_REPO_DEFAULT}}" \
     GIT_BRANCH="{{DEFAULT_BRANCH}}"
 
 USER root
+ENV HOME=/root
 
 # --- BEGIN USER SNIPPET ---
 {{USER_SNIPPET}}
 # --- END USER SNIPPET ---
 
 WORKDIR /workspace
+ENV HOME=/home/dev
 USER dev
