@@ -2,9 +2,13 @@
 ARG BASE_IMAGE=luskctl-l0:latest
 FROM ${BASE_IMAGE}
 
+ARG LUSKUI_DIST_TAG=latest
+
 ENV HOST="0.0.0.0" \
     PORT="7860" \
-    LUSKUI_DIR="/opt/luskui"
+    LUSKUI_DIR="/opt/luskui" \
+    LUSKUI_DIST_TAG="${LUSKUI_DIST_TAG}" \
+    LUSKUI_DIST_URL="https://github.com/sliwowitz/luskui/releases/download/${LUSKUI_DIST_TAG}/luskui-dist.tar.gz"
 
 # === Root operations ===
 USER root
@@ -26,8 +30,24 @@ RUN set -eux; \
     fi
 
 RUN set -eux; \
-    mkdir -p /opt/luskui; \
-    chown -R dev:dev /opt/luskui
+    mkdir -p "${LUSKUI_DIR}"; \
+    tarball_path="/tmp/luskui-dist.tar.gz"; \
+    curl -fsSL "${LUSKUI_DIST_URL}" -o "${tarball_path}"; \
+    if [ ! -s "${tarball_path}" ]; then \
+      echo "!! failed to download LuskUI distribution (file is missing or empty): ${tarball_path}"; \
+      exit 1; \
+    fi; \
+    if ! tar -tzf "${tarball_path}" >/dev/null 2>&1; then \
+      echo "!! downloaded LuskUI archive appears to be corrupted or not a valid tar.gz: ${tarball_path}"; \
+      exit 1; \
+    fi; \
+    tar -xzf "${tarball_path}" -C "${LUSKUI_DIR}"; \
+    rm -f "${tarball_path}"; \
+    if [ ! -f "${LUSKUI_DIR}/dist/server.js" ]; then \
+      echo "!! no UI entrypoint found (expected dist/server.js)."; \
+      exit 1; \
+    fi; \
+    chown -R dev:dev "${LUSKUI_DIR}"
 
 COPY scripts/luskui-entry.sh /usr/local/bin/luskui-entry.sh
 RUN chmod +x /usr/local/bin/luskui-entry.sh

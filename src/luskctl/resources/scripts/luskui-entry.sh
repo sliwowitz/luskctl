@@ -36,35 +36,18 @@ if command -v git >/dev/null 2>&1 && [[ -n "${LUSKUI_BACKEND:-}" ]]; then
 fi
 
 : "${LUSKUI_DIR:=/opt/luskui}"
-: "${LUSKUI_DIST_TAG:=latest}"
-: "${LUSKUI_DIST_URL:=https://github.com/sliwowitz/luskui/releases/download/${LUSKUI_DIST_TAG}/luskui-dist.tar.gz}"
 : "${HOST:=0.0.0.0}"
 : "${PORT:=7860}"
 
-echo ">> fetching CodexUI release asset ${LUSKUI_DIST_URL}"
-mkdir -p "${LUSKUI_DIR}"
-tarball_path="/tmp/luskui-dist.tar.gz"
-curl -fsSL "${LUSKUI_DIST_URL}" -o "${tarball_path}"
-
-# Validate that the download succeeded and the archive is usable
-if [[ ! -s "${tarball_path}" ]]; then
-  echo "!! failed to download CodexUI distribution (file is missing or empty): ${tarball_path}"
-  exit 1
-fi
-
-if ! tar -tzf "${tarball_path}" >/dev/null 2>&1; then
-  echo "!! downloaded CodexUI archive appears to be corrupted or not a valid tar.gz: ${tarball_path}"
-  exit 1
-fi
-
-tar -xzf "${tarball_path}" -C "${LUSKUI_DIR}"
-rm -f "${tarball_path}"
-cd "${LUSKUI_DIR}"
 ui_entry="${LUSKUI_DIR}/dist/server.js"
 if [[ ! -f "${ui_entry}" ]]; then
-  echo "!! no UI entrypoint found (expected dist/server.js)."
+  echo "!! missing preinstalled LuskUI distribution (expected ${ui_entry})."
+  echo "!! ensure the image build installs the LuskUI dist tarball."
   exit 1
+else
+  echo ">> using preinstalled LuskUI at ${ui_entry}"
 fi
+cd "${LUSKUI_DIR}"
 
 # If a task workspace repository exists, prefer that as working directory
 if [[ -n "${REPO_ROOT:-}" && -d "${REPO_ROOT}" ]]; then
