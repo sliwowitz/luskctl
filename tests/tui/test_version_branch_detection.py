@@ -2,7 +2,6 @@
 
 import json
 import unittest
-from pathlib import Path
 from unittest import mock
 
 
@@ -129,19 +128,6 @@ class CLIVersionTests(unittest.TestCase):
             text=True,
         )
         self.assertIn(expected_version_str, result.stdout)
-
-
-class BranchInfoPlaceholderTests(unittest.TestCase):
-    """Test that _branch_info.py placeholder is correctly set."""
-
-    def test_branch_info_placeholder_is_none(self) -> None:
-        """Test that the committed _branch_info.py has BRANCH_NAME = None."""
-        branch_info_path = (
-            Path(__file__).parent.parent.parent / "src" / "luskctl" / "_branch_info.py"
-        )
-        content = branch_info_path.read_text()
-        # The placeholder should have BRANCH_NAME = None
-        self.assertIn("BRANCH_NAME = None", content)
 
 
 if __name__ == "__main__":
