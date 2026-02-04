@@ -1255,7 +1255,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.tasks._is_container_running", return_value=True
+                        "luskctl.lib.tasks._get_container_state", return_value="running"
                     ),
                     unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                 ):
