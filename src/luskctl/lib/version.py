@@ -8,6 +8,7 @@ import json
 import subprocess
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 
 def get_version_info() -> tuple[str, str | None]:
@@ -156,7 +157,7 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     if not isinstance(vcs_info, dict):
         return None
 
-    def validate_and_strip(value: any) -> str | None:
+    def validate_and_strip(value: Any) -> str | None:
         """Validate that value is a non-empty string after stripping whitespace."""
         if isinstance(value, str):
             stripped = value.strip()
