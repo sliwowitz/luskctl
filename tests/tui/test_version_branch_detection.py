@@ -55,46 +55,18 @@ class VersionModuleTests(unittest.TestCase):
         self.assertIsInstance(version, str)
         self.assertTrue(branch is None or isinstance(branch, str))
 
-    def test_get_version_info_with_branch_info_set(self) -> None:
-        """Test get_version_info when _branch_info.BRANCH_NAME is set."""
-        # Import the actual _branch_info and patch its BRANCH_NAME attribute
-        import luskctl._branch_info
-
-        original_value = luskctl._branch_info.BRANCH_NAME
-        try:
-            luskctl._branch_info.BRANCH_NAME = "test-branch"
+    def test_get_version_info_without_branch_data(self) -> None:
+        """Test get_version_info when no branch data is available."""
+        # Mock subprocess to fail git detection (simulating tarball install)
+        with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
 
             from luskctl.lib.version import get_version_info
 
             with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
                 _, branch = get_version_info()
-            self.assertEqual(branch, "test-branch")
-        finally:
-            # Restore original value
-            luskctl._branch_info.BRANCH_NAME = original_value
-
-    def test_get_version_info_with_branch_info_none(self) -> None:
-        """Test get_version_info when _branch_info.BRANCH_NAME is None (release/tarball)."""
-        # Import the actual _branch_info and patch its BRANCH_NAME attribute
-        import luskctl._branch_info
-
-        original_value = luskctl._branch_info.BRANCH_NAME
-        try:
-            luskctl._branch_info.BRANCH_NAME = None
-
-            # Also mock subprocess to fail git detection (simulating tarball install)
-            with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
-                mock_run.side_effect = FileNotFoundError("git not found")
-
-                from luskctl.lib.version import get_version_info
-
-                with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
-                    _, branch = get_version_info()
-                # Branch should be None when _branch_info is None and git detection fails
-                self.assertIsNone(branch)
-        finally:
-            # Restore original value
-            luskctl._branch_info.BRANCH_NAME = original_value
+            # Branch should be None when PEP 610 is absent and git detection fails
+            self.assertIsNone(branch)
 
 
 class Pep610Tests(unittest.TestCase):

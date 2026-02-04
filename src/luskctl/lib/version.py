@@ -46,11 +46,7 @@ def get_version_info() -> tuple[str, str | None]:
       direct_url.json. If present, we use requested_revision (or commit_id)
       for display, without mutating any source files.
 
-    STRATEGY 2 - Legacy _branch_info.py (for older wheels):
-      Some historical builds embedded branch info in _branch_info.py. If present,
-      we still honor it for compatibility.
-
-    STRATEGY 3 - Live git detection (for development mode):
+    STRATEGY 2 - Live git detection (for development mode):
       When running from source (detected by presence of pyproject.toml), query
       git directly for the current branch. Check for tagged releases and suppress
       the branch name if HEAD is at a vX.Y.Z tag.
@@ -84,17 +80,7 @@ def get_version_info() -> tuple[str, str | None]:
     if pep610_revision:
         return version, pep610_revision
 
-    # Strategy 2: Legacy _branch_info.py (older wheels)
-    try:
-        from luskctl import _branch_info
-
-        if hasattr(_branch_info, "BRANCH_NAME") and _branch_info.BRANCH_NAME:
-            return version, _branch_info.BRANCH_NAME
-    except ImportError:
-        # _branch_info.py doesn't exist: either PyPI install, dev mode, or release build
-        pass
-
-    # Strategy 3: Live git detection (development mode only)
+    # Strategy 2: Live git detection (development mode only)
     # Only attempt if pyproject.toml exists, indicating we're in a source checkout
     pyproject_path = repo_root / "pyproject.toml"
     if pyproject_path.exists():
