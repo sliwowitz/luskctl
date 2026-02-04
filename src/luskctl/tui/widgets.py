@@ -336,7 +336,10 @@ class TaskList(ListView):
             # Use actual container state if we have it
             if task.container_state == "running":
                 status_display = "running"
-                task_emoji = ""  # Reset emoji to avoid pause emoji for running containers
+                # Clear task_emoji if it was set to pause emoji from metadata status
+                # Running tasks should use their mode-based emoji (CLI/web backend)
+                if task.status == "stopped":
+                    task_emoji = ""
                 # Add port for running web tasks
                 if task.web_port:
                     extra_parts.append(f"port={task.web_port}")
