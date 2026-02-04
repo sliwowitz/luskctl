@@ -8,6 +8,7 @@ import json
 import subprocess
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 
 def get_version_info() -> tuple[str, str | None]:
@@ -134,7 +135,14 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     try:
         dist = metadata.distribution(dist_name)
         direct_url = dist.read_text("direct_url.json")
-    except (metadata.PackageNotFoundError, FileNotFoundError):
+    except (
+        metadata.PackageNotFoundError,
+        FileNotFoundError,
+        PermissionError,
+        UnicodeDecodeError,
+        OSError,
+    ):
+        # Handle various file reading errors gracefully
         return None
 
     if not direct_url:
@@ -149,13 +157,20 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     if not isinstance(vcs_info, dict):
         return None
 
-    requested_revision = vcs_info.get("requested_revision")
-    if requested_revision:
-        return requested_revision
+    def validate_and_strip(value: Any) -> str | None:
+        """Validate that value is a non-empty string after stripping whitespace."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        return None
 
-    commit_id = vcs_info.get("commit_id")
-    if commit_id:
-        return commit_id
+    # Try requested_revision first, then commit_id
+    if result := validate_and_strip(vcs_info.get("requested_revision")):
+        return result
+
+    if result := validate_and_strip(vcs_info.get("commit_id")):
+        return result
 
     return None
 
