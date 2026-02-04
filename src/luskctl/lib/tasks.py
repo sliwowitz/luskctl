@@ -512,12 +512,18 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     claude_host_dir = envs_base / "_claude-config"
     vibe_host_dir = envs_base / "_vibe-config"
     blablador_host_dir = envs_base / "_blablador-config"
+    opencode_config_host_dir = envs_base / "_opencode-config"
+    opencode_data_host_dir = envs_base / "_opencode-data"
+    opencode_state_host_dir = envs_base / "_opencode-state"
     # Prefer project-configured SSH host dir if set
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
     _ensure_dir_writable(codex_host_dir, "Codex config")
     _ensure_dir_writable(claude_host_dir, "Claude config")
     _ensure_dir_writable(vibe_host_dir, "Vibe config")
     _ensure_dir_writable(blablador_host_dir, "Blablador config")
+    _ensure_dir_writable(opencode_config_host_dir, "OpenCode config")
+    _ensure_dir_writable(opencode_data_host_dir, "OpenCode data")
+    _ensure_dir_writable(opencode_state_host_dir, "OpenCode state")
 
     env = {
         "PROJECT_ID": project.id,
@@ -546,6 +552,12 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     volumes.append(f"{vibe_host_dir}:/home/dev/.vibe:z")
     # Shared Blablador credentials/config (OpenCode wrapper, shared between containers)
     volumes.append(f"{blablador_host_dir}:/home/dev/.blablador:z")
+    # Shared OpenCode config directory (shared between containers)
+    volumes.append(f"{opencode_config_host_dir}:/home/dev/.config/opencode:z")
+    # Shared OpenCode data directory (used by OpenCode/Blablador, shared between containers)
+    volumes.append(f"{opencode_data_host_dir}:/home/dev/.local/share/opencode:z")
+    # Shared OpenCode state directory (used by Bun runtime, shared between containers)
+    volumes.append(f"{opencode_state_host_dir}:/home/dev/.local/state:z")
 
     # Security mode specific wiring
     gate_repo = project.gate_path

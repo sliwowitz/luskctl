@@ -17,10 +17,10 @@ Layers
 1. L1 — agent images (luskctl-l1-cli:<base-tag>, luskctl-l1-ui:<base-tag>)
    - Built FROM L0.
    - CLI image installs Codex, Claude Code, Mistral Vibe, and supporting tools.
-   - UI image installs UI dependencies and sets CMD to luskui-entry.sh.
+   - UI image installs UI dependencies, prefetches the LuskUI distribution, and sets CMD to luskui-entry.sh.
    - luskui-entry.sh:
      - Invokes init-ssh-and-repo.sh first (if present) to initialize SSH and the project repo in /workspace.
-     - Downloads a pre-built CodexUI distribution tarball containing production-ready assets and dependencies.
+     - Uses the pre-built CodexUI distribution baked into the image; downloads it at runtime only if missing.
      - Starts the UI server directly using the pre-built dist/server.js.
      - If REPO_ROOT exists, cd into it so the UI starts in the project root.
 
@@ -47,16 +47,22 @@ Build flow
   1) <project>:l2-cli FROM luskctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
   2) <project>:l2-ui FROM luskctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
   3) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --dev` is used)
-- luskctl build --all <project> rebuilds all images from L0 to L2 in order:
+- luskctl build --agents <project> rebuilds L0+L1+L2 with fresh agent installs:
   1) luskctl-l0:<base-tag> FROM docker.base_image (default: Ubuntu 24.04)
-  2) luskctl-l1-cli:<base-tag> FROM luskctl-l0:<base-tag>
+  2) luskctl-l1-cli:<base-tag> FROM luskctl-l0:<base-tag> — with cache bust to force fresh agent downloads
   3) luskctl-l1-ui:<base-tag> FROM luskctl-l0:<base-tag>
-  4) <project>:l2-cli FROM luskctl-l1-cli:<base-tag> (via --build-arg BASE_IMAGE=...)
-  5) <project>:l2-ui FROM luskctl-l1-ui:<base-tag> (via --build-arg BASE_IMAGE=...)
-  6) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `luskctl build --all --dev` is used)
-  - <base-tag> is derived from docker.base_image (sanitized), e.g.:
-    - ubuntu:24.04 → ubuntu-24.04
-    - nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04 → nvcr-io-nvidia-nvhpc-25.9-devel-cuda13.0-ubuntu24.04
+  4) <project>:l2-cli FROM luskctl-l1-cli:<base-tag>
+  5) <project>:l2-ui FROM luskctl-l1-ui:<base-tag>
+  6) Optional: <project>:l2-dev FROM luskctl-l0:<base-tag> (when `--dev` is used)
+  - The --agents flag passes a unique AGENT_CACHE_BUST build arg to L1, invalidating the cache
+    for agent install layers (codex, claude, opencode) while preserving cache for apt packages.
+- luskctl build --full-rebuild <project> does a complete rebuild with no cache:
+  - Adds --no-cache to all podman build commands
+  - Adds --pull=always to L0 build to fetch latest base image
+  - Use when base image or apt packages need updating
+- <base-tag> is derived from docker.base_image (sanitized), e.g.:
+  - ubuntu:24.04 → ubuntu-24.04
+  - nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04 → nvcr-io-nvidia-nvhpc-25.9-devel-cuda13.0-ubuntu24.04
 
 Runtime behavior (tasks)
 - luskctl task run-cli starts <project>:l2-cli; luskctl task run-ui starts <project>:l2-ui.

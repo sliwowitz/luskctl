@@ -183,18 +183,24 @@ luskctl generate myproj
 ### Step 5: Build Images
 
 ```bash
-# Build only L2 project images (faster, reuses existing L0/L1 layers)
+# Build only L2 project images (fast, reuses existing L0/L1 layers)
 luskctl build myproj
 
-# Build all layers from L0 to L2 (use when you've updated base or agent layers)
-luskctl build --all myproj
+# Rebuild L0+L1+L2 with fresh agent installs (codex, claude, opencode, vibe)
+luskctl build --agents myproj
+
+# Full rebuild with no cache (includes base image pull and apt packages)
+luskctl build --full-rebuild myproj
 
 # Optional: build a dev image from L0 as well
 luskctl build myproj --dev
-luskctl build --all myproj --dev
+luskctl build --agents myproj --dev
 ```
 
-The default `luskctl build` command only rebuilds the project-specific L2 images, reusing the existing L0 (base) and L1 (agent) images. This is much faster when you've only changed project-specific settings. Use `--all` when you need to rebuild the base or agent layers.
+Build modes:
+- **Default** (`build`): Only rebuilds L2 project images, reuses existing L0/L1. Use for project config changes.
+- **Agents** (`--agents`): Rebuilds L0+L1+L2 with fresh agent downloads. Use to update AI agents to latest versions.
+- **Full rebuild** (`--full-rebuild`): Complete rebuild with `--no-cache` and `--pull=always`. Use when base image or apt packages need updating.
 
 ### Step 6: Initialize SSH (for private repos)
 
