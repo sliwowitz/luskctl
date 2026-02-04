@@ -90,7 +90,8 @@ if _HAS_TEXTUAL:
             _modal_binding("down", "app.focus_next", "Next"),
             _modal_binding("d", "generate", "Generate dockerfiles"),
             _modal_binding("b", "build", "Build project image"),
-            _modal_binding("a", "build_all", "Build all images"),
+            _modal_binding("a", "build_agents", "Rebuild with fresh agents"),
+            _modal_binding("f", "build_full", "Full rebuild no cache"),
             _modal_binding("s", "init_ssh", "Init SSH"),
             _modal_binding("g", "sync_gate", "Sync git gate"),
         ]
@@ -172,8 +173,13 @@ if _HAS_TEXTUAL:
                         variant="primary",
                     )
                     yield Button(
-                        "build [yellow]a[/yellow]ll images",
-                        id="build_all",
+                        "rebuild with [yellow]a[/yellow]gents",
+                        id="build_agents",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "[yellow]f[/yellow]ull rebuild no cache",
+                        id="build_full",
                         variant="primary",
                     )
                     yield Button(
@@ -196,7 +202,8 @@ if _HAS_TEXTUAL:
                 action_map = {
                     "generate": "generate",
                     "build": "build",
-                    "build_all": "build_all",
+                    "build_agents": "build_agents",
+                    "build_full": "build_full",
                     "sync_gate": "sync_gate",
                     "init_ssh": "init_ssh",
                 }
@@ -227,7 +234,11 @@ if _HAS_TEXTUAL:
                 event.stop()
                 return
             if key == "a":
-                self.action_build_all()
+                self.action_build_agents()
+                event.stop()
+                return
+            if key == "f":
+                self.action_build_full()
                 event.stop()
                 return
             if key == "s":
@@ -247,8 +258,11 @@ if _HAS_TEXTUAL:
         def action_build(self) -> None:
             self.dismiss("build")
 
-        def action_build_all(self) -> None:
-            self.dismiss("build_all")
+        def action_build_agents(self) -> None:
+            self.dismiss("build_agents")
+
+        def action_build_full(self) -> None:
+            self.dismiss("build_full")
 
         def action_init_ssh(self) -> None:
             self.dismiss("init_ssh")
@@ -1289,8 +1303,10 @@ if _HAS_TEXTUAL:
                 await self.action_generate_dockerfiles()
             elif action == "build":
                 await self.action_build_images()
-            elif action == "build_all":
-                await self._action_build_all_images()
+            elif action == "build_agents":
+                await self._action_build_agents()
+            elif action == "build_full":
+                await self._action_build_full()
             elif action == "init_ssh":
                 await self.action_init_ssh()
             elif action == "sync_gate":
@@ -1307,18 +1323,32 @@ if _HAS_TEXTUAL:
             elif action == "delete":
                 await self.action_delete_task()
 
-        async def _action_build_all_images(self) -> None:
-            """Build all project images (L0, L1, L2)."""
+        async def _action_build_agents(self) -> None:
+            """Build L0+L1+L2 with fresh agent installs."""
             if not self.current_project_id:
                 self.notify("No project selected.")
                 return
             with self.suspend():
                 try:
-                    build_images(self.current_project_id, build_all=True)
+                    build_images(self.current_project_id, rebuild_agents=True)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")
-            self.notify(f"Built all images (L0, L1, L2) for {self.current_project_id}")
+            self.notify(f"Built L0+L1+L2 with fresh agents for {self.current_project_id}")
+            self._refresh_project_state()
+
+        async def _action_build_full(self) -> None:
+            """Full rebuild with no cache."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            with self.suspend():
+                try:
+                    build_images(self.current_project_id, full_rebuild=True)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            self.notify(f"Full rebuild (no cache) completed for {self.current_project_id}")
             self._refresh_project_state()
 
         async def _action_sync_gate(self) -> None:
@@ -1400,7 +1430,7 @@ if _HAS_TEXTUAL:
                 return
             with self.suspend():
                 try:
-                    build_images(self.current_project_id, build_all=False)
+                    build_images(self.current_project_id)
                 except SystemExit as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")

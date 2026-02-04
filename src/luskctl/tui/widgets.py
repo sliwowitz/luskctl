@@ -239,10 +239,15 @@ class ProjectActions(Static):
             yield Button(
                 "[yellow]g[/yellow]en", id="btn-generate", compact=True
             )  # generate Dockerfiles (g)
-            yield Button("[yellow]b[/yellow]uild", id="btn-build", compact=True)  # build images (b)
             yield Button(
-                "b[yellow]A[/yellow]ll", id="btn-build-all", compact=True
-            )  # build all images (A)
+                "[yellow]b[/yellow]uild", id="btn-build", compact=True
+            )  # build L2 images (b)
+            yield Button(
+                "[yellow]A[/yellow]gents", id="btn-build-agents", compact=True
+            )  # rebuild with fresh agents (A)
+            yield Button(
+                "[yellow]F[/yellow]ull", id="btn-build-full", compact=True
+            )  # full rebuild no cache (F)
             yield Button(
                 "[yellow]s[/yellow]sh", id="btn-ssh-init", compact=True
             )  # init SSH dir (s)
@@ -273,7 +278,8 @@ class ProjectActions(Static):
         mapping = {
             "btn-generate": "action_generate_dockerfiles",
             "btn-build": "action_build_images",
-            "btn-build-all": "_action_build_all_images",
+            "btn-build-agents": "_action_build_agents",
+            "btn-build-full": "_action_build_full",
             "btn-ssh-init": "action_init_ssh",
             "btn-sync-gate": "action_sync_gate",
             "btn-new-task": "action_new_task",

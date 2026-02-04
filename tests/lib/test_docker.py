@@ -121,8 +121,8 @@ class DockerTests(unittest.TestCase):
                 self.assertIn("pipx install mistral-vibe", content)
                 self.assertIn("pipx inject mistral-vibe mistralai", content)
 
-    def test_build_images_build_all_parameter(self) -> None:
-        """Test that build_images respects the build_all parameter."""
+    def test_build_images_rebuild_agents_parameter(self) -> None:
+        """Test that build_images respects the rebuild_agents parameter."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -159,10 +159,10 @@ class DockerTests(unittest.TestCase):
                     return result
 
                 with unittest.mock.patch("subprocess.run", side_effect=mock_run):
-                    # Test build_all=False (default)
+                    # Test default (L2 only)
                     build_commands.clear()
                     try:
-                        build_images(project_id, build_all=False)
+                        build_images(project_id)
                     except Exception:
                         pass  # We're mocking, so it might fail
 
@@ -171,10 +171,10 @@ class DockerTests(unittest.TestCase):
                     for cmd in build_commands:
                         self.assertIn("L2.Dockerfile", " ".join(cmd))
 
-                    # Test build_all=True
+                    # Test rebuild_agents=True
                     build_commands.clear()
                     try:
-                        build_images(project_id, build_all=True)
+                        build_images(project_id, rebuild_agents=True)
                     except Exception:
                         pass  # We're mocking, so it might fail
 
@@ -182,9 +182,28 @@ class DockerTests(unittest.TestCase):
                     self.assertEqual(len(build_commands), 5)
                     # First command should be L0
                     self.assertIn("L0.Dockerfile", " ".join(build_commands[0]))
-                    # Second and third should be L1
+                    # Second should be L1-cli with AGENT_CACHE_BUST
                     self.assertIn("L1.cli.Dockerfile", " ".join(build_commands[1]))
+                    self.assertIn("AGENT_CACHE_BUST", " ".join(build_commands[1]))
+                    # Third should be L1-ui
                     self.assertIn("L1.ui.Dockerfile", " ".join(build_commands[2]))
                     # Fourth and fifth should be L2
                     self.assertIn("L2.Dockerfile", " ".join(build_commands[3]))
                     self.assertIn("L2.Dockerfile", " ".join(build_commands[4]))
+
+                    # Test full_rebuild=True
+                    build_commands.clear()
+                    try:
+                        build_images(project_id, full_rebuild=True)
+                    except Exception:
+                        pass  # We're mocking, so it might fail
+
+                    # Should build all images with --no-cache
+                    self.assertEqual(len(build_commands), 5)
+                    # L0 should have --no-cache and --pull=always
+                    l0_cmd = " ".join(build_commands[0])
+                    self.assertIn("--no-cache", l0_cmd)
+                    self.assertIn("--pull=always", l0_cmd)
+                    # All other commands should have --no-cache
+                    for cmd in build_commands[1:]:
+                        self.assertIn("--no-cache", " ".join(cmd))
