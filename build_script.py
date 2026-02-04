@@ -31,6 +31,7 @@ The TUI reads _branch_info.py and displays the branch name if set, otherwise
 falls back to live git detection (for development mode) or shows version only.
 """
 
+import atexit
 import subprocess
 from pathlib import Path
 
@@ -92,6 +93,22 @@ def _get_git_branch() -> str | None:
     return None
 
 
+def _register_branch_info_restore(branch_info_path: Path, original_content: str) -> None:
+    """Restore _branch_info.py to its original contents on process exit.
+
+    This keeps the working tree clean after build hooks run (e.g., CI builds),
+    while still allowing the build to package the generated branch info.
+    """
+
+    def _restore() -> None:
+        try:
+            branch_info_path.write_text(original_content)
+        except Exception as e:
+            print(f"build_script.py: Warning: Could not restore branch info: {e}")
+
+    atexit.register(_restore)
+
+
 def _write_branch_info(branch_name: str) -> None:
     """Overwrite _branch_info.py placeholder with actual branch name.
 
@@ -107,6 +124,12 @@ BRANCH_NAME = {repr(branch_name)}
 
     branch_info_path = Path("src/luskctl/_branch_info.py")
     try:
+        original_content = branch_info_path.read_text()
+    except Exception:
+        original_content = None
+    try:
+        if original_content is not None:
+            _register_branch_info_restore(branch_info_path, original_content)
         branch_info_path.write_text(content)
         print(f"build_script.py: Preserved branch information: {branch_name}")
     except Exception as e:
