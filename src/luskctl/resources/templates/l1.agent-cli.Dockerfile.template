@@ -65,11 +65,17 @@ RUN set -eux; \
 
 # === User operations ===
 ENV HOME=/home/dev
+ENV NPM_CONFIG_PREFIX=/home/dev/.npm-packages \
+    PATH=/home/dev/.npm-packages/bin:/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH
 USER dev
 WORKDIR /home/dev
 
 # Install AI agent CLIs as dev user
-RUN npm install -g @openai/codex
+RUN set -eux; \
+    mkdir -p "$NPM_CONFIG_PREFIX"; \
+    npm config set prefix "$NPM_CONFIG_PREFIX"; \
+    npm install -g @openai/codex; \
+    npm cache clean --force
 RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN curl -fsSL https://opencode.ai/install | bash
 
