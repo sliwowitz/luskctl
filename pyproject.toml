@@ -71,9 +71,6 @@ addopts = "-v --tb=short"
 luskctl = "luskctl.cli.main:main"
 luskctl-tui = "luskctl.tui.app:main"
 
-[tool.poetry.build]
-script = "build_script.py"
-
 [tool.ruff]
 target-version = "py312"
 line-length = 100

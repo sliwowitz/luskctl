@@ -4,8 +4,11 @@ This module provides a single source of truth for version and branch information
 used by both the CLI (--version) and TUI (title bar).
 """
 
+import json
 import subprocess
+from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 
 def get_version_info() -> tuple[str, str | None]:
@@ -27,26 +30,22 @@ def get_version_info() -> tuple[str, str | None]:
          Standard `pip install luskctl` from PyPI.
          -> Show version only. No branch info available or meaningful.
 
-      3. INSTALLED FROM GIT DIRECTORY:
-         `pip install /path/to/luskctl` or `pipx install /path/to/luskctl`
-         where the path is a git repository.
-         -> Show branch name (via _branch_info.py generated at build time)
-            unless the build was from a tagged release commit.
+      3. INSTALLED FROM VCS URL:
+         `pip install git+https://...` or `pipx install git+https://...`.
+         -> Show requested revision (branch/tag/commit) from PEP 610 metadata.
 
-      4. INSTALLED FROM RELEASE TARBALL:
-         `pip install luskctl-X.Y.Z.tar.gz` from a release artifact.
-         -> Show version only. The placeholder _branch_info.py has None.
+      4. INSTALLED FROM LOCAL PATH / RELEASE TARBALL:
+         `pip install /path/to/luskctl` or `pip install luskctl-X.Y.Z.tar.gz`.
+         -> Show version only. Branch info is not available/meaningful.
 
     IMPLEMENTATION:
     ---------------
-    The branch detection uses two strategies with a priority order:
+    The branch detection uses three strategies with a priority order:
 
-    STRATEGY 1 - Preserved branch info (for pip/pipx installs from git):
-      A placeholder _branch_info.py (with BRANCH_NAME = None) is checked into the
-      repo to ensure it's included in the wheel. The Poetry build script
-      (build_script.py, configured via [tool.poetry.build]) runs during
-      `pip install <git-dir>` and overwrites the placeholder with the actual branch
-      name. For tagged releases (vX.Y.Z), the placeholder is left unchanged.
+    STRATEGY 1 - PEP 610 metadata (for VCS installs):
+      When installed from a VCS URL, pip records PEP 610 metadata in
+      direct_url.json. If present, we use requested_revision (or commit_id)
+      for display, without mutating any source files.
 
     STRATEGY 2 - Live git detection (for development mode):
       When running from source (detected by presence of pyproject.toml), query
@@ -77,17 +76,10 @@ def get_version_info() -> tuple[str, str | None]:
     # --- BRANCH DETECTION ---
     branch_name = None
 
-    # Strategy 1: Check for _branch_info.py (placeholder overwritten by build_script.py)
-    # The placeholder has BRANCH_NAME = None; build_script.py overwrites it with the
-    # actual branch name during pip/pipx install from a git directory (non-release).
-    try:
-        from luskctl import _branch_info
-
-        if hasattr(_branch_info, "BRANCH_NAME") and _branch_info.BRANCH_NAME:
-            return version, _branch_info.BRANCH_NAME
-    except ImportError:
-        # _branch_info.py doesn't exist: either PyPI install, dev mode, or release build
-        pass
+    # Strategy 1: PEP 610 direct_url.json (VCS installs)
+    pep610_revision = _get_pep610_revision()
+    if pep610_revision:
+        return version, pep610_revision
 
     # Strategy 2: Live git detection (development mode only)
     # Only attempt if pyproject.toml exists, indicating we're in a source checkout
@@ -136,6 +128,51 @@ def get_version_info() -> tuple[str, str | None]:
             pass
 
     return version, branch_name
+
+
+def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
+    """Return VCS revision from PEP 610 metadata, if available."""
+    try:
+        dist = metadata.distribution(dist_name)
+        direct_url = dist.read_text("direct_url.json")
+    except (
+        metadata.PackageNotFoundError,
+        FileNotFoundError,
+        PermissionError,
+        UnicodeDecodeError,
+        OSError,
+    ):
+        # Handle various file reading errors gracefully
+        return None
+
+    if not direct_url:
+        return None
+
+    try:
+        data = json.loads(direct_url)
+    except json.JSONDecodeError:
+        return None
+
+    vcs_info = data.get("vcs_info")
+    if not isinstance(vcs_info, dict):
+        return None
+
+    def validate_and_strip(value: Any) -> str | None:
+        """Validate that value is a non-empty string after stripping whitespace."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        return None
+
+    # Try requested_revision first, then commit_id
+    if result := validate_and_strip(vcs_info.get("requested_revision")):
+        return result
+
+    if result := validate_and_strip(vcs_info.get("commit_id")):
+        return result
+
+    return None
 
 
 def format_version_string(version: str, branch: str | None) -> str:

@@ -1,9 +1,7 @@
 """Tests for version and branch detection functionality."""
 
-import sys
-import tempfile
+import json
 import unittest
-from pathlib import Path
 from unittest import mock
 
 
@@ -26,198 +24,6 @@ class VersionDetectionTests(unittest.TestCase):
         pkg_version = version("luskctl")
         self.assertIsInstance(pkg_version, str)
         self.assertNotEqual(pkg_version, "")
-
-
-class BuildScriptTests(unittest.TestCase):
-    """Test build_script.py functionality."""
-
-    def setUp(self) -> None:
-        """Add build_script.py to the path."""
-        # Add the repo root to the path so we can import build_script
-        repo_root = Path(__file__).parent.parent.parent
-        if str(repo_root) not in sys.path:
-            sys.path.insert(0, str(repo_root))
-
-    def test_is_tagged_release_with_version_tag(self) -> None:
-        """Test that _is_tagged_release detects version tags correctly."""
-        import build_script
-
-        # Mock git describe to return a version tag
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = "v1.2.3"
-            mock_run.return_value = mock_result
-
-            self.assertTrue(build_script._is_tagged_release())
-
-    def test_is_tagged_release_with_non_version_tag(self) -> None:
-        """Test that _is_tagged_release rejects non-version tags."""
-        import build_script
-
-        # Mock git describe to return a non-version tag
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = "versioninfo"  # Not a version tag
-            mock_run.return_value = mock_result
-
-            self.assertFalse(build_script._is_tagged_release())
-
-    def test_is_tagged_release_with_valid_tag_v_prefix(self) -> None:
-        """Test tag validation with 'v' prefix followed by digit."""
-        import build_script
-
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = "v0.3.1"
-            mock_run.return_value = mock_result
-
-            self.assertTrue(build_script._is_tagged_release())
-
-    def test_is_tagged_release_rejects_v_only(self) -> None:
-        """Test that 'v' alone is not considered a version tag."""
-        import build_script
-
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = "v"  # Just 'v' without digit
-            mock_run.return_value = mock_result
-
-            self.assertFalse(build_script._is_tagged_release())
-
-    def test_is_tagged_release_not_at_tag(self) -> None:
-        """Test that _is_tagged_release returns False when not at a tag."""
-        import build_script
-
-        # Mock git describe to fail (not at a tag)
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 1
-            mock_run.return_value = mock_result
-
-            self.assertFalse(build_script._is_tagged_release())
-
-    def test_get_git_branch(self) -> None:
-        """Test that _get_git_branch detects branch name correctly."""
-        import build_script
-
-        # Mock git commands
-        with mock.patch("subprocess.run") as mock_run:
-            # First call: git rev-parse --is-inside-work-tree
-            rev_parse_result = mock.MagicMock()
-            rev_parse_result.returncode = 0
-            rev_parse_result.stdout = "true"
-
-            # Second call: git branch --show-current
-            branch_result = mock.MagicMock()
-            branch_result.returncode = 0
-            branch_result.stdout = "main"
-
-            mock_run.side_effect = [rev_parse_result, branch_result]
-
-            branch = build_script._get_git_branch()
-
-            self.assertEqual(branch, "main")
-
-    def test_get_git_branch_not_in_repo(self) -> None:
-        """Test that _get_git_branch returns None when not in a git repo."""
-        import build_script
-
-        # Mock git rev-parse to fail (not in a repo)
-        with mock.patch("subprocess.run") as mock_run:
-            mock_result = mock.MagicMock()
-            mock_result.returncode = 1
-            mock_run.return_value = mock_result
-
-            branch = build_script._get_git_branch()
-
-            self.assertIsNone(branch)
-
-    def test_get_git_branch_detached_head(self) -> None:
-        """Test that _get_git_branch returns None in detached HEAD state."""
-        import build_script
-
-        # Mock git commands for detached HEAD (empty branch name)
-        with mock.patch("subprocess.run") as mock_run:
-            # First call: git rev-parse --is-inside-work-tree
-            rev_parse_result = mock.MagicMock()
-            rev_parse_result.returncode = 0
-            rev_parse_result.stdout = "true"
-
-            # Second call: git branch --show-current (empty in detached HEAD)
-            branch_result = mock.MagicMock()
-            branch_result.returncode = 0
-            branch_result.stdout = ""
-
-            mock_run.side_effect = [rev_parse_result, branch_result]
-
-            branch = build_script._get_git_branch()
-
-            self.assertIsNone(branch)
-
-    def test_write_branch_info_escapes_special_characters(self) -> None:
-        """Test that _write_branch_info properly escapes branch names."""
-        import build_script
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create src/luskctl directory structure
-            src_dir = Path(tmpdir) / "src" / "luskctl"
-            src_dir.mkdir(parents=True)
-
-            # Change to tmpdir for the test
-            import os
-
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(tmpdir)
-
-                # Test with a branch name containing quotes and backslashes
-                branch_name = 'feature/"test"\\branch'
-                build_script._write_branch_info(branch_name)
-
-                # Read the generated file
-                branch_info_path = src_dir / "_branch_info.py"
-                content = branch_info_path.read_text()
-
-                # Verify that the branch name is properly escaped using repr()
-                self.assertIn("BRANCH_NAME = 'feature/\"test\"\\\\branch'", content)
-
-            finally:
-                os.chdir(original_cwd)
-
-    def test_write_branch_info_simple_branch(self) -> None:
-        """Test that _write_branch_info works with simple branch names."""
-        import build_script
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create src/luskctl directory structure
-            src_dir = Path(tmpdir) / "src" / "luskctl"
-            src_dir.mkdir(parents=True)
-
-            # Change to tmpdir for the test
-            import os
-
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(tmpdir)
-
-                # Test with a simple branch name
-                branch_name = "main"
-                build_script._write_branch_info(branch_name)
-
-                # Read the generated file
-                branch_info_path = src_dir / "_branch_info.py"
-                content = branch_info_path.read_text()
-
-                # Verify the content
-                self.assertIn("BRANCH_NAME = 'main'", content)
-                self.assertIn("# Auto-generated by build_script.py", content)
-
-            finally:
-                os.chdir(original_cwd)
 
 
 class VersionModuleTests(unittest.TestCase):
@@ -248,44 +54,360 @@ class VersionModuleTests(unittest.TestCase):
         self.assertIsInstance(version, str)
         self.assertTrue(branch is None or isinstance(branch, str))
 
-    def test_get_version_info_with_branch_info_set(self) -> None:
-        """Test get_version_info when _branch_info.BRANCH_NAME is set."""
-        # Import the actual _branch_info and patch its BRANCH_NAME attribute
-        import luskctl._branch_info
-
-        original_value = luskctl._branch_info.BRANCH_NAME
-        try:
-            luskctl._branch_info.BRANCH_NAME = "test-branch"
+    def test_get_version_info_without_branch_data(self) -> None:
+        """Test get_version_info when no branch data is available."""
+        # Mock subprocess to fail git detection (simulating tarball install)
+        with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
 
             from luskctl.lib.version import get_version_info
 
-            version, branch = get_version_info()
-            self.assertEqual(branch, "test-branch")
-        finally:
-            # Restore original value
-            luskctl._branch_info.BRANCH_NAME = original_value
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                _, branch = get_version_info()
+            # Branch should be None when PEP 610 is absent and git detection fails
+            self.assertIsNone(branch)
 
-    def test_get_version_info_with_branch_info_none(self) -> None:
-        """Test get_version_info when _branch_info.BRANCH_NAME is None (release/tarball)."""
-        # Import the actual _branch_info and patch its BRANCH_NAME attribute
-        import luskctl._branch_info
 
-        original_value = luskctl._branch_info.BRANCH_NAME
-        try:
-            luskctl._branch_info.BRANCH_NAME = None
+class Pep610Tests(unittest.TestCase):
+    """Test PEP 610 direct_url.json handling."""
 
-            # Also mock subprocess to fail git detection (simulating tarball install)
-            with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
-                mock_run.side_effect = FileNotFoundError("git not found")
+    def test_pep610_requested_revision(self) -> None:
+        """Use requested_revision when present."""
+        from luskctl.lib.version import _get_pep610_revision
 
-                from luskctl.lib.version import get_version_info
+        direct_url = json.dumps({"vcs_info": {"requested_revision": "feature/foo"}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
 
-                version, branch = get_version_info()
-                # Branch should be None when _branch_info is None and git detection fails
-                self.assertIsNone(branch)
-        finally:
-            # Restore original value
-            luskctl._branch_info.BRANCH_NAME = original_value
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertEqual(_get_pep610_revision(), "feature/foo")
+
+    def test_pep610_commit_id_fallback(self) -> None:
+        """Fallback to commit_id when requested_revision is missing."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"commit_id": "abc123"}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertEqual(_get_pep610_revision(), "abc123")
+
+    def test_pep610_priority_order(self) -> None:
+        """Requested_revision takes priority over commit_id."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps(
+            {"vcs_info": {"requested_revision": "feature/foo", "commit_id": "abc123"}}
+        )
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            # Should return requested_revision, not commit_id
+            self.assertEqual(_get_pep610_revision(), "feature/foo")
+
+    def test_pep610_malformed_json(self) -> None:
+        """Handle malformed JSON in direct_url.json."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        dist = mock.MagicMock()
+        dist.read_text.return_value = "not valid json {"
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_vcs_info_null(self) -> None:
+        """Handle vcs_info being null."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": None})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_vcs_info_not_dict(self) -> None:
+        """Handle vcs_info being a non-dict value."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": "not a dict"})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_requested_revision_not_string(self) -> None:
+        """Handle requested_revision being a non-string value."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        # Test with number
+        direct_url = json.dumps({"vcs_info": {"requested_revision": 123}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+        # Test with null
+        direct_url = json.dumps({"vcs_info": {"requested_revision": None}})
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_commit_id_not_string(self) -> None:
+        """Handle commit_id being a non-string value."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        # Test with object
+        direct_url = json.dumps({"vcs_info": {"commit_id": {"sha": "abc"}}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_empty_string_requested_revision(self) -> None:
+        """Handle empty string for requested_revision."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"requested_revision": ""}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_empty_string_commit_id(self) -> None:
+        """Handle empty string for commit_id."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"commit_id": ""}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_whitespace_only_requested_revision(self) -> None:
+        """Handle whitespace-only string for requested_revision."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"requested_revision": "   "}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_whitespace_only_commit_id(self) -> None:
+        """Handle whitespace-only string for commit_id."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"commit_id": "  \t\n  "}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_whitespace_trimmed(self) -> None:
+        """Verify that whitespace is trimmed from revision strings."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        direct_url = json.dumps({"vcs_info": {"requested_revision": "  feature/foo  "}})
+        dist = mock.MagicMock()
+        dist.read_text.return_value = direct_url
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertEqual(_get_pep610_revision(), "feature/foo")
+
+    def test_pep610_file_not_found(self) -> None:
+        """Handle missing direct_url.json file."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        dist = mock.MagicMock()
+        dist.read_text.side_effect = FileNotFoundError()
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_permission_error(self) -> None:
+        """Handle permission error when reading direct_url.json."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        dist = mock.MagicMock()
+        dist.read_text.side_effect = PermissionError()
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+    def test_pep610_unicode_decode_error(self) -> None:
+        """Handle unicode decode error when reading direct_url.json."""
+        from luskctl.lib.version import _get_pep610_revision
+
+        dist = mock.MagicMock()
+        dist.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "test")
+
+        with mock.patch("luskctl.lib.version.metadata.distribution", return_value=dist):
+            self.assertIsNone(_get_pep610_revision())
+
+
+class LiveGitDetectionTests(unittest.TestCase):
+    """Test live git detection (Strategy 2) for development mode."""
+
+    def test_git_detection_with_branch(self) -> None:
+        """Test successful git branch detection in development mode."""
+        from luskctl.lib.version import get_version_info
+
+        # Mock subprocess to simulate git detection
+        def mock_run(*args, **kwargs):
+            cmd = args[0]
+            result = mock.MagicMock()
+            result.returncode = 0
+
+            if "rev-parse" in cmd:
+                result.stdout = "true\n"
+            elif "branch" in cmd and "--show-current" in cmd:
+                result.stdout = "feature/test-branch\n"
+            elif "describe" in cmd and "--exact-match" in cmd:
+                result.returncode = 1  # Not at a tag
+                result.stdout = ""
+
+            return result
+
+        with mock.patch("luskctl.lib.version.subprocess.run", side_effect=mock_run):
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                # Mock pyproject.toml exists
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    self.assertEqual(branch, "feature/test-branch")
+
+    def test_git_detection_suppresses_tagged_release(self) -> None:
+        """Test that branch name is suppressed when HEAD is at a version tag."""
+        from luskctl.lib.version import get_version_info
+
+        def mock_run(*args, **kwargs):
+            cmd = args[0]
+            result = mock.MagicMock()
+            result.returncode = 0
+
+            if "rev-parse" in cmd:
+                result.stdout = "true\n"
+            elif "branch" in cmd and "--show-current" in cmd:
+                result.stdout = "main\n"
+            elif "describe" in cmd and "--exact-match" in cmd:
+                # At a version tag
+                result.stdout = "v1.2.3\n"
+
+            return result
+
+        with mock.patch("luskctl.lib.version.subprocess.run", side_effect=mock_run):
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    # Branch should be None at a tagged release
+                    self.assertIsNone(branch)
+
+    def test_git_detection_not_in_git_repository(self) -> None:
+        """Test behavior when pyproject.toml exists but not in a git repository."""
+        from luskctl.lib.version import get_version_info
+
+        def mock_run(*args, **kwargs):
+            result = mock.MagicMock()
+            result.returncode = 1  # git rev-parse fails
+            result.stdout = ""
+            return result
+
+        with mock.patch("luskctl.lib.version.subprocess.run", side_effect=mock_run):
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    # Branch should be None when not in a git repo
+                    self.assertIsNone(branch)
+
+    def test_git_detection_no_pyproject(self) -> None:
+        """Test that git detection is skipped when pyproject.toml doesn't exist."""
+        from luskctl.lib.version import get_version_info
+
+        # This should prevent git detection from even being attempted
+        with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+            with mock.patch("luskctl.lib.version.Path.exists", return_value=False):
+                # Should not call subprocess at all
+                with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+                    _, branch = get_version_info()
+                    # Branch should be None
+                    self.assertIsNone(branch)
+                    # Git should not have been invoked
+                    mock_run.assert_not_called()
+
+    def test_git_detection_empty_branch_name(self) -> None:
+        """Test behavior when git returns an empty branch name."""
+        from luskctl.lib.version import get_version_info
+
+        def mock_run(*args, **kwargs):
+            cmd = args[0]
+            result = mock.MagicMock()
+            result.returncode = 0
+
+            if "rev-parse" in cmd:
+                result.stdout = "true\n"
+            elif "branch" in cmd and "--show-current" in cmd:
+                result.stdout = "\n"  # Empty branch name (detached HEAD)
+
+            return result
+
+        with mock.patch("luskctl.lib.version.subprocess.run", side_effect=mock_run):
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    # Branch should be None for empty branch name
+                    self.assertIsNone(branch)
+
+    def test_git_detection_timeout_error(self) -> None:
+        """Test that git timeout errors are handled gracefully."""
+        import subprocess
+
+        from luskctl.lib.version import get_version_info
+
+        with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="git", timeout=1)
+
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    # Should handle timeout gracefully
+                    self.assertIsNone(branch)
+
+    def test_git_detection_git_not_available(self) -> None:
+        """Test behavior when git command is not available."""
+        from luskctl.lib.version import get_version_info
+
+        with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+
+            with mock.patch("luskctl.lib.version._get_pep610_revision", return_value=None):
+                with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                    _, branch = get_version_info()
+                    # Should handle git not available gracefully
+                    self.assertIsNone(branch)
+
+    def test_pep610_takes_priority_over_git(self) -> None:
+        """Test that PEP 610 metadata takes priority over live git detection."""
+        from luskctl.lib.version import get_version_info
+
+        # Even with pyproject.toml present, PEP 610 should win
+        with mock.patch("luskctl.lib.version._get_pep610_revision", return_value="vcs-branch"):
+            with mock.patch("luskctl.lib.version.Path.exists", return_value=True):
+                with mock.patch("luskctl.lib.version.subprocess.run") as mock_run:
+                    _, branch = get_version_info()
+                    # Should use PEP 610 revision
+                    self.assertEqual(branch, "vcs-branch")
+                    # Git should not have been invoked
+                    mock_run.assert_not_called()
 
 
 class CLIVersionTests(unittest.TestCase):
@@ -322,19 +444,6 @@ class CLIVersionTests(unittest.TestCase):
             text=True,
         )
         self.assertIn(expected_version_str, result.stdout)
-
-
-class BranchInfoPlaceholderTests(unittest.TestCase):
-    """Test that _branch_info.py placeholder is correctly set."""
-
-    def test_branch_info_placeholder_is_none(self) -> None:
-        """Test that the committed _branch_info.py has BRANCH_NAME = None."""
-        branch_info_path = (
-            Path(__file__).parent.parent.parent / "src" / "luskctl" / "_branch_info.py"
-        )
-        content = branch_info_path.read_text()
-        # The placeholder should have BRANCH_NAME = None
-        self.assertIn("BRANCH_NAME = None", content)
 
 
 if __name__ == "__main__":
