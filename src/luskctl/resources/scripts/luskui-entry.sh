@@ -19,6 +19,10 @@ if command -v git >/dev/null 2>&1 && [[ -n "${LUSKUI_BACKEND:-}" ]]; then
       export GIT_AUTHOR_NAME="Claude"
       export GIT_AUTHOR_EMAIL="noreply@anthropic.com"
       ;;
+    copilot)
+      export GIT_AUTHOR_NAME="GitHub Copilot"
+      export GIT_AUTHOR_EMAIL="copilot@github.com"
+      ;;
     mistral)
       export GIT_AUTHOR_NAME="Mistral Vibe"
       export GIT_AUTHOR_EMAIL="vibe@mistral.ai"
