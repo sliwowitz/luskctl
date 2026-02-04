@@ -156,17 +156,20 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     if not isinstance(vcs_info, dict):
         return None
 
-    requested_revision = vcs_info.get("requested_revision")
-    if isinstance(requested_revision, str):
-        requested_revision_stripped = requested_revision.strip()
-        if requested_revision_stripped:
-            return requested_revision_stripped
+    def validate_and_strip(value: any) -> str | None:
+        """Validate that value is a non-empty string after stripping whitespace."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        return None
 
-    commit_id = vcs_info.get("commit_id")
-    if isinstance(commit_id, str):
-        commit_id_stripped = commit_id.strip()
-        if commit_id_stripped:
-            return commit_id_stripped
+    # Try requested_revision first, then commit_id
+    if result := validate_and_strip(vcs_info.get("requested_revision")):
+        return result
+
+    if result := validate_and_strip(vcs_info.get("commit_id")):
+        return result
 
     return None
 
