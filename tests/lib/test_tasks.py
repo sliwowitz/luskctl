@@ -496,6 +496,217 @@ class TaskTests(unittest.TestCase):
                 self.assertIn(expected_logs, output)
                 self.assertIn(expected_stop, output)
 
+    def test_task_run_cli_already_running(self) -> None:
+        """task_run_cli prints message and exits when container is already running."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_cli_running"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state", return_value="running"
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                ):
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_cli(project_id, "1")
+
+                    # Verify no podman run was called
+                    run_mock.assert_not_called()
+
+                    # Verify message indicates already running
+                    output = buffer.getvalue()
+                    self.assertIn("already running", output)
+
+    def test_task_run_cli_starts_stopped_container(self) -> None:
+        """task_run_cli uses 'podman start' for stopped container."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_cli_stopped"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new(project_id)
+                meta_dir = state_dir / "projects" / project_id / "tasks"
+                meta_path = meta_dir / "1.yml"
+
+                # Simulate task was previously run
+                meta = yaml.safe_load(meta_path.read_text())
+                meta["mode"] = "cli"
+                meta["status"] = "stopped"
+                meta_path.write_text(yaml.safe_dump(meta))
+
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state", return_value="exited"
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_cli(project_id, "1")
+
+                    # Verify podman start was called
+                    run_mock.assert_called_once()
+                    call_args = run_mock.call_args[0][0]
+                    self.assertEqual(call_args[:2], ["podman", "start"])
+
+                    # Verify metadata status is now 'running'
+                    meta = yaml.safe_load(meta_path.read_text())
+                    self.assertEqual(meta["status"], "running")
+                    self.assertEqual(meta["mode"], "cli")
+
+    def test_task_run_web_already_running(self) -> None:
+        """task_run_web prints message and exits when container is already running."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_web_running"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                task_new(project_id)
+                meta_dir = state_dir / "projects" / project_id / "tasks"
+                meta_path = meta_dir / "1.yml"
+
+                # Simulate task was previously run
+                meta = yaml.safe_load(meta_path.read_text())
+                meta["mode"] = "web"
+                meta["web_port"] = 7860
+                meta_path.write_text(yaml.safe_dump(meta))
+
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state", return_value="running"
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                ):
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_web(project_id, "1")
+
+                    # Verify no podman run was called
+                    run_mock.assert_not_called()
+
+                    # Verify message indicates already running
+                    output = buffer.getvalue()
+                    self.assertIn("already running", output)
+
+    def test_task_run_web_starts_stopped_container(self) -> None:
+        """task_run_web uses 'podman start' for stopped container."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            envs_dir = base / "envs"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            project_id = "proj_web_stopped"
+            write_project(
+                config_root,
+                project_id,
+                f"project:\n  id: {project_id}\n",
+            )
+
+            config_file = base / "config.yml"
+            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                task_new(project_id)
+                meta_dir = state_dir / "projects" / project_id / "tasks"
+                meta_path = meta_dir / "1.yml"
+
+                # Simulate task was previously run
+                meta = yaml.safe_load(meta_path.read_text())
+                meta["mode"] = "web"
+                meta["web_port"] = 7860
+                meta["status"] = "stopped"
+                meta_path.write_text(yaml.safe_dump(meta))
+
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state", return_value="exited"
+                    ),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_web(project_id, "1")
+
+                    # Verify podman start was called
+                    run_mock.assert_called_once()
+                    call_args = run_mock.call_args[0][0]
+                    self.assertEqual(call_args[:2], ["podman", "start"])
+
+                    # Verify metadata status is now 'running'
+                    meta = yaml.safe_load(meta_path.read_text())
+                    self.assertEqual(meta["status"], "running")
+
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
         with tempfile.TemporaryDirectory() as td:

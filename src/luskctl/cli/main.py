@@ -318,36 +318,41 @@ def main() -> None:
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
     _a = t_stop.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
 
     t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
     _a = t_restart.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
     _a = t_restart.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
+    t_restart.add_argument(
+        "--backend",
+        choices=["gradio", "streamlit"],
+        help="Backend to use when re-running a web task (default: use saved backend)",
+    )
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
     _a = t_status.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
     _a = t_status.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
 
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
@@ -530,7 +535,8 @@ def main() -> None:
         elif args.task_cmd == "stop":
             task_stop(args.project_id, args.task_id)
         elif args.task_cmd == "restart":
-            task_restart(args.project_id, args.task_id)
+            backend = getattr(args, "backend", None)
+            task_restart(args.project_id, args.task_id, backend=backend)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
         else:

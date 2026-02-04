@@ -331,24 +331,33 @@ class TaskList(ListView):
         extra_parts: list[str] = []
 
         # Determine effective status based on metadata and container state
-        if task.status == "stopped":
-            status_display = "stopped"
-        elif task.container_state is not None:
+        # Prioritize actual container state over metadata
+        if task.container_state is not None:
             # Use actual container state if we have it
             if task.container_state == "running":
                 status_display = "running"
+                # Clear task_emoji if it was set to pause emoji from metadata status
+                # Running tasks should use their mode-based emoji (CLI/web backend)
+                if task.status == "stopped":
+                    task_emoji = ""
+                # Add port for running web tasks
+                if task.web_port:
+                    extra_parts.append(f"port={task.web_port}")
             elif task.container_state in ("exited", "stopped"):
                 status_display = "stopped"
                 task_emoji = "⏸️"
             else:
                 status_display = task.container_state
+        elif task.status == "stopped":
+            status_display = "stopped"
         elif task.status == "created" and task.web_port:
             status_display = "running"
             extra_parts.append(f"port={task.web_port}")
         elif task.status == "created" and task.mode == "cli":
             status_display = "running"
 
-        if task.web_port and "port=" not in "; ".join(extra_parts):
+        # Only add port if not already added
+        if task.web_port and not any(part.startswith("port=") for part in extra_parts):
             extra_parts.append(f"port={task.web_port}")
 
         extra_str = "; ".join(extra_parts)
@@ -362,20 +371,30 @@ class TaskList(ListView):
 
     def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
         """Populate the list from raw metadata dicts."""
+        # Preserve container_state from existing tasks
+        existing_states: dict[str, str | None] = {}
+        if self.project_id == project_id:
+            for task in self.tasks:
+                existing_states[task.task_id] = task.container_state
+
         self.project_id = project_id
         self.tasks = []
         self._generation += 1
         self.clear()
 
         for meta in tasks_meta:
+            task_id = meta.get("task_id", "")
             tm = TaskMeta(
-                task_id=meta.get("task_id", ""),
+                task_id=task_id,
                 status=meta.get("status", "unknown"),
                 mode=meta.get("mode"),
                 workspace=meta.get("workspace", ""),
                 web_port=meta.get("web_port"),
                 backend=meta.get("backend"),
             )
+            # Restore container_state if available
+            if task_id in existing_states:
+                tm.container_state = existing_states[task_id]
             self.tasks.append(tm)
 
             label = self._format_task_label(tm)

@@ -768,6 +768,11 @@ def task_run_cli(project_id: str, task_id: str) -> None:
                     check=True,
                     stdout=subprocess.DEVNULL,
                 )
+            except FileNotFoundError:
+                raise SystemExit(
+                    "Failed to start container: 'podman' executable not found. "
+                    "Please install podman or ensure it is available on your PATH."
+                )
             except subprocess.CalledProcessError as e:
                 raise SystemExit(f"Failed to start container: {e}")
             meta["status"] = "running"
@@ -889,6 +894,11 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
                     ["podman", "start", container_name],
                     check=True,
                     stdout=subprocess.DEVNULL,
+                )
+            except FileNotFoundError:
+                raise SystemExit(
+                    "Failed to start container: 'podman' executable not found. "
+                    "Please install podman or ensure it is available on your PATH."
                 )
             except subprocess.CalledProcessError as e:
                 raise SystemExit(f"Failed to start container: {e}")
@@ -1056,8 +1066,13 @@ def task_stop(project_id: str, task_id: str) -> None:
 
     container_name = f"{project.id}-{mode}-{task_id}"
 
-    if not _is_container_running(container_name):
-        raise SystemExit(f"Task {task_id} container is not running")
+    state = _get_container_state(container_name)
+    if state is None:
+        raise SystemExit(f"Task {task_id} container does not exist")
+    if state not in ("running", "paused"):
+        raise SystemExit(
+            f"Task {task_id} container is not stoppable (state: {state})"
+        )
 
     try:
         subprocess.run(
