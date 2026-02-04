@@ -749,10 +749,40 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "cli")
 
+    container_name = f"{project.id}-cli-{task_id}"
+    container_state = _get_container_state(container_name)
+
+    # If container already exists, handle it
+    if container_state is not None:
+        color_enabled = _supports_color()
+        if container_state == "running":
+            print(f"Container {_green(container_name, color_enabled)} is already running.")
+            print(f"Login with: podman exec -it {container_name} bash")
+            return
+        else:
+            # Container exists but is stopped/exited - start it
+            print(f"Starting existing container {_green(container_name, color_enabled)}...")
+            try:
+                subprocess.run(
+                    ["podman", "start", container_name],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                )
+            except subprocess.CalledProcessError as e:
+                raise SystemExit(f"Failed to start container: {e}")
+            meta["status"] = "running"
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml.safe_dump(meta))
+            print("Container started.")
+            print(f"Login with: podman exec -it {container_name} bash")
+            return
+
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
     # Run detached and keep the container alive so users can exec into it later
-    cmd = ["podman", "run", "--rm", "-d"]
+    # Note: We intentionally do NOT use --rm so containers persist after stopping.
+    # This allows `task restart` to quickly resume stopped containers.
+    cmd = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes
@@ -841,9 +871,37 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         meta_path.write_text(yaml.safe_dump(meta))
 
     container_name = f"{project.id}-web-{task_id}"
+    container_state = _get_container_state(container_name)
+
+    # If container already exists, handle it
+    if container_state is not None:
+        color_enabled = _supports_color()
+        url = f"http://127.0.0.1:{port}/"
+        if container_state == "running":
+            print(f"Container {_green(container_name, color_enabled)} is already running.")
+            print(f"Web UI: {_blue(url, color_enabled)}")
+            return
+        else:
+            # Container exists but is stopped/exited - start it
+            print(f"Starting existing container {_green(container_name, color_enabled)}...")
+            try:
+                subprocess.run(
+                    ["podman", "start", container_name],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                )
+            except subprocess.CalledProcessError as e:
+                raise SystemExit(f"Failed to start container: {e}")
+            meta["status"] = "running"
+            meta_path.write_text(yaml.safe_dump(meta))
+            print("Container started.")
+            print(f"Web UI: {_blue(url, color_enabled)}")
+            return
 
     # Start UI in background and return terminal when it's reachable
-    cmd = ["podman", "run", "--rm", "-d", "-p", f"127.0.0.1:{port}:7860"]
+    # Note: We intentionally do NOT use --rm so containers persist after stopping.
+    # This allows `task restart` to quickly resume stopped containers.
+    cmd = ["podman", "run", "-d", "-p", f"127.0.0.1:{port}:7860"]
     cmd += _podman_userns_args()
     cmd += _gpu_run_args(project)
     # Volumes

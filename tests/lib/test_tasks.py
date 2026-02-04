@@ -346,6 +346,10 @@ class TaskTests(unittest.TestCase):
                         return_value=True,
                     ),
                     unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state",
+                        return_value=None,  # No existing container
+                    ),
+                    unittest.mock.patch(
                         "luskctl.lib.tasks._is_container_running",
                         return_value=True,
                     ),
@@ -402,6 +406,10 @@ class TaskTests(unittest.TestCase):
                         "luskctl.lib.tasks._stream_initial_logs",
                         return_value=True,
                     ),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state",
+                        return_value=None,  # No existing container
+                    ),
                     unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
                         "luskctl.lib.tasks._supports_color",
@@ -454,6 +462,10 @@ class TaskTests(unittest.TestCase):
                     unittest.mock.patch(
                         "luskctl.lib.tasks._stream_initial_logs",
                         return_value=True,
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state",
+                        return_value=None,  # No existing container
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.tasks._is_container_running",
