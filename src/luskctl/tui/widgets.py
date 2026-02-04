@@ -25,6 +25,7 @@ class TaskMeta:
     workspace: str
     web_port: int | None
     backend: str | None = None
+    container_state: str | None = None  # Actual podman container state
 
 
 class ProjectListItem(ListItem):
@@ -317,6 +318,8 @@ class TaskList(ListView):
         task_emoji = ""
         if task.status == "deleting":
             task_emoji = "🗑️"
+        elif task.status == "stopped":
+            task_emoji = "⏸️"  # Pause emoji for stopped
         elif task.mode == "cli":
             task_emoji = "⌨️"  # Keyboard emoji for CLI
         elif task.mode == "web":
@@ -327,11 +330,26 @@ class TaskList(ListView):
         status_display = task.status
         extra_parts: list[str] = []
 
-        if task.status == "created" and task.web_port:
+        # Determine effective status based on metadata and container state
+        if task.status == "stopped":
+            status_display = "stopped"
+        elif task.container_state is not None:
+            # Use actual container state if we have it
+            if task.container_state == "running":
+                status_display = "running"
+            elif task.container_state in ("exited", "stopped"):
+                status_display = "stopped"
+                task_emoji = "⏸️"
+            else:
+                status_display = task.container_state
+        elif task.status == "created" and task.web_port:
             status_display = "running"
             extra_parts.append(f"port={task.web_port}")
         elif task.status == "created" and task.mode == "cli":
             status_display = "running"
+
+        if task.web_port and "port=" not in "; ".join(extra_parts):
+            extra_parts.append(f"port={task.web_port}")
 
         extra_str = "; ".join(extra_parts)
 
@@ -494,9 +512,24 @@ class TaskDetails(Static):
             task_emoji = "🦗 "
             mode_display = "Not assigned (choose CLI or Web mode)"
 
-        # Update status display
+        # Update status display based on actual container state if available
         status_display = task.status
-        if task.status == "created" and (task.web_port or task.mode == "cli"):
+        container_mismatch = False
+        if task.container_state is not None:
+            # Use actual container state
+            if task.container_state == "running":
+                status_display = "running"
+            elif task.container_state in ("exited", "stopped"):
+                status_display = "stopped"
+            else:
+                status_display = task.container_state
+            # Check for mismatch: metadata says running but container isn't
+            metadata_expects_running = (
+                task.status in ("running", "created") and task.mode is not None
+            )
+            if metadata_expects_running and task.container_state != "running":
+                container_mismatch = True
+        elif task.status == "created" and (task.web_port or task.mode == "cli"):
             status_display = "running"
 
         variables = _get_css_variables(self)
@@ -509,6 +542,13 @@ class TaskDetails(Static):
             Text(f"Type:      {task_emoji}{mode_display}"),
             Text(f"Workspace: {task.workspace}"),
         ]
+        if container_mismatch:
+            lines.append(
+                Text.assemble(
+                    "Container: ",
+                    Text(f"{task.container_state} (not running!)", style=warning_style),
+                )
+            )
         if status_display == "running" and image_old:
             lines.append(
                 Text.assemble(

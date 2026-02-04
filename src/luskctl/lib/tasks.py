@@ -949,6 +949,186 @@ def _is_container_running(container_name: str) -> bool:
     return out.lower() == "true"
 
 
+def _get_container_state(container_name: str) -> str | None:
+    """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
+
+    This uses `podman inspect` to get the actual container state. Returns None
+    if the container doesn't exist or podman is not available.
+    """
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.Status}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        return out.lower() if out else None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
+    """Get actual container state for a task.
+
+    This is intended for TUI background workers to check container status.
+    Returns 'running', 'exited', 'paused', etc., or None if container not found.
+    """
+    if not mode:
+        return None
+    project = load_project(project_id)
+    container_name = f"{project.id}-{mode}-{task_id}"
+    return _get_container_state(container_name)
+
+
+def task_stop(project_id: str, task_id: str) -> None:
+    """Gracefully stop a running task container.
+
+    Uses `podman stop` (with default 10s timeout) instead of force-removing.
+    Updates task metadata status to 'stopped'.
+    """
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+
+    mode = meta.get("mode")
+    if not mode:
+        raise SystemExit(f"Task {task_id} has never been run (no mode set)")
+
+    container_name = f"{project.id}-{mode}-{task_id}"
+
+    if not _is_container_running(container_name):
+        raise SystemExit(f"Task {task_id} container is not running")
+
+    try:
+        subprocess.run(
+            ["podman", "stop", container_name],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Failed to stop container: {e}")
+
+    meta["status"] = "stopped"
+    meta_path.write_text(yaml.safe_dump(meta))
+
+    color_enabled = _supports_color()
+    print(f"Stopped task {task_id}: {_green(container_name, color_enabled)}")
+    print(f"Restart with: luskctl task restart {project_id} {task_id}")
+
+
+def task_restart(project_id: str, task_id: str, backend: str | None = None) -> None:
+    """Restart a stopped task or re-run if the container is gone.
+
+    If the container exists in stopped/exited state, uses `podman start`.
+    If the container doesn't exist, delegates to task_run_cli or task_run_web.
+    """
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+
+    mode = meta.get("mode")
+    if not mode:
+        raise SystemExit(f"Task {task_id} has never been run (no mode set)")
+
+    container_name = f"{project.id}-{mode}-{task_id}"
+    container_state = _get_container_state(container_name)
+
+    if container_state == "running":
+        color_enabled = _supports_color()
+        print(f"Task {task_id} is already running: {_green(container_name, color_enabled)}")
+        return
+
+    if container_state is not None:
+        # Container exists but is stopped/exited - restart it
+        try:
+            subprocess.run(
+                ["podman", "start", container_name],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            raise SystemExit("podman not found; please install podman")
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"Failed to start container: {e}")
+
+        meta["status"] = "running"
+        meta_path.write_text(yaml.safe_dump(meta))
+
+        color_enabled = _supports_color()
+        print(f"Restarted task {task_id}: {_green(container_name, color_enabled)}")
+        if mode == "cli":
+            print(f"Login with: podman exec -it {container_name} bash")
+        elif mode == "web":
+            port = meta.get("web_port")
+            if port:
+                print(f"Web UI: http://127.0.0.1:{port}/")
+    else:
+        # Container doesn't exist - re-run the task
+        print(f"Container {container_name} not found, re-running task...")
+        if mode == "cli":
+            task_run_cli(project_id, task_id)
+        elif mode == "web":
+            task_run_web(project_id, task_id, backend=backend or meta.get("backend"))
+        else:
+            raise SystemExit(f"Unknown mode '{mode}' for task {task_id}")
+
+
+def task_status(project_id: str, task_id: str) -> None:
+    """Show actual container state vs metadata state for a task."""
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+
+    mode = meta.get("mode")
+    metadata_status = meta.get("status", "unknown")
+    web_port = meta.get("web_port")
+
+    color_enabled = _supports_color()
+
+    # Get actual container state if mode is set
+    container_state = None
+    container_name = None
+    if mode:
+        container_name = f"{project.id}-{mode}-{task_id}"
+        container_state = _get_container_state(container_name)
+
+    # Determine if there's a mismatch
+    # Metadata "running" or "created" with mode should have a running container
+    expected_running = metadata_status in ("running", "created") and mode is not None
+    actual_running = container_state == "running"
+    mismatch = expected_running and not actual_running
+
+    print(f"Task {task_id}:")
+    print(f"  Metadata status: {metadata_status}")
+    print(f"  Mode:            {mode or 'not set'}")
+    if container_name:
+        print(f"  Container:       {container_name}")
+    if container_state:
+        state_color = _green if container_state == "running" else _yellow
+        print(f"  Container state: {state_color(container_state, color_enabled)}")
+    else:
+        print(f"  Container state: {_red('not found', color_enabled)}")
+    if web_port:
+        print(f"  Web port:        {web_port}")
+    if mismatch:
+        print(
+            f"\n  {_yellow('Warning:', color_enabled)} Metadata says running but container is not!"
+        )
+        print(f"  Run 'luskctl task restart {project_id} {task_id}' to fix.")
+
+
 def _stream_initial_logs(container_name: str, timeout_sec: float | None, ready_check) -> bool:
     """Follow container logs and detach when ready, timed out, or container exits.
 

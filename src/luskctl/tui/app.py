@@ -553,6 +553,8 @@ if _HAS_TEXTUAL:
             self._polling_project_id: str | None = None  # Project ID the timer was started for
             self._last_notified_stale: bool = False  # Track if we already notified about staleness
             self._auto_sync_cooldown: dict[str, float] = {}  # Per-project cooldown timestamps
+            # Container status polling state
+            self._container_status_timer = None
             # Selection persistence
             self._last_selected_project: str | None = None
             self._last_selected_tasks: dict[str, str] = {}  # project_id -> task_id
@@ -981,6 +983,62 @@ if _HAS_TEXTUAL:
                 self._polling_timer = None
             self._polling_project_id = None
 
+        def _start_container_status_polling(self) -> None:
+            """Start background polling for container status every 2 seconds."""
+            self._stop_container_status_polling()
+            if not self.current_project_id:
+                return
+            # Poll every 2 seconds - podman inspect is fast (~10-50ms)
+            interval_seconds = 2
+            # Initial poll
+            self._poll_container_status()
+            # Schedule recurring polls
+            self._container_status_timer = self.set_interval(
+                interval_seconds, self._poll_container_status, name="container_status_polling"
+            )
+
+        def _stop_container_status_polling(self) -> None:
+            """Stop the container status polling timer."""
+            if self._container_status_timer is not None:
+                self._container_status_timer.stop()
+                self._container_status_timer = None
+
+        def _poll_container_status(self) -> None:
+            """Check container status for the current task."""
+            if not self.current_project_id or not self.current_task or not self.current_task.mode:
+                return
+            self._queue_container_state_check(
+                self.current_project_id,
+                self.current_task.task_id,
+                self.current_task.mode,
+            )
+
+        def _queue_container_state_check(self, project_id: str, task_id: str, mode: str) -> None:
+            """Queue a background check for a task's container state."""
+            self.run_worker(
+                self._load_container_state_worker(project_id, task_id, mode),
+                name=f"container-state:{project_id}:{task_id}",
+                group="container-state",
+                exclusive=True,
+            )
+
+        async def _load_container_state_worker(
+            self, project_id: str, task_id: str, mode: str
+        ) -> tuple[str, str, str | None]:
+            """Background worker to check container state."""
+            import asyncio
+
+            from ..lib.tasks import get_task_container_state
+
+            try:
+                state = await asyncio.get_event_loop().run_in_executor(
+                    None, get_task_container_state, project_id, task_id, mode
+                )
+                return (project_id, task_id, state)
+            except Exception as e:
+                self._log_debug(f"container state check error: {e}")
+                return (project_id, task_id, None)
+
         def _poll_upstream(self) -> None:
             """Check upstream for changes and update staleness info.
 
@@ -1142,6 +1200,7 @@ if _HAS_TEXTUAL:
             await self.refresh_tasks()
             # Start polling for the newly selected project
             self._start_upstream_polling()
+            self._start_container_status_polling()
 
         @on(TaskList.TaskSelected)
         async def handle_task_selected(self, message: TaskList.TaskSelected) -> None:
@@ -1155,6 +1214,14 @@ if _HAS_TEXTUAL:
                 self._save_selection_state()
 
             self._update_task_details()
+
+            # Immediately check container state when task is selected
+            if self.current_task and self.current_task.mode:
+                self._queue_container_state_check(
+                    message.project_id,
+                    self.current_task.task_id,
+                    self.current_task.mode,
+                )
 
         @on(Worker.StateChanged)
         async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
@@ -1194,6 +1261,24 @@ if _HAS_TEXTUAL:
                     return
                 details = self.query_one("#task-details", TaskDetails)
                 details.set_task(self.current_task, image_old=image_old)
+                return
+
+            if worker.group == "container-state":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, container_state = result
+                if project_id != self.current_project_id:
+                    return
+                if not self.current_task or self.current_task.task_id != task_id:
+                    return
+                # Update current_task with container state and refresh display
+                self.current_task.container_state = container_state
+                details = self.query_one("#task-details", TaskDetails)
+                details.set_task(self.current_task)
+                # Also refresh the task list to update status display
+                task_list = self.query_one("#task-list", TaskList)
+                task_list.refresh()
                 return
 
             if worker.group == "task-delete":
@@ -1256,8 +1341,9 @@ if _HAS_TEXTUAL:
             ``AttributeError`` on quit while still delegating to Textual's
             normal shutdown/cleanup logic.
             """
-            # Stop upstream polling before exit
+            # Stop polling before exit
             self._stop_upstream_polling()
+            self._stop_container_status_polling()
 
             # Textual's ``App`` provides ``exit()`` rather than ``shutdown()``;
             # calling the latter would raise ``AttributeError``.

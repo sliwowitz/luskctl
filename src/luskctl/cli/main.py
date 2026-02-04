@@ -39,8 +39,11 @@ from ..lib.tasks import (
     task_delete,
     task_list,
     task_new,
+    task_restart,
     task_run_cli,
     task_run_web,
+    task_status,
+    task_stop,
 )
 from ..lib.tasks import (
     get_tasks as _get_tasks,
@@ -310,6 +313,42 @@ def main() -> None:
     except Exception:
         pass
 
+    t_stop = tsub.add_parser("stop", help="Gracefully stop a running task container")
+    _a = t_stop.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_stop.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
+    _a = t_restart.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_restart.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
+    _a = t_status.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = t_status.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
@@ -488,6 +527,12 @@ def main() -> None:
             task_run_web(args.project_id, args.task_id, backend=getattr(args, "ui_backend", None))
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
+        elif args.task_cmd == "stop":
+            task_stop(args.project_id, args.task_id)
+        elif args.task_cmd == "restart":
+            task_restart(args.project_id, args.task_id)
+        elif args.task_cmd == "status":
+            task_status(args.project_id, args.task_id)
         else:
             parser.error("Unknown task subcommand")
     else:
