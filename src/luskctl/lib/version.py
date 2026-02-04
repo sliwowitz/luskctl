@@ -134,9 +134,14 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     try:
         dist = metadata.distribution(dist_name)
         direct_url = dist.read_text("direct_url.json")
-    except Exception:
-        # Catch all exceptions (PackageNotFoundError, FileNotFoundError,
-        # PermissionError, UnicodeDecodeError, etc.)
+    except (
+        metadata.PackageNotFoundError,
+        FileNotFoundError,
+        PermissionError,
+        UnicodeDecodeError,
+        OSError,
+    ):
+        # Handle various file reading errors gracefully
         return None
 
     if not direct_url:
