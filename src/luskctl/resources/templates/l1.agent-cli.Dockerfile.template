@@ -79,7 +79,7 @@ ARG AGENT_CACHE_BUST=0
 # Install AI agent CLIs as dev user
 RUN mkdir -p "$NPM_CONFIG_PREFIX" && npm config set prefix "$NPM_CONFIG_PREFIX"
 RUN npm install -g @openai/codex
-RUN npm install -g @github/copilot-cli
+RUN npm install -g @github/copilot
 RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN curl -fsSL https://opencode.ai/install | bash
 RUN npm cache clean --force
