@@ -134,7 +134,9 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
     try:
         dist = metadata.distribution(dist_name)
         direct_url = dist.read_text("direct_url.json")
-    except (metadata.PackageNotFoundError, FileNotFoundError):
+    except Exception:
+        # Catch all exceptions (PackageNotFoundError, FileNotFoundError,
+        # PermissionError, UnicodeDecodeError, etc.)
         return None
 
     if not direct_url:
@@ -150,12 +152,16 @@ def _get_pep610_revision(dist_name: str = "luskctl") -> str | None:
         return None
 
     requested_revision = vcs_info.get("requested_revision")
-    if requested_revision:
-        return requested_revision
+    if isinstance(requested_revision, str):
+        requested_revision_stripped = requested_revision.strip()
+        if requested_revision_stripped:
+            return requested_revision_stripped
 
     commit_id = vcs_info.get("commit_id")
-    if commit_id:
-        return commit_id
+    if isinstance(commit_id, str):
+        commit_id_stripped = commit_id.strip()
+        if commit_id_stripped:
+            return commit_id_stripped
 
     return None
 
