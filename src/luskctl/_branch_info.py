@@ -1,5 +1,5 @@
-# Placeholder file for branch information - DO NOT EDIT MANUALLY
-# This file is overwritten by build_script.py during pip/pipx install from a git repo.
-# The placeholder value (None) is used for PyPI releases and tarball installs.
-# See build_script.py and src/luskctl/lib/version.py for details.
+# Placeholder file for branch information - DO NOT EDIT MANUALLY.
+# This file must remain BRANCH_NAME = None in the repo.
+# Branch info is derived from PEP 610 metadata (direct_url.json) or live git detection.
+# See src/luskctl/lib/version.py for details.
 BRANCH_NAME = None
