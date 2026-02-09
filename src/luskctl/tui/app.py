@@ -41,6 +41,7 @@ if _HAS_TEXTUAL:
     from ..lib.docker import build_images, generate_dockerfiles
     from ..lib.git_gate import (
         GateStalenessInfo,
+        compare_gate_vs_upstream,
         sync_project_gate,
     )
     from ..lib.projects import Project as CodexProject
@@ -516,15 +517,21 @@ if _HAS_TEXTUAL:
 
         def _load_project_state(
             self, project_id: str
-        ) -> tuple[str, CodexProject | None, dict | None, str | None]:
+        ) -> tuple[str, CodexProject | None, dict | None, GateStalenessInfo | None, str | None]:
             try:
                 project = load_project(project_id)
                 state = get_project_state(project_id)
-                return project_id, project, state, None
+                staleness = None
+                if state.get("gate") and project.upstream_url:
+                    try:
+                        staleness = compare_gate_vs_upstream(project_id)
+                    except Exception:
+                        staleness = None
+                return project_id, project, state, staleness, None
             except SystemExit as e:
-                return project_id, None, None, str(e)
+                return project_id, None, None, None, str(e)
             except Exception as e:
-                return project_id, None, None, str(e)
+                return project_id, None, None, None, str(e)
 
         def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
             if not project_id or task is None:
@@ -617,7 +624,7 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, project, state, error = result
+                project_id, project, state, staleness, error = result
                 if project_id != self.current_project_id:
                     return
                 state_widget = self.query_one("#project-state", ProjectState)
@@ -628,6 +635,7 @@ if _HAS_TEXTUAL:
                     state_widget.set_state(None, None, None)
                     return
                 self._projects_by_id[project_id] = project
+                self._staleness_info = staleness
                 state_widget.set_state(project, state, self._last_task_count, self._staleness_info)
                 return
 

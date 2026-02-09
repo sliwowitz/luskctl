@@ -655,7 +655,7 @@ class ProjectState(Static):
             message = message[:50] + ("..." if len(message) > 50 else "")
             lines.append(Text(f"  Message:  {message}"))
 
-        # Add upstream staleness info if available (gatekeeping projects only)
+        # Add upstream staleness info if available
         if staleness is not None:
             lines.append(Text(""))
             lines.append(Text("Upstream status:"))
