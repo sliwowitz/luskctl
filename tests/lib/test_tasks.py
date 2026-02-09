@@ -9,15 +9,16 @@ from pathlib import Path
 
 import yaml
 
+from luskctl.lib.clipboard import (
+    copy_to_clipboard,
+    copy_to_clipboard_detailed,
+    get_clipboard_helper_status,
+)
+from luskctl.lib.containers import _get_container_state, get_task_container_state
 from luskctl.lib.projects import load_project
 from luskctl.lib.tasks import (
     _apply_web_env_overrides,
     _build_task_env_and_volumes,
-    _get_container_state,
-    copy_to_clipboard,
-    copy_to_clipboard_detailed,
-    get_clipboard_helper_status,
-    get_task_container_state,
     get_workspace_git_diff,
     task_delete,
     task_new,
@@ -985,11 +986,11 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
-        with unittest.mock.patch("luskctl.lib.tasks.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.lib.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.lib.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
-                with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -1026,9 +1027,9 @@ class TaskTests(unittest.TestCase):
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
-        with unittest.mock.patch("luskctl.lib.tasks.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.lib.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.lib.tasks.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.lib.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
                 status = get_clipboard_helper_status()
                 self.assertTrue(status.available)
@@ -1477,7 +1478,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.tasks._get_container_state", return_value="running"
+                        "luskctl.lib.containers._get_container_state", return_value="running"
                     ) as mock_state,
                 ):
                     state = get_task_container_state(project_id, "1", "cli")
