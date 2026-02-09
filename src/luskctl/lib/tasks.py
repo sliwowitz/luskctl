@@ -1,48 +1,38 @@
 import os
-import select
 import shutil
 import socket
 import subprocess
-import sys
-import time
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml  # pip install pyyaml
 
 from .config import get_envs_base_dir, get_ui_base_port, state_root
+from .containers import (
+    _get_container_state,
+    _gpu_run_args,
+    _is_container_running,
+    _stop_task_containers,
+    _stream_initial_logs,
+)
 from .fs import _ensure_dir_writable
 from .images import project_cli_image, project_web_image
 from .podman import _podman_userns_args
 from .projects import Project, load_project
-
-
-def _supports_color() -> bool:
-    if "NO_COLOR" in os.environ:
-        return False
-    return sys.stdout.isatty()
-
-
-def _color(text: str, code: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    return f"\x1b[{code}m{text}\x1b[0m"
-
-
-def _yellow(text: str, enabled: bool) -> str:
-    return _color(text, "33", enabled)
-
-
-def _blue(text: str, enabled: bool) -> str:
-    return _color(text, "34", enabled)
-
-
-def _green(text: str, enabled: bool) -> str:
-    return _color(text, "32", enabled)
-
-
-def _red(text: str, enabled: bool) -> str:
-    return _color(text, "31", enabled)
+from .terminal import (
+    blue as _blue,
+)
+from .terminal import (
+    green as _green,
+)
+from .terminal import (
+    red as _red,
+)
+from .terminal import (
+    supports_color as _supports_color,
+)
+from .terminal import (
+    yellow as _yellow,
+)
 
 
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
@@ -88,173 +78,6 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
     except Exception:
         # If anything goes wrong, return None - this is a best-effort operation
         return None
-
-
-@dataclass(frozen=True)
-class ClipboardHelperStatus:
-    available: tuple[str, ...]
-    hint: str | None = None
-
-
-@dataclass(frozen=True)
-class ClipboardCopyResult:
-    ok: bool
-    method: str | None = None
-    error: str | None = None
-    hint: str | None = None
-
-
-def _clipboard_install_hint() -> str:
-    if sys.platform == "darwin":
-        return ""
-
-    # Wayland vs X11 is fuzzy; provide a useful Ubuntu/Debian hint.
-    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(
-        os.environ.get("WAYLAND_DISPLAY")
-    )
-    x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
-
-    if wayland and not x11:
-        return "Install wl-clipboard: sudo apt install wl-clipboard"
-    if x11 and not wayland:
-        return "Install xclip or xsel: sudo apt install xclip"
-    return "Install wl-clipboard (Wayland) or xclip/xsel (X11)"
-
-
-def _clipboard_candidates() -> list[tuple[str, list[str]]]:
-    candidates: list[tuple[str, list[str]]] = []
-
-    if sys.platform == "darwin":
-        candidates.append(("pbcopy", ["pbcopy"]))
-        return candidates
-    if os.name == "nt":
-        candidates.append(("clip", ["clip"]))
-        return candidates
-
-    wayland = os.environ.get("XDG_SESSION_TYPE") == "wayland" or bool(
-        os.environ.get("WAYLAND_DISPLAY")
-    )
-    x11 = os.environ.get("XDG_SESSION_TYPE") == "x11" or bool(os.environ.get("DISPLAY"))
-
-    if wayland:
-        candidates.append(("wl-copy", ["wl-copy", "--type", "text/plain"]))
-    if x11:
-        candidates.append(("xclip", ["xclip", "-selection", "clipboard"]))
-        candidates.append(("xsel", ["xsel", "--clipboard", "--input"]))
-
-    if not candidates:
-        candidates.extend(
-            [
-                ("wl-copy", ["wl-copy", "--type", "text/plain"]),
-                ("xclip", ["xclip", "-selection", "clipboard"]),
-                ("xsel", ["xsel", "--clipboard", "--input"]),
-            ]
-        )
-
-    return candidates
-
-
-def get_clipboard_helper_status() -> ClipboardHelperStatus:
-    """Return which clipboard helpers are available on this machine."""
-
-    candidates = _clipboard_candidates()
-    available = tuple(name for name, cmd in candidates if shutil.which(cmd[0]))
-    if available:
-        return ClipboardHelperStatus(available=available)
-
-    hint = _clipboard_install_hint()
-    return ClipboardHelperStatus(available=(), hint=hint or None)
-
-
-def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
-    """Copy text to the system clipboard and return a detailed result.
-
-    Prefers native OS clipboard helpers when available. On Linux, users may
-    need to install a helper (for example, ``wl-clipboard`` on Wayland or
-    ``xclip``/``xsel`` on X11).
-
-    Args:
-        text: The text to copy to the system clipboard. If this is an empty
-            string, the function will not invoke any clipboard helper and will
-            return a failure result.
-
-    Returns:
-        ClipboardCopyResult: A dataclass describing the outcome:
-
-            * ``ok``: ``True`` if the text was successfully written to the
-              clipboard using one of the available helpers; ``False`` if all
-              helpers failed or no helper was available, or if ``text`` was
-              empty.
-            * ``method``: The name of the clipboard helper that succeeded
-              (for example, ``"pbcopy"``, ``"wl-copy"``, or ``"xclip"``) when
-              ``ok`` is ``True``. ``None`` if no helper was run or all helpers
-              failed.
-            * ``error``: A human-readable error message describing why the
-              copy failed when ``ok`` is ``False``. This is ``"Nothing to copy."``
-              when ``text`` is empty, ``"No clipboard helper found on PATH."``
-              when no helper is available, or the last recorded helper failure
-              message when all helpers fail.
-            * ``hint``: An optional hint string with guidance on how to enable
-              clipboard support on the current platform (for example, a command
-              to install a missing helper). This is typically populated when no
-              helper is available or when all helpers fail, and is ``None`` on
-              successful copies.
-
-    Examples:
-        Basic usage with boolean check::
-
-            result = copy_to_clipboard_detailed("hello world")
-            if result.ok:
-                print(f"Copied to clipboard using {result.method}")
-            else:
-                print(f"Copy failed: {result.error}")
-                if result.hint:
-                    print(result.hint)
-
-        Handling the case where no clipboard helper is installed::
-
-            result = copy_to_clipboard_detailed("some text")
-            if not result.ok and result.error == "No clipboard helper found on PATH.":
-                # result.hint may contain a command to install a suitable helper.
-                print(result.hint or "Install a clipboard helper for your system.")
-
-        Handling an empty string (nothing to copy)::
-
-            result = copy_to_clipboard_detailed("")
-            assert not result.ok
-            assert result.error == "Nothing to copy."
-    """
-    if not text:
-        return ClipboardCopyResult(ok=False, error="Nothing to copy.")
-
-    candidates = _clipboard_candidates()
-    available = [(name, cmd) for name, cmd in candidates if shutil.which(cmd[0])]
-    if not available:
-        hint = _clipboard_install_hint()
-        return ClipboardCopyResult(
-            ok=False, error="No clipboard helper found on PATH.", hint=hint or None
-        )
-
-    errors: list[str] = []
-    for name, cmd in available:
-        try:
-            subprocess.run(cmd, input=text, check=True, text=True, capture_output=True)
-            return ClipboardCopyResult(ok=True, method=name)
-        except subprocess.CalledProcessError as e:
-            detail = (e.stderr or e.stdout or "").strip()
-            errors.append(f"{name} failed" + (f": {detail}" if detail else ""))
-        except Exception as e:
-            errors.append(f"{name} error: {e}")
-
-    hint = _clipboard_install_hint()
-    return ClipboardCopyResult(
-        ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None
-    )
-
-
-def copy_to_clipboard(text: str) -> bool:
-    """Backward-compatible clipboard copy helper returning only success."""
-    return copy_to_clipboard_detailed(text).ok
 
 
 # ---------- Tasks ----------
@@ -605,98 +428,10 @@ def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, l
     return env, volumes
 
 
-def _gpu_run_args(project: Project) -> list[str]:
-    """Return additional podman run args to enable NVIDIA GPU if configured.
-
-    Per-project only: GPUs are enabled exclusively by the project's project.yml.
-    Default is disabled. Global config and environment variables are ignored.
-
-    project.yml example:
-      run:
-        gpus: all   # or true
-
-    When enabled, we pass a combination that works with Podman +
-    nvidia-container-toolkit (recent versions):
-      --device nvidia.com/gpu=all
-      -e NVIDIA_VISIBLE_DEVICES=all
-      -e NVIDIA_DRIVER_CAPABILITIES=all
-      (optional) --hooks-dir=/usr/share/containers/oci/hooks.d if it exists
-    """
-    # Project-level setting from project.yml (only source of truth)
-    enabled = False
-    try:
-        proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
-        run_cfg = proj_cfg.get("run", {}) or {}
-        gpus = run_cfg.get("gpus", run_cfg.get("gpu"))
-        if isinstance(gpus, str):
-            enabled = gpus.lower() == "all"
-        elif isinstance(gpus, bool):
-            enabled = gpus
-    except Exception:
-        enabled = False
-
-    if not enabled:
-        return []
-
-    args: list[str] = [
-        "--device",
-        "nvidia.com/gpu=all",
-        "-e",
-        "NVIDIA_VISIBLE_DEVICES=all",
-        "-e",
-        "NVIDIA_DRIVER_CAPABILITIES=all",
-    ]
-    hooks_dir = Path("/usr/share/containers/oci/hooks.d")
-    if hooks_dir.is_dir():
-        args.extend(["--hooks-dir", str(hooks_dir)])
-    return args
-
-
 def _check_mode(meta: dict, expected: str) -> None:
     mode = meta.get("mode")
     if mode and mode != expected:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
-
-
-def _stop_task_containers(project: "Project", task_id: str) -> None:
-    """Best-effort removal of any containers associated with a task.
-
-    We intentionally ignore most errors here: task deletion should succeed
-    even if podman isn't installed, the containers are already gone, or the
-    container names never existed. This helper is used when deleting a
-    task's workspace/metadata to avoid leaving behind containers that would
-    later conflict with a new task reusing the same ID.
-
-    We use ``podman rm -f`` rather than ``podman stop`` to make teardown
-    deterministic and avoid hangs waiting for graceful shutdown inside the
-    container. The task itself is already being deleted at this point, so
-    a forceful remove is acceptable and keeps state consistent.
-    """
-
-    # The naming scheme is kept in sync with task_run_cli/task_run_ui.
-    names = [
-        f"{project.id}-cli-{task_id}",
-        f"{project.id}-web-{task_id}",
-    ]
-
-    for name in names:
-        try:
-            _log_debug(f"stop_containers: podman rm -f {name} (start)")
-            # "podman rm -f" force-removes the container even if it is
-            # currently running. If the container does not exist this will
-            # fail, but we treat that as a non-fatal condition and simply
-            # continue.
-            subprocess.run(
-                ["podman", "rm", "-f", name],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _log_debug(f"stop_containers: podman rm -f {name} (done)")
-        except FileNotFoundError:
-            # podman not installed; nothing we can do here.
-            _log_debug("stop_containers: podman not found; skipping all")
-            break
 
 
 def task_delete(project_id: str, task_id: str) -> None:
@@ -1000,53 +735,6 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
     )
 
 
-def _is_container_running(container_name: str) -> bool:
-    """Return True if a podman container with the given name is running.
-
-    This uses `podman inspect` and treats missing containers or any
-    inspection error as "not running".
-    """
-    try:
-        out = subprocess.check_output(
-            ["podman", "inspect", "-f", "{{.State.Running}}", container_name],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-    return out.lower() == "true"
-
-
-def _get_container_state(container_name: str) -> str | None:
-    """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
-
-    This uses `podman inspect` to get the actual container state. Returns None
-    if the container doesn't exist or podman is not available.
-    """
-    try:
-        out = subprocess.check_output(
-            ["podman", "inspect", "-f", "{{.State.Status}}", container_name],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return out.lower() if out else None
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-
-
-def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
-    """Get actual container state for a task.
-
-    This is intended for TUI background workers to check container status.
-    Returns 'running', 'exited', 'paused', etc., or None if container not found.
-    """
-    if not mode:
-        return None
-    project = load_project(project_id)
-    container_name = f"{project.id}-{mode}-{task_id}"
-    return _get_container_state(container_name)
-
-
 def task_stop(project_id: str, task_id: str) -> None:
     """Gracefully stop a running task container.
 
@@ -1198,80 +886,3 @@ def task_status(project_id: str, task_id: str) -> None:
             f"\n  {_yellow('Warning:', color_enabled)} Metadata says running but container is not!"
         )
         print(f"  Run 'luskctl task restart {project_id} {task_id}' to fix.")
-
-
-def _stream_initial_logs(container_name: str, timeout_sec: float | None, ready_check) -> bool:
-    """Follow container logs and detach when ready, timed out, or container exits.
-
-    - container_name: podman container name.
-    - timeout_sec: maximum seconds to follow logs. If ``None``, there is no
-      time-based cutoff and we only stop when either the ready condition is
-      met or the container exits.
-    - ready_check: callable(line:str)->bool that returns True when ready. It will
-      be evaluated for each incoming log line; for UI case it may ignore line
-      content and probe external readiness.
-
-    Returns True if a ready condition was met, False on timeout or if logs
-    ended without ever becoming ready.
-    """
-    try:
-        proc = subprocess.Popen(
-            ["podman", "logs", "-f", container_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-    except Exception:
-        return False
-
-    start = time.time()
-    ready = False
-    try:
-        assert proc.stdout is not None
-        while True:
-            # Stop if timeout (when enabled)
-            if timeout_sec is not None and (time.time() - start > timeout_sec):
-                break
-            # If process already ended, stop
-            if proc.poll() is not None:
-                break
-            # Wait for a line (non-blocking with select)
-            rlist, _, _ = select.select([proc.stdout], [], [], 0.5)
-            if not rlist:
-                # Even without a new line, allow external readiness checks
-                if ready_check(""):
-                    ready = True
-                    break
-                continue
-            line = proc.stdout.readline()
-            if not line:
-                continue
-            # Echo the line to the user's terminal
-            try:
-                sys.stdout.write(line)
-                sys.stdout.flush()
-            except Exception:
-                # Ignore terminal write errors.
-                pass
-            # Check readiness based on the line content
-            try:
-                if ready_check(line):
-                    ready = True
-                    break
-            except Exception:
-                # Ignore errors in readiness checks
-                pass
-    finally:
-        # Stop following logs
-        try:
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=2)
-                except Exception:
-                    proc.kill()
-        except Exception:
-            # Best-effort termination; ignore cleanup errors.
-            pass
-    return ready

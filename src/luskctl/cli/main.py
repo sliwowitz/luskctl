@@ -48,6 +48,10 @@ from ..lib.tasks import (
 from ..lib.tasks import (
     get_tasks as _get_tasks,
 )
+from ..lib.terminal import gray as _gray
+from ..lib.terminal import supports_color as _supports_color
+from ..lib.terminal import violet as _violet
+from ..lib.terminal import yes_no as _yes_no
 from ..lib.version import format_version_string, get_version_info
 
 # Optional: bash completion via argcomplete
@@ -82,33 +86,118 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
     return tids
 
 
-def _supports_color() -> bool:
-    """Check if stdout supports color output."""
-    import sys
+def _print_config() -> None:
+    """Display all configuration, template and output paths."""
+    color_enabled = _supports_color()
+    # READ PATHS
+    print("Configuration (read):")
+    gcfg = _global_config_path()
+    gcfg_exists = Path(gcfg).is_file()
+    print(
+        f"- Global config file: {_gray(str(gcfg), color_enabled)} "
+        f"(exists: {_yes_no(gcfg_exists, color_enabled)})"
+    )
+    paths = _global_config_search_paths()
+    if paths:
+        print("- Global config search order:")
+        for p in paths:
+            exists = Path(p).is_file()
+            print(f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})")
+    print(f"- Web base port: {_get_ui_base_port()}")
 
-    # Follow the NO_COLOR standard (https://no-color.org/):
-    # if NO_COLOR is present in the environment, disable color entirely.
-    if "NO_COLOR" in os.environ:
-        return False
-    return sys.stdout.isatty()
+    # Envs base dir
+    try:
+        print(f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}")
+    except Exception:
+        pass
 
+    uproj = _user_projects_root()
+    sproj = _config_root()
+    uproj_exists = Path(uproj).is_dir()
+    print(
+        f"- User projects root: {_gray(str(uproj), color_enabled)} "
+        f"(exists: {_yes_no(uproj_exists, color_enabled)})"
+    )
+    print(
+        f"- System projects root: {_gray(str(sproj), color_enabled)} "
+        f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
+    )
 
-def _color(text: str, code: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    return f"\x1b[{code}m{text}\x1b[0m"
+    # Project configs discovered
+    projs = list_projects()
+    if projs:
+        print("- Project configs:")
+        for p in projs:
+            print(
+                f"  • {_violet(str(p.id), color_enabled)}: "
+                f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
+            )
+    else:
+        print("- Project configs: none found")
 
+    # Templates (package resources)
+    print("Templates (read):")
+    tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
+    try:
+        names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
+    except Exception:
+        names = []
+    print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
+    if names:
+        for n in sorted(names):
+            print(f"  • {_gray(str(n), color_enabled)}")
 
-def _yes_no(value: bool, enabled: bool) -> str:
-    return _color("yes" if value else "no", "32" if value else "31", enabled)
+    # Scripts (package resources)
+    scr_pkg = resources.files("luskctl") / "resources" / "scripts"
+    try:
+        scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
+    except Exception:
+        scr_names = []
+    print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
+    if scr_names:
+        for n in sorted(scr_names):
+            print(f"  • {_gray(str(n), color_enabled)}")
 
+    # WRITE PATHS
+    print("Writable locations (write):")
+    sroot = _state_root()
+    sroot_exists = Path(sroot).is_dir()
+    print(
+        f"- State root: {_gray(str(sroot), color_enabled)} "
+        f"(exists: {_yes_no(sroot_exists, color_enabled)})"
+    )
+    build_root = _build_root()
+    print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
+    if projs:
+        print("- Expected generated files per project:")
+        for p in projs:
+            base = build_root / p.id
+            for fname in (
+                "L0.Dockerfile",
+                "L1.cli.Dockerfile",
+                "L1.ui.Dockerfile",
+                "L2.Dockerfile",
+            ):
+                path = base / fname
+                print(
+                    f"  • {_violet(str(p.id), color_enabled)}: "
+                    f"{_gray(str(path), color_enabled)} "
+                    f"(exists: {_yes_no(path.is_file(), color_enabled)})"
+                )
 
-def _violet(text: str, enabled: bool) -> str:
-    return _color(text, "35", enabled)
-
-
-def _gray(text: str, enabled: bool) -> str:
-    return _color(text, "90", enabled)
+    # ENVIRONMENT
+    print("Environment overrides (if set):")
+    for var in (
+        "LUSKCTL_CONFIG_FILE",
+        "LUSKCTL_CONFIG_DIR",
+        "LUSKCTL_STATE_DIR",
+        "LUSKCTL_RUNTIME_DIR",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+    ):
+        val = os.environ.get(var)
+        if val is not None:
+            print(f"- {var}={_gray(val, color_enabled)}")
 
 
 def main() -> None:
@@ -398,120 +487,7 @@ def main() -> None:
     elif args.cmd == "auth-blablador":
         blablador_auth(args.project_id)
     elif args.cmd == "config":
-        color_enabled = _supports_color()
-        # READ PATHS
-        print("Configuration (read):")
-        gcfg = _global_config_path()
-        gcfg_exists = Path(gcfg).is_file()
-        print(
-            f"- Global config file: {_gray(str(gcfg), color_enabled)} "
-            f"(exists: {_yes_no(gcfg_exists, color_enabled)})"
-        )
-        paths = _global_config_search_paths()
-        if paths:
-            print("- Global config search order:")
-            for p in paths:
-                exists = Path(p).is_file()
-                print(
-                    f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})"
-                )
-        print(f"- Web base port: {_get_ui_base_port()}")
-
-        # Envs base dir
-        try:
-            print(
-                f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}"
-            )
-        except Exception:
-            pass
-
-        uproj = _user_projects_root()
-        sproj = _config_root()
-        uproj_exists = Path(uproj).is_dir()
-        print(
-            f"- User projects root: {_gray(str(uproj), color_enabled)} "
-            f"(exists: {_yes_no(uproj_exists, color_enabled)})"
-        )
-        print(
-            f"- System projects root: {_gray(str(sproj), color_enabled)} "
-            f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
-        )
-
-        # Project configs discovered
-        projs = list_projects()
-        if projs:
-            print("- Project configs:")
-            for p in projs:
-                print(
-                    f"  • {_violet(str(p.id), color_enabled)}: "
-                    f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
-                )
-        else:
-            print("- Project configs: none found")
-
-        # Templates (package resources)
-        print("Templates (read):")
-        tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
-        try:
-            names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
-        except Exception:
-            names = []
-        print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
-        if names:
-            for n in sorted(names):
-                print(f"  • {_gray(str(n), color_enabled)}")
-
-        # Scripts (package resources)
-        scr_pkg = resources.files("luskctl") / "resources" / "scripts"
-        try:
-            scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
-        except Exception:
-            scr_names = []
-        print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
-        if scr_names:
-            for n in sorted(scr_names):
-                print(f"  • {_gray(str(n), color_enabled)}")
-
-        # WRITE PATHS
-        print("Writable locations (write):")
-        sroot = _state_root()
-        sroot_exists = Path(sroot).is_dir()
-        print(
-            f"- State root: {_gray(str(sroot), color_enabled)} "
-            f"(exists: {_yes_no(sroot_exists, color_enabled)})"
-        )
-        build_root = _build_root()
-        print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
-        if projs:
-            print("- Expected generated files per project:")
-            for p in projs:
-                base = build_root / p.id
-                for fname in (
-                    "L0.Dockerfile",
-                    "L1.cli.Dockerfile",
-                    "L1.ui.Dockerfile",
-                    "L2.Dockerfile",
-                ):
-                    path = base / fname
-                    print(
-                        f"  • {_violet(str(p.id), color_enabled)}: "
-                        f"{_gray(str(path), color_enabled)} "
-                        f"(exists: {_yes_no(path.is_file(), color_enabled)})"
-                    )
-
-        # ENVIRONMENT
-        print("Environment overrides (if set):")
-        for var in (
-            "LUSKCTL_CONFIG_FILE",
-            "LUSKCTL_CONFIG_DIR",
-            "LUSKCTL_STATE_DIR",
-            "LUSKCTL_RUNTIME_DIR",
-            "XDG_DATA_HOME",
-            "XDG_CONFIG_HOME",
-        ):
-            val = os.environ.get(var)
-            if val is not None:
-                print(f"- {var}={_gray(val, color_enabled)}")
+        _print_config()
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:
