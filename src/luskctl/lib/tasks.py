@@ -1070,9 +1070,7 @@ def task_stop(project_id: str, task_id: str) -> None:
     if state is None:
         raise SystemExit(f"Task {task_id} container does not exist")
     if state not in ("running", "paused"):
-        raise SystemExit(
-            f"Task {task_id} container is not stoppable (state: {state})"
-        )
+        raise SystemExit(f"Task {task_id} container is not stoppable (state: {state})")
 
     try:
         subprocess.run(
