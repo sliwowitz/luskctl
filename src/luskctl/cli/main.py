@@ -571,7 +571,7 @@ def main() -> None:
         elif args.task_cmd == "start":
             task_id = task_new(args.project_id)
             if args.web:
-                task_run_web(args.project_id, task_id, backend=args.backend)
+                task_run_web(args.project_id, task_id, backend=getattr(args, "backend", None))
             else:
                 task_run_cli(args.project_id, task_id)
         elif args.task_cmd == "status":
