@@ -130,12 +130,29 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         def __init__(self, *args, **kwargs) -> None:
             pass
 
+    class OptionList:
+        class OptionSelected:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
     widgets_mod.Button = Button
     widgets_mod.Footer = Footer
     widgets_mod.Header = Header
     widgets_mod.ListItem = ListItem
     widgets_mod.ListView = ListView
     widgets_mod.Static = Static
+    widgets_mod.OptionList = OptionList
+
+    option_list_mod = types.ModuleType("textual.widgets.option_list")
+
+    class Option:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+    option_list_mod.Option = Option
 
     message_mod = types.ModuleType("textual.message")
 
@@ -178,6 +195,7 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         "textual.app": app_mod,
         "textual.containers": containers_mod,
         "textual.widgets": widgets_mod,
+        "textual.widgets.option_list": option_list_mod,
         "textual.message": message_mod,
         "textual.worker": worker_mod,
         "textual.binding": binding_mod,

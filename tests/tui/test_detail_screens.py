@@ -134,12 +134,29 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         def __init__(self, *args, **kwargs) -> None:
             pass
 
+    class OptionList:
+        class OptionSelected:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
     widgets_mod.Button = Button
     widgets_mod.Footer = Footer
     widgets_mod.Header = Header
     widgets_mod.ListItem = ListItem
     widgets_mod.ListView = ListView
     widgets_mod.Static = Static
+    widgets_mod.OptionList = OptionList
+
+    option_list_mod = types.ModuleType("textual.widgets.option_list")
+
+    class Option:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+    option_list_mod.Option = Option
 
     message_mod = types.ModuleType("textual.message")
 
@@ -182,6 +199,7 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         "textual.app": app_mod,
         "textual.containers": containers_mod,
         "textual.widgets": widgets_mod,
+        "textual.widgets.option_list": option_list_mod,
         "textual.message": message_mod,
         "textual.worker": worker_mod,
         "textual.binding": binding_mod,
@@ -338,7 +356,7 @@ class ScreenConstructionTests(TestCase):
             project_id="proj1",
             image_old=False,
         )
-        self.assertEqual(screen._task, task)
+        self.assertEqual(screen._task_meta, task)
         self.assertTrue(screen._has_tasks)
         self.assertEqual(screen._project_id, "proj1")
         self.assertFalse(screen._image_old)
@@ -612,6 +630,53 @@ class ActionDispatchTests(TestCase):
                 coro = AppClass._handle_project_action(instance, action)
                 asyncio.run(coro)
                 getattr(instance, method).assert_called_once()
+
+
+class ProjectScreenNoneStateTests(TestCase):
+    """Tests that ProjectDetailsScreen handles None state correctly."""
+
+    def _import_screens(self):
+        stubs = _build_textual_stubs()
+        screens, widgets, _ = _import_fresh(stubs)
+        return screens, widgets
+
+    def test_project_screen_stores_none_state(self) -> None:
+        screens, _ = self._import_screens()
+        project = mock.Mock()
+        project.id = "proj1"
+        screen = screens.ProjectDetailsScreen(project=project, state=None, task_count=3)
+        self.assertIsNone(screen._state)
+        self.assertEqual(screen._task_count, 3)
+
+
+class MainScreenShortcutTests(TestCase):
+    """Tests for c/w/d action routing from the main screen."""
+
+    def _get_app(self):
+        stubs = _build_textual_stubs()
+        _, _, app_mod = _import_fresh(stubs)
+        return app_mod, app_mod.LuskTUI
+
+    def test_action_run_cli_from_main(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass.action_run_cli_from_main(instance)
+        asyncio.run(coro)
+        instance._action_task_start_cli.assert_called_once()
+
+    def test_action_run_web_from_main(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass.action_run_web_from_main(instance)
+        asyncio.run(coro)
+        instance._action_task_start_web.assert_called_once()
+
+    def test_action_delete_task_from_main(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass.action_delete_task_from_main(instance)
+        asyncio.run(coro)
+        instance.action_delete_task.assert_called_once()
 
 
 if __name__ == "__main__":

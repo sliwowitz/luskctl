@@ -2,8 +2,18 @@
 
 from textual import events, screen
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, Static
+from textual.containers import Vertical
+from textual.widgets import Static
+
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets import OptionList
+except Exception:  # pragma: no cover - textual may be a stub module
+    OptionList = None  # type: ignore[assignment,misc]
+
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets.option_list import Option
+except Exception:  # pragma: no cover - textual may be a stub module
+    Option = None  # type: ignore[assignment,misc]
 
 try:  # pragma: no cover - optional import for test stubs
     from textual.binding import Binding
@@ -12,7 +22,7 @@ except Exception:  # pragma: no cover - textual may be a stub module
 
 from ..lib.git_gate import GateStalenessInfo
 from ..lib.projects import Project as CodexProject
-from .widgets import TaskMeta, render_project_details, render_task_details
+from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
 
 
 def _modal_binding(key: str, action: str, description: str) -> tuple | object:
@@ -31,44 +41,16 @@ _DETAIL_SCREEN_CSS = """
         max-height: 50%;
         border: round $primary;
         border-title-align: right;
+        border-subtitle-align: left;
         background: $surface;
         padding: 1;
         margin: 1;
         overflow-y: auto;
     }
 
-    #actions-container {
+    #actions-list {
         height: 1fr;
-        padding: 0 1;
-        overflow-y: auto;
-    }
-
-    .action-group-label {
-        margin: 1 0 0 1;
-        text-style: bold;
-        color: $text-muted;
-    }
-
-    .action-group {
-        layout: vertical;
         margin: 0 1;
-        height: auto;
-    }
-
-    .action-group Button {
-        margin: 0 0 1 0;
-        width: 100%;
-        min-width: 0;
-    }
-
-    #action-cancel {
-        margin: 0 1 1 1;
-        height: auto;
-    }
-
-    #action-cancel Button {
-        width: 100%;
-        min-width: 0;
     }
 """
 
@@ -120,80 +102,44 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
     def compose(self) -> ComposeResult:
         detail_pane = Static(id="detail-content")
         detail_pane.border_title = f"Project: {self._project.id}"
+        detail_pane.border_subtitle = "Esc to close"
         yield detail_pane
 
-        with VerticalScroll(id="actions-container"):
-            yield Static("Common Actions", classes="action-group-label")
-            with Vertical(classes="action-group"):
-                yield Button(
-                    "Full Setup - project-[yellow]i[/yellow]nit"
-                    "  (ssh + generate + build + gate-sync)",
-                    id="project_init",
-                    variant="primary",
-                )
-                yield Button(
-                    "sync [yellow]g[/yellow]it gate",
-                    id="sync_gate",
-                    variant="primary",
-                )
-
-            yield Static("Build & Configure", classes="action-group-label")
-            with Vertical(classes="action-group"):
-                yield Button(
-                    "generate [yellow]d[/yellow]ockerfiles",
-                    id="generate",
-                    variant="primary",
-                )
-                yield Button(
-                    "[yellow]b[/yellow]uild project image",
-                    id="build",
-                    variant="primary",
-                )
-                yield Button(
-                    "[yellow]r[/yellow]ebuild with agents",
-                    id="build_agents",
-                    variant="primary",
-                )
-                yield Button(
-                    "[yellow]f[/yellow]ull rebuild no cache",
-                    id="build_full",
-                    variant="primary",
-                )
-                yield Button(
-                    "initialize [yellow]s[/yellow]sh",
-                    id="init_ssh",
-                    variant="primary",
-                )
-
-            yield Static("Authentication", classes="action-group-label")
-            with Vertical(classes="action-group"):
-                yield Button(
-                    "[yellow]a[/yellow]uthenticate agents...",
-                    id="auth",
-                    variant="primary",
-                )
-
-        with Horizontal(id="action-cancel"):
-            yield Button("Cancel [Esc]", id="cancel", variant="default")
+        yield OptionList(
+            Option(
+                "Full Setup - project-[i]nit  (ssh + generate + build + gate-sync)",
+                id="project_init",
+            ),
+            Option("sync [g]it gate", id="sync_gate"),
+            None,
+            Option("generate [d]ockerfiles", id="generate"),
+            Option("[b]uild project image", id="build"),
+            Option("[r]ebuild with agents", id="build_agents"),
+            Option("[f]ull rebuild no cache", id="build_full"),
+            Option("initialize [s]sh", id="init_ssh"),
+            None,
+            Option("[a]uthenticate agents...", id="auth"),
+            id="actions-list",
+        )
 
     def on_mount(self) -> None:
         detail_widget = self.query_one("#detail-content", Static)
-        rendered = render_project_details(
-            self._project, self._state, self._task_count, self._staleness
-        )
+        if self._state is not None:
+            rendered = render_project_details(
+                self._project, self._state, self._task_count, self._staleness
+            )
+        else:
+            rendered = render_project_loading(self._project, self._task_count)
         detail_widget.update(rendered)
-        first_button = self.query("Button").first()
-        if first_button:
-            first_button.focus()
+        actions = self.query_one("#actions-list", OptionList)
+        actions.focus()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id
-        if button_id == "cancel":
-            self.dismiss(None)
-        elif button_id == "auth":
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        option_id = event.option_id
+        if option_id == "auth":
             self._open_auth_modal()
-        elif button_id:
-            self.dismiss(button_id)
+        elif option_id:
+            self.dismiss(option_id)
 
     def _open_auth_modal(self) -> None:
         self.app.push_screen(AuthActionsScreen(), self._on_auth_result)
@@ -259,53 +205,36 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         max-height: 80%;
         border: heavy $primary;
         border-title-align: right;
+        border-subtitle-align: left;
         background: $surface;
         padding: 1;
     }
 
-    #auth-buttons {
-        layout: vertical;
+    #auth-actions-list {
         height: auto;
-    }
-
-    #auth-buttons Button {
-        margin: 0 0 1 0;
-        width: 100%;
-        min-width: 0;
-    }
-
-    #auth-cancel {
-        margin-top: 0;
-        height: auto;
-    }
-
-    #auth-cancel Button {
-        width: 100%;
-        min-width: 0;
     }
     """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="auth-dialog") as dialog:
-            with Vertical(id="auth-buttons"):
-                yield Button("[yellow]1[/yellow] Codex", id="auth_codex", variant="primary")
-                yield Button("[yellow]2[/yellow] Claude", id="auth_claude", variant="primary")
-                yield Button("[yellow]3[/yellow] Mistral", id="auth_mistral", variant="primary")
-                yield Button("[yellow]4[/yellow] Blablador", id="auth_blablador", variant="primary")
-            with Horizontal(id="auth-cancel"):
-                yield Button("Cancel [Esc]", id="cancel", variant="default")
+            yield OptionList(
+                Option("[1] Codex", id="auth_codex"),
+                Option("[2] Claude", id="auth_claude"),
+                Option("[3] Mistral", id="auth_mistral"),
+                Option("[4] Blablador", id="auth_blablador"),
+                id="auth-actions-list",
+            )
         dialog.border_title = "Authenticate Agents"
+        dialog.border_subtitle = "Esc to close"
 
     def on_mount(self) -> None:
-        first_button = self.query_one("#auth-buttons Button", Button)
-        first_button.focus()
+        actions = self.query_one("#auth-actions-list", OptionList)
+        actions.focus()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id
-        if button_id == "cancel":
-            self.dismiss(None)
-        elif button_id:
-            self.dismiss(button_id)
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        option_id = event.option_id
+        if option_id:
+            self.dismiss(option_id)
 
     # Action methods invoked by BINDINGS
     def action_dismiss(self) -> None:
@@ -358,7 +287,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         image_old: bool | None = None,
     ) -> None:
         super().__init__()
-        self._task = task
+        self._task_meta = task
         self._has_tasks = has_tasks
         self._project_id = project_id
         self._image_old = image_old
@@ -366,91 +295,48 @@ class TaskDetailsScreen(screen.Screen[str | None]):
     def compose(self) -> ComposeResult:
         detail_pane = Static(id="detail-content")
         title = "Task Details"
-        if self._task:
-            backend = self._task.backend or self._task.mode or "unknown"
-            title = f"Task: {self._task.task_id} ({backend})"
+        if self._task_meta:
+            backend = self._task_meta.backend or self._task_meta.mode or "unknown"
+            title = f"Task: {self._task_meta.task_id} ({backend})"
         detail_pane.border_title = title
+        detail_pane.border_subtitle = "Esc to close"
         yield detail_pane
 
-        with VerticalScroll(id="actions-container"):
-            yield Static("Common Actions", classes="action-group-label")
-            with Vertical(classes="action-group"):
-                yield Button(
-                    "Start CLI task  [yellow]N[/yellow]  (new task + run CLI)",
-                    id="task_start_cli",
-                    variant="primary",
-                )
-                yield Button(
-                    "Start [yellow]W[/yellow]eb task  (new task + run Web)",
-                    id="task_start_web",
-                    variant="primary",
-                )
-                yield Button(
-                    "New task (no run)  [yellow]C[/yellow]",
-                    id="new",
-                    variant="primary",
-                )
-                if self._has_tasks:
-                    yield Button(
-                        "[yellow]d[/yellow]elete task",
-                        id="delete",
-                        variant="error",
-                    )
+        options: list[Option | None] = [
+            Option("Start CLI task  [N]  (new task + run CLI)", id="task_start_cli"),
+            Option("Start [W]eb task  (new task + run Web)", id="task_start_web"),
+            Option("New task (no run)  [C]", id="new"),
+        ]
+        if self._has_tasks:
+            options.append(Option("[d]elete task", id="delete"))
 
-            if self._has_tasks:
-                yield Static("Task Operations", classes="action-group-label")
-                with Vertical(classes="action-group"):
-                    yield Button(
-                        "run [yellow]c[/yellow]li agent",
-                        id="cli",
-                        variant="primary",
-                    )
-                    yield Button(
-                        "run [yellow]w[/yellow]eb UI",
-                        id="web",
-                        variant="primary",
-                    )
-                    yield Button(
-                        "[yellow]r[/yellow]estart container",
-                        id="restart",
-                        variant="primary",
-                    )
+        if self._has_tasks:
+            options.append(None)
+            options.append(Option("run [c]li agent", id="cli"))
+            options.append(Option("run [w]eb UI", id="web"))
+            options.append(Option("[r]estart container", id="restart"))
+            options.append(None)
+            options.append(Option("Copy diff vs [H]EAD", id="diff_head"))
+            options.append(Option("Copy diff vs [P]REV", id="diff_prev"))
 
-                yield Static("Diff", classes="action-group-label")
-                with Vertical(classes="action-group"):
-                    yield Button(
-                        "Copy diff vs [yellow]H[/yellow]EAD",
-                        id="diff_head",
-                        variant="primary",
-                    )
-                    yield Button(
-                        "Copy diff vs [yellow]P[/yellow]REV",
-                        id="diff_prev",
-                        variant="primary",
-                    )
-
-        with Horizontal(id="action-cancel"):
-            yield Button("Cancel [Esc]", id="cancel", variant="default")
+        yield OptionList(*options, id="actions-list")
 
     def on_mount(self) -> None:
         detail_widget = self.query_one("#detail-content", Static)
         rendered = render_task_details(
-            self._task,
+            self._task_meta,
             project_id=self._project_id,
             image_old=self._image_old,
             empty_message="No task selected.",
         )
         detail_widget.update(rendered)
-        first_button = self.query("Button").first()
-        if first_button:
-            first_button.focus()
+        actions = self.query_one("#actions-list", OptionList)
+        actions.focus()
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id
-        if button_id == "cancel":
-            self.dismiss(None)
-        elif button_id:
-            self.dismiss(button_id)
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        option_id = event.option_id
+        if option_id:
+            self.dismiss(option_id)
 
     def on_key(self, event: events.Key) -> None:
         key = event.key  # case-sensitive
