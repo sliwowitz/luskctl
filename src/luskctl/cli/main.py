@@ -86,6 +86,24 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
     return tids
 
 
+def _cmd_project_init(project_id: str) -> None:
+    """Full project setup: ssh-init, generate, build, gate-sync."""
+    print("==> Initializing SSH...")
+    init_project_ssh(project_id)
+
+    print("==> Generating Dockerfiles...")
+    generate_dockerfiles(project_id)
+
+    print("==> Building images...")
+    build_images(project_id)
+
+    print("==> Syncing git gate...")
+    res = sync_project_gate(project_id)
+    if not res["success"]:
+        raise SystemExit(f"Gate sync failed: {', '.join(res['errors'])}")
+    print(f"Gate ready at {res['path']}")
+
+
 def _print_config() -> None:
     """Display all configuration, template and output paths."""
     color_enabled = _supports_color()
@@ -210,10 +228,15 @@ def main() -> None:
         description="luskctl – generate/build images and run per-project task containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Quick start (order of operations):\n"
-            "- Online (HTTPS): generate → build → gate-sync (optional) → task new → task run-*\n"
-            "- Online (SSH):   generate → build → ssh-init → gate-sync (recommended) → task new → task run-*\n"
-            "- Gatekeeping:    generate → build → ssh-init → gate-sync (required) →  task new → task run-*\n"
+            "Quick start:\n"
+            "  1. Setup:  luskctl project-init <project_id>\n"
+            "  2. Work:   luskctl task start <project_id>         (new CLI task)\n"
+            "             luskctl task start <project_id> --web   (new web task)\n"
+            "\n"
+            "Step-by-step (order of operations):\n"
+            "  Online (HTTPS): generate → build → gate-sync (optional) → task new → task run-*\n"
+            "  Online (SSH):   generate → build → ssh-init → gate-sync (recommended) → task new → task run-*\n"
+            "  Gatekeeping:    generate → build → ssh-init → gate-sync (required) → task new → task run-*\n"
         ),
     )
     parser.add_argument("--version", action="version", version=f"luskctl {version_string}")
@@ -297,6 +320,17 @@ def main() -> None:
         action="store_true",
         help="Recreate the mirror from scratch",
     )
+
+    # project-init
+    p_pinit = sub.add_parser(
+        "project-init",
+        help="Full project setup: ssh-init + generate + build + gate-sync",
+    )
+    _a = p_pinit.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     # auth-codex
     p_auth_codex = sub.add_parser(
@@ -431,6 +465,25 @@ def main() -> None:
         help="Backend to use when re-running a web task (default: use saved backend)",
     )
 
+    t_start = tsub.add_parser(
+        "start",
+        help="Create a new task and immediately run it (default: CLI mode)",
+    )
+    _a = t_start.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    t_start.add_argument(
+        "--web",
+        action="store_true",
+        help="Start in web mode instead of CLI",
+    )
+    t_start.add_argument(
+        "--backend",
+        help="Web backend (default from project config or 'codex')",
+    )
+
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
     _a = t_status.add_argument("project_id")
     try:
@@ -478,6 +531,8 @@ def main() -> None:
         print(
             f"Gate ready at {res['path']} (upstream: {res['upstream_url']}; created: {res['created']})"
         )
+    elif args.cmd == "project-init":
+        _cmd_project_init(args.project_id)
     elif args.cmd == "auth-codex":
         codex_auth(args.project_id)
     elif args.cmd == "auth-mistral":
@@ -513,6 +568,12 @@ def main() -> None:
         elif args.task_cmd == "restart":
             backend = getattr(args, "backend", None)
             task_restart(args.project_id, args.task_id, backend=backend)
+        elif args.task_cmd == "start":
+            task_id = task_new(args.project_id)
+            if args.web:
+                task_run_web(args.project_id, task_id, backend=args.backend)
+            else:
+                task_run_cli(args.project_id, task_id)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
         else:
