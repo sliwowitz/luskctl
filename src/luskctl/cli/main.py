@@ -473,7 +473,7 @@ def main() -> None:
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
-        pass
+        pass  # argcomplete not available or completer attribute not supported
     t_start.add_argument(
         "--web",
         action="store_true",
