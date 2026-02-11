@@ -578,14 +578,23 @@ def render_project_details(
 
     gate_commit = state.get("gate_last_commit")
     if gate_commit:
+        commit_hash = gate_commit.get("commit_hash") or "unknown"
+        commit_hash_short = commit_hash[:8] if isinstance(commit_hash, str) else "unknown"
+        commit_date = gate_commit.get("commit_date") or "unknown"
+        commit_author = gate_commit.get("commit_author") or "unknown"
+        commit_message = gate_commit.get("commit_message") or "unknown"
+        commit_message_short = (
+            commit_message[:50] + ("..." if len(commit_message) > 50 else "")
+            if isinstance(commit_message, str)
+            else "unknown"
+        )
+
         lines.append(Text(""))
         lines.append(Text("Gate info:"))
-        lines.append(Text(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}"))
-        lines.append(Text(f"  Date:     {gate_commit.get('commit_date', 'unknown')}"))
-        lines.append(Text(f"  Author:   {gate_commit.get('commit_author', 'unknown')}"))
-        message = gate_commit.get("commit_message", "unknown")
-        message = message[:50] + ("..." if len(message) > 50 else "")
-        lines.append(Text(f"  Message:  {message}"))
+        lines.append(Text(f"  Commit:   {commit_hash_short}"))
+        lines.append(Text(f"  Date:     {commit_date}"))
+        lines.append(Text(f"  Author:   {commit_author}"))
+        lines.append(Text(f"  Message:  {commit_message_short}"))
 
     if staleness is not None:
         lines.append(Text(""))
