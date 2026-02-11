@@ -36,6 +36,7 @@ if _HAS_TEXTUAL:
     from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
+    from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
     from ..lib.clipboard import copy_to_clipboard_detailed, get_clipboard_helper_status
     from ..lib.containers import _is_task_image_old
     from ..lib.docker import build_images, generate_dockerfiles
@@ -53,6 +54,7 @@ if _HAS_TEXTUAL:
         get_workspace_git_diff,
         task_delete,
         task_new,
+        task_restart,
         task_run_cli,
         task_run_web,
     )
@@ -60,7 +62,7 @@ if _HAS_TEXTUAL:
     # Import version info function from lib (shared with CLI --version)
     from ..lib.version import get_version_info as _get_version_info
     from .polling import PollingMixin
-    from .screens import ProjectActionsScreen, TaskActionsScreen
+    from .screens import ProjectDetailsScreen, TaskDetailsScreen
     from .widgets import (
         ProjectList,
         ProjectState,
@@ -105,8 +107,8 @@ if _HAS_TEXTUAL:
             border: round $primary;
             border-title-align: right;
             background: $surface;
-            height: 1fr;
-            min-height: 10;
+            height: auto;
+            max-height: 8;
         }
 
         /* Project details section */
@@ -115,7 +117,7 @@ if _HAS_TEXTUAL:
             border-title-align: right;
             background: $background;
             height: 1fr;
-            min-height: 10;
+            min-height: 5;
             margin-top: 1;
         }
 
@@ -124,8 +126,8 @@ if _HAS_TEXTUAL:
             border: round $primary;
             border-title-align: right;
             background: $surface;
-            height: 1fr;
-            min-height: 10;
+            height: auto;
+            max-height: 8;
         }
 
         /* Task details section */
@@ -134,7 +136,7 @@ if _HAS_TEXTUAL:
             border-title-align: right;
             background: $background;
             height: 1fr;
-            min-height: 10;
+            min-height: 5;
             margin-top: 1;
         }
 
@@ -176,6 +178,9 @@ if _HAS_TEXTUAL:
             self._auto_sync_cooldown: dict[str, float] = {}  # Per-project cooldown timestamps
             # Container status polling state
             self._container_status_timer = None
+            # Cached state for detail screens
+            self._last_project_state: dict | None = None
+            self._last_image_old: bool | None = None
             # Selection persistence
             self._last_selected_project: str | None = None
             self._last_selected_tasks: dict[str, str] = {}  # project_id -> task_id
@@ -392,11 +397,16 @@ if _HAS_TEXTUAL:
                     self.current_project_id = projects[0].id
                     proj_widget.select_project(self.current_project_id)
 
+                # Reset cached detail screen state; workers will repopulate.
+                self._last_project_state = None
+                self._last_image_old = None
                 await self.refresh_tasks()
                 # Start upstream polling for the selected project
                 self._start_upstream_polling()
             else:
                 self.current_project_id = None
+                self._last_project_state = None
+                self._last_image_old = None
                 task_list = self.query_one("#task-list", TaskList)
                 task_list.set_tasks("", [])
                 task_details = self.query_one("#task-details", TaskDetails)
@@ -575,6 +585,7 @@ if _HAS_TEXTUAL:
         async def handle_project_selected(self, message: ProjectList.ProjectSelected) -> None:
             """Called when user selects a project in the list."""
             self.current_project_id = message.project_id
+            self._last_project_state = None
             # Save the project selection
             self._last_selected_project = self.current_project_id
             self._save_selection_state()
@@ -589,6 +600,7 @@ if _HAS_TEXTUAL:
             """Called when user selects a task in the list."""
             self.current_project_id = message.project_id
             self.current_task = message.task
+            self._last_image_old = None
 
             # Save the task selection for this project
             if self.current_project_id and self.current_task:
@@ -630,6 +642,7 @@ if _HAS_TEXTUAL:
                     return
                 self._projects_by_id[project_id] = project
                 self._staleness_info = staleness
+                self._last_project_state = state
                 state_widget.set_state(project, state, self._last_task_count, self._staleness_info)
                 return
 
@@ -642,6 +655,7 @@ if _HAS_TEXTUAL:
                     return
                 if not self.current_task or self.current_task.task_id != task_id:
                     return
+                self._last_image_old = image_old
                 details = self.query_one("#task-details", TaskDetails)
                 details.set_task(self.current_task, image_old=image_old)
                 return
@@ -699,26 +713,41 @@ if _HAS_TEXTUAL:
             self.exit()
 
         async def action_show_project_actions(self) -> None:
-            """Show modal dialog with project actions."""
-            title = self.current_project_id or "Project Actions"
+            """Show detail screen with project info and actions."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            project = self._projects_by_id.get(self.current_project_id)
+            if not project:
+                self.notify("Project data not loaded yet.")
+                return
             await self.push_screen(
-                ProjectActionsScreen(title=title),
+                ProjectDetailsScreen(
+                    project,
+                    self._last_project_state,
+                    self._last_task_count,
+                    self._staleness_info,
+                ),
                 self._on_project_action_screen_result,
             )
 
         async def action_show_task_actions(self) -> None:
-            """Show modal dialog with task actions."""
-            title = "Task Actions"
-            if self.current_task is not None:
-                backend = self.current_task.backend or self.current_task.mode or "unknown"
-                title = f"Task ID: {self.current_task.task_id}, {backend}"
+            """Show detail screen with task info and actions."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
             try:
                 task_list = self.query_one("#task-list", TaskList)
                 has_tasks = bool(task_list.tasks)
             except Exception:
-                has_tasks = True
+                has_tasks = False
             await self.push_screen(
-                TaskActionsScreen(title=title, has_tasks=has_tasks),
+                TaskDetailsScreen(
+                    self.current_task,
+                    has_tasks,
+                    self.current_project_id,
+                    self._last_image_old,
+                ),
                 self._on_task_action_screen_result,
             )
 
@@ -734,7 +763,9 @@ if _HAS_TEXTUAL:
 
         async def _handle_project_action(self, action: str) -> None:
             """Handle project actions."""
-            if action == "generate":
+            if action == "project_init":
+                await self._action_project_init()
+            elif action == "generate":
                 await self.action_generate_dockerfiles()
             elif action == "build":
                 await self.action_build_images()
@@ -746,10 +777,22 @@ if _HAS_TEXTUAL:
                 await self.action_init_ssh()
             elif action == "sync_gate":
                 await self._action_sync_gate()
+            elif action == "auth_codex":
+                await self._action_auth("codex")
+            elif action == "auth_claude":
+                await self._action_auth("claude")
+            elif action == "auth_mistral":
+                await self._action_auth("mistral")
+            elif action == "auth_blablador":
+                await self._action_auth("blablador")
 
         async def _handle_task_action(self, action: str) -> None:
             """Handle task actions."""
-            if action == "new":
+            if action == "task_start_cli":
+                await self._action_task_start_cli()
+            elif action == "task_start_web":
+                await self._action_task_start_web()
+            elif action == "new":
                 await self.action_new_task()
             elif action == "cli":
                 await self.action_run_cli()
@@ -757,6 +800,12 @@ if _HAS_TEXTUAL:
                 await self._action_run_web()
             elif action == "delete":
                 await self.action_delete_task()
+            elif action == "restart":
+                await self._action_restart_task()
+            elif action == "diff_head":
+                await self.action_copy_diff_head()
+            elif action == "diff_prev":
+                await self.action_copy_diff_prev()
 
         async def _action_build_agents(self) -> None:
             """Build L0+L1+L2 with fresh agent installs."""
@@ -785,6 +834,104 @@ if _HAS_TEXTUAL:
                 input("\n[Press Enter to return to LuskTUI] ")
             self.notify(f"Full rebuild (no cache) completed for {self.current_project_id}")
             self._refresh_project_state()
+
+        async def _action_project_init(self) -> None:
+            """Full project setup: ssh-init, generate, build, gate-sync."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            pid = self.current_project_id
+            with self.suspend():
+                try:
+                    print(f"=== Full Setup for {pid} ===\n")
+                    print("Step 1/4: Initializing SSH...")
+                    init_project_ssh(pid)
+                    print("\nStep 2/4: Generating Dockerfiles...")
+                    generate_dockerfiles(pid)
+                    print("\nStep 3/4: Building images...")
+                    build_images(pid)
+                    print("\nStep 4/4: Syncing git gate...")
+                    res = sync_project_gate(pid)
+                    if not res["success"]:
+                        print(f"\nGate sync failed: {', '.join(res['errors'])}")
+                    else:
+                        print(f"\nGate ready at {res['path']}")
+                    print("\n=== Full Setup complete! ===")
+                except SystemExit as e:
+                    print(f"\nError during setup: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            self.notify(f"Full setup completed for {pid}")
+            self._refresh_project_state()
+
+        async def _action_auth(self, agent: str) -> None:
+            """Run auth flow for the given agent."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            auth_funcs = {
+                "codex": codex_auth,
+                "claude": claude_auth,
+                "mistral": mistral_auth,
+                "blablador": blablador_auth,
+            }
+            func = auth_funcs.get(agent)
+            if not func:
+                return
+            with self.suspend():
+                try:
+                    func(self.current_project_id)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            self.notify(f"Auth completed for {agent}")
+
+        async def _action_task_start_cli(self) -> None:
+            """Create a new task and immediately run CLI agent."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            pid = self.current_project_id
+            with self.suspend():
+                try:
+                    task_id = task_new(pid)
+                    print(f"\nRunning CLI for {pid}/{task_id}...\n")
+                    task_run_cli(pid, task_id)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
+
+        async def _action_task_start_web(self) -> None:
+            """Create a new task and immediately run Web UI."""
+            if not self.current_project_id:
+                self.notify("No project selected.")
+                return
+            pid = self.current_project_id
+            with self.suspend():
+                try:
+                    task_id = task_new(pid)
+                    backend = self._prompt_ui_backend()
+                    print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
+                    task_run_web(pid, task_id, backend=backend)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
+
+        async def _action_restart_task(self) -> None:
+            """Restart a stopped task container."""
+            if not self.current_project_id or not self.current_task:
+                self.notify("No task selected.")
+                return
+            pid = self.current_project_id
+            tid = self.current_task.task_id
+            with self.suspend():
+                try:
+                    task_restart(pid, tid)
+                except SystemExit as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
 
         async def _action_sync_gate(self) -> None:
             """Sync gate (init if doesn't exist, sync if exists)."""

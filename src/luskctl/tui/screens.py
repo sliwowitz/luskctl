@@ -2,103 +2,143 @@
 
 from textual import events, screen
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Button
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import Button, Static
 
 try:  # pragma: no cover - optional import for test stubs
     from textual.binding import Binding
 except Exception:  # pragma: no cover - textual may be a stub module
     Binding = None  # type: ignore[assignment]
 
+from ..lib.git_gate import GateStalenessInfo
+from ..lib.projects import Project as CodexProject
+from .widgets import TaskMeta, render_project_details, render_task_details
 
-def _modal_binding(key: str, action: str, description: str):
+
+def _modal_binding(key: str, action: str, description: str) -> tuple | object:
     if Binding is None:
         return (key, action, description)
     return Binding(key, action, description, show=False)
 
 
-class ProjectActionsScreen(screen.ModalScreen[str | None]):
-    """Modal screen for project actions."""
+# ---------------------------------------------------------------------------
+# Shared CSS for full-page detail screens
+# ---------------------------------------------------------------------------
 
-    BINDINGS = [
-        _modal_binding("escape", "dismiss", "Cancel"),
-        _modal_binding("q", "dismiss", "Cancel"),
-        _modal_binding("up", "app.focus_previous", "Previous"),
-        _modal_binding("down", "app.focus_next", "Next"),
-        _modal_binding("d", "generate", "Generate dockerfiles"),
-        _modal_binding("b", "build", "Build project image"),
-        _modal_binding("a", "build_agents", "Rebuild with fresh agents"),
-        _modal_binding("f", "build_full", "Full rebuild no cache"),
-        _modal_binding("s", "init_ssh", "Init SSH"),
-        _modal_binding("g", "sync_gate", "Sync git gate"),
-    ]
-
-    COMPACT_HEIGHT = 20
-
-    CSS = """
-    ProjectActionsScreen {
-        align: center middle;
-        padding: 1 0;
-    }
-
-    #action-dialog {
-        width: 60;
+_DETAIL_SCREEN_CSS = """
+    #detail-content {
         height: auto;
-        max-height: 100%;
-        border: heavy $primary;
+        max-height: 50%;
+        border: round $primary;
         border-title-align: right;
         background: $surface;
-        padding: 1 1 0 1;
+        padding: 1;
+        margin: 1;
         overflow-y: auto;
     }
 
-    #action-buttons {
+    #actions-container {
+        height: 1fr;
+        padding: 0 1;
+        overflow-y: auto;
+    }
+
+    .action-group-label {
+        margin: 1 0 0 1;
+        text-style: bold;
+        color: $text-muted;
+    }
+
+    .action-group {
         layout: vertical;
-        margin-top: 1;
-        align: center middle;
-        width: 100%;
+        margin: 0 1;
+        height: auto;
     }
 
-    #action-cancel {
-        margin-top: 0;
-        align: center middle;
-        width: 100%;
-    }
-
-    #action-buttons Button {
+    .action-group Button {
         margin: 0 0 1 0;
         width: 100%;
         min-width: 0;
     }
 
-    #action-dialog Button {
+    #action-cancel {
+        margin: 0 1 1 1;
+        height: auto;
+    }
+
+    #action-cancel Button {
         width: 100%;
         min-width: 0;
     }
+"""
 
-    ProjectActionsScreen.compact #action-dialog {
-        padding: 0 1;
+
+# ---------------------------------------------------------------------------
+# Project Details Screen
+# ---------------------------------------------------------------------------
+
+
+class ProjectDetailsScreen(screen.Screen[str | None]):
+    """Full-page detail screen for a project with categorized actions."""
+
+    BINDINGS = [
+        _modal_binding("escape", "dismiss", "Back"),
+        _modal_binding("q", "dismiss", "Back"),
+        _modal_binding("i", "project_init", "Full Setup"),
+        _modal_binding("g", "sync_gate", "Sync git gate"),
+        _modal_binding("d", "generate", "Generate dockerfiles"),
+        _modal_binding("b", "build", "Build project image"),
+        _modal_binding("r", "build_agents", "Rebuild with agents"),
+        _modal_binding("f", "build_full", "Full rebuild no cache"),
+        _modal_binding("s", "init_ssh", "Init SSH"),
+        _modal_binding("a", "auth", "Authenticate agents"),
+    ]
+
+    CSS = (
+        """
+    ProjectDetailsScreen {
+        layout: vertical;
+        background: $background;
     }
-
-    ProjectActionsScreen.compact #action-buttons {
-        margin-top: 0;
-    }
-
-    ProjectActionsScreen.compact #action-dialog Button {
-        border: none;
-        height: 1;
-        padding: 0 1;
-    }
-
     """
+        + _DETAIL_SCREEN_CSS
+    )
 
-    def __init__(self, title: str | None = None) -> None:
+    def __init__(
+        self,
+        project: CodexProject,
+        state: dict | None,
+        task_count: int | None,
+        staleness: GateStalenessInfo | None = None,
+    ) -> None:
         super().__init__()
-        self._dialog_title = title or "Project Actions"
+        self._project = project
+        self._state = state
+        self._task_count = task_count
+        self._staleness = staleness
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="action-dialog") as dialog:
-            with Vertical(id="action-buttons"):
+        detail_pane = Static(id="detail-content")
+        detail_pane.border_title = f"Project: {self._project.id}"
+        yield detail_pane
+
+        with VerticalScroll(id="actions-container"):
+            yield Static("Common Actions", classes="action-group-label")
+            with Vertical(classes="action-group"):
+                yield Button(
+                    "Full Setup - project-[yellow]i[/yellow]nit"
+                    "  (ssh + generate + build + gate-sync)",
+                    id="project_init",
+                    variant="primary",
+                )
+                yield Button(
+                    "sync [yellow]g[/yellow]it gate",
+                    id="sync_gate",
+                    variant="primary",
+                )
+
+            yield Static("Build & Configure", classes="action-group-label")
+            with Vertical(classes="action-group"):
                 yield Button(
                     "generate [yellow]d[/yellow]ockerfiles",
                     id="generate",
@@ -110,7 +150,7 @@ class ProjectActionsScreen(screen.ModalScreen[str | None]):
                     variant="primary",
                 )
                 yield Button(
-                    "rebuild with [yellow]a[/yellow]gents",
+                    "[yellow]r[/yellow]ebuild with agents",
                     id="build_agents",
                     variant="primary",
                 )
@@ -119,73 +159,58 @@ class ProjectActionsScreen(screen.ModalScreen[str | None]):
                     id="build_full",
                     variant="primary",
                 )
-                yield Button("initialize [yellow]s[/yellow]sh", id="init_ssh", variant="primary")
                 yield Button(
-                    "sync [yellow]g[/yellow]it gate",
-                    id="sync_gate",
+                    "initialize [yellow]s[/yellow]sh",
+                    id="init_ssh",
                     variant="primary",
                 )
-            with Horizontal(id="action-cancel"):
-                yield Button("Cancel", id="cancel", variant="default")
-        dialog.border_title = self._dialog_title
+
+            yield Static("Authentication", classes="action-group-label")
+            with Vertical(classes="action-group"):
+                yield Button(
+                    "[yellow]a[/yellow]uthenticate agents...",
+                    id="auth",
+                    variant="primary",
+                )
+
+        with Horizontal(id="action-cancel"):
+            yield Button("Cancel [Esc]", id="cancel", variant="default")
+
+    def on_mount(self) -> None:
+        detail_widget = self.query_one("#detail-content", Static)
+        rendered = render_project_details(
+            self._project, self._state, self._task_count, self._staleness
+        )
+        detail_widget.update(rendered)
+        first_button = self.query("Button").first()
+        if first_button:
+            first_button.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
         if button_id == "cancel":
             self.dismiss(None)
-        else:
-            action_map = {
-                "generate": "generate",
-                "build": "build",
-                "build_agents": "build_agents",
-                "build_full": "build_full",
-                "sync_gate": "sync_gate",
-                "init_ssh": "init_ssh",
-            }
-            self.dismiss(action_map.get(button_id))
+        elif button_id == "auth":
+            self._open_auth_modal()
+        elif button_id:
+            self.dismiss(button_id)
 
-    def on_key(self, event: events.Key) -> None:
-        key = event.key.lower()
-        if key in {"escape", "q"}:
-            self.action_dismiss()
-            event.stop()
-            return
-        if key == "up":
-            if self.app:
-                self.app.action_focus_previous()
-            event.stop()
-            return
-        if key == "down":
-            if self.app:
-                self.app.action_focus_next()
-            event.stop()
-            return
-        if key == "d":
-            self.action_generate()
-            event.stop()
-            return
-        if key == "b":
-            self.action_build()
-            event.stop()
-            return
-        if key == "a":
-            self.action_build_agents()
-            event.stop()
-            return
-        if key == "f":
-            self.action_build_full()
-            event.stop()
-            return
-        if key == "s":
-            self.action_init_ssh()
-            event.stop()
-            return
-        if key == "g":
-            self.action_sync_gate()
-            event.stop()
+    def _open_auth_modal(self) -> None:
+        self.app.push_screen(AuthActionsScreen(), self._on_auth_result)
 
+    def _on_auth_result(self, result: str | None) -> None:
+        if result:
+            self.dismiss(result)
+
+    # Action methods invoked by BINDINGS
     def action_dismiss(self) -> None:
         self.dismiss(None)
+
+    def action_project_init(self) -> None:
+        self.dismiss("project_init")
+
+    def action_sync_gate(self) -> None:
+        self.dismiss("sync_gate")
 
     def action_generate(self) -> None:
         self.dismiss("generate")
@@ -202,179 +227,295 @@ class ProjectActionsScreen(screen.ModalScreen[str | None]):
     def action_init_ssh(self) -> None:
         self.dismiss("init_ssh")
 
-    def action_sync_gate(self) -> None:
-        self.dismiss("sync_gate")
-
-    def on_mount(self) -> None:
-        first_button = self.query_one("#action-buttons Button", Button)
-        first_button.focus()
-        self._update_density()
-
-    def on_resize(self, _event: object) -> None:
-        self._update_density()
-
-    def _update_density(self) -> None:
-        self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
+    def action_auth(self) -> None:
+        self._open_auth_modal()
 
 
-class TaskActionsScreen(screen.ModalScreen[str | None]):
-    """Modal screen for task actions."""
+# ---------------------------------------------------------------------------
+# Auth Actions Modal (sub-modal of ProjectDetailsScreen)
+# ---------------------------------------------------------------------------
+
+
+class AuthActionsScreen(screen.ModalScreen[str | None]):
+    """Small modal for selecting which agent to authenticate."""
 
     BINDINGS = [
         _modal_binding("escape", "dismiss", "Cancel"),
         _modal_binding("q", "dismiss", "Cancel"),
-        _modal_binding("up", "app.focus_previous", "Previous"),
-        _modal_binding("down", "app.focus_next", "Next"),
-        _modal_binding("n", "new_task", "New task"),
-        _modal_binding("c", "cli", "CLI agent"),
-        _modal_binding("w", "web", "Web UI"),
-        _modal_binding("d", "delete", "Delete task"),
+        _modal_binding("1", "auth_codex", "Codex"),
+        _modal_binding("2", "auth_claude", "Claude"),
+        _modal_binding("3", "auth_mistral", "Mistral"),
+        _modal_binding("4", "auth_blablador", "Blablador"),
     ]
 
-    COMPACT_HEIGHT = 18
-
     CSS = """
-    TaskActionsScreen {
+    AuthActionsScreen {
         align: center middle;
-        padding: 1 0;
     }
 
-    #action-dialog {
-        width: 60;
+    #auth-dialog {
+        width: 50;
         height: auto;
-        max-height: 100%;
+        max-height: 80%;
         border: heavy $primary;
         border-title-align: right;
         background: $surface;
-        padding: 1 1 0 1;
-        overflow-y: auto;
+        padding: 1;
     }
 
-    #action-buttons {
+    #auth-buttons {
         layout: vertical;
-        margin-top: 1;
-        align: center middle;
-        width: 100%;
+        height: auto;
     }
 
-    #action-cancel {
-        margin-top: 0;
-        align: center middle;
-        width: 100%;
-    }
-
-    #action-buttons Button {
+    #auth-buttons Button {
         margin: 0 0 1 0;
         width: 100%;
         min-width: 0;
     }
 
-    #action-dialog Button {
+    #auth-cancel {
+        margin-top: 0;
+        height: auto;
+    }
+
+    #auth-cancel Button {
         width: 100%;
         min-width: 0;
     }
-
-    TaskActionsScreen.compact #action-dialog {
-        padding: 0 1;
-    }
-
-    TaskActionsScreen.compact #action-buttons {
-        margin-top: 0;
-    }
-
-    TaskActionsScreen.compact #action-dialog Button {
-        border: none;
-        height: 1;
-        padding: 0 1;
-    }
-
     """
 
-    def __init__(self, title: str | None = None, *, has_tasks: bool = True) -> None:
-        super().__init__()
-        self._dialog_title = title or "Task Actions"
-        self._has_tasks = has_tasks
-
     def compose(self) -> ComposeResult:
-        with Vertical(id="action-dialog") as dialog:
-            with Vertical(id="action-buttons"):
-                yield Button("[yellow]n[/yellow]ew task", id="new", variant="primary")
-                if self._has_tasks:
-                    yield Button("[yellow]c[/yellow]li agent", id="cli", variant="primary")
-                    yield Button("[yellow]w[/yellow]eb ui", id="web", variant="primary")
-                    yield Button("[yellow]d[/yellow]elete task", id="delete", variant="primary")
-            with Horizontal(id="action-cancel"):
-                yield Button("Cancel", id="cancel", variant="default")
-        dialog.border_title = self._dialog_title
+        with Vertical(id="auth-dialog") as dialog:
+            with Vertical(id="auth-buttons"):
+                yield Button("[yellow]1[/yellow] Codex", id="auth_codex", variant="primary")
+                yield Button("[yellow]2[/yellow] Claude", id="auth_claude", variant="primary")
+                yield Button("[yellow]3[/yellow] Mistral", id="auth_mistral", variant="primary")
+                yield Button("[yellow]4[/yellow] Blablador", id="auth_blablador", variant="primary")
+            with Horizontal(id="auth-cancel"):
+                yield Button("Cancel [Esc]", id="cancel", variant="default")
+        dialog.border_title = "Authenticate Agents"
+
+    def on_mount(self) -> None:
+        first_button = self.query_one("#auth-buttons Button", Button)
+        first_button.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
         if button_id == "cancel":
             self.dismiss(None)
-        else:
-            action_map = {"new": "new", "cli": "cli", "web": "web", "delete": "delete"}
-            self.dismiss(action_map.get(button_id))
+        elif button_id:
+            self.dismiss(button_id)
 
-    def on_key(self, event: events.Key) -> None:
-        key = event.key.lower()
-        if key in {"escape", "q"}:
-            self.action_dismiss()
-            event.stop()
-            return
-        if key == "up":
-            if self.app:
-                self.app.action_focus_previous()
-            event.stop()
-            return
-        if key == "down":
-            if self.app:
-                self.app.action_focus_next()
-            event.stop()
-            return
-        if key == "n":
-            self.action_new_task()
-            event.stop()
-            return
-        if key == "c":
-            self.action_cli()
-            event.stop()
-            return
-        if key == "w":
-            self.action_web()
-            event.stop()
-            return
-        if key == "d":
-            self.action_delete()
-            event.stop()
-
+    # Action methods invoked by BINDINGS
     def action_dismiss(self) -> None:
         self.dismiss(None)
 
-    def action_new_task(self) -> None:
-        self.dismiss("new")
+    def action_auth_codex(self) -> None:
+        self.dismiss("auth_codex")
 
-    def action_cli(self) -> None:
-        if not self._has_tasks:
-            return
-        self.dismiss("cli")
+    def action_auth_claude(self) -> None:
+        self.dismiss("auth_claude")
 
-    def action_web(self) -> None:
-        if not self._has_tasks:
-            return
-        self.dismiss("web")
+    def action_auth_mistral(self) -> None:
+        self.dismiss("auth_mistral")
 
-    def action_delete(self) -> None:
-        if not self._has_tasks:
-            return
-        self.dismiss("delete")
+    def action_auth_blablador(self) -> None:
+        self.dismiss("auth_blablador")
+
+
+# ---------------------------------------------------------------------------
+# Task Details Screen
+# ---------------------------------------------------------------------------
+
+
+class TaskDetailsScreen(screen.Screen[str | None]):
+    """Full-page detail screen for a task with categorized actions."""
+
+    # Only escape/q use BINDINGS. Other keys require case-sensitive
+    # dispatch (e.g. shift-N vs n) which Textual BINDINGS cannot express,
+    # so they are handled in on_key instead.
+    BINDINGS = [
+        _modal_binding("escape", "dismiss", "Back"),
+        _modal_binding("q", "dismiss", "Back"),
+    ]
+
+    CSS = (
+        """
+    TaskDetailsScreen {
+        layout: vertical;
+        background: $background;
+    }
+    """
+        + _DETAIL_SCREEN_CSS
+    )
+
+    def __init__(
+        self,
+        task: TaskMeta | None,
+        has_tasks: bool,
+        project_id: str,
+        image_old: bool | None = None,
+    ) -> None:
+        super().__init__()
+        self._task = task
+        self._has_tasks = has_tasks
+        self._project_id = project_id
+        self._image_old = image_old
+
+    def compose(self) -> ComposeResult:
+        detail_pane = Static(id="detail-content")
+        title = "Task Details"
+        if self._task:
+            backend = self._task.backend or self._task.mode or "unknown"
+            title = f"Task: {self._task.task_id} ({backend})"
+        detail_pane.border_title = title
+        yield detail_pane
+
+        with VerticalScroll(id="actions-container"):
+            yield Static("Common Actions", classes="action-group-label")
+            with Vertical(classes="action-group"):
+                yield Button(
+                    "Start CLI task  [yellow]N[/yellow]  (new task + run CLI)",
+                    id="task_start_cli",
+                    variant="primary",
+                )
+                yield Button(
+                    "Start [yellow]W[/yellow]eb task  (new task + run Web)",
+                    id="task_start_web",
+                    variant="primary",
+                )
+                yield Button(
+                    "New task (no run)  [yellow]C[/yellow]",
+                    id="new",
+                    variant="primary",
+                )
+                if self._has_tasks:
+                    yield Button(
+                        "[yellow]d[/yellow]elete task",
+                        id="delete",
+                        variant="error",
+                    )
+
+            if self._has_tasks:
+                yield Static("Task Operations", classes="action-group-label")
+                with Vertical(classes="action-group"):
+                    yield Button(
+                        "run [yellow]c[/yellow]li agent",
+                        id="cli",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "run [yellow]w[/yellow]eb UI",
+                        id="web",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "[yellow]r[/yellow]estart container",
+                        id="restart",
+                        variant="primary",
+                    )
+
+                yield Static("Diff", classes="action-group-label")
+                with Vertical(classes="action-group"):
+                    yield Button(
+                        "Copy diff vs [yellow]H[/yellow]EAD",
+                        id="diff_head",
+                        variant="primary",
+                    )
+                    yield Button(
+                        "Copy diff vs [yellow]P[/yellow]REV",
+                        id="diff_prev",
+                        variant="primary",
+                    )
+
+        with Horizontal(id="action-cancel"):
+            yield Button("Cancel [Esc]", id="cancel", variant="default")
 
     def on_mount(self) -> None:
-        first_button = self.query_one("#action-buttons Button", Button)
-        first_button.focus()
-        self._update_density()
+        detail_widget = self.query_one("#detail-content", Static)
+        rendered = render_task_details(
+            self._task,
+            project_id=self._project_id,
+            image_old=self._image_old,
+            empty_message="No task selected.",
+        )
+        detail_widget.update(rendered)
+        first_button = self.query("Button").first()
+        if first_button:
+            first_button.focus()
 
-    def on_resize(self, _event: object) -> None:
-        self._update_density()
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id
+        if button_id == "cancel":
+            self.dismiss(None)
+        elif button_id:
+            self.dismiss(button_id)
 
-    def _update_density(self) -> None:
-        self.set_class(self.size.height < self.COMPACT_HEIGHT, "compact")
+    def on_key(self, event: events.Key) -> None:
+        key = event.key  # case-sensitive
+
+        if key.lower() in ("escape", "q"):
+            self.dismiss(None)
+            event.stop()
+            return
+
+        # Shift keys (uppercase) — N/W/C always available, H/P require tasks
+        shift_map = {
+            "N": "task_start_cli",
+            "W": "task_start_web",
+            "C": "new",
+            "H": "diff_head",
+            "P": "diff_prev",
+        }
+        if key in shift_map:
+            if key in ("H", "P") and not self._has_tasks:
+                return
+            self.dismiss(shift_map[key])
+            event.stop()
+            return
+
+        # Lowercase keys — all require tasks to exist
+        lower_map = {"d": "delete", "c": "cli", "w": "web", "r": "restart"}
+        if key in lower_map:
+            if not self._has_tasks:
+                return
+            self.dismiss(lower_map[key])
+            event.stop()
+
+    # Action methods for programmatic access
+    def action_dismiss(self) -> None:
+        self.dismiss(None)
+
+    def action_task_start_cli(self) -> None:
+        self.dismiss("task_start_cli")
+
+    def action_task_start_web(self) -> None:
+        self.dismiss("task_start_web")
+
+    def action_new(self) -> None:
+        self.dismiss("new")
+
+    def action_delete(self) -> None:
+        if self._has_tasks:
+            self.dismiss("delete")
+
+    def action_cli(self) -> None:
+        if self._has_tasks:
+            self.dismiss("cli")
+
+    def action_web(self) -> None:
+        if self._has_tasks:
+            self.dismiss("web")
+
+    def action_restart(self) -> None:
+        if self._has_tasks:
+            self.dismiss("restart")
+
+    def action_diff_head(self) -> None:
+        if self._has_tasks:
+            self.dismiss("diff_head")
+
+    def action_diff_prev(self) -> None:
+        if self._has_tasks:
+            self.dismiss("diff_prev")
