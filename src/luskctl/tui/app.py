@@ -66,7 +66,6 @@ if _HAS_TEXTUAL:
     from .widgets import (
         ProjectList,
         ProjectState,
-        StatusBar,
         TaskDetails,
         TaskList,
         TaskMeta,
@@ -140,15 +139,6 @@ if _HAS_TEXTUAL:
             margin-top: 1;
         }
 
-        /* Status bar styling */
-        #status-bar {
-            border: solid $primary;
-            background: $background;
-            height: 3;
-            padding: 0 1;
-            margin: 0 1;
-        }
-
         /* Task details internal layout */
         #task-details-content {
             height: 1fr;
@@ -168,8 +158,6 @@ if _HAS_TEXTUAL:
             self.current_task: TaskMeta | None = None
             self._projects_by_id: dict[str, CodexProject] = {}
             self._last_task_count: int | None = None
-            # Set on mount; used to display status / notifications.
-            self._status_bar: StatusBar | None = None
             # Upstream polling state
             self._staleness_info: GateStalenessInfo | None = None
             self._polling_timer = None
@@ -226,17 +214,7 @@ if _HAS_TEXTUAL:
             # Use Textual's default Footer which will show key bindings
             yield Footer()
 
-            # Custom status bar for our messages
-            yield StatusBar(id="status-bar")
-
         async def on_mount(self) -> None:
-            # Cache a reference to the status bar widget so we can update it
-            # from notify() and other helpers.
-            try:
-                self._status_bar = self.query_one("#status-bar", StatusBar)
-            except Exception:
-                self._status_bar = None
-
             try:
                 clipboard_status = get_clipboard_helper_status()
                 if not clipboard_status.available:
@@ -440,6 +418,9 @@ if _HAS_TEXTUAL:
                     # No remembered task, select the newest task
                     task_list.index = 0
                     self.current_task = task_list.tasks[0]
+                # Ensure highlight fires even if index didn't change
+                # (e.g. clear() reset to 0 and we set it back to 0).
+                task_list._post_selected_task()
             else:
                 self.current_task = None
 
@@ -460,34 +441,6 @@ if _HAS_TEXTUAL:
                 self._queue_task_image_status(self.current_project_id, self.current_task)
 
         # ---------- Status / notifications ----------
-
-        def _set_status(self, message: str) -> None:
-            """Update the bottom status bar if available."""
-
-            if self._status_bar is not None:
-                try:
-                    self._status_bar.set_message(message)
-                except Exception:
-                    # Never let status updates break the TUI.
-                    pass
-
-        def notify(self, message: str, *args, **kwargs) -> None:  # type: ignore[override]
-            """Display a notification/status message.
-
-            We override Textual's App.notify so that notifications are
-            mirrored into our custom bottom status bar while still delegating
-            to the framework's native notification system when present.
-            """
-
-            self._set_status(message)
-
-            # Best-effort delegation to the base implementation (for pop-up
-            # notifications etc.). On older/newer Textual versions notify()
-            # might not exist or have a different signature, so we guard it.
-            try:
-                super().notify(message, *args, **kwargs)  # type: ignore[misc,attr-defined]
-            except Exception:
-                pass
 
         def _refresh_project_state(self, task_count: int | None = None) -> None:
             """Update the small project state summary panel.
@@ -1119,6 +1072,20 @@ if _HAS_TEXTUAL:
         async def action_copy_diff_prev(self) -> None:
             """Copy git diff vs previous commit to clipboard."""
             await self._copy_diff_to_clipboard("PREV", "PREV")
+
+        # --- Main-screen task pane shortcuts (c/w/d) ---
+
+        async def action_run_cli_from_main(self) -> None:
+            """Start a new CLI task from the main screen."""
+            await self._action_task_start_cli()
+
+        async def action_run_web_from_main(self) -> None:
+            """Start a new web task from the main screen."""
+            await self._action_task_start_web()
+
+        async def action_delete_task_from_main(self) -> None:
+            """Delete the selected task from the main screen."""
+            await self.action_delete_task()
 
     def main() -> None:
         LuskTUI().run()

@@ -246,6 +246,9 @@ class TaskList(ListView):
         ("enter", "app.show_task_actions", "Task\u2026"),
         ("H", "app.copy_diff_head", "Diff HEAD"),
         ("P", "app.copy_diff_prev", "Diff PREV"),
+        ("c", "app.action_run_cli_from_main", "CLI"),
+        ("w", "app.action_run_web_from_main", "Web"),
+        ("d", "app.action_delete_task_from_main", "Delete"),
     ]
 
     class TaskSelected(Message):
