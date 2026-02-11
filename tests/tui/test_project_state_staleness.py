@@ -35,7 +35,16 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         def __class_getitem__(cls, item):
             return cls
 
+    class Screen:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        @classmethod
+        def __class_getitem__(cls, item):
+            return cls
+
     screen_mod.ModalScreen = ModalScreen
+    screen_mod.Screen = Screen
 
     app_mod = types.ModuleType("textual.app")
 
@@ -52,13 +61,38 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
     containers_mod = types.ModuleType("textual.containers")
 
     class Horizontal:
-        pass
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
 
     class Vertical:
-        pass
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class VerticalScroll:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
 
     containers_mod.Horizontal = Horizontal
     containers_mod.Vertical = Vertical
+    containers_mod.VerticalScroll = VerticalScroll
 
     widgets_mod = types.ModuleType("textual.widgets")
 
@@ -82,6 +116,10 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
 
     class ListView:
         class Selected:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        class Highlighted:
             def __init__(self, *args, **kwargs) -> None:
                 pass
 
@@ -158,8 +196,9 @@ class ProjectStateStalenessTests(TestCase):
 
         with mock.patch("importlib.util.find_spec", side_effect=_find_spec):
             with mock.patch.dict(sys.modules, stubs):
-                sys.modules.pop("luskctl.tui.app", None)
-                sys.modules.pop("luskctl.tui", None)
+                for mod_name in list(sys.modules):
+                    if mod_name.startswith("luskctl.tui"):
+                        sys.modules.pop(mod_name, None)
                 app = importlib.import_module("luskctl.tui.app")
 
                 staleness = GateStalenessInfo(

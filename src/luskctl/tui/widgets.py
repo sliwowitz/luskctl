@@ -96,6 +96,13 @@ def _get_css_variables(widget: Static) -> dict[str, str]:
 class ProjectList(ListView):
     """Left-hand project list widget."""
 
+    # Override ListView's Enter to open the project actions modal instead
+    # of firing ListView.Selected.  Uses the ``app.`` prefix so the action
+    # is dispatched to the App instance.
+    BINDINGS = [
+        ("enter", "app.show_project_actions", "Project\u2026"),
+    ]
+
     class ProjectSelected(Message):
         def __init__(self, project_id: str) -> None:
             super().__init__()
@@ -127,10 +134,6 @@ class ProjectList(ListView):
             if proj.id == project_id:
                 self.index = idx
                 break
-
-    def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
-        """When user selects a row, send a semantic ProjectSelected message."""
-        self._post_selected_project(event.item)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         """Update selection immediately when highlight changes."""
@@ -235,6 +238,15 @@ class ProjectActions(Static):
 
 class TaskList(ListView):
     """Middle pane: per-project tasks."""
+
+    # Override ListView's Enter to open the task actions modal.  Diff
+    # shortcuts are also scoped here so they only appear when the task
+    # pane has focus.
+    BINDINGS = [
+        ("enter", "app.show_task_actions", "Task\u2026"),
+        ("H", "app.copy_diff_head", "Diff HEAD"),
+        ("P", "app.copy_diff_prev", "Diff PREV"),
+    ]
 
     class TaskSelected(Message):
         def __init__(self, project_id: str, task: TaskMeta) -> None:
@@ -381,10 +393,6 @@ class TaskList(ListView):
 
         return found
 
-    def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
-        """When user selects a task row, send a semantic TaskSelected message."""
-        self._post_selected_task(event.item)
-
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         """Update selection immediately when highlight changes."""
         if event.item is None:
@@ -407,28 +415,210 @@ class TaskList(ListView):
         self.post_message(self.TaskSelected(self.project_id, item.task_meta))
 
 
+def render_task_details(
+    task: TaskMeta | None,
+    project_id: str | None = None,
+    image_old: bool | None = None,
+    empty_message: str | None = None,
+    css_variables: dict[str, str] | None = None,
+) -> Text:
+    """Render task details as a Rich Text object."""
+    if task is None:
+        return Text(empty_message or "")
+
+    variables = css_variables or {}
+    accent_style = Style(color=variables.get("primary", "cyan"))
+    warning_style = Style(color=variables.get("warning", "yellow"))
+
+    task_emoji = ""
+    mode_display = task.mode or "unset"
+    if task.status == "deleting":
+        task_emoji = "🗑️ "
+        mode_display = "Deleting"
+    elif task.mode == "cli":
+        task_emoji = "⌨️ "
+        mode_display = "CLI"
+    elif task.mode == "web":
+        emoji = get_backend_emoji(task)
+        task_emoji = f"{emoji} "
+    elif task.status == "created":
+        task_emoji = "🦗 "
+        mode_display = "Not assigned (choose CLI or Web mode)"
+
+    status_display = task.status
+    container_mismatch = False
+    if task.container_state is not None:
+        if task.container_state == "running":
+            status_display = "running"
+        elif task.container_state in ("exited", "stopped"):
+            status_display = "stopped"
+        else:
+            status_display = task.container_state
+        metadata_expects_running = task.status in ("running", "created") and task.mode is not None
+        if metadata_expects_running and task.container_state != "running":
+            container_mismatch = True
+    elif task.status == "created" and (task.web_port or task.mode == "cli"):
+        status_display = "running"
+
+    lines = [
+        Text(f"Task ID:   {task.task_id}"),
+        Text(f"Status:    {status_display}"),
+        Text(f"Type:      {task_emoji}{mode_display}"),
+        Text(f"Workspace: {task.workspace}"),
+    ]
+    if container_mismatch:
+        lines.append(
+            Text.assemble(
+                "Container: ",
+                Text(f"{task.container_state} (not running!)", style=warning_style),
+            )
+        )
+    if status_display == "running" and image_old:
+        lines.append(Text.assemble("Image:     ", Text("old", style=warning_style)))
+    if task.web_port:
+        lines.append(
+            Text.assemble(
+                "Web URL:   ",
+                Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
+            )
+        )
+    if task.mode == "cli" and project_id:
+        container_name = f"{project_id}-cli-{task.task_id}"
+        lines.append(
+            Text.assemble(
+                "Log in:    ",
+                Text(f"podman exec -it {container_name} bash", style=accent_style),
+            )
+        )
+
+    return Text("\n").join(lines)
+
+
+def render_project_loading(
+    project: CodexProject | None,
+    task_count: int | None = None,
+) -> Text:
+    """Render project loading state as a Rich Text object."""
+    if project is None:
+        return Text("No project selected.")
+
+    upstream = project.upstream_url or "-"
+    security_emoji = "🚪" if project.security_class == "gatekeeping" else "🌐"
+    tasks_line = (
+        Text("Tasks:     loading") if task_count is None else Text(f"Tasks:     {task_count}")
+    )
+
+    lines = [
+        Text(f"Project:   {project.id} {security_emoji}"),
+        Text(upstream),
+        Text(""),
+        Text("Loading details..."),
+        tasks_line,
+    ]
+    return Text("\n").join(lines)
+
+
+def render_project_details(
+    project: CodexProject | None,
+    state: dict | None,
+    task_count: int | None = None,
+    staleness: GateStalenessInfo | None = None,
+    css_variables: dict[str, str] | None = None,
+) -> Text:
+    """Render project details as a Rich Text object."""
+    if project is None or state is None:
+        return Text("No project selected.")
+
+    variables = css_variables or {}
+    success_color = variables.get("success", "green")
+    error_color = variables.get("error", "red")
+    warning_color = variables.get("warning", "yellow")
+
+    status_styles = {
+        "yes": Style(color=success_color),
+        "no": Style(color=error_color),
+        "old": Style(color=warning_color),
+    }
+
+    def _status_text(value: str) -> Text:
+        style = status_styles.get(value, Style(color=error_color))
+        return Text(value, style=style)
+
+    docker_value = "yes" if state.get("dockerfiles") else "no"
+    if docker_value == "yes" and state.get("dockerfiles_old"):
+        docker_value = "old"
+    docker_s = _status_text(docker_value)
+
+    images_value = "yes" if state.get("images") else "no"
+    if images_value == "yes" and state.get("images_old"):
+        images_value = "old"
+    images_s = _status_text(images_value)
+    ssh_s = _status_text("yes" if state.get("ssh") else "no")
+    gate_value = "yes" if state.get("gate") else "no"
+    if gate_value == "yes" and staleness is not None and not staleness.error and staleness.is_stale:
+        gate_value = "old"
+    gate_s = _status_text(gate_value)
+
+    tasks_line = (
+        Text("Tasks:     unknown") if task_count is None else Text(f"Tasks:     {task_count}")
+    )
+    upstream = project.upstream_url or "-"
+    security_emoji = "🚪" if project.security_class == "gatekeeping" else "🌐"
+
+    lines = [
+        Text(f"Project:   {project.id} {security_emoji}"),
+        Text(upstream),
+        Text(""),
+        Text.assemble("Dockerfiles: ", docker_s),
+        Text.assemble("Images:      ", images_s),
+        Text.assemble("SSH dir:     ", ssh_s),
+        Text.assemble("Git gate:    ", gate_s),
+        tasks_line,
+    ]
+
+    gate_commit = state.get("gate_last_commit")
+    if gate_commit:
+        lines.append(Text(""))
+        lines.append(Text("Gate info:"))
+        lines.append(Text(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}"))
+        lines.append(Text(f"  Date:     {gate_commit.get('commit_date', 'unknown')}"))
+        lines.append(Text(f"  Author:   {gate_commit.get('commit_author', 'unknown')}"))
+        message = gate_commit.get("commit_message", "unknown")
+        message = message[:50] + ("..." if len(message) > 50 else "")
+        lines.append(Text(f"  Message:  {message}"))
+
+    if staleness is not None:
+        lines.append(Text(""))
+        lines.append(Text("Upstream status:"))
+        if staleness.error:
+            lines.append(Text(f"  Error:    {staleness.error}"))
+        elif staleness.is_stale:
+            behind_str = "unknown"
+            if staleness.commits_behind is not None:
+                behind_str = str(staleness.commits_behind)
+            lines.append(Text(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}"))
+            upstream_head = staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
+            gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+            lines.append(Text(f"  Upstream: {upstream_head}"))
+            lines.append(Text(f"  Gate:     {gate_head}"))
+        else:
+            lines.append(Text(f"  Status:   Up to date on {staleness.branch}"))
+            gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+            lines.append(Text(f"  Commit:   {gate_head}"))
+        lines.append(Text(f"  Checked:  {staleness.last_checked}"))
+
+    return Text("\n").join(lines)
+
+
 class TaskDetails(Static):
     """Panel showing details for the currently selected task."""
-
-    class CopyDiffRequested(Message):
-        """Message sent when user requests to copy git diff."""
-
-        def __init__(self, project_id: str, task_id: str, diff_type: str) -> None:
-            super().__init__()
-            self.project_id = project_id
-            self.task_id = task_id
-            self.diff_type = diff_type  # "HEAD" or "PREV"
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.current_project_id: str | None = None
-        self.current_task_id: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(id="task-details-content")
-        with Horizontal(id="task-details-actions"):
-            yield Button("Copy Diff vs HEAD", id="btn-copy-diff-head", variant="primary")
-            yield Button("Copy Diff vs PREV", id="btn-copy-diff-prev", variant="primary")
 
     def set_task(
         self,
@@ -437,107 +627,14 @@ class TaskDetails(Static):
         image_old: bool | None = None,
     ) -> None:
         content = self.query_one("#task-details-content", Static)
-
         if task is None:
-            content.update(empty_message or "")
             self.current_project_id = None
-            self.current_task_id = None
-            return
-
-        # Store current task info for button handlers
-        self.current_project_id = self.app.current_project_id if self.app else None
-        self.current_task_id = task.task_id
-
-        # Use emojis for task types
-        task_emoji = ""
-        mode_display = task.mode or "unset"
-        if task.status == "deleting":
-            task_emoji = "🗑️ "
-            mode_display = "Deleting"
-        elif task.mode == "cli":
-            task_emoji = "⌨️ "  # Keyboard emoji for CLI
-            mode_display = "CLI"
-        elif task.mode == "web":
-            # Use backend-specific emojis for web tasks
-            emoji = get_backend_emoji(task)
-            task_emoji = f"{emoji} "
-        elif task.status == "created":
-            task_emoji = "🦗 "
-            mode_display = "Not assigned (choose CLI or Web mode)"
-
-        # Update status display based on actual container state if available
-        status_display = task.status
-        container_mismatch = False
-        if task.container_state is not None:
-            # Use actual container state
-            if task.container_state == "running":
-                status_display = "running"
-            elif task.container_state in ("exited", "stopped"):
-                status_display = "stopped"
-            else:
-                status_display = task.container_state
-            # Check for mismatch: metadata says running but container isn't
-            metadata_expects_running = (
-                task.status in ("running", "created") and task.mode is not None
-            )
-            if metadata_expects_running and task.container_state != "running":
-                container_mismatch = True
-        elif task.status == "created" and (task.web_port or task.mode == "cli"):
-            status_display = "running"
-
-        variables = _get_css_variables(self)
-        accent_style = Style(color=variables.get("primary", "cyan"))
-        warning_style = Style(color=variables.get("warning", "yellow"))
-
-        lines = [
-            Text(f"Task ID:   {task.task_id}"),
-            Text(f"Status:    {status_display}"),
-            Text(f"Type:      {task_emoji}{mode_display}"),
-            Text(f"Workspace: {task.workspace}"),
-        ]
-        if container_mismatch:
-            lines.append(
-                Text.assemble(
-                    "Container: ",
-                    Text(f"{task.container_state} (not running!)", style=warning_style),
-                )
-            )
-        if status_display == "running" and image_old:
-            lines.append(
-                Text.assemble(
-                    "Image:     ",
-                    Text("old", style=warning_style),
-                )
-            )
-        if task.web_port:
-            lines.append(
-                Text.assemble(
-                    "Web URL:   ",
-                    Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
-                )
-            )
-        if task.mode == "cli" and self.current_project_id:
-            container_name = f"{self.current_project_id}-cli-{task.task_id}"
-            lines.append(
-                Text.assemble(
-                    "Log in:    ",
-                    Text(f"podman exec -it {container_name} bash", style=accent_style),
-                )
-            )
-
-        content.update(Text("\n").join(lines))
-
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses for copy diff actions."""
-        if not self.current_project_id or not self.current_task_id:
-            return
-
-        btn_id = event.button.id
-        diff_type = "HEAD" if btn_id == "btn-copy-diff-head" else "PREV"
-
-        self.post_message(
-            self.CopyDiffRequested(self.current_project_id, self.current_task_id, diff_type)
+        else:
+            self.current_project_id = self.app.current_project_id if self.app else None
+        rendered = render_task_details(
+            task, self.current_project_id, image_old, empty_message, _get_css_variables(self)
         )
+        content.update(rendered)
 
 
 class ProjectState(Static):
@@ -547,31 +644,7 @@ class ProjectState(Static):
         super().__init__(**kwargs)
 
     def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
-        if project is None:
-            self.update(Text("No project selected."))
-            return
-
-        upstream = project.upstream_url or "-"
-
-        # Use emojis for security class
-        if project.security_class == "gatekeeping":
-            security_emoji = "🚪"  # Door emoji for gatekeeping
-        else:
-            security_emoji = "🌐"  # Globe emoji for online
-
-        if task_count is None:
-            tasks_line = Text("Tasks:     loading")
-        else:
-            tasks_line = Text(f"Tasks:     {task_count}")
-
-        lines = [
-            Text(f"Project:   {project.id} {security_emoji}"),
-            Text(upstream),
-            Text(""),
-            Text("Loading details..."),
-            tasks_line,
-        ]
-        self.update(Text("\n").join(lines))
+        self.update(render_project_loading(project, task_count))
 
     def set_state(
         self,
@@ -580,107 +653,9 @@ class ProjectState(Static):
         task_count: int | None = None,
         staleness: GateStalenessInfo | None = None,
     ) -> None:
-        if project is None or state is None:
-            self.update(Text("No project selected."))
-            return
-
-        variables = _get_css_variables(self)
-        success_color = variables.get("success", "green")
-        error_color = variables.get("error", "red")
-        warning_color = variables.get("warning", "yellow")
-
-        status_styles = {
-            "yes": Style(color=success_color),
-            "no": Style(color=error_color),
-            "old": Style(color=warning_color),
-        }
-
-        def _status_text(value: str) -> Text:
-            style = status_styles.get(value, Style(color=error_color))
-            return Text(value, style=style)
-
-        docker_value = "yes" if state.get("dockerfiles") else "no"
-        if docker_value == "yes" and state.get("dockerfiles_old"):
-            docker_value = "old"
-        docker_s = _status_text(docker_value)
-
-        images_value = "yes" if state.get("images") else "no"
-        if images_value == "yes" and state.get("images_old"):
-            images_value = "old"
-        images_s = _status_text(images_value)
-        ssh_s = _status_text("yes" if state.get("ssh") else "no")
-        gate_value = "yes" if state.get("gate") else "no"
-        if (
-            gate_value == "yes"
-            and staleness is not None
-            and not staleness.error
-            and staleness.is_stale
-        ):
-            gate_value = "old"
-        gate_s = _status_text(gate_value)
-
-        if task_count is None:
-            tasks_line = Text("Tasks:     unknown")
-        else:
-            tasks_line = Text(f"Tasks:     {task_count}")
-
-        upstream = project.upstream_url or "-"
-
-        # Use emojis for security class
-        if project.security_class == "gatekeeping":
-            security_emoji = "🚪"  # Door emoji for gatekeeping
-        else:
-            security_emoji = "🌐"  # Globe emoji for online
-
-        lines = [
-            Text(f"Project:   {project.id} {security_emoji}"),
-            Text(upstream),
-            Text(""),
-            Text.assemble("Dockerfiles: ", docker_s),
-            Text.assemble("Images:      ", images_s),
-            Text.assemble("SSH dir:     ", ssh_s),
-            Text.assemble("Git gate:    ", gate_s),
-            tasks_line,
-        ]
-
-        # Add gate commit info if available
-        gate_commit = state.get("gate_last_commit")
-        if gate_commit:
-            lines.append(Text(""))
-            lines.append(Text("Gate info:"))
-            lines.append(Text(f"  Commit:   {gate_commit.get('commit_hash', 'unknown')[:8]}"))
-            lines.append(Text(f"  Date:     {gate_commit.get('commit_date', 'unknown')}"))
-            lines.append(Text(f"  Author:   {gate_commit.get('commit_author', 'unknown')}"))
-            message = gate_commit.get("commit_message", "unknown")
-            message = message[:50] + ("..." if len(message) > 50 else "")
-            lines.append(Text(f"  Message:  {message}"))
-
-        # Add upstream staleness info if available
-        if staleness is not None:
-            lines.append(Text(""))
-            lines.append(Text("Upstream status:"))
-            if staleness.error:
-                lines.append(Text(f"  Error:    {staleness.error}"))
-            elif staleness.is_stale:
-                behind_str = "unknown"
-                if staleness.commits_behind is not None:
-                    behind_str = str(staleness.commits_behind)
-                lines.append(
-                    Text(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}")
-                )
-                upstream_head = (
-                    staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
-                )
-                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
-                lines.append(Text(f"  Upstream: {upstream_head}"))
-                lines.append(Text(f"  Gate:     {gate_head}"))
-            else:
-                lines.append(Text(f"  Status:   Up to date on {staleness.branch}"))
-                gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
-                lines.append(Text(f"  Commit:   {gate_head}"))
-            lines.append(Text(f"  Checked:  {staleness.last_checked}"))
-
-        self.update(Text("\n").join(lines))
+        self.update(
+            render_project_details(project, state, task_count, staleness, _get_css_variables(self))
+        )
 
 
 class StatusBar(Static):
