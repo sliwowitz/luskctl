@@ -33,7 +33,7 @@ if _HAS_TEXTUAL:
     from textual import on
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Button, Footer, Header
+    from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
     from ..lib.clipboard import copy_to_clipboard_detailed, get_clipboard_helper_status
@@ -151,16 +151,10 @@ if _HAS_TEXTUAL:
         #task-details-content {
             height: 1fr;
         }
-        #task-details-actions {
-            height: auto;
-            margin-top: 1;
-        }
         """
 
         BINDINGS = [
             ("q", "quit", "Quit"),
-            ("p", "show_project_actions", "Project actions"),
-            ("t", "show_task_actions", "Task actions"),
         ]
 
         def __init__(self) -> None:
@@ -683,40 +677,6 @@ if _HAS_TEXTUAL:
                 if project_id != self.current_project_id:
                     return
                 await self.refresh_tasks()
-
-        @on(TaskDetails.CopyDiffRequested)
-        async def handle_copy_diff_requested(self, message: TaskDetails.CopyDiffRequested) -> None:
-            """Called when user requests to copy git diff to clipboard."""
-            if not self.current_project_id or not self.current_task:
-                self.notify("No task selected.")
-                return
-
-            task_id = self.current_task.task_id
-            diff = get_workspace_git_diff(self.current_project_id, task_id, message.diff_type)
-
-            if diff is None:
-                self.notify("Failed to get git diff. Is this a git repository?")
-                return
-
-            if diff == "":
-                self.notify("No changes to copy (working tree clean).")
-                return
-
-            # Try to copy to clipboard
-            result = copy_to_clipboard_detailed(diff)
-            if result.ok:
-                self.notify(f"Git diff copied to clipboard ({len(diff)} characters)")
-            else:
-                msg = result.error or "Failed to copy to clipboard."
-                if result.hint:
-                    msg = f"{msg}\n{result.hint}"
-                self.notify(msg)
-
-        # ---------- Button presses (forwarded from ProjectActions) ----------
-
-        async def on_button_pressed(self, event: Button.Pressed) -> None:
-            # ProjectActions already calls our action_* methods directly; this is just a safety net
-            pass
 
         # ---------- Actions (keys + called from buttons) ----------
 
