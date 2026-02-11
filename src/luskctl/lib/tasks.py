@@ -172,7 +172,7 @@ def _apply_web_env_overrides(
     return merged
 
 
-def task_new(project_id: str) -> None:
+def task_new(project_id: str) -> str:
     """Create a new task with a fresh workspace for a project.
 
     Workspace Initialization Protocol:
@@ -232,6 +232,7 @@ def task_new(project_id: str) -> None:
     }
     (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
     print(f"Created task {next_id} in {ws}")
+    return next_id
 
 
 def get_tasks(project_id: str, reverse: bool = False) -> list[dict]:

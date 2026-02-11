@@ -106,7 +106,8 @@ class TaskTests(unittest.TestCase):
                     "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                task_new(project_id)
+                returned_id = task_new(project_id)
+                self.assertEqual(returned_id, "1")
                 meta_dir = state_dir / "projects" / project_id / "tasks"
                 meta_path = meta_dir / "1.yml"
                 self.assertTrue(meta_path.is_file())
@@ -115,6 +116,10 @@ class TaskTests(unittest.TestCase):
                 self.assertEqual(parse_meta_value(meta_text, "task_id"), "1")
                 workspace = Path(parse_meta_value(meta_text, "workspace") or "")
                 self.assertTrue(workspace.is_dir())
+
+                # Verify second task returns incremented ID
+                second_id = task_new(project_id)
+                self.assertEqual(second_id, "2")
 
                 with unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
