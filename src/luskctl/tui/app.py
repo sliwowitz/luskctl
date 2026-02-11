@@ -403,24 +403,26 @@ if _HAS_TEXTUAL:
             if task_list.tasks:
                 # Try to restore last selected task for this project
                 last_task_id = self._last_selected_tasks.get(self.current_project_id)
+                desired_idx = 0
                 if last_task_id:
-                    # Find the task with the matching ID
                     for idx, task in enumerate(task_list.tasks):
                         if task.task_id == last_task_id:
-                            task_list.index = idx
-                            self.current_task = task
+                            desired_idx = idx
                             break
-                    else:
-                        # Task not found, select the newest task
-                        task_list.index = 0
-                        self.current_task = task_list.tasks[0]
-                else:
-                    # No remembered task, select the newest task
-                    task_list.index = 0
-                    self.current_task = task_list.tasks[0]
-                # Ensure highlight fires even if index didn't change
-                # (e.g. clear() reset to 0 and we set it back to 0).
-                task_list._post_selected_task()
+
+                self.current_task = task_list.tasks[desired_idx]
+
+                # Defer index setting to after layout pass so appended items
+                # are fully mounted.  An immediate ``index = 0`` after clear()
+                # is a no-op because clear() already reset the index to 0.
+                def _apply_selection(idx: int = desired_idx) -> None:
+                    try:
+                        task_list.index = idx
+                        task_list._post_selected_task()
+                    except Exception:
+                        pass
+
+                self.call_after_refresh(_apply_selection)
             else:
                 self.current_task = None
 
