@@ -622,8 +622,7 @@ def render_project_details(
                 status_str = f"DIVERGED ({ahead} ahead, {behind} behind) on {staleness.branch}"
             elif ahead > 0:
                 # Ahead only
-                ahead_str = "unknown" if staleness.commits_ahead is None else str(ahead)
-                status_str = f"AHEAD ({ahead_str} commits) on {staleness.branch}"
+                status_str = f"AHEAD ({ahead} commits) on {staleness.branch}"
             else:
                 # Behind only or unknown
                 behind_str = "unknown" if staleness.commits_behind is None else str(behind)

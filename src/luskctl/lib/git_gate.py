@@ -426,6 +426,9 @@ def _count_commits_behind(project_id: str, local_head: str, remote_head: str) ->
 def _count_commits_ahead(project_id: str, local_head: str, remote_head: str) -> int | None:
     """Count commits that are ahead of upstream (in local but not in remote).
 
+    Uses git rev-list to count commits reachable from local_head but not from remote_head.
+    This represents how many commits the local branch is ahead of the remote.
+
     Returns None if we can't determine the count.
     """
     try:
