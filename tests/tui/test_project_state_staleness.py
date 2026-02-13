@@ -225,6 +225,7 @@ class ProjectStateStalenessTests(TestCase):
                     upstream_head="bbb",
                     is_stale=True,
                     commits_behind=1,
+                    commits_ahead=0,
                     last_checked="now",
                     error=None,
                 )

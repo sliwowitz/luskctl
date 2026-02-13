@@ -66,6 +66,7 @@ class PollingStateTests(TestCase):
             upstream_head="bbb",
             is_stale=True,
             commits_behind=3,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -80,6 +81,7 @@ class PollingStateTests(TestCase):
             upstream_head="ccc",
             is_stale=True,
             commits_behind=5,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -93,6 +95,7 @@ class PollingStateTests(TestCase):
             upstream_head="ccc",
             is_stale=False,
             commits_behind=0,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -107,6 +110,7 @@ class PollingStateTests(TestCase):
             upstream_head="ddd",
             is_stale=True,
             commits_behind=1,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -134,6 +138,7 @@ class PollingStateTests(TestCase):
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
+            commits_ahead=None,
             last_checked="now",
             error="Could not reach upstream",
         )
@@ -192,6 +197,7 @@ class PollingStateTests(TestCase):
             upstream_head="bbb",
             is_stale=True,
             commits_behind=1,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -205,6 +211,7 @@ class PollingStateTests(TestCase):
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
+            commits_ahead=None,
             last_checked="now",
             error="Network error",
         )
@@ -218,6 +225,7 @@ class PollingStateTests(TestCase):
             upstream_head="bbb",
             is_stale=False,
             commits_behind=0,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -249,6 +257,7 @@ class PollingStateTests(TestCase):
             upstream_head="bbb",
             is_stale=True,
             commits_behind=3,
+            commits_ahead=0,
             last_checked="now",
             error=None,
         )
@@ -269,6 +278,7 @@ class GateStalenessInfoTests(TestCase):
             upstream_head="def456",
             is_stale=True,
             commits_behind=5,
+            commits_ahead=0,
             last_checked="2024-01-01T00:00:00",
             error=None,
         )
@@ -284,6 +294,7 @@ class GateStalenessInfoTests(TestCase):
             upstream_head="abc123",
             is_stale=False,
             commits_behind=0,
+            commits_ahead=0,
             last_checked="2024-01-01T00:00:00",
             error=None,
         )
@@ -298,6 +309,7 @@ class GateStalenessInfoTests(TestCase):
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
+            commits_ahead=None,
             last_checked="2024-01-01T00:00:00",
             error="Could not reach upstream",
         )
