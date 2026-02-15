@@ -315,6 +315,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(Option("run [c]li agent", id="cli"))
             options.append(Option("run [w]eb UI", id="web"))
             options.append(Option("[r]estart container", id="restart"))
+            options.append(Option("[l]ogin to container", id="login"))
             options.append(None)
             options.append(Option("Copy diff vs [H]EAD", id="diff_head"))
             options.append(Option("Copy diff vs [P]REV", id="diff_prev"))
@@ -362,7 +363,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             return
 
         # Lowercase keys — all require tasks to exist
-        lower_map = {"d": "delete", "c": "cli", "w": "web", "r": "restart"}
+        lower_map = {"d": "delete", "c": "cli", "w": "web", "r": "restart", "l": "login"}
         if key in lower_map:
             if not self._has_tasks:
                 return
@@ -397,6 +398,10 @@ class TaskDetailsScreen(screen.Screen[str | None]):
     def action_restart(self) -> None:
         if self._has_tasks:
             self.dismiss("restart")
+
+    def action_login(self) -> None:
+        if self._has_tasks:
+            self.dismiss("login")
 
     def action_diff_head(self) -> None:
         if self._has_tasks:

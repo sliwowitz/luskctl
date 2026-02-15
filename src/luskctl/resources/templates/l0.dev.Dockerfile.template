@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Basic dev tooling common to all projects
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg git openssh-client sudo \
-      ripgrep vim \
+      ripgrep vim tmux \
     && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
@@ -38,6 +38,9 @@ WORKDIR /workspace
 
 COPY scripts/init-ssh-and-repo.sh /usr/local/bin/init-ssh-and-repo.sh
 RUN chmod +x /usr/local/bin/init-ssh-and-repo.sh
+
+# tmux config for persistent login sessions (prefix ^a, green status bar)
+COPY tmux/container-tmux.conf /etc/tmux.conf
 
 ENV HOME=/home/dev
 USER dev

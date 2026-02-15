@@ -137,6 +137,8 @@ git:
 
 - Podman installed and working
 - OpenSSH client tools (ssh, ssh-keygen) for private Git over SSH
+- tmux (optional, for `luskctl-tui --tmux` and persistent container sessions)
+- ttyd (optional, for web-mode terminal access)
 
 ### Step 1: Create Project Directory
 
@@ -241,6 +243,48 @@ luskctl task run-cli myproj 1
 # Or run in UI mode (web interface)
 luskctl task run-ui myproj 1 --backend codex
 ```
+
+### Step 8: Log into a Running Container
+
+```bash
+# Open a shell in a running task container (persistent tmux session)
+luskctl login myproj 1
+```
+
+This opens a tmux session inside the container. The session persists across
+disconnects — re-running `luskctl login` reattaches to the same session.
+
+#### From the TUI
+
+Press `l` on any running task to open a login session. The TUI picks the best
+method automatically:
+
+| Environment | What happens |
+|---|---|
+| Inside tmux | Opens new tmux window (TUI stays visible) |
+| Desktop (GNOME/KDE) | Opens new terminal window |
+| Web (textual serve) | Opens new browser tab (via ttyd) |
+| Plain terminal | Suspends TUI, opens shell, resumes on exit |
+
+#### Running the TUI under tmux (recommended)
+
+```bash
+luskctl-tui --tmux
+```
+
+This wraps the TUI in a managed tmux session with a blue status bar showing
+keyboard shortcuts. Login sessions open as additional tmux windows — press
+`^b n`/`^b p` to switch between TUI and container shells.
+
+#### tmux Quick Reference
+
+| Context | Prefix | Status bar color | Common keys |
+|---|---|---|---|
+| Host tmux | `^b` | Blue | `^b n/p` switch windows, `^b d` detach |
+| Container tmux | `^a` | Green | `^a n/p` switch windows, `^a c` new window |
+
+The container's tmux prefix (`^a`) is different from the host's (`^b`) to avoid
+conflicts. The container status bar shows `host: ^b` as a reminder.
 
 ### UI Mode Configuration
 

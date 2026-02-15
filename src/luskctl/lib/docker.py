@@ -57,6 +57,17 @@ def _stage_scripts_into(dest: Path) -> None:
     _copy_package_tree("luskctl", pkg_rel, dest)
 
 
+def _stage_tmux_config_into(dest: Path) -> None:
+    """Stage tmux config from package resources into dest/tmux.
+
+    Single source of truth: luskctl/resources/tmux bundled in the wheel.
+    """
+    pkg_rel = "resources/tmux"
+    if dest.exists():
+        shutil.rmtree(dest)
+    _copy_package_tree("luskctl", pkg_rel, dest)
+
+
 def _load_docker_config(project_root: Path) -> dict:
     try:
         cfg = yaml.safe_load((project_root / "project.yml").read_text()) or {}
@@ -87,6 +98,12 @@ def _hash_traversable_tree(root) -> str:
 def _scripts_hash() -> str:
     scripts_root = resources.files("luskctl") / "resources" / "scripts"
     return _hash_traversable_tree(scripts_root)
+
+
+@lru_cache(maxsize=1)
+def _tmux_config_hash() -> str:
+    tmux_root = resources.files("luskctl") / "resources" / "tmux"
+    return _hash_traversable_tree(tmux_root)
 
 
 def _render_dockerfiles(project) -> dict[str, str]:
@@ -167,6 +184,8 @@ def build_context_hash(project_id: str) -> str:
         hasher.update(rendered[name].encode("utf-8"))
         hasher.update(b"\0")
     hasher.update(_scripts_hash().encode("utf-8"))
+    hasher.update(b"\0")
+    hasher.update(_tmux_config_hash().encode("utf-8"))
     return hasher.hexdigest()
 
 
@@ -197,6 +216,12 @@ def generate_dockerfiles(project_id: str) -> None:
         _stage_scripts_into(out_dir / "scripts")
     except Exception:
         # Non-fatal: some templates may not need scripts
+        pass
+
+    # Stage tmux config for container login sessions.
+    try:
+        _stage_tmux_config_into(out_dir / "tmux")
+    except Exception:
         pass
 
     print(f"Generated Dockerfiles in {out_dir}")

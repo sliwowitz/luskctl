@@ -38,6 +38,7 @@ from ..lib.tasks import (
     WEB_BACKENDS,
     task_delete,
     task_list,
+    task_login,
     task_new,
     task_restart,
     task_run_cli,
@@ -232,6 +233,7 @@ def main() -> None:
             "  1. Setup:  luskctl project-init <project_id>\n"
             "  2. Work:   luskctl task start <project_id>         (new CLI task)\n"
             "             luskctl task start <project_id> --web   (new web task)\n"
+            "  3. Login:  luskctl login <project_id> <task_id>\n"
             "\n"
             "Step-by-step (order of operations):\n"
             "  Online (HTTPS): generate → build → gate-sync (optional) → task new → task run-*\n"
@@ -373,6 +375,19 @@ def main() -> None:
     _a = p_auth_blablador.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    # login (top-level shortcut)
+    p_login = sub.add_parser("login", help="Open interactive shell in a running task container")
+    _a = p_login.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = p_login.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -552,6 +567,8 @@ def main() -> None:
             for p in projs:
                 upstream = p.upstream_url or "-"
                 print(f"- {p.id} [{p.security_class}] upstream={upstream} config_root={p.root}")
+    elif args.cmd == "login":
+        task_login(args.project_id, args.task_id)
     elif args.cmd == "task":
         if args.task_cmd == "new":
             task_new(args.project_id)

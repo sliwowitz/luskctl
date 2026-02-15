@@ -248,6 +248,7 @@ class TaskList(ListView):
         ("P", "app.copy_diff_prev", "Diff PREV"),
         ("c", "app.action_run_cli_from_main", "CLI"),
         ("w", "app.action_run_web_from_main", "Web"),
+        ("l", "app.action_login_from_main", "Login"),
         ("d", "app.action_delete_task_from_main", "Delete"),
     ]
 
