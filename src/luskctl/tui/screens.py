@@ -107,18 +107,18 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
         yield OptionList(
             Option(
-                "Full Setup - project-[i]nit  (ssh + generate + build + gate-sync)",
+                "Full Setup - project-\\[i]nit  (ssh + generate + build + gate-sync)",
                 id="project_init",
             ),
-            Option("sync [g]it gate", id="sync_gate"),
+            Option("sync \\[g]it gate", id="sync_gate"),
             None,
-            Option("generate [d]ockerfiles", id="generate"),
-            Option("[b]uild project image", id="build"),
-            Option("[r]ebuild with agents", id="build_agents"),
-            Option("[f]ull rebuild no cache", id="build_full"),
-            Option("initialize [s]sh", id="init_ssh"),
+            Option("generate \\[d]ockerfiles", id="generate"),
+            Option("\\[b]uild project image", id="build"),
+            Option("\\[r]ebuild with agents", id="build_agents"),
+            Option("\\[f]ull rebuild no cache", id="build_full"),
+            Option("initialize \\[s]sh", id="init_ssh"),
             None,
-            Option("[a]uthenticate agents...", id="auth"),
+            Option("\\[a]uthenticate agents...", id="auth"),
             id="actions-list",
         )
 
@@ -218,10 +218,10 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(
-                Option("[1] Codex", id="auth_codex"),
-                Option("[2] Claude", id="auth_claude"),
-                Option("[3] Mistral", id="auth_mistral"),
-                Option("[4] Blablador", id="auth_blablador"),
+                Option("\\[1] Codex", id="auth_codex"),
+                Option("\\[2] Claude", id="auth_claude"),
+                Option("\\[3] Mistral", id="auth_mistral"),
+                Option("\\[4] Blablador", id="auth_blablador"),
                 id="auth-actions-list",
             )
         dialog.border_title = "Authenticate Agents"
@@ -303,22 +303,20 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         yield detail_pane
 
         options: list[Option | None] = [
-            Option("Start CLI task  [N]  (new task + run CLI)", id="task_start_cli"),
-            Option("Start [W]eb task  (new task + run Web)", id="task_start_web"),
-            Option("New task (no run)  [C]", id="new"),
+            Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
+            Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"),
+            Option("[l]ogin to container", id="login")),
         ]
-        if self._has_tasks:
-            options.append(Option("[d]elete task", id="delete"))
-
         if self._has_tasks:
             options.append(None)
             options.append(Option("run [c]li agent", id="cli"))
             options.append(Option("run [w]eb UI", id="web"))
             options.append(Option("[r]estart container", id="restart"))
-            options.append(Option("[l]ogin to container", id="login"))
             options.append(None)
-            options.append(Option("Copy diff vs [H]EAD", id="diff_head"))
-            options.append(Option("Copy diff vs [P]REV", id="diff_prev"))
+            options.append(Option("Copy diff vs \\[H]EAD", id="diff_head"))
+            options.append(Option("Copy diff vs \\[P]REV", id="diff_prev"))
+        options.append(None)
+        options.append(Option("New task (no run)  \\[C]", id="new"))
 
         yield OptionList(*options, id="actions-list")
 
