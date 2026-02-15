@@ -535,10 +535,17 @@ def get_login_command(project_id: str, task_id: str) -> list[str]:
 def task_login(project_id: str, task_id: str) -> None:
     """Open an interactive shell in a running task container.
 
-    Replaces the current process with podman exec + tmux.
+    Validates the task, then replaces the current process with
+    ``podman exec -it <container> tmux new-session -A -s main``.
+    Raises SystemExit if podman is not found on PATH.
     """
     cmd = get_login_command(project_id, task_id)
-    os.execvp(cmd[0], cmd)
+    try:
+        os.execvp(cmd[0], cmd)
+    except FileNotFoundError:
+        raise SystemExit(
+            f"'{cmd[0]}' not found on PATH. Please install podman or add it to your PATH."
+        )
 
 
 def task_run_cli(project_id: str, task_id: str) -> None:

@@ -54,7 +54,7 @@ class DetectTerminalTests(unittest.TestCase):
     """Tests for detect_terminal_emulator."""
 
     def test_gnome_terminal(self) -> None:
-        def which_side_effect(name: str):
+        def which_side_effect(name: str) -> str | None:
             return "/usr/bin/gnome-terminal" if name == "gnome-terminal" else None
 
         with unittest.mock.patch(
@@ -63,7 +63,7 @@ class DetectTerminalTests(unittest.TestCase):
             self.assertEqual(detect_terminal_emulator(), "gnome-terminal")
 
     def test_konsole_only(self) -> None:
-        def which_side_effect(name: str):
+        def which_side_effect(name: str) -> str | None:
             return "/usr/bin/konsole" if name == "konsole" else None
 
         with unittest.mock.patch(
@@ -80,7 +80,7 @@ class SpawnTerminalTests(unittest.TestCase):
     """Tests for spawn_terminal_with_command."""
 
     def test_gnome_terminal(self) -> None:
-        def which_side_effect(name: str):
+        def which_side_effect(name: str) -> str | None:
             return "/usr/bin/gnome-terminal" if name == "gnome-terminal" else None
 
         with (
@@ -97,7 +97,7 @@ class SpawnTerminalTests(unittest.TestCase):
             self.assertIn("--", call_args)
 
     def test_konsole(self) -> None:
-        def which_side_effect(name: str):
+        def which_side_effect(name: str) -> str | None:
             return "/usr/bin/konsole" if name == "konsole" else None
 
         with (
