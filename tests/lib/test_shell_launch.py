@@ -161,3 +161,31 @@ class LaunchLoginTests(unittest.TestCase):
             method, port = launch_login(["podman", "exec", "-it", "c1", "bash"])
             self.assertEqual(method, "none")
             self.assertIsNone(port)
+
+    def test_web_mode_with_ttyd(self) -> None:
+        """In web mode with ttyd available, launch_login returns ('web', port)."""
+        with (
+            unittest.mock.patch("luskctl.lib.shell_launch.is_inside_tmux", return_value=False),
+            unittest.mock.patch("luskctl.lib.shell_launch.is_web_mode", return_value=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch.spawn_terminal_with_command", return_value=False
+            ),
+            unittest.mock.patch("luskctl.lib.shell_launch.spawn_ttyd", return_value=12345),
+        ):
+            method, port = launch_login(["podman", "exec", "-it", "c1", "bash"])
+            self.assertEqual(method, "web")
+            self.assertEqual(port, 12345)
+
+    def test_web_mode_ttyd_unavailable_falls_back(self) -> None:
+        """In web mode without ttyd, launch_login falls back to ('none', None)."""
+        with (
+            unittest.mock.patch("luskctl.lib.shell_launch.is_inside_tmux", return_value=False),
+            unittest.mock.patch("luskctl.lib.shell_launch.is_web_mode", return_value=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch.spawn_terminal_with_command", return_value=False
+            ),
+            unittest.mock.patch("luskctl.lib.shell_launch.spawn_ttyd", return_value=None),
+        ):
+            method, port = launch_login(["podman", "exec", "-it", "c1", "bash"])
+            self.assertEqual(method, "none")
+            self.assertIsNone(port)

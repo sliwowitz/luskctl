@@ -493,7 +493,8 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str]:
     if not mode:
         raise SystemExit(
             f"Task {task_id} has never been run (no mode set). "
-            f"Run 'luskctl task run-cli {project_id} {task_id}' first."
+            f"Start it first via 'luskctl task run-cli {project_id} {task_id}' "
+            f"or 'luskctl task run-web {project_id} {task_id}'."
         )
 
     container_name = f"{project.id}-{mode}-{task_id}"

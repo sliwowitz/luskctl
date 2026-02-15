@@ -100,8 +100,10 @@ def _find_free_port() -> int:
 def spawn_ttyd(command: list[str], port: int = 0) -> int | None:
     """Start ttyd serving the given command on a local port.
 
-    Returns the port number on success, or None if ttyd is not installed.
-    If port is 0, a free port is selected automatically.
+    Binds to the loopback interface only (``-i lo``) so the terminal is not
+    exposed beyond localhost.  Returns the port number on success, or None
+    if ttyd is not installed.  If port is 0, a free port is selected
+    automatically.
     """
     if not shutil.which("ttyd"):
         return None
@@ -109,7 +111,7 @@ def spawn_ttyd(command: list[str], port: int = 0) -> int | None:
     if port == 0:
         port = _find_free_port()
 
-    ttyd_cmd = ["ttyd", "-W", "-o", "-p", str(port)] + command
+    ttyd_cmd = ["ttyd", "-W", "-o", "-i", "lo", "-p", str(port)] + command
     try:
         subprocess.Popen(ttyd_cmd, start_new_session=True)
         return port

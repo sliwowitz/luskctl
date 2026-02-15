@@ -1136,12 +1136,25 @@ if _HAS_TEXTUAL:
         """Launch the TUI inside a managed tmux session.
 
         If already inside tmux, just run the TUI directly.
-        Otherwise, exec into tmux with the luskctl host config.
+        Otherwise, verify that tmux is installed and exec into it with the
+        luskctl host config (blue status bar, usage hints).  Exits with an
+        actionable error message if tmux is not found on ``$PATH``.
         """
         if os.environ.get("TMUX"):
             # Already inside tmux — no double-wrap
             LuskTUI().run()
             return
+
+        import shutil
+
+        if not shutil.which("tmux"):
+            print(
+                "Error: tmux is not installed.\n"
+                "Install it (e.g. 'apt install tmux' or 'brew install tmux') "
+                "and try again,\nor run 'luskctl-tui' without --tmux.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         from importlib import resources as _res
 

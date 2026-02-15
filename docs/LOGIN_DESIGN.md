@@ -10,22 +10,27 @@ the container name must be remembered or copied, and sessions are lost on discon
 ## Requirements
 
 ### R1: One-command login
+
 A single command (`luskctl login <project> <task>`) should open an interactive shell.
 No container name needed — luskctl resolves it from project/task metadata.
 
 ### R2: Persistent sessions
+
 Sessions should survive disconnects. Reconnecting should reattach to the same session
 with all state (running processes, environment, working directory) preserved.
 
 ### R3: TUI integration
+
 The TUI should allow login without leaving the interface. When possible, the login
 session should open in a separate window/tab so the TUI remains usable.
 
 ### R4: Work across environments
+
 Users run luskctl in diverse environments. Login should work well in all of them:
 terminal (bare), terminal (under tmux), desktop (GNOME, KDE), and browser (web-served TUI).
 
 ### R5: Minimize cognitive load for nested tmux
+
 Host-level tmux (for managing TUI windows) and container-level tmux (for session
 persistence) use different prefix keys and visual indicators to avoid confusion.
 
