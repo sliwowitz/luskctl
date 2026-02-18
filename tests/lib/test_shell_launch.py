@@ -3,7 +3,8 @@ import unittest
 import unittest.mock
 
 from luskctl.lib.shell_launch import (
-    detect_terminal_emulator,
+    is_inside_gnome_terminal,
+    is_inside_konsole,
     is_inside_tmux,
     launch_login,
     spawn_terminal_with_command,
@@ -21,6 +22,85 @@ class TmuxDetectionTests(unittest.TestCase):
     def test_is_inside_tmux_false(self) -> None:
         with unittest.mock.patch.dict("os.environ", {}, clear=True):
             self.assertFalse(is_inside_tmux())
+
+
+class GnomeTerminalDetectionTests(unittest.TestCase):
+    """Tests for GNOME Terminal environment detection."""
+
+    def test_is_inside_gnome_terminal_true(self) -> None:
+        with unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "gnome-terminal"}):
+            self.assertTrue(is_inside_gnome_terminal())
+
+    def test_is_inside_gnome_terminal_false_other_terminal(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "iTerm.app"}),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            self.assertFalse(is_inside_gnome_terminal())
+
+    def test_is_inside_gnome_terminal_false_not_set(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {}, clear=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            self.assertFalse(is_inside_gnome_terminal())
+
+    def test_is_inside_gnome_terminal_fallback_via_parent_process(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {}, clear=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=True
+            ),
+        ):
+            self.assertTrue(is_inside_gnome_terminal())
+
+    def test_is_inside_gnome_terminal_via_gnome_terminal_service(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"GNOME_TERMINAL_SERVICE": "1"}),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            self.assertTrue(is_inside_gnome_terminal())
+
+
+class KonsoleDetectionTests(unittest.TestCase):
+    """Tests for Konsole environment detection."""
+
+    def test_is_inside_konsole_true(self) -> None:
+        with unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "konsole"}):
+            self.assertTrue(is_inside_konsole())
+
+    def test_is_inside_konsole_false_other_terminal(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "gnome-terminal"}),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            self.assertFalse(is_inside_konsole())
+
+    def test_is_inside_konsole_false_not_set(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {}, clear=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            self.assertFalse(is_inside_konsole())
+
+    def test_is_inside_konsole_fallback_via_parent_process(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {}, clear=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=True
+            ),
+        ):
+            self.assertTrue(is_inside_konsole())
 
 
 class TmuxNewWindowTests(unittest.TestCase):
@@ -50,43 +130,12 @@ class TmuxNewWindowTests(unittest.TestCase):
             self.assertFalse(result)
 
 
-class DetectTerminalTests(unittest.TestCase):
-    """Tests for detect_terminal_emulator."""
-
-    def test_gnome_terminal(self) -> None:
-        def which_side_effect(name: str) -> str | None:
-            return "/usr/bin/gnome-terminal" if name == "gnome-terminal" else None
-
-        with unittest.mock.patch(
-            "luskctl.lib.shell_launch.shutil.which", side_effect=which_side_effect
-        ):
-            self.assertEqual(detect_terminal_emulator(), "gnome-terminal")
-
-    def test_konsole_only(self) -> None:
-        def which_side_effect(name: str) -> str | None:
-            return "/usr/bin/konsole" if name == "konsole" else None
-
-        with unittest.mock.patch(
-            "luskctl.lib.shell_launch.shutil.which", side_effect=which_side_effect
-        ):
-            self.assertEqual(detect_terminal_emulator(), "konsole")
-
-    def test_none_available(self) -> None:
-        with unittest.mock.patch("luskctl.lib.shell_launch.shutil.which", return_value=None):
-            self.assertIsNone(detect_terminal_emulator())
-
-
 class SpawnTerminalTests(unittest.TestCase):
     """Tests for spawn_terminal_with_command."""
 
-    def test_gnome_terminal(self) -> None:
-        def which_side_effect(name: str) -> str | None:
-            return "/usr/bin/gnome-terminal" if name == "gnome-terminal" else None
-
+    def test_gnome_terminal_inside_gnome_terminal(self) -> None:
         with (
-            unittest.mock.patch(
-                "luskctl.lib.shell_launch.shutil.which", side_effect=which_side_effect
-            ),
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "gnome-terminal"}),
             unittest.mock.patch("luskctl.lib.shell_launch.subprocess.Popen") as mock_popen,
         ):
             result = spawn_terminal_with_command(["podman", "exec", "-it", "c1", "bash"])
@@ -94,15 +143,29 @@ class SpawnTerminalTests(unittest.TestCase):
             mock_popen.assert_called_once()
             call_args = mock_popen.call_args[0][0]
             self.assertEqual(call_args[0], "gnome-terminal")
+            self.assertIn("--tab", call_args)
+            self.assertNotIn("--window", call_args)
             self.assertIn("--", call_args)
 
-    def test_konsole(self) -> None:
-        def which_side_effect(name: str) -> str | None:
-            return "/usr/bin/konsole" if name == "konsole" else None
-
+    def test_gnome_terminal_with_title(self) -> None:
         with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "gnome-terminal"}),
+            unittest.mock.patch("luskctl.lib.shell_launch.subprocess.Popen") as mock_popen,
+        ):
+            result = spawn_terminal_with_command(
+                ["podman", "exec", "-it", "c1", "bash"], title="login:c1"
+            )
+            self.assertTrue(result)
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            self.assertIn("--title", call_args)
+            self.assertIn("login:c1", call_args)
+
+    def test_konsole_inside_konsole(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "konsole"}),
             unittest.mock.patch(
-                "luskctl.lib.shell_launch.shutil.which", side_effect=which_side_effect
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
             ),
             unittest.mock.patch("luskctl.lib.shell_launch.subprocess.Popen") as mock_popen,
         ):
@@ -111,10 +174,43 @@ class SpawnTerminalTests(unittest.TestCase):
             mock_popen.assert_called_once()
             call_args = mock_popen.call_args[0][0]
             self.assertEqual(call_args[0], "konsole")
-            self.assertIn("-e", call_args)
+            self.assertIn("--new-tab", call_args)
 
-    def test_no_terminal(self) -> None:
-        with unittest.mock.patch("luskctl.lib.shell_launch.shutil.which", return_value=None):
+    def test_konsole_title_propagation(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "konsole"}),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+            unittest.mock.patch("luskctl.lib.shell_launch.subprocess.Popen") as mock_popen,
+        ):
+            result = spawn_terminal_with_command(
+                ["podman", "exec", "-it", "c1", "bash"], title="login:c1"
+            )
+            self.assertTrue(result)
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            self.assertIn("--new-tab", call_args)
+            self.assertIn("--title", call_args)
+            self.assertIn("login:c1", call_args)
+
+    def test_not_inside_terminal_returns_false(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {}, clear=True),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
+            result = spawn_terminal_with_command(["echo", "hello"])
+            self.assertFalse(result)
+
+    def test_inside_other_terminal_returns_false(self) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", {"TERM_PROGRAM": "iTerm.app"}),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch._parent_process_has_name", return_value=False
+            ),
+        ):
             result = spawn_terminal_with_command(["echo", "hello"])
             self.assertFalse(result)
 
@@ -123,24 +219,23 @@ class LaunchLoginTests(unittest.TestCase):
     """Tests for the launch_login orchestrator."""
 
     def test_prefers_tmux(self) -> None:
-        """When inside tmux and terminal is available, tmux is preferred."""
+        """When inside tmux, tmux is preferred."""
         with (
             unittest.mock.patch("luskctl.lib.shell_launch.is_inside_tmux", return_value=True),
             unittest.mock.patch("luskctl.lib.shell_launch.tmux_new_window", return_value=True),
-            unittest.mock.patch(
-                "luskctl.lib.shell_launch.detect_terminal_emulator",
-                return_value="gnome-terminal",
-            ),
         ):
             method, port = launch_login(["podman", "exec", "-it", "c1", "bash"])
             self.assertEqual(method, "tmux")
             self.assertIsNone(port)
 
-    def test_falls_back_to_terminal(self) -> None:
-        """When not inside tmux but terminal is available, use terminal."""
+    def test_falls_back_to_terminal_when_inside_gnome_terminal(self) -> None:
+        """When inside gnome-terminal, spawn a new tab."""
         with (
             unittest.mock.patch("luskctl.lib.shell_launch.is_inside_tmux", return_value=False),
             unittest.mock.patch("luskctl.lib.shell_launch.is_web_mode", return_value=False),
+            unittest.mock.patch(
+                "luskctl.lib.shell_launch.is_inside_gnome_terminal", return_value=True
+            ),
             unittest.mock.patch(
                 "luskctl.lib.shell_launch.spawn_terminal_with_command", return_value=True
             ),
@@ -149,8 +244,8 @@ class LaunchLoginTests(unittest.TestCase):
             self.assertEqual(method, "terminal")
             self.assertIsNone(port)
 
-    def test_returns_none_when_nothing_available(self) -> None:
-        """When no method is available, return ('none', None)."""
+    def test_returns_none_when_not_inside_terminal(self) -> None:
+        """When not inside a terminal, fall back to other methods."""
         with (
             unittest.mock.patch("luskctl.lib.shell_launch.is_inside_tmux", return_value=False),
             unittest.mock.patch("luskctl.lib.shell_launch.is_web_mode", return_value=False),
