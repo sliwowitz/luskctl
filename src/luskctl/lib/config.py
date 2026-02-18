@@ -186,7 +186,7 @@ def get_envs_base_dir() -> Path:
     # Otherwise, use the same pattern as state_root()
     # For non-root users: ~/.local/share/luskctl/envs
     # For root users: /var/lib/luskctl/envs
-    return _state_root_base() / "envs"
+    return (_state_root_base() / "envs").resolve()
 
 
 def get_global_human_name() -> str | None:
