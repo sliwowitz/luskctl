@@ -72,6 +72,8 @@ class Project:
     auto_sync_branches: list[str] = field(default_factory=list)
     # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
     default_agent: str | None = None
+    # Optional path to a default agent-config.json for autopilot/headless runs
+    agent_default_config: Path | None = None
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -216,6 +218,13 @@ def load_project(project_id: str) -> Project:
     if not default_agent:
         default_agent = get_global_default_agent()
 
+    # Optional agent config section for autopilot/headless runs
+    agent_cfg = cfg.get("agent", {}) or {}
+    agent_default_config_str = agent_cfg.get("default_config")
+    agent_default_config: Path | None = None
+    if agent_default_config_str:
+        agent_default_config = Path(str(agent_default_config_str)).expanduser().resolve()
+
     p = Project(
         id=pid,
         security_class=sec,
@@ -238,5 +247,6 @@ def load_project(project_id: str) -> Project:
         auto_sync_enabled=auto_sync_enabled,
         auto_sync_branches=auto_sync_branches,
         default_agent=default_agent,
+        agent_default_config=agent_default_config,
     )
     return p

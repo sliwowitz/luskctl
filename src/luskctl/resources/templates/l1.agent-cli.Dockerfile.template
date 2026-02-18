@@ -13,7 +13,7 @@ ENV HOME=/root
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-            curl ca-certificates gnupg \
+            curl ca-certificates gnupg jq \
             python-is-python3 python3 python3-pip python3-venv pipx ; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     apt-get install -y --no-install-recommends nodejs; \
@@ -27,6 +27,10 @@ RUN set -eux; \
 # Copy setup script for codex auth (port forwarding for OAuth callbacks)
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
+
+# Copy Claude runner script (headless + interactive modes)
+COPY scripts/start-claude.sh /usr/local/bin/start-claude.sh
+RUN chmod +x /usr/local/bin/start-claude.sh
 
 # Copy blablador wrapper (OpenCode-based)
 COPY scripts/blablador /usr/local/bin/blablador
