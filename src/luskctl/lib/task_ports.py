@@ -13,7 +13,6 @@ from .config import get_ui_base_port, state_root
 
 def _is_port_free(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(("127.0.0.1", port))
         except OSError:
@@ -43,6 +42,12 @@ def _collect_all_web_ports() -> set[int]:
 
 
 def _assign_web_port() -> int:
+    """Find a free web port starting from the configured UI base port.
+
+    Scans up to 200 successive ports (base_port through base_port + 199),
+    skipping ports already recorded in task metadata or currently bound.
+    Raises SystemExit if no free port is found.
+    """
     used = _collect_all_web_ports()
     base = get_ui_base_port()
     port = base

@@ -10,6 +10,7 @@ The mixin accesses ``self`` attributes defined by ``LuskTUI.__init__``
 """
 
 import os
+import subprocess
 
 from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
 from ..lib.clipboard import copy_to_clipboard_detailed
@@ -339,9 +340,7 @@ class ActionsMixin:
             # Fallback: suspend TUI
             with self.suspend():
                 try:
-                    import subprocess as _sp
-
-                    _sp.run(cmd)
+                    subprocess.run(cmd)
                 except Exception as e:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")

@@ -83,11 +83,11 @@ def _run_auth_container(
         "--name",
         container_name,
     ]
-    # Insert userns args after the initial flags
-    cmd[3:3] = _podman_userns_args()
+    # Insert userns args after the initial flags, then extra args after those
+    userns = _podman_userns_args()
+    cmd[3:3] = userns
     if extra_run_args:
-        # Insert extra args before the volume mount
-        cmd[3:3] = extra_run_args
+        cmd[3 + len(userns) : 3 + len(userns)] = extra_run_args
     cmd.append(project_cli_image(project.id))
     cmd.extend(command)
 
@@ -173,7 +173,7 @@ def claude_auth(project_id: str) -> None:
             "echo 'Enter your Claude API key (get one at https://console.anthropic.com/settings/keys):' && "
             "read -r -p 'ANTHROPIC_API_KEY=' api_key && "
             "mkdir -p ~/.claude && "
-            'echo \'{"api_key": "$api_key"}\' > ~/.claude/config.json && '
+            'printf \'{"api_key": "%s"}\\n\' "$api_key" > ~/.claude/config.json && '
             "echo && echo 'API key saved to ~/.claude/config.json' && "
             "echo 'You can now use claude in task containers.'",
         ],
@@ -214,7 +214,7 @@ def mistral_auth(project_id: str) -> None:
             "echo 'Enter your Mistral API key (get one at https://console.mistral.ai/api-keys):' && "
             "read -r -p 'MISTRAL_API_KEY=' api_key && "
             "mkdir -p ~/.vibe && "
-            'echo "MISTRAL_API_KEY=$api_key" > ~/.vibe/.env && '
+            "printf 'MISTRAL_API_KEY=%s\\n' \"$api_key\" > ~/.vibe/.env && "
             "echo && echo 'API key saved to ~/.vibe/.env' && "
             "echo 'You can now use vibe in task containers.'",
         ],
@@ -254,7 +254,7 @@ def blablador_auth(project_id: str) -> None:
             "echo 'Enter your Blablador API key (get one at https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens):' && "
             "read -r -p 'BLABLADOR_API_KEY=' api_key && "
             "mkdir -p ~/.blablador && "
-            'echo "{\\"api_key\\": \\"$api_key\\"}" > ~/.blablador/config.json && '
+            'printf \'{"api_key": "%s"}\\n\' "$api_key" > ~/.blablador/config.json && '
             "echo && echo 'API key saved to ~/.blablador/config.json' && "
             "echo 'You can now use blablador in task containers.'",
         ],

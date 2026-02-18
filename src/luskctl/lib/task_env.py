@@ -64,6 +64,10 @@ def _apply_web_env_overrides(
     if not effective_backend:
         effective_backend = "codex"
 
+    # Validate against known backends; fall back to default on typos
+    if effective_backend not in WEB_BACKENDS:
+        effective_backend = "codex"
+
     # Export as LUSKUI_BACKEND to the container
     merged["LUSKUI_BACKEND"] = effective_backend
 

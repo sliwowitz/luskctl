@@ -116,7 +116,7 @@ class ProjectTests(unittest.TestCase):
                 gate_dir = state_root() / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                with unittest.mock.patch("luskctl.lib.projects.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.lib.project_state.subprocess.run") as run_mock:
                     run_mock.return_value.returncode = 0
                     state = get_project_state(project_id)
 

@@ -8,6 +8,7 @@ for overview displays.
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from .config import build_root, get_envs_base_dir
 from .images import project_cli_image, project_web_image
@@ -68,10 +69,14 @@ def get_project_state(project_id: str) -> dict:
     if has_dockerfiles:
         try:
             from .docker import dockerfiles_match_templates
-
-            dockerfiles_old = not dockerfiles_match_templates(project_id)
-        except Exception:
+        except ImportError:
             dockerfiles_old = False
+        else:
+            try:
+                dockerfiles_old = not dockerfiles_match_templates(project_id)
+            except Exception:
+                # Template comparison is best-effort; treat errors as "not old"
+                dockerfiles_old = False
 
     images_old = False
     if has_images and has_dockerfiles:
@@ -196,7 +201,7 @@ def _parse_podman_created(value: str) -> datetime | None:
         return None
 
 
-def _is_task_image_old(project_id: str | None, task) -> bool | None:
+def _is_task_image_old(project_id: str | None, task: Any) -> bool | None:
     """Check if the image used by a task's container is outdated.
 
     Compares the build context hash label on the running container's image

@@ -71,7 +71,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
             # Default: diff against HEAD (uncommitted changes)
             cmd = ["git", "-C", str(workspace_dir), "diff", "HEAD"]
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             # Non-zero return code indicates an error; treat as failure
             return None
