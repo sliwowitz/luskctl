@@ -12,6 +12,14 @@ def _only_custom_editor(cmd: str) -> str | None:
     return cmd if cmd == "/usr/bin/custom-editor" else None
 
 
+def _only_nano(cmd: str) -> str | None:
+    return cmd if cmd == "nano" else None
+
+
+def _only_vi(cmd: str) -> str | None:
+    return cmd if cmd == "vi" else None
+
+
 class ResolveEditorTests(unittest.TestCase):
     """Tests for _resolve_editor()."""
 
@@ -21,12 +29,12 @@ class ResolveEditorTests(unittest.TestCase):
         self.assertEqual(_resolve_editor(), "/usr/bin/custom-editor")
 
     @unittest.mock.patch.dict("os.environ", {"EDITOR": ""})
-    @unittest.mock.patch("shutil.which", side_effect=lambda cmd: cmd if cmd == "nano" else None)
+    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
     def test_falls_back_to_nano(self, _which: unittest.mock.Mock) -> None:
         self.assertEqual(_resolve_editor(), "nano")
 
     @unittest.mock.patch.dict("os.environ", {"EDITOR": ""})
-    @unittest.mock.patch("shutil.which", side_effect=lambda cmd: cmd if cmd == "vi" else None)
+    @unittest.mock.patch("shutil.which", side_effect=_only_vi)
     def test_falls_back_to_vi(self, _which: unittest.mock.Mock) -> None:
         self.assertEqual(_resolve_editor(), "vi")
 
@@ -36,12 +44,12 @@ class ResolveEditorTests(unittest.TestCase):
         self.assertIsNone(_resolve_editor())
 
     @unittest.mock.patch.dict("os.environ", {"EDITOR": "   "})
-    @unittest.mock.patch("shutil.which", side_effect=lambda cmd: cmd if cmd == "nano" else None)
+    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
     def test_ignores_whitespace_only_editor(self, _which: unittest.mock.Mock) -> None:
         self.assertEqual(_resolve_editor(), "nano")
 
     @unittest.mock.patch.dict("os.environ", {"EDITOR": "nonexistent"})
-    @unittest.mock.patch("shutil.which", side_effect=lambda cmd: cmd if cmd == "nano" else None)
+    @unittest.mock.patch("shutil.which", side_effect=_only_nano)
     def test_editor_env_not_on_path_falls_back(self, _which: unittest.mock.Mock) -> None:
         self.assertEqual(_resolve_editor(), "nano")
 

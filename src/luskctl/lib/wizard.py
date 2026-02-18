@@ -45,15 +45,20 @@ def _prompt(message: str, default: str = "") -> str:
 
 def _prompt_template() -> int | None:
     """Show numbered template menu and return the 0-based index, or ``None`` on bad input."""
+    if not TEMPLATES:
+        print("No templates available.", file=sys.stderr)
+        return None
+
     print("\nSelect a project template:")
     for i, (label, _filename) in enumerate(TEMPLATES, 1):
         print(f"  {i}) {label}")
 
-    choice = input("\nChoice [1-4]: ").strip()
+    max_choice = len(TEMPLATES)
+    choice = input(f"\nChoice [1-{max_choice}]: ").strip()
     if not choice.isdigit():
         return None
     idx = int(choice) - 1
-    if 0 <= idx < len(TEMPLATES):
+    if 0 <= idx < max_choice:
         return idx
     return None
 
