@@ -542,6 +542,7 @@ def render_project_details(
         "yes": Style(color=success_color),
         "no": Style(color=error_color),
         "old": Style(color=warning_color),
+        "new": Style(color="blue"),
     }
 
     def _status_text(value: str) -> Text:
@@ -560,7 +561,13 @@ def render_project_details(
     ssh_s = _status_text("yes" if state.get("ssh") else "no")
     gate_value = "yes" if state.get("gate") else "no"
     if gate_value == "yes" and staleness is not None and not staleness.error and staleness.is_stale:
-        gate_value = "old"
+        # Determine if ahead, behind, or diverged
+        behind = staleness.commits_behind or 0
+        ahead = staleness.commits_ahead or 0
+        if ahead > 0 and behind == 0:
+            gate_value = "new"  # Gate is ahead of upstream
+        else:
+            gate_value = "old"  # Gate is behind or diverged
     gate_s = _status_text(gate_value)
 
     tasks_line = (
@@ -606,10 +613,22 @@ def render_project_details(
         if staleness.error:
             lines.append(Text(f"  Error:    {staleness.error}"))
         elif staleness.is_stale:
-            behind_str = "unknown"
-            if staleness.commits_behind is not None:
-                behind_str = str(staleness.commits_behind)
-            lines.append(Text(f"  Status:   BEHIND ({behind_str} commits) on {staleness.branch}"))
+            # Determine status based on ahead/behind counts
+            behind = staleness.commits_behind or 0
+            ahead = staleness.commits_ahead or 0
+
+            if ahead > 0 and behind > 0:
+                # Diverged
+                status_str = f"DIVERGED ({ahead} ahead, {behind} behind) on {staleness.branch}"
+            elif ahead > 0:
+                # Ahead only
+                status_str = f"AHEAD ({ahead} commits) on {staleness.branch}"
+            else:
+                # Behind only or unknown
+                behind_str = "unknown" if staleness.commits_behind is None else str(behind)
+                status_str = f"BEHIND ({behind_str} commits) on {staleness.branch}"
+
+            lines.append(Text(f"  Status:   {status_str}"))
             upstream_head = staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
             gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
             lines.append(Text(f"  Upstream: {upstream_head}"))

@@ -20,6 +20,7 @@ class GateStalenessInfo:
     upstream_head: str | None
     is_stale: bool
     commits_behind: int | None  # None if couldn't determine
+    commits_ahead: int | None  # None if couldn't determine
     last_checked: str  # ISO timestamp
     error: str | None
 
@@ -358,6 +359,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
+            commits_ahead=None,
             last_checked=now,
             error="Gate not initialized",
         )
@@ -371,6 +373,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
+            commits_ahead=None,
             last_checked=now,
             error="Could not reach upstream",
         )
@@ -378,10 +381,12 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
     upstream_head = upstream_info["commit_hash"]
     is_stale = gate_head != upstream_head
 
-    # Try to count commits behind using git rev-list
+    # Count commits behind and ahead
     commits_behind = None
+    commits_ahead = None
     if is_stale:
         commits_behind = _count_commits_behind(project_id, gate_head, upstream_head)
+        commits_ahead = _count_commits_ahead(project_id, gate_head, upstream_head)
 
     return GateStalenessInfo(
         branch=branch,
@@ -389,6 +394,7 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
         upstream_head=upstream_head,
         is_stale=is_stale,
         commits_behind=commits_behind if is_stale else 0,
+        commits_ahead=commits_ahead if is_stale else 0,
         last_checked=now,
         error=None,
     )
@@ -408,6 +414,30 @@ def _count_commits_behind(project_id: str, local_head: str, remote_head: str) ->
         # This will only work if we've fetched the commits
         # For a stale gate, we may not have remote_head locally
         cmd = ["git", "-C", str(gate_dir), "rev-list", "--count", f"{local_head}..{remote_head}"]
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+
+        if result.returncode == 0:
+            return int(result.stdout.strip())
+        return None
+    except Exception:
+        return None
+
+
+def _count_commits_ahead(project_id: str, local_head: str, remote_head: str) -> int | None:
+    """Count commits that are ahead of upstream (in local but not in remote).
+
+    Uses git rev-list to count commits reachable from local_head but not from remote_head.
+    This represents how many commits the local branch is ahead of the remote.
+
+    Returns None if we can't determine the count.
+    """
+    try:
+        project = load_project(project_id)
+        gate_dir = project.gate_path
+        env = _git_env_with_ssh(project)
+
+        # Count commits in local that are not in remote
+        cmd = ["git", "-C", str(gate_dir), "rev-list", "--count", f"{remote_head}..{local_head}"]
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
         if result.returncode == 0:
