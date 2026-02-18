@@ -1,0 +1,24 @@
+# Gatekeeping project template (Ubuntu base)
+# Security class "gatekeeping": tasks push to a host-side staging repo;
+# a human must review and promote changes to upstream.
+
+project:
+  id: "{{PROJECT_ID}}"
+  security_class: "gatekeeping"
+
+git:
+  upstream_url: "{{UPSTREAM_URL}}"
+  default_branch: "{{DEFAULT_BRANCH}}"
+
+docker:
+  base_image: "ubuntu:24.04"
+  # Optional: extra Dockerfile commands injected into the project image.
+  # Use user_snippet_file to point to an external .dockerinclude file instead.
+  user_snippet_inline: |
+    {{USER_SNIPPET}}
+
+gatekeeping:
+  expose_external_remote: true
+  upstream_polling:
+    enabled: true
+    interval_minutes: 5
