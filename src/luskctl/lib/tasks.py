@@ -476,6 +476,78 @@ def task_delete(project_id: str, task_id: str) -> None:
     _log_debug("task_delete: finished")
 
 
+def _validate_login(project_id: str, task_id: str) -> tuple[str, str]:
+    """Validate that a task exists and its container is running.
+
+    Returns (container_name, mode) on success.
+    Raises SystemExit with actionable messages on failure.
+    """
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+
+    mode = meta.get("mode")
+    if not mode:
+        raise SystemExit(
+            f"Task {task_id} has never been run (no mode set). "
+            f"Start it first via 'luskctl task run-cli {project_id} {task_id}' "
+            f"or 'luskctl task run-web {project_id} {task_id}'."
+        )
+
+    container_name = f"{project.id}-{mode}-{task_id}"
+    state = _get_container_state(container_name)
+    if state is None:
+        raise SystemExit(
+            f"Container {container_name} does not exist. "
+            f"Run 'luskctl task restart {project_id} {task_id}' first."
+        )
+    if state != "running":
+        raise SystemExit(
+            f"Container {container_name} is not running (state: {state}). "
+            f"Run 'luskctl task restart {project_id} {task_id}' first."
+        )
+    return container_name, mode
+
+
+def get_login_command(project_id: str, task_id: str) -> list[str]:
+    """Return the podman exec command to log into a task container.
+
+    Validates the task and container state, then returns the command list
+    for use by TUI/tmux/terminal-spawn paths.
+    """
+    container_name, _mode = _validate_login(project_id, task_id)
+    return [
+        "podman",
+        "exec",
+        "-it",
+        container_name,
+        "tmux",
+        "new-session",
+        "-A",
+        "-s",
+        "main",
+    ]
+
+
+def task_login(project_id: str, task_id: str) -> None:
+    """Open an interactive shell in a running task container.
+
+    Validates the task, then replaces the current process with
+    ``podman exec -it <container> tmux new-session -A -s main``.
+    Raises SystemExit if podman is not found on PATH.
+    """
+    cmd = get_login_command(project_id, task_id)
+    try:
+        os.execvp(cmd[0], cmd)
+    except FileNotFoundError:
+        raise SystemExit(
+            f"'{cmd[0]}' not found on PATH. Please install podman or add it to your PATH."
+        )
+
+
 def task_run_cli(project_id: str, task_id: str) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
@@ -493,7 +565,10 @@ def task_run_cli(project_id: str, task_id: str) -> None:
         color_enabled = _supports_color()
         if container_state == "running":
             print(f"Container {_green(container_name, color_enabled)} is already running.")
-            print(f"Login with: podman exec -it {container_name} bash")
+            login_cmd = f"luskctl login {project.id} {task_id}"
+            raw_cmd = f"podman exec -it {container_name} bash"
+            print(f"Login with: {_blue(login_cmd, color_enabled)}")
+            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
             return
         else:
             # Container exists but is stopped/exited - start it
@@ -515,7 +590,10 @@ def task_run_cli(project_id: str, task_id: str) -> None:
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
             print("Container started.")
-            print(f"Login with: podman exec -it {container_name} bash")
+            login_cmd = f"luskctl login {project.id} {task_id}"
+            raw_cmd = f"podman exec -it {container_name} bash"
+            print(f"Login with: {_blue(login_cmd, color_enabled)}")
+            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
             return
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
@@ -567,13 +645,15 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     color_enabled = _supports_color()
     container_name = f"{project.id}-cli-{task_id}"
-    login_command = f"podman exec -it {container_name} bash"
+    login_cmd = f"luskctl login {project.id} {task_id}"
+    raw_cmd = f"podman exec -it {container_name} bash"
     stop_command = f"podman stop {container_name}"
 
     print(
         "\nCLI container is running in the background."
-        f"\n- Name: {_green(container_name, color_enabled)}"
-        f"\n- To enter: {_blue(login_command, color_enabled)}"
+        f"\n- Name:     {_green(container_name, color_enabled)}"
+        f"\n- To enter: {_blue(login_cmd, color_enabled)}"
+        f"\n  (or:      {_blue(raw_cmd, color_enabled)})"
         f"\n- To stop:  {_red(stop_command, color_enabled)}\n"
     )
 
@@ -826,7 +906,10 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
         color_enabled = _supports_color()
         print(f"Restarted task {task_id}: {_green(container_name, color_enabled)}")
         if mode == "cli":
-            print(f"Login with: podman exec -it {container_name} bash")
+            login_cmd = f"luskctl login {project_id} {task_id}"
+            raw_cmd = f"podman exec -it {container_name} bash"
+            print(f"Login with: {_blue(login_cmd, color_enabled)}")
+            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
         elif mode == "web":
             port = meta.get("web_port")
             if port:

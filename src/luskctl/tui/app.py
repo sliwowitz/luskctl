@@ -47,9 +47,11 @@ if _HAS_TEXTUAL:
     )
     from ..lib.projects import Project as CodexProject
     from ..lib.projects import get_project_state, list_projects, load_project
+    from ..lib.shell_launch import launch_login
     from ..lib.ssh import init_project_ssh
     from ..lib.tasks import (
         WEB_BACKENDS,
+        get_login_command,
         get_tasks,
         get_workspace_git_diff,
         task_delete,
@@ -761,6 +763,8 @@ if _HAS_TEXTUAL:
                 await self.action_copy_diff_head()
             elif action == "diff_prev":
                 await self.action_copy_diff_prev()
+            elif action == "login":
+                await self._action_login()
 
         async def _action_build_agents(self) -> None:
             """Build L0+L1+L2 with fresh agent installs."""
@@ -887,6 +891,44 @@ if _HAS_TEXTUAL:
                     print(f"Error: {e}")
                 input("\n[Press Enter to return to LuskTUI] ")
             await self.refresh_tasks()
+
+        async def _action_login(self) -> None:
+            """Log into the selected task's running container."""
+            if not self.current_project_id or not self.current_task:
+                self.notify("No task selected.")
+                return
+            pid = self.current_project_id
+            tid = self.current_task.task_id
+            try:
+                cmd = get_login_command(pid, tid)
+            except SystemExit as e:
+                self.notify(str(e))
+                return
+
+            mode = self.current_task.mode or "cli"
+            container_name = f"{pid}-{mode}-{tid}"
+            title = f"login:{container_name}"
+
+            method, port = launch_login(cmd, title=title)
+
+            if method == "tmux":
+                self.notify(f"Opened in tmux window: {container_name}")
+            elif method == "terminal":
+                self.notify(f"Opened in new terminal: {container_name}")
+            elif method == "web" and port is not None:
+                self.open_url(f"http://localhost:{port}")
+                self.notify(f"Opened terminal in browser tab: {container_name}")
+            else:
+                # Fallback: suspend TUI
+                with self.suspend():
+                    try:
+                        import subprocess as _sp
+
+                        _sp.run(cmd)
+                    except Exception as e:
+                        print(f"Error: {e}")
+                    input("\n[Press Enter to return to LuskTUI] ")
+                await self.refresh_tasks()
 
         async def _action_sync_gate(self) -> None:
             """Sync gate (init if doesn't exist, sync if exists)."""
@@ -1089,7 +1131,75 @@ if _HAS_TEXTUAL:
             """Delete the selected task from the main screen."""
             await self.action_delete_task()
 
+        async def action_login_from_main(self) -> None:
+            """Login to the selected task from the main screen."""
+            await self._action_login()
+
+    def _launch_in_tmux() -> None:
+        """Launch the TUI inside a managed tmux session.
+
+        If already inside tmux, just run the TUI directly.
+        Otherwise, verify that tmux is installed and exec into it with the
+        luskctl host config (blue status bar, usage hints).  Exits with an
+        actionable error message if tmux is not found on ``$PATH``.
+        """
+        if os.environ.get("TMUX"):
+            # Already inside tmux — no double-wrap
+            LuskTUI().run()
+            return
+
+        import shutil
+
+        if not shutil.which("tmux"):
+            print(
+                "Error: tmux is not installed.\n"
+                "Install it (e.g. 'apt install tmux' or 'brew install tmux') "
+                "and try again,\nor run 'luskctl-tui' without --tmux.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        from importlib import resources as _res
+
+        tmux_conf = _res.files("luskctl") / "resources" / "tmux" / "host-tmux.conf"
+        # Materialise the resource to a real file path for tmux -f.
+        # Note: os.execvp replaces this process so the context manager's
+        # __exit__ never runs.  This is fine — tmux reads the config file
+        # at startup, and OS process cleanup handles any temp resources.
+        with _res.as_file(tmux_conf) as conf_path:
+            os.execvp(
+                "tmux",
+                [
+                    "tmux",
+                    "-f",
+                    str(conf_path),
+                    "new-session",
+                    "-s",
+                    "luskctl",
+                    "luskctl-tui",
+                ],
+            )
+
     def main() -> None:
+        """CLI entry-point for launching the luskctl TUI.
+
+        Supports ``--tmux`` to wrap the TUI in a managed host tmux session
+        (blue status bar, login windows as extra tmux windows).  Without the
+        flag the TUI runs directly in the current terminal.
+        """
+        import argparse
+
+        parser = argparse.ArgumentParser(prog="luskctl-tui")
+        parser.add_argument(
+            "--tmux",
+            action="store_true",
+            help="Launch TUI inside a managed tmux session",
+        )
+        args = parser.parse_args()
+
+        if args.tmux:
+            _launch_in_tmux()
+            return
         LuskTUI().run()
 
 else:

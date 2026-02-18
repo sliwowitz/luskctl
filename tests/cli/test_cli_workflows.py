@@ -108,3 +108,12 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_init.assert_called_once_with("myproj")
+
+    @unittest.mock.patch("luskctl.cli.main.task_login")
+    def test_login_dispatch(self, mock_login) -> None:
+        from luskctl.cli.main import main
+
+        with unittest.mock.patch("sys.argv", ["luskctl", "login", "proj1", "1"]):
+            main()
+
+        mock_login.assert_called_once_with("proj1", "1")
