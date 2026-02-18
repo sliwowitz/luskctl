@@ -57,12 +57,13 @@ def get_project_state(project_id: str) -> dict:
                 ["podman", "image", "exists", tag],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             if result.returncode != 0:
                 ok = False
                 break
         has_images = ok
-    except (FileNotFoundError, OSError):  # podman missing or not usable
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         has_images = False
 
     dockerfiles_old = False
