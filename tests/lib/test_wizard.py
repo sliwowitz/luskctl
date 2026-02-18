@@ -8,6 +8,7 @@ from luskctl.lib.wizard import (
     _validate_project_id,
     collect_wizard_inputs,
     generate_config,
+    run_wizard,
 )
 
 
@@ -222,6 +223,107 @@ class GenerateConfigTests(unittest.TestCase):
                     self.assertNotIn("{{UPSTREAM_URL}}", content)
                     self.assertNotIn("{{DEFAULT_BRANCH}}", content)
                     self.assertNotIn("{{USER_SNIPPET}}", content)
+
+
+class RunWizardTests(unittest.TestCase):
+    """Tests for run_wizard() orchestration."""
+
+    @unittest.mock.patch("luskctl.lib.wizard.open_in_editor", return_value=True)
+    @unittest.mock.patch("luskctl.lib.wizard.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizard.collect_wizard_inputs")
+    def test_run_wizard_with_edit_and_init(
+        self,
+        mock_collect: unittest.mock.Mock,
+        mock_generate: unittest.mock.Mock,
+        mock_editor: unittest.mock.Mock,
+    ) -> None:
+        mock_collect.return_value = {
+            "template_index": 0,
+            "project_id": "proj1",
+            "upstream_url": "https://x.com/r.git",
+            "default_branch": "main",
+            "user_snippet": "",
+        }
+        mock_generate.return_value = Path("/tmp/proj1/project.yml")
+        mock_init = unittest.mock.Mock()
+
+        with unittest.mock.patch("builtins.input", side_effect=["y", "y"]):
+            result = run_wizard(init_fn=mock_init)
+
+        self.assertEqual(result, Path("/tmp/proj1/project.yml"))
+        mock_editor.assert_called_once()
+        mock_init.assert_called_once_with("proj1")
+
+    @unittest.mock.patch("luskctl.lib.wizard.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizard.collect_wizard_inputs")
+    def test_run_wizard_skip_edit_and_init(
+        self,
+        mock_collect: unittest.mock.Mock,
+        mock_generate: unittest.mock.Mock,
+    ) -> None:
+        mock_collect.return_value = {
+            "template_index": 0,
+            "project_id": "proj2",
+            "upstream_url": "https://x.com/r.git",
+            "default_branch": "main",
+            "user_snippet": "",
+        }
+        mock_generate.return_value = Path("/tmp/proj2/project.yml")
+        mock_init = unittest.mock.Mock()
+
+        with unittest.mock.patch("builtins.input", side_effect=["n", "n"]):
+            result = run_wizard(init_fn=mock_init)
+
+        self.assertEqual(result, Path("/tmp/proj2/project.yml"))
+        mock_init.assert_not_called()
+
+    @unittest.mock.patch("luskctl.lib.wizard.collect_wizard_inputs", return_value=None)
+    def test_run_wizard_cancellation_returns_none(self, _collect: unittest.mock.Mock) -> None:
+        result = run_wizard()
+        self.assertIsNone(result)
+
+    @unittest.mock.patch("luskctl.lib.wizard.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizard.collect_wizard_inputs")
+    def test_run_wizard_no_init_fn(
+        self,
+        mock_collect: unittest.mock.Mock,
+        mock_generate: unittest.mock.Mock,
+    ) -> None:
+        mock_collect.return_value = {
+            "template_index": 0,
+            "project_id": "proj3",
+            "upstream_url": "https://x.com/r.git",
+            "default_branch": "main",
+            "user_snippet": "",
+        }
+        mock_generate.return_value = Path("/tmp/proj3/project.yml")
+
+        with unittest.mock.patch("builtins.input", side_effect=["n"]):
+            result = run_wizard()
+
+        self.assertIsNotNone(result)
+
+    @unittest.mock.patch("luskctl.lib.wizard.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizard.collect_wizard_inputs")
+    def test_run_wizard_ctrl_c_after_generate(
+        self,
+        mock_collect: unittest.mock.Mock,
+        mock_generate: unittest.mock.Mock,
+    ) -> None:
+        mock_collect.return_value = {
+            "template_index": 0,
+            "project_id": "proj4",
+            "upstream_url": "https://x.com/r.git",
+            "default_branch": "main",
+            "user_snippet": "",
+        }
+        mock_generate.return_value = Path("/tmp/proj4/project.yml")
+
+        with unittest.mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            result = run_wizard()
+
+        # Config was generated, so path is returned even if post-steps cancelled
+        self.assertIsNotNone(result)
 
 
 if __name__ == "__main__":

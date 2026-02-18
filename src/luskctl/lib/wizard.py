@@ -167,8 +167,12 @@ def generate_config(values: dict) -> Path:
     return config_path
 
 
-def run_wizard() -> Path | None:
+def run_wizard(init_fn=None) -> Path | None:
     """Top-level wizard entry point called by the CLI.
+
+    *init_fn* is an optional callable accepting a project ID string that
+    performs project initialisation (ssh-init, generate, build, gate-sync).
+    When ``None`` (the default), no automatic initialisation is offered.
 
     Returns the path to the generated config file, or ``None`` on cancellation.
     """
@@ -178,6 +182,25 @@ def run_wizard() -> Path | None:
         return None
 
     config_path = generate_config(values)
+    project_id = values["project_id"]
     print(f"\nProject configuration created: {config_path}")
-    print(f"Next step: luskctl project-init {values['project_id']}")
+
+    try:
+        # Offer to edit the generated config before setup
+        edit_answer = input("Edit configuration file before setup? [Y/n]: ").strip().lower()
+        if edit_answer not in ("n", "no"):
+            open_in_editor(config_path)
+
+        # Offer to run project-init if a handler was provided
+        if init_fn is not None:
+            init_answer = input("Run project initialization? [Y/n]: ").strip().lower()
+            if init_answer not in ("n", "no"):
+                init_fn(project_id)
+                print(f"\nProject '{project_id}' is ready.")
+                return config_path
+
+        print(f"Next step: luskctl project-init {project_id}")
+    except (KeyboardInterrupt, EOFError):
+        print(f"\nSkipped. Run manually: luskctl project-init {project_id}")
+
     return config_path

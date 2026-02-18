@@ -556,7 +556,7 @@ def main() -> None:
     elif args.cmd == "project-init":
         _cmd_project_init(args.project_id)
     elif args.cmd == "project-wizard":
-        run_wizard()
+        run_wizard(init_fn=_cmd_project_init)
     elif args.cmd == "auth-codex":
         codex_auth(args.project_id)
     elif args.cmd == "auth-mistral":
