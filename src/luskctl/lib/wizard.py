@@ -3,9 +3,13 @@
 import re
 import sys
 import tempfile
+from importlib import resources
 from pathlib import Path
 
+from .config import user_projects_root
 from .editor import open_in_editor
+from .fs import _ensure_dir_writable
+from .template_utils import render_template
 
 # Template variants: (label, filename)
 TEMPLATES: list[tuple[str, str]] = [
@@ -16,6 +20,8 @@ TEMPLATES: list[tuple[str, str]] = [
 ]
 
 _PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+_TEMPLATE_DIR = resources.files("luskctl") / "resources" / "templates" / "projects"
 
 
 def _validate_project_id(project_id: str) -> str | None:
@@ -129,10 +135,44 @@ def collect_wizard_inputs() -> dict | None:
         return None
 
 
-def run_wizard() -> None:
-    """Top-level wizard entry point called by the CLI."""
+def generate_config(values: dict) -> Path:
+    """Render the chosen template and write ``project.yml``.
+
+    *values* is the dict returned by :func:`collect_wizard_inputs`.
+    Returns the path to the created ``project.yml`` file.
+    """
+    _label, filename = TEMPLATES[values["template_index"]]
+    template_path = Path(str(_TEMPLATE_DIR / filename))
+
+    rendered = render_template(
+        template_path,
+        {
+            "PROJECT_ID": values["project_id"],
+            "UPSTREAM_URL": values["upstream_url"],
+            "DEFAULT_BRANCH": values["default_branch"],
+            "USER_SNIPPET": values["user_snippet"],
+        },
+    )
+
+    project_dir = user_projects_root() / values["project_id"]
+    _ensure_dir_writable(project_dir, "Project")
+
+    config_path = project_dir / "project.yml"
+    config_path.write_text(rendered, encoding="utf-8")
+    return config_path
+
+
+def run_wizard() -> Path | None:
+    """Top-level wizard entry point called by the CLI.
+
+    Returns the path to the generated config file, or ``None`` on cancellation.
+    """
     print("=== luskctl project wizard ===")
     values = collect_wizard_inputs()
     if values is None:
-        return
-    print(f"\nCollected configuration for project '{values['project_id']}'.")
+        return None
+
+    config_path = generate_config(values)
+    print(f"\nProject configuration created: {config_path}")
+    print(f"Next step: luskctl project-init {values['project_id']}")
+    return config_path
