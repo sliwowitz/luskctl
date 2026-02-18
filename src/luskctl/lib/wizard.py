@@ -150,17 +150,18 @@ def generate_config(values: dict) -> Path:
     Returns the path to the created ``project.yml`` file.
     """
     _label, filename = TEMPLATES[values["template_index"]]
-    template_path = Path(str(_TEMPLATE_DIR / filename))
+    traversable = _TEMPLATE_DIR / filename
 
-    rendered = render_template(
-        template_path,
-        {
-            "PROJECT_ID": values["project_id"],
-            "UPSTREAM_URL": values["upstream_url"],
-            "DEFAULT_BRANCH": values["default_branch"],
-            "USER_SNIPPET": values["user_snippet"],
-        },
-    )
+    with resources.as_file(traversable) as template_path:
+        rendered = render_template(
+            template_path,
+            {
+                "PROJECT_ID": values["project_id"],
+                "UPSTREAM_URL": values["upstream_url"],
+                "DEFAULT_BRANCH": values["default_branch"],
+                "USER_SNIPPET": values["user_snippet"],
+            },
+        )
 
     project_dir = user_projects_root() / values["project_id"]
     _ensure_dir_writable(project_dir, "Project")
@@ -192,7 +193,11 @@ def run_wizard(init_fn: Callable[[str], None] | None = None) -> Path | None:
         # Offer to edit the generated config before setup
         edit_answer = input("Edit configuration file before setup? [Y/n]: ").strip().lower()
         if edit_answer not in ("n", "no"):
-            open_in_editor(config_path)
+            if not open_in_editor(config_path):
+                print(
+                    f"Warning: could not open editor — edit file manually: {config_path}",
+                    file=sys.stderr,
+                )
 
         # Offer to run project-init if a handler was provided
         if init_fn is not None:
