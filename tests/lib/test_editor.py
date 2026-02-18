@@ -8,13 +8,15 @@ from pathlib import Path
 from luskctl.lib.editor import _resolve_editor, open_in_editor
 
 
+def _only_custom_editor(cmd: str) -> str | None:
+    return cmd if cmd == "/usr/bin/custom-editor" else None
+
+
 class ResolveEditorTests(unittest.TestCase):
     """Tests for _resolve_editor()."""
 
     @unittest.mock.patch.dict("os.environ", {"EDITOR": "/usr/bin/custom-editor"})
-    @unittest.mock.patch(
-        "shutil.which", side_effect=lambda cmd: cmd if cmd == "/usr/bin/custom-editor" else None
-    )
+    @unittest.mock.patch("shutil.which", side_effect=_only_custom_editor)
     def test_prefers_editor_env_var(self, _which: unittest.mock.Mock) -> None:
         self.assertEqual(_resolve_editor(), "/usr/bin/custom-editor")
 

@@ -1,10 +1,11 @@
 import unittest
 from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from luskctl.lib.template_utils import render_template
 
-TEMPLATE_DIR: Path = resources.files("luskctl") / "resources" / "templates" / "projects"
+TEMPLATE_DIR: Traversable = resources.files("luskctl") / "resources" / "templates" / "projects"
 
 EXPECTED_TEMPLATES: list[str] = [
     "online-ubuntu.yml",
