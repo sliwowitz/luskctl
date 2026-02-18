@@ -16,6 +16,85 @@ def is_inside_tmux() -> bool:
     return bool(os.environ.get("TMUX"))
 
 
+def is_inside_gnome_terminal() -> bool:
+    """Return True if the current process is running inside GNOME Terminal.
+
+    Checks multiple methods for detection:
+    1. TERM_PROGRAM environment variable
+    2. GNOME_TERMINAL_SERVICE environment variable
+    3. Parent process name (fallback only if above are not set)
+    """
+    if os.environ.get("TERM_PROGRAM") == "gnome-terminal":
+        return True
+    if os.environ.get("GNOME_TERMINAL_SERVICE"):
+        return True
+    if os.environ.get("TERM_PROGRAM"):
+        return False
+    return _parent_process_has_name("gnome-terminal")
+
+
+def is_inside_konsole() -> bool:
+    """Return True if the current process is running inside Konsole.
+
+    Checks multiple methods for detection:
+    1. TERM_PROGRAM environment variable
+    2. Parent process name (fallback only if TERM_PROGRAM is not set)
+    """
+    if os.environ.get("TERM_PROGRAM") == "konsole":
+        return True
+    if os.environ.get("TERM_PROGRAM"):
+        return False
+    return _parent_process_has_name("konsole")
+
+
+def _parent_process_has_name(name: str) -> bool:
+    """Check if any parent process has the given name."""
+    try:
+        pid = os.getppid()
+        result = subprocess.run(
+            ["ps", "-o", "comm=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        if result.returncode == 0:
+            proc_name = result.stdout.strip()
+            if proc_name == name:
+                return True
+        for _ in range(3):
+            result = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            if result.returncode != 0:
+                return False
+            ppid_str = result.stdout.strip()
+            if not ppid_str:
+                return False
+            if ppid_str == "1":
+                return False
+            try:
+                pid = int(ppid_str)
+            except ValueError:
+                return False
+            result = subprocess.run(
+                ["ps", "-o", "comm=", "-p", str(pid)],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            if result.returncode != 0:
+                return False
+            proc_name = result.stdout.strip()
+            if proc_name == name:
+                return True
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+        pass
+    return False
+
+
 def tmux_new_window(command: list[str], title: str | None = None) -> bool:
     """Open a new tmux window running the given command.
 
@@ -34,46 +113,39 @@ def tmux_new_window(command: list[str], title: str | None = None) -> bool:
         return False
 
 
-def detect_terminal_emulator() -> str | None:
-    """Detect an available graphical terminal emulator.
+def spawn_terminal_with_command(command: list[str], title: str | None = None) -> bool:
+    """Spawn a new terminal tab running the given command.
 
-    Returns the name of the first available terminal emulator found,
-    or None if no supported terminal is available.  Currently supports
-    gnome-terminal (GNOME) and konsole (KDE).
+    Only spawns if already running inside a supported terminal emulator.
+    Opens a new tab in the existing window.
+
+    Returns True if the terminal was spawned, False if not running inside
+    a supported terminal or if the spawn failed.
     """
-    candidates = ["gnome-terminal", "konsole"]
-    for name in candidates:
-        if shutil.which(name):
-            return name
-    return None
-
-
-def spawn_terminal_with_command(command: list[str]) -> bool:
-    """Spawn a new terminal window running the given command.
-
-    Returns True if the terminal was spawned, False if no terminal
-    emulator was found or if the spawn failed.
-    """
-    terminal = detect_terminal_emulator()
-    if not terminal:
-        return False
-
     shell_cmd = " ".join(shlex.quote(c) for c in command)
 
     try:
-        if terminal == "gnome-terminal":
+        if is_inside_gnome_terminal():
+            args = ["--tab"]
+            if title:
+                args.extend(["--title", title])
+            args.extend(["--", "bash", "-c", shell_cmd + "; exec bash"])
             subprocess.Popen(
-                ["gnome-terminal", "--", "bash", "-c", shell_cmd + "; exec bash"],
+                ["gnome-terminal"] + args,
                 start_new_session=True,
             )
-        elif terminal == "konsole":
+            return True
+        if is_inside_konsole():
+            args = ["--new-tab"]
+            if title:
+                args.extend(["--title", title])
+            args.extend(["-e", "bash", "-c", shell_cmd + "; exec bash"])
             subprocess.Popen(
-                ["konsole", "-e", "bash", "-c", shell_cmd + "; exec bash"],
+                ["konsole"] + args,
                 start_new_session=True,
             )
-        else:
-            return False
-        return True
+            return True
+        return False
     except (FileNotFoundError, OSError):
         return False
 
@@ -136,7 +208,7 @@ def launch_login(
             return ("tmux", None)
 
     if not is_web_mode():
-        if spawn_terminal_with_command(command):
+        if spawn_terminal_with_command(command, title=title):
             return ("terminal", None)
 
     if is_web_mode():
