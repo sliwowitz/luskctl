@@ -16,9 +16,8 @@ from luskctl.lib.clipboard import (
 )
 from luskctl.lib.containers import _get_container_state, get_task_container_state
 from luskctl.lib.projects import load_project
+from luskctl.lib.task_env import _apply_web_env_overrides, _build_task_env_and_volumes
 from luskctl.lib.tasks import (
-    _apply_web_env_overrides,
-    _build_task_env_and_volumes,
     get_login_command,
     get_workspace_git_diff,
     task_delete,

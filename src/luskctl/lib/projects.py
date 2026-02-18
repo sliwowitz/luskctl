@@ -1,6 +1,5 @@
 import subprocess
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -8,14 +7,12 @@ import yaml  # pip install pyyaml
 from .config import (
     build_root,
     config_root,
-    get_envs_base_dir,
     get_global_default_agent,
     get_global_human_email,
     get_global_human_name,
     state_root,
     user_projects_root,
 )
-from .images import project_cli_image, project_web_image
 
 
 def _get_global_git_config(key: str) -> str | None:
@@ -243,189 +240,3 @@ def load_project(project_id: str) -> Project:
         default_agent=default_agent,
     )
     return p
-
-
-# ---------- Project state helpers ----------
-
-
-def get_project_state(project_id: str) -> dict:
-    """Return a summary of per-project infrastructure state.
-
-    The resulting dict contains boolean flags that can be used by UIs
-    (including the TUI) to give a quick overview of the project:
-
-    - ``dockerfiles`` - True if all required Dockerfiles (L0, L1.cli, L1.ui, L2) exist
-      under the build root for this project.
-    - ``images`` - True if podman reports that images ``<id>:l2-cli``
-      and ``<id>:l2-ui`` exist.
-    - ``ssh`` - True if the project SSH directory exists and contains
-      a ``config`` file.
-    - ``gate`` - True if the project's git gate directory exists.
-    - ``gate_last_commit`` - Dict with commit info if gate exists, None otherwise.
-    """
-
-    project = load_project(project_id)
-
-    # Dockerfiles: look in the same location generate_dockerfiles writes to.
-    stage_dir = build_root() / project.id
-    dockerfiles = [
-        stage_dir / "L0.Dockerfile",
-        stage_dir / "L1.cli.Dockerfile",
-        stage_dir / "L1.ui.Dockerfile",
-        stage_dir / "L2.Dockerfile",
-    ]
-    has_dockerfiles = all(p.is_file() for p in dockerfiles)
-
-    # Images: rely on podman image tags created by build_images().
-    has_images = False
-    try:
-        required_tags = [
-            project_cli_image(project.id),
-            project_web_image(project.id),
-        ]
-        ok = True
-        for tag in required_tags:
-            # ``podman image exists`` exits with 0 when the image is present.
-            result = subprocess.run(
-                ["podman", "image", "exists", tag],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            if result.returncode != 0:
-                ok = False
-                break
-        has_images = ok
-    except (FileNotFoundError, OSError):  # podman missing or not usable
-        has_images = False
-
-    dockerfiles_old = False
-    if has_dockerfiles:
-        try:
-            from .docker import dockerfiles_match_templates
-
-            dockerfiles_old = not dockerfiles_match_templates(project_id)
-        except Exception:
-            dockerfiles_old = False
-
-    images_old = False
-    if has_images and has_dockerfiles:
-        if dockerfiles_old:
-            images_old = True
-        else:
-            docker_mtime = None
-            try:
-                docker_mtime = max(p.stat().st_mtime for p in dockerfiles if p.is_file())
-            except Exception:
-                docker_mtime = None
-
-            context_hash = None
-            try:
-                from .docker import build_context_hash
-
-                context_hash = build_context_hash(project_id)
-            except Exception:
-                context_hash = None
-
-            if docker_mtime is not None or context_hash is not None:
-                docker_dt = (
-                    datetime.fromtimestamp(docker_mtime, tz=UTC)
-                    if docker_mtime is not None
-                    else None
-                )
-                for tag in required_tags:
-                    created, label = _get_image_metadata(tag, "luskctl.build_context_hash")
-                    if created is None and label is None:
-                        images_old = True
-                        break
-                    if docker_dt is not None and created is not None and created < docker_dt:
-                        images_old = True
-                        break
-                    if context_hash is not None:
-                        if label is None or label != context_hash:
-                            images_old = True
-                            break
-
-    # SSH: same resolution logic as init_project_ssh(). Consider SSH
-    # "ready" when the directory and its config file exist.
-    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
-    ssh_dir = Path(ssh_dir).expanduser().resolve()
-    has_ssh = ssh_dir.is_dir() and (ssh_dir / "config").is_file()
-
-    # Gate: a mirror bare repo initialized by sync_project_gate(). We
-    # treat existence of the directory as "gate present".
-    gate_dir = project.gate_path
-    has_gate = gate_dir.is_dir()
-
-    # Get gate commit info if gate exists
-    gate_last_commit = None
-    if has_gate:
-        # Import here to avoid circular import
-        from .git_gate import get_gate_last_commit
-
-        gate_last_commit = get_gate_last_commit(project_id)
-
-    return {
-        "dockerfiles": has_dockerfiles,
-        "dockerfiles_old": dockerfiles_old,
-        "images": has_images,
-        "images_old": images_old,
-        "ssh": has_ssh,
-        "gate": has_gate,
-        "gate_last_commit": gate_last_commit,
-    }
-
-
-def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str | None]:
-    try:
-        result = subprocess.run(
-            [
-                "podman",
-                "image",
-                "inspect",
-                "--format",
-                f'{{{{.Created}}}}\\t{{{{index .Config.Labels "{label_key}"}}}}',
-                tag,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return None, None
-    if result.returncode != 0:
-        return None, None
-    created_raw, _, label_raw = result.stdout.partition("\t")
-    label = label_raw.strip() or None
-    if label == "<no value>":
-        label = None
-    return _parse_podman_created(created_raw), label
-
-
-def _parse_podman_created(value: str) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    value = value.strip()
-    if not value:
-        return None
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    if "." in value:
-        head, tail = value.split(".", 1)
-        tz_sep = None
-        for sep in ("+", "-"):
-            idx = tail.find(sep)
-            if idx != -1:
-                tz_sep = idx
-                break
-        if tz_sep is None:
-            frac = tail
-            tz = ""
-        else:
-            frac = tail[:tz_sep]
-            tz = tail[tz_sep:]
-        frac = (frac[:6]).ljust(6, "0")
-        value = f"{head}.{frac}{tz}"
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return None
