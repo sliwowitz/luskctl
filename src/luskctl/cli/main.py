@@ -54,6 +54,7 @@ from ..lib.terminal import supports_color as _supports_color
 from ..lib.terminal import violet as _violet
 from ..lib.terminal import yes_no as _yes_no
 from ..lib.version import format_version_string, get_version_info
+from ..lib.wizard import run_wizard
 
 # Optional: bash completion via argcomplete
 try:
@@ -334,6 +335,12 @@ def main() -> None:
     except Exception:
         pass
 
+    # project-wizard
+    sub.add_parser(
+        "project-wizard",
+        help="Interactive wizard to create a new project configuration",
+    )
+
     # auth-codex
     p_auth_codex = sub.add_parser(
         "auth-codex",
@@ -548,6 +555,8 @@ def main() -> None:
         )
     elif args.cmd == "project-init":
         _cmd_project_init(args.project_id)
+    elif args.cmd == "project-wizard":
+        run_wizard()
     elif args.cmd == "auth-codex":
         codex_auth(args.project_id)
     elif args.cmd == "auth-mistral":
