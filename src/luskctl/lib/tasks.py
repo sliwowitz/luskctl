@@ -739,21 +739,37 @@ def task_run_headless(
 def task_login_claude(project_id: str, task_id: str, config_path: str | None = None) -> None:
     """Exec into a running task container and start Claude interactively.
 
-    If a config_path is provided, copies it to the task's agent-config dir
-    (which should already be mounted in the container).
+    If a config_path is provided, copies it into the running container so
+    that start-claude.sh can see it.
     """
-    project = load_project(project_id)
-    container_name, _mode = _validate_login(project_id, task_id)
+    container_name, mode = _validate_login(project_id, task_id)
 
-    # If config provided, copy to agent-config dir
+    # start-claude.sh is only available in CLI and run mode containers
+    if mode not in ("cli", "run"):
+        raise SystemExit(
+            f"login-claude requires a CLI or run task container. "
+            f"Task {task_id} is running in '{mode}' mode, which does not include start-claude.sh. "
+            f"Use 'luskctl task run-cli {project_id} {task_id}' to start a CLI container."
+        )
+
+    # If config provided, copy it directly into the running container
     if config_path:
-        task_dir = project.tasks_root / str(task_id)
-        agent_config_dir = task_dir / "agent-config"
-        agent_config_dir.mkdir(parents=True, exist_ok=True)
         config_src = Path(config_path)
         if not config_src.is_file():
             raise SystemExit(f"Agent config file not found: {config_path}")
-        shutil.copy2(config_src, agent_config_dir / "agent-config.json")
+
+        # Place the config where start-claude.sh expects it inside the container.
+        # This avoids relying on a volume mount that may not exist for all task modes.
+        dest_in_container = f"{container_name}:/home/dev/.luskctl/agent-config.json"
+        cp_cmd = ["podman", "cp", str(config_src), dest_in_container]
+        try:
+            subprocess.run(cp_cmd, check=True)
+        except FileNotFoundError:
+            raise SystemExit(
+                f"'{cp_cmd[0]}' not found on PATH. Please install podman or add it to your PATH."
+            )
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"Failed to copy agent config into container '{container_name}': {e}")
 
     cmd = [
         "podman",
