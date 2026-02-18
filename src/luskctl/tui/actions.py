@@ -11,6 +11,7 @@ The mixin accesses ``self`` attributes defined by ``LuskTUI.__init__``
 
 import os
 import subprocess
+import sys
 
 from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
 from ..lib.clipboard import copy_to_clipboard_detailed
@@ -447,6 +448,24 @@ class ActionsMixin:
         except Exception as e:
             if project_id == self.current_project_id:
                 self.notify(f"Gate operation error: {e}")
+
+    # --- Project wizard ---
+
+    async def action_new_project_wizard(self) -> None:
+        """Launch the CLI project wizard in a suspended terminal."""
+        with self.suspend():
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "luskctl.cli.main", "project-wizard"],
+                    check=False,
+                )
+                if result.returncode != 0:
+                    print(f"Wizard exited with code {result.returncode}")
+            except Exception as e:
+                print(f"Error: {e}")
+            input("\n[Press Enter to return to LuskTUI] ")
+        await self.refresh_projects()
+        self.notify("Project list refreshed.")
 
     # --- Main-screen task pane shortcuts (c/w/d) ---
 
