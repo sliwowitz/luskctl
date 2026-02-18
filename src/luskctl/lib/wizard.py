@@ -87,13 +87,25 @@ def _prompt_docker_snippet() -> str:
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    # Strip comment-only preamble that the user didn't edit
-    lines: list[str] = []
-    for line in content.splitlines():
-        stripped = line.strip()
+    # Strip comment-only preamble that the user didn't edit, but preserve
+    # the original structure (including indentation and internal comments)
+    raw_lines = content.splitlines()
+
+    # Skip leading blank or comment-only lines (the boilerplate preamble)
+    start_idx = 0
+    while start_idx < len(raw_lines):
+        stripped = raw_lines[start_idx].strip()
         if stripped and not stripped.startswith("#"):
-            lines.append(line)
-    return "\n".join(lines)
+            break
+        start_idx += 1
+
+    trimmed = raw_lines[start_idx:]
+
+    # Optionally strip trailing blank lines to avoid meaningless whitespace
+    while trimmed and not trimmed[-1].strip():
+        trimmed.pop()
+
+    return "\n".join(trimmed)
 
 
 def collect_wizard_inputs() -> dict | None:
@@ -167,6 +179,24 @@ def generate_config(values: dict) -> Path:
     _ensure_dir_writable(project_dir, "Project")
 
     config_path = project_dir / "project.yml"
+
+    if config_path.exists():
+        while True:
+            answer = (
+                input(
+                    f"Configuration for project '{values['project_id']}' already exists "
+                    f"at {config_path}. Overwrite? [y/N]: "
+                )
+                .strip()
+                .lower()
+            )
+            if answer in ("", "n", "no"):
+                print("Keeping existing configuration; no file was overwritten.")
+                return config_path
+            if answer in ("y", "yes"):
+                break
+            print("Please answer 'y' or 'n'.")
+
     config_path.write_text(rendered, encoding="utf-8")
     return config_path
 

@@ -4,15 +4,11 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from luskctl.lib.template_utils import render_template
+from luskctl.lib.wizard import TEMPLATES as WIZARD_TEMPLATES
 
 TEMPLATE_DIR: Traversable = resources.files("luskctl") / "resources" / "templates" / "projects"
 
-EXPECTED_TEMPLATES: list[str] = [
-    "online-ubuntu.yml",
-    "online-nvidia.yml",
-    "gatekeeping-ubuntu.yml",
-    "gatekeeping-nvidia.yml",
-]
+EXPECTED_TEMPLATES: list[str] = [filename for _label, filename in WIZARD_TEMPLATES]
 
 REQUIRED_PLACEHOLDERS: list[str] = [
     "{{PROJECT_ID}}",
