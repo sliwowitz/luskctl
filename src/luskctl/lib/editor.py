@@ -27,7 +27,11 @@ def open_in_editor(file_path: Path) -> bool:
         return False
 
     try:
-        subprocess.run([editor, str(file_path)], check=True)  # noqa: S603
+        # Handle editors with arguments (e.g., "nano -w")
+        import shlex
+
+        cmd = shlex.split(editor) + [str(file_path)]
+        subprocess.run(cmd, check=True)  # noqa: S603
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
     return True
@@ -36,8 +40,12 @@ def open_in_editor(file_path: Path) -> bool:
 def _resolve_editor() -> str | None:
     """Return the first available editor command, or *None*."""
     env_editor = os.environ.get("EDITOR", "").strip()
-    if env_editor and shutil.which(env_editor):
-        return env_editor
+    if env_editor:
+        # Handle EDITOR with arguments (e.g., "nano -w")
+        # Only validate the first token (the actual command)
+        editor_cmd = env_editor.split()[0]
+        if shutil.which(editor_cmd):
+            return env_editor
 
     for fallback in ("nano", "vi"):
         if shutil.which(fallback):
