@@ -1,0 +1,56 @@
+"""Web port allocation for task containers.
+
+Scans existing task metadata to find used ports and allocates the next
+free port starting from the configured UI base port.
+"""
+
+import socket
+
+import yaml
+
+from .config import get_ui_base_port, state_root
+
+
+def _is_port_free(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def _collect_all_web_ports() -> set[int]:
+    # Scan all task metas for any project
+    root = state_root() / "projects"
+    ports: set[int] = set()
+    if not root.is_dir():
+        return ports
+    for proj_dir in root.iterdir():
+        tdir = proj_dir / "tasks"
+        if not tdir.is_dir():
+            continue
+        for f in tdir.glob("*.yml"):
+            try:
+                meta = yaml.safe_load(f.read_text()) or {}
+            except Exception:
+                continue
+            port = meta.get("web_port")
+            if isinstance(port, int):
+                ports.add(port)
+    return ports
+
+
+def _assign_web_port() -> int:
+    used = _collect_all_web_ports()
+    base = get_ui_base_port()
+    port = base
+    max_tries = 200
+    tries = 0
+    while tries < max_tries:
+        if port not in used and _is_port_free(port):
+            return port
+        port += 1
+        tries += 1
+    raise SystemExit("No free web ports available")

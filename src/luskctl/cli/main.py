@@ -34,8 +34,11 @@ from ..lib.docker import build_images, generate_dockerfiles
 from ..lib.git_gate import sync_project_gate
 from ..lib.projects import list_projects
 from ..lib.ssh import init_project_ssh
+from ..lib.task_env import WEB_BACKENDS
 from ..lib.tasks import (
-    WEB_BACKENDS,
+    get_tasks as _get_tasks,
+)
+from ..lib.tasks import (
     task_delete,
     task_list,
     task_login,
@@ -45,9 +48,6 @@ from ..lib.tasks import (
     task_run_web,
     task_status,
     task_stop,
-)
-from ..lib.tasks import (
-    get_tasks as _get_tasks,
 )
 from ..lib.terminal import gray as _gray
 from ..lib.terminal import supports_color as _supports_color

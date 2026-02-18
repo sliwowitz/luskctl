@@ -5,7 +5,8 @@ import unittest.mock
 from pathlib import Path
 
 from luskctl.lib.config import build_root, state_root
-from luskctl.lib.projects import get_project_state, list_projects, load_project
+from luskctl.lib.project_state import get_project_state
+from luskctl.lib.projects import list_projects, load_project
 from test_utils import write_project
 
 
