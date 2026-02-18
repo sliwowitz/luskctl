@@ -38,7 +38,7 @@ Create separate config directories per task, with authentication files copied fr
 #### Architecture
 
 ```
-/var/lib/luskctl/envs/
+~/.local/share/luskctl/envs/ (or /var/lib/luskctl/envs/ if root)
 ├── _claude-config/                    # Global auth (source of truth)
 │   ├── .credentials.json
 │   └── settings.json
@@ -128,7 +128,7 @@ Track context file creation from within the container, writing the mapping to a 
 #### Architecture
 
 ```
-/var/lib/luskctl/envs/
+~/.local/share/luskctl/envs/ (or /var/lib/luskctl/envs/ if root)
 └── _claude-config/                    # Shared (unchanged)
     └── projects/-workspace/           # All sessions live here
         ├── abc123.jsonl               # Created by task 1

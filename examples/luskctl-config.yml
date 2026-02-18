@@ -18,9 +18,9 @@ envs:
   #   - <base_dir>/_codex-config         → /home/dev/.codex  (rw)
   #   - <base_dir>/_claude-config        → /home/dev/.claude (rw)
   #   - <base_dir>/_ssh-config-<project> → /home/dev/.ssh    (rw)
-  # Default for system-wide installs: /var/lib/luskctl/envs
+  # Default: ~/.local/share/luskctl/envs (or /var/lib/luskctl/envs if root)
   # You can override per user or system by editing this file.
-  # base_dir: /var/lib/luskctl/envs
+  # base_dir: ~/.local/share/luskctl/envs
 
 paths:
   # User projects root (per-user overlays). Each project is a subdirectory

@@ -329,7 +329,7 @@ When enabled, luskctl adds:
 ## Tips
 
 - **Show resolved paths:** `luskctl config`
-- **Where envs live:** `/var/lib/luskctl/envs` (or as configured under `envs.base_dir`)
+- **Where envs live:** `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if root, or as configured under `envs.base_dir`)
 - **Shared directories:** See [SHARED_DIRS.md](SHARED_DIRS.md)
 - **Security modes:** See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md)
 

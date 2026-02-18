@@ -171,14 +171,23 @@ def get_envs_base_dir() -> Path:
 
     Global config (luskctl-config.yml):
       envs:
-        base_dir: /var/lib/luskctl/envs
+        base_dir: <path>
 
-    Default: /var/lib/luskctl/envs
+    Default: ~/.local/share/luskctl/envs (or /var/lib/luskctl/envs if root)
     """
     cfg = load_global_config()
     envs_cfg = cfg.get("envs", {}) or {}
-    base = envs_cfg.get("base_dir", "/var/lib/luskctl/envs")
-    return Path(str(base)).expanduser().resolve()
+
+    # If explicitly configured, use that
+    if "base_dir" in envs_cfg:
+        base = envs_cfg["base_dir"]
+        return Path(str(base)).expanduser().resolve()
+
+    # Otherwise, use the same pattern as state_root()
+    # For non-root users: ~/.local/share/luskctl/envs
+    # For root users: /var/lib/luskctl/envs
+    from .paths import state_root
+    return state_root() / "envs"
 
 
 def get_global_human_name() -> str | None:
