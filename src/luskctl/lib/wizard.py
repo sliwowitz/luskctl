@@ -3,6 +3,7 @@
 import re
 import sys
 import tempfile
+from collections.abc import Callable
 from importlib import resources
 from pathlib import Path
 
@@ -87,9 +88,11 @@ def _prompt_docker_snippet() -> str:
         tmp_path.unlink(missing_ok=True)
 
     # Strip comment-only preamble that the user didn't edit
-    lines = [
-        line for line in content.splitlines() if line.strip() and not line.strip().startswith("#")
-    ]
+    lines: list[str] = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            lines.append(line)
     return "\n".join(lines)
 
 
@@ -167,7 +170,7 @@ def generate_config(values: dict) -> Path:
     return config_path
 
 
-def run_wizard(init_fn=None) -> Path | None:
+def run_wizard(init_fn: Callable[[str], None] | None = None) -> Path | None:
     """Top-level wizard entry point called by the CLI.
 
     *init_fn* is an optional callable accepting a project ID string that
