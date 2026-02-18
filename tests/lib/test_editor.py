@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import tempfile
 import unittest
 import unittest.mock
@@ -97,6 +98,7 @@ class OpenInEditorTests(unittest.TestCase):
             open_in_editor(Path(f.name))
             mock_print.assert_called_once()
             self.assertIn("EDITOR", mock_print.call_args[0][0])
+            self.assertIs(mock_print.call_args[1].get("file"), sys.stderr)
 
 
 if __name__ == "__main__":

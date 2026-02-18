@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -21,6 +22,7 @@ def open_in_editor(file_path: Path) -> bool:
     if editor is None:
         print(
             "No editor found. Set the EDITOR environment variable or install nano/vi.",
+            file=sys.stderr,
         )
         return False
 
