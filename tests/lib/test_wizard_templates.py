@@ -4,16 +4,16 @@ from pathlib import Path
 
 from luskctl.lib.template_utils import render_template
 
-TEMPLATE_DIR = resources.files("luskctl") / "resources" / "templates" / "projects"
+TEMPLATE_DIR: Path = resources.files("luskctl") / "resources" / "templates" / "projects"
 
-EXPECTED_TEMPLATES = [
+EXPECTED_TEMPLATES: list[str] = [
     "online-ubuntu.yml",
     "online-nvidia.yml",
     "gatekeeping-ubuntu.yml",
     "gatekeeping-nvidia.yml",
 ]
 
-REQUIRED_PLACEHOLDERS = [
+REQUIRED_PLACEHOLDERS: list[str] = [
     "{{PROJECT_ID}}",
     "{{UPSTREAM_URL}}",
     "{{DEFAULT_BRANCH}}",
