@@ -55,14 +55,25 @@ fi
 [[ -n "${LUSKCTL_AGENT_MODEL:-}" ]] && CLAUDE_ARGS+=(--model "$LUSKCTL_AGENT_MODEL")
 [[ -n "${LUSKCTL_AGENT_MAX_TURNS:-}" ]] && CLAUDE_ARGS+=(--max-turns "$LUSKCTL_AGENT_MAX_TURNS")
 
+# Optional: opt-in to skipping permission checks via config
+skip_perms=$(jq -r '.dangerously_skip_permissions // empty' "$CONFIG_FILE" 2>/dev/null || true)
+if [[ "$skip_perms" == "true" ]]; then
+    CLAUDE_ARGS+=(--dangerously-skip-permissions)
+fi
+
+# Optional: opt-in to skipping permission checks via env var
+case "${LUSKCTL_AGENT_DANGEROUSLY_SKIP_PERMISSIONS:-}" in
+    1|true|TRUE|yes|YES)
+        CLAUDE_ARGS+=(--dangerously-skip-permissions)
+        ;;
+esac
+
 # Determine mode: headless (automated) vs interactive (subagent)
 if [[ -f "$PROMPT_FILE" ]]; then
     # Automated mode: run with prompt, non-interactive
-    CLAUDE_ARGS+=(--dangerously-skip-permissions)
     CLAUDE_ARGS+=(--output-format stream-json)
     exec claude -p "$(cat "$PROMPT_FILE")" "${CLAUDE_ARGS[@]}"
 else
     # Interactive subagent mode: start claude interactively
-    CLAUDE_ARGS+=(--dangerously-skip-permissions)
     exec claude "${CLAUDE_ARGS[@]}"
 fi

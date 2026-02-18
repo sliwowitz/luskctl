@@ -223,7 +223,11 @@ def load_project(project_id: str) -> Project:
     agent_default_config_str = agent_cfg.get("default_config")
     agent_default_config: Path | None = None
     if agent_default_config_str:
-        agent_default_config = Path(str(agent_default_config_str)).expanduser().resolve()
+        _agent_cfg_path = Path(str(agent_default_config_str)).expanduser()
+        if _agent_cfg_path.is_absolute():
+            agent_default_config = _agent_cfg_path.resolve()
+        else:
+            agent_default_config = (root / _agent_cfg_path).expanduser().resolve()
 
     p = Project(
         id=pid,
