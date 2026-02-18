@@ -305,13 +305,13 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         options: list[Option | None] = [
             Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
             Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"),
-            Option("[l]ogin to container", id="login"),
+            Option("\\[l]ogin to container", id="login"),
         ]
         if self._has_tasks:
             options.append(None)
-            options.append(Option("run [c]li agent", id="cli"))
-            options.append(Option("run [w]eb UI", id="web"))
-            options.append(Option("[r]estart container", id="restart"))
+            options.append(Option("run \\[c]li agent", id="cli"))
+            options.append(Option("run \\[w]eb UI", id="web"))
+            options.append(Option("\\[r]estart container", id="restart"))
             options.append(None)
             options.append(Option("Copy diff vs \\[H]EAD", id="diff_head"))
             options.append(Option("Copy diff vs \\[P]REV", id="diff_prev"))
@@ -398,6 +398,11 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             self.dismiss("restart")
 
     def action_login(self) -> None:
+        """Dismiss the screen with a ``'login'`` result to trigger container login.
+
+        Only fires when the current project has tasks (``self._has_tasks``).
+        The parent ``LuskTUI`` handles the actual login dispatch.
+        """
         if self._has_tasks:
             self.dismiss("login")
 

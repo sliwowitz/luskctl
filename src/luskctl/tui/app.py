@@ -905,7 +905,8 @@ if _HAS_TEXTUAL:
                 self.notify(str(e))
                 return
 
-            container_name = cmd[3]  # ["podman","exec","-it",NAME,...]
+            mode = self.current_task.mode or "cli"
+            container_name = f"{pid}-{mode}-{tid}"
             title = f"login:{container_name}"
 
             method, port = launch_login(cmd, title=title)
@@ -1177,6 +1178,12 @@ if _HAS_TEXTUAL:
             )
 
     def main() -> None:
+        """CLI entry-point for launching the luskctl TUI.
+
+        Supports ``--tmux`` to wrap the TUI in a managed host tmux session
+        (blue status bar, login windows as extra tmux windows).  Without the
+        flag the TUI runs directly in the current terminal.
+        """
         import argparse
 
         parser = argparse.ArgumentParser(prog="luskctl-tui")
