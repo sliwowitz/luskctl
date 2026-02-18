@@ -12,6 +12,7 @@ from .containers import (
     _is_container_running,
     _stop_task_containers,
     _stream_initial_logs,
+    _stream_until_exit,
 )
 from .images import project_cli_image, project_web_image
 from .podman import _podman_userns_args
@@ -595,6 +596,180 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
         f"\n- Check logs: {_yellow(log_command, color_enabled)}"
         f"\n- Stop:       {_red(stop_command, color_enabled)}"
     )
+
+
+def _print_run_summary(workspace: Path) -> None:
+    """Print a summary of changes made by the headless agent."""
+    try:
+        diff_stat = subprocess.check_output(
+            ["git", "-C", str(workspace), "diff", "--stat", "HEAD@{1}..HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if diff_stat:
+            print("\n── Changes ──────────────────────────────")
+            print(diff_stat)
+        else:
+            print("\n── No changes committed ──────────────────")
+        print(f"  Workspace: {workspace}")
+    except subprocess.CalledProcessError:
+        print(f"\n  Workspace: {workspace}")
+    except FileNotFoundError:
+        print(f"\n  Workspace: {workspace}")
+
+
+def task_run_headless(
+    project_id: str,
+    prompt: str,
+    config_path: str | None = None,
+    model: str | None = None,
+    max_turns: int | None = None,
+    timeout: int | None = None,
+    follow: bool = True,
+) -> str:
+    """Run Claude headlessly (autopilot mode) in a new task container.
+
+    Creates a new task, writes the prompt and optional agent config to the
+    task's agent-config directory, then launches a detached container that
+    runs init-ssh-and-repo.sh followed by start-claude.sh.
+
+    Returns the task_id.
+    """
+    project = load_project(project_id)
+
+    # Resolve config: CLI flag > project default > none
+    effective_config = config_path
+    if not effective_config and project.agent_default_config:
+        effective_config = str(project.agent_default_config)
+
+    # Create a new task
+    task_id = task_new(project_id)
+
+    # Set up agent-config directory in task dir (NOT in workspace)
+    task_dir = project.tasks_root / str(task_id)
+    agent_config_dir = task_dir / "agent-config"
+    agent_config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write prompt
+    (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+
+    # Copy agent config if provided
+    if effective_config:
+        config_src = Path(effective_config)
+        if not config_src.is_file():
+            raise SystemExit(f"Agent config file not found: {effective_config}")
+        shutil.copy2(config_src, agent_config_dir / "agent-config.json")
+
+    # Build env and volumes
+    env, volumes = _build_task_env_and_volumes(project, task_id)
+
+    # Mount agent-config dir to /home/dev/.luskctl
+    volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
+
+    # CLI overrides via env vars
+    if model:
+        env["LUSKCTL_AGENT_MODEL"] = model
+    if max_turns:
+        env["LUSKCTL_AGENT_MAX_TURNS"] = str(max_turns)
+
+    effective_timeout = timeout or 1800
+
+    # Build podman command (DETACHED)
+    container_name = f"{project.id}-run-{task_id}"
+    cmd: list[str] = ["podman", "run", "-d"]
+    cmd += _podman_userns_args()
+    cmd += _gpu_run_args(project)
+    for v in volumes:
+        cmd += ["-v", v]
+    for k, v in env.items():
+        cmd += ["-e", f"{k}={v}"]
+    cmd += [
+        "--name",
+        container_name,
+        "-w",
+        "/workspace",
+        project_cli_image(project.id),
+        "bash",
+        "-lc",
+        f"init-ssh-and-repo.sh && timeout {effective_timeout} start-claude.sh",
+    ]
+    print("$", " ".join(map(str, cmd)))
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Run failed: {e}")
+
+    # Update task metadata
+    meta_dir = _tasks_meta_dir(project.id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta["status"] = "running"
+    meta["mode"] = "run"
+    meta_path.write_text(yaml.safe_dump(meta))
+
+    color_enabled = _supports_color()
+
+    if follow:
+        exit_code = _stream_until_exit(container_name)
+        _print_run_summary(task_dir / "workspace")
+
+        # Update metadata with final status
+        meta["status"] = "completed" if exit_code == 0 else "failed"
+        meta["exit_code"] = exit_code
+        meta_path.write_text(yaml.safe_dump(meta))
+
+        if exit_code != 0:
+            print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
+    else:
+        log_command = f"podman logs -f {container_name}"
+        stop_command = f"podman stop {container_name}"
+        print(
+            f"\nHeadless Claude task started (detached)."
+            f"\n- Task:  {task_id}"
+            f"\n- Name:  {_green(container_name, color_enabled)}"
+            f"\n- Logs:  {_blue(log_command, color_enabled)}"
+            f"\n- Stop:  {_red(stop_command, color_enabled)}\n"
+        )
+
+    return task_id
+
+
+def task_login_claude(project_id: str, task_id: str, config_path: str | None = None) -> None:
+    """Exec into a running task container and start Claude interactively.
+
+    If a config_path is provided, copies it to the task's agent-config dir
+    (which should already be mounted in the container).
+    """
+    project = load_project(project_id)
+    container_name, _mode = _validate_login(project_id, task_id)
+
+    # If config provided, copy to agent-config dir
+    if config_path:
+        task_dir = project.tasks_root / str(task_id)
+        agent_config_dir = task_dir / "agent-config"
+        agent_config_dir.mkdir(parents=True, exist_ok=True)
+        config_src = Path(config_path)
+        if not config_src.is_file():
+            raise SystemExit(f"Agent config file not found: {config_path}")
+        shutil.copy2(config_src, agent_config_dir / "agent-config.json")
+
+    cmd = [
+        "podman",
+        "exec",
+        "-it",
+        container_name,
+        "bash",
+        "-lc",
+        "start-claude.sh",
+    ]
+    try:
+        os.execvp(cmd[0], cmd)
+    except FileNotFoundError:
+        raise SystemExit(
+            f"'{cmd[0]}' not found on PATH. Please install podman or add it to your PATH."
+        )
 
 
 def task_stop(project_id: str, task_id: str) -> None:

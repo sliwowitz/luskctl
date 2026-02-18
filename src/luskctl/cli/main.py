@@ -42,9 +42,11 @@ from ..lib.tasks import (
     task_delete,
     task_list,
     task_login,
+    task_login_claude,
     task_new,
     task_restart,
     task_run_cli,
+    task_run_headless,
     task_run_web,
     task_status,
     task_stop,
@@ -398,6 +400,44 @@ def main() -> None:
     except Exception:
         pass
 
+    # run-claude (headless autopilot)
+    p_run_claude = sub.add_parser(
+        "run-claude", help="Run Claude headlessly in a new task (autopilot mode)"
+    )
+    _a = p_run_claude.add_argument("project_id", help="Project ID")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_run_claude.add_argument("prompt", help="Task prompt for Claude")
+    p_run_claude.add_argument("--config", dest="agent_config", help="Path to agent-config.json")
+    p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
+    p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
+    p_run_claude.add_argument("--timeout", type=int, help="Maximum runtime in seconds")
+    p_run_claude.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="Detach after starting (don't stream output)",
+    )
+
+    # login-claude (interactive Claude with optional config)
+    p_login_claude = sub.add_parser(
+        "login-claude", help="Start interactive Claude session in a running task container"
+    )
+    _a = p_login_claude.add_argument("project_id", help="Project ID")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _a = p_login_claude.add_argument("task_id", help="Task ID")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_login_claude.add_argument(
+        "--config", dest="agent_config", help="Path to agent-config.json (optional override)"
+    )
+
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -578,6 +618,22 @@ def main() -> None:
                 print(f"- {p.id} [{p.security_class}] upstream={upstream} config_root={p.root}")
     elif args.cmd == "login":
         task_login(args.project_id, args.task_id)
+    elif args.cmd == "run-claude":
+        task_run_headless(
+            args.project_id,
+            args.prompt,
+            config_path=getattr(args, "agent_config", None),
+            model=getattr(args, "model", None),
+            max_turns=getattr(args, "max_turns", None),
+            timeout=getattr(args, "timeout", None),
+            follow=not getattr(args, "no_follow", False),
+        )
+    elif args.cmd == "login-claude":
+        task_login_claude(
+            args.project_id,
+            args.task_id,
+            config_path=getattr(args, "agent_config", None),
+        )
     elif args.cmd == "task":
         if args.task_cmd == "new":
             task_new(args.project_id)
