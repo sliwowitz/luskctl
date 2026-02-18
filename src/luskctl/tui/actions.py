@@ -455,10 +455,12 @@ class ActionsMixin:
         """Launch the CLI project wizard in a suspended terminal."""
         with self.suspend():
             try:
-                subprocess.run(
+                result = subprocess.run(
                     [sys.executable, "-m", "luskctl.cli.main", "project-wizard"],
                     check=False,
                 )
+                if result.returncode != 0:
+                    print(f"Wizard exited with code {result.returncode}")
             except Exception as e:
                 print(f"Error: {e}")
             input("\n[Press Enter to return to LuskTUI] ")

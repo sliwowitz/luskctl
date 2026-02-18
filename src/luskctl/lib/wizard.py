@@ -5,6 +5,7 @@ import sys
 import tempfile
 from collections.abc import Callable
 from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .config import user_projects_root
@@ -22,7 +23,7 @@ TEMPLATES: list[tuple[str, str]] = [
 
 _PROJECT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
-_TEMPLATE_DIR = resources.files("luskctl") / "resources" / "templates" / "projects"
+_TEMPLATE_DIR: Traversable = resources.files("luskctl") / "resources" / "templates" / "projects"
 
 
 def _validate_project_id(project_id: str) -> str | None:
@@ -181,21 +182,25 @@ def generate_config(values: dict) -> Path:
     config_path = project_dir / "project.yml"
 
     if config_path.exists():
-        while True:
-            answer = (
-                input(
-                    f"Configuration for project '{values['project_id']}' already exists "
-                    f"at {config_path}. Overwrite? [y/N]: "
+        try:
+            while True:
+                answer = (
+                    input(
+                        f"Configuration for project '{values['project_id']}' already exists "
+                        f"at {config_path}. Overwrite? [y/N]: "
+                    )
+                    .strip()
+                    .lower()
                 )
-                .strip()
-                .lower()
-            )
-            if answer in ("", "n", "no"):
-                print("Keeping existing configuration; no file was overwritten.")
-                return config_path
-            if answer in ("y", "yes"):
-                break
-            print("Please answer 'y' or 'n'.")
+                if answer in ("", "n", "no"):
+                    print("Keeping existing configuration; no file was overwritten.")
+                    return config_path
+                if answer in ("y", "yes"):
+                    break
+                print("Please answer 'y' or 'n'.")
+        except (KeyboardInterrupt, EOFError):
+            print("\nKeeping existing configuration; no file was overwritten.")
+            return config_path
 
     config_path.write_text(rendered, encoding="utf-8")
     return config_path

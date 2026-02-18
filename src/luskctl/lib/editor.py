@@ -1,6 +1,7 @@
 """Utility to open files in the user's preferred editor."""
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -28,8 +29,6 @@ def open_in_editor(file_path: Path) -> bool:
 
     try:
         # Handle editors with arguments (e.g., "nano -w")
-        import shlex
-
         cmd = shlex.split(editor) + [str(file_path)]
         subprocess.run(cmd, check=True)  # noqa: S603
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -43,7 +42,7 @@ def _resolve_editor() -> str | None:
     if env_editor:
         # Handle EDITOR with arguments (e.g., "nano -w")
         # Only validate the first token (the actual command)
-        editor_cmd = env_editor.split()[0]
+        editor_cmd = shlex.split(env_editor)[0]
         if shutil.which(editor_cmd):
             return env_editor
 
