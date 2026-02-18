@@ -1,9 +1,13 @@
+import tempfile
 import unittest
 import unittest.mock
+from pathlib import Path
 
 from luskctl.lib.wizard import (
+    TEMPLATES,
     _validate_project_id,
     collect_wizard_inputs,
+    generate_config,
 )
 
 
@@ -119,6 +123,105 @@ class CollectWizardInputsTests(unittest.TestCase):
         result = collect_wizard_inputs()
         self.assertIsNotNone(result)
         self.assertEqual(result["upstream_url"], "https://x.com/r.git")
+
+
+class GenerateConfigTests(unittest.TestCase):
+    """Tests for generate_config()."""
+
+    def test_generates_project_yml(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch(
+                "luskctl.lib.wizard.user_projects_root", return_value=Path(td)
+            ):
+                values = {
+                    "template_index": 0,
+                    "project_id": "test-proj",
+                    "upstream_url": "https://github.com/user/repo.git",
+                    "default_branch": "main",
+                    "user_snippet": "",
+                }
+                result = generate_config(values)
+
+                self.assertTrue(result.exists())
+                self.assertEqual(result.name, "project.yml")
+                content = result.read_text(encoding="utf-8")
+                self.assertIn('id: "test-proj"', content)
+                self.assertIn("https://github.com/user/repo.git", content)
+                self.assertIn('default_branch: "main"', content)
+                self.assertIn('security_class: "online"', content)
+
+    def test_generates_gatekeeping_template(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch(
+                "luskctl.lib.wizard.user_projects_root", return_value=Path(td)
+            ):
+                values = {
+                    "template_index": 2,
+                    "project_id": "gk-proj",
+                    "upstream_url": "git@github.com:user/repo.git",
+                    "default_branch": "dev",
+                    "user_snippet": "RUN apt-get update",
+                }
+                result = generate_config(values)
+
+                content = result.read_text(encoding="utf-8")
+                self.assertIn('security_class: "gatekeeping"', content)
+                self.assertIn('default_branch: "dev"', content)
+                self.assertIn("RUN apt-get update", content)
+                self.assertIn("gatekeeping:", content)
+
+    def test_creates_project_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch(
+                "luskctl.lib.wizard.user_projects_root", return_value=Path(td)
+            ):
+                values = {
+                    "template_index": 0,
+                    "project_id": "new-proj",
+                    "upstream_url": "https://x.com/r.git",
+                    "default_branch": "main",
+                    "user_snippet": "",
+                }
+                result = generate_config(values)
+                self.assertTrue(result.parent.is_dir())
+                self.assertEqual(result.parent.name, "new-proj")
+
+    def test_nvidia_template_includes_gpus(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch(
+                "luskctl.lib.wizard.user_projects_root", return_value=Path(td)
+            ):
+                values = {
+                    "template_index": 1,
+                    "project_id": "gpu-proj",
+                    "upstream_url": "https://x.com/r.git",
+                    "default_branch": "main",
+                    "user_snippet": "",
+                }
+                result = generate_config(values)
+                content = result.read_text(encoding="utf-8")
+                self.assertIn("gpus: all", content)
+                self.assertIn("nvcr.io/nvidia/", content)
+
+    def test_all_placeholders_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch(
+                "luskctl.lib.wizard.user_projects_root", return_value=Path(td)
+            ):
+                for idx in range(len(TEMPLATES)):
+                    values = {
+                        "template_index": idx,
+                        "project_id": f"proj{idx}",
+                        "upstream_url": "https://x.com/r.git",
+                        "default_branch": "main",
+                        "user_snippet": "RUN echo hi",
+                    }
+                    result = generate_config(values)
+                    content = result.read_text(encoding="utf-8")
+                    self.assertNotIn("{{PROJECT_ID}}", content)
+                    self.assertNotIn("{{UPSTREAM_URL}}", content)
+                    self.assertNotIn("{{DEFAULT_BRANCH}}", content)
+                    self.assertNotIn("{{USER_SNIPPET}}", content)
 
 
 if __name__ == "__main__":
