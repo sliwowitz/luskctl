@@ -187,6 +187,7 @@ def get_envs_base_dir() -> Path:
     # For non-root users: ~/.local/share/luskctl/envs
     # For root users: /var/lib/luskctl/envs
     from .paths import state_root
+
     return state_root() / "envs"
 
 
