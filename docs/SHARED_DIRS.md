@@ -19,12 +19,12 @@
 - Purpose: The project repository is cloned or synced here by `init-ssh-and-repo.sh`. Because this path lives under the task's directory on the host, you can inspect, edit, or back it up from the host.
 
 ## Shared envs base directory (configurable)
-- Base dir (default): `/var/lib/luskctl/envs`
+- Base dir (default): `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if running as root)
   - Can be overridden in the global config file (`luskctl-config.yml`):
 
 ```yaml
 envs:
-  base_dir: /var/lib/luskctl/envs
+  base_dir: /custom/path/to/envs
 ```
 
 - Under this base, eight subdirectories may be used:
@@ -126,13 +126,23 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
 
 ## How luskctl discovers these paths
 - `state_root`: Determined by `LUSKCTL_STATE_DIR` or defaults (root: `/var/lib/luskctl`; user: `${XDG_DATA_HOME:-~/.local/share}/luskctl`).
-- `envs_base`: Set in `luskctl-config.yml` under `envs.base_dir`; defaults to `/var/lib/luskctl/envs` if unspecified.
+- `envs_base`: Set in `luskctl-config.yml` under `envs.base_dir`; defaults to `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if root) if unspecified.
 
 ## Minimal setup to run tasks
 1. Ensure luskctl can write to the state root (or set `LUSKCTL_STATE_DIR` accordingly).
 2. Optionally create the envs base dir (luskctl will create these directories automatically if missing):
 
 ```bash
+# For non-root users (default location):
+mkdir -p ~/.local/share/luskctl/envs/_codex-config
+mkdir -p ~/.local/share/luskctl/envs/_claude-config
+mkdir -p ~/.local/share/luskctl/envs/_vibe-config
+mkdir -p ~/.local/share/luskctl/envs/_blablador-config
+mkdir -p ~/.local/share/luskctl/envs/_opencode-config
+mkdir -p ~/.local/share/luskctl/envs/_opencode-data
+mkdir -p ~/.local/share/luskctl/envs/_opencode-state
+
+# For root users or system-wide installs:
 sudo mkdir -p /var/lib/luskctl/envs/_codex-config
 sudo mkdir -p /var/lib/luskctl/envs/_claude-config
 sudo mkdir -p /var/lib/luskctl/envs/_vibe-config
@@ -143,7 +153,8 @@ sudo mkdir -p /var/lib/luskctl/envs/_opencode-state
 ```
 
 3. If using private git repositories for a project `<proj>`:
-   - `sudo mkdir -p /var/lib/luskctl/envs/_ssh-config-<proj>`
+   - For non-root: `mkdir -p ~/.local/share/luskctl/envs/_ssh-config-<proj>`
+   - For root: `sudo mkdir -p /var/lib/luskctl/envs/_ssh-config-<proj>`
    - Place SSH keys and config there (see above). Keys must match your repo host.
 
 ## Notes
