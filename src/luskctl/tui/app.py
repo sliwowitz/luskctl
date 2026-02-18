@@ -135,7 +135,6 @@ if _HAS_TEXTUAL:
 
         BINDINGS = [
             ("q", "quit", "Quit"),
-            ("n", "new_project_wizard", "New Project"),
         ]
 
         def __init__(self) -> None:

@@ -101,6 +101,7 @@ class ProjectList(ListView):
     # is dispatched to the App instance.
     BINDINGS = [
         ("enter", "app.show_project_actions", "Project\u2026"),
+        ("n", "app.new_project_wizard", "New Project"),
     ]
 
     class ProjectSelected(Message):
