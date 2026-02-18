@@ -305,9 +305,9 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         options: list[Option | None] = [
             Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
             Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"),
-            Option("\\[l]ogin to container", id="login"),
         ]
         if self._has_tasks:
+            options.append(Option("\\[l]ogin to container", id="login"))
             options.append(None)
             options.append(Option("run \\[c]li agent", id="cli"))
             options.append(Option("run \\[w]eb UI", id="web"))

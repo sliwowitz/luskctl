@@ -1162,7 +1162,10 @@ if _HAS_TEXTUAL:
         from importlib import resources as _res
 
         tmux_conf = _res.files("luskctl") / "resources" / "tmux" / "host-tmux.conf"
-        # Materialise the resource to a real file path for tmux -f
+        # Materialise the resource to a real file path for tmux -f.
+        # Note: os.execvp replaces this process so the context manager's
+        # __exit__ never runs.  This is fine — tmux reads the config file
+        # at startup, and OS process cleanup handles any temp resources.
         with _res.as_file(tmux_conf) as conf_path:
             os.execvp(
                 "tmux",
