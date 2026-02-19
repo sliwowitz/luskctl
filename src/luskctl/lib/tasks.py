@@ -16,7 +16,7 @@ from .containers import (
 )
 from .images import project_cli_image, project_web_image
 from .podman import _podman_userns_args
-from .projects import load_project
+from .projects import Project, load_project
 from .task_env import (
     _apply_web_env_overrides,
     _build_task_env_and_volumes,
@@ -258,10 +258,10 @@ def task_delete(project_id: str, task_id: str) -> None:
     _log_debug("task_delete: finished")
 
 
-def _validate_login(project_id: str, task_id: str) -> tuple[str, str]:
+def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
     """Validate that a task exists and its container is running.
 
-    Returns (container_name, mode) on success.
+    Returns (container_name, mode, project) on success.
     Raises SystemExit with actionable messages on failure.
     """
     project = load_project(project_id)
@@ -291,16 +291,48 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str]:
             f"Container {container_name} is not running (state: {state}). "
             f"Run 'luskctl task restart {project_id} {task_id}' first."
         )
-    return container_name, mode
+    return container_name, mode, project
+
+
+def _inject_agent_config(container_name: str, project: Project) -> None:
+    """Copy the project's default agent config into a running container.
+
+    No-op if the project has no agent_default_config configured.
+    """
+    if not project.agent_default_config:
+        return
+    config_src = project.agent_default_config
+    if not config_src.is_file():
+        return
+    try:
+        subprocess.run(
+            ["podman", "exec", container_name, "mkdir", "-p", "/home/dev/.luskctl"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "podman",
+                "cp",
+                str(config_src),
+                f"{container_name}:/home/dev/.luskctl/agent-config.json",
+            ],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass  # best-effort; don't block login over config injection
 
 
 def get_login_command(project_id: str, task_id: str) -> list[str]:
     """Return the podman exec command to log into a task container.
 
-    Validates the task and container state, then returns the command list
-    for use by TUI/tmux/terminal-spawn paths.
+    Validates the task and container state, injects the project's agent
+    config (if configured) into the container, then returns the command
+    list for use by TUI/tmux/terminal-spawn paths.
     """
-    container_name, _mode = _validate_login(project_id, task_id)
+    container_name, _mode, project = _validate_login(project_id, task_id)
+    _inject_agent_config(container_name, project)
     return [
         "podman",
         "exec",
