@@ -522,24 +522,24 @@ class TaskLoginClaudeTests(unittest.TestCase):
                 },
             ):
                 with (
+                    mock_git_config(),
                     unittest.mock.patch(
                         "luskctl.lib.tasks._get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch("luskctl.lib.tasks.os.execvp"),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as mock_run,
                 ):
+                    mock_run.return_value = subprocess.CompletedProcess([], 0)
                     task_login_claude("proj_lccfg", "1", config_path=str(agent_config))
 
-                    copied = (
-                        state_dir
-                        / "tasks"
-                        / "proj_lccfg"
-                        / "1"
-                        / "agent-config"
-                        / "agent-config.json"
-                    )
-                    self.assertTrue(copied.is_file())
-                    self.assertEqual(copied.read_text(), '{"model": "opus"}')
+                    # Verify podman exec mkdir and podman cp were called
+                    self.assertEqual(mock_run.call_count, 2)
+                    mkdir_call = mock_run.call_args_list[0][0][0]
+                    self.assertEqual(mkdir_call[:2], ["podman", "exec"])
+                    self.assertIn("mkdir", mkdir_call)
+                    cp_call = mock_run.call_args_list[1][0][0]
+                    self.assertEqual(cp_call[:2], ["podman", "cp"])
 
     def test_login_claude_container_not_running(self) -> None:
         """task_login_claude raises SystemExit when container is not running."""

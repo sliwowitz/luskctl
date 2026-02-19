@@ -752,24 +752,36 @@ def task_login_claude(project_id: str, task_id: str, config_path: str | None = N
             f"Use 'luskctl task run-cli {project_id} {task_id}' to start a CLI container."
         )
 
-    # If config provided, copy it directly into the running container
+    # If config provided, copy into the running container via podman cp.
+    # We cannot use a host-side file copy because the agent-config dir is
+    # only volume-mounted for containers started by task_run_headless.
     if config_path:
         config_src = Path(config_path)
         if not config_src.is_file():
             raise SystemExit(f"Agent config file not found: {config_path}")
-
-        # Place the config where start-claude.sh expects it inside the container.
-        # This avoids relying on a volume mount that may not exist for all task modes.
-        dest_in_container = f"{container_name}:/home/dev/.luskctl/agent-config.json"
-        cp_cmd = ["podman", "cp", str(config_src), dest_in_container]
         try:
-            subprocess.run(cp_cmd, check=True)
+            subprocess.run(
+                ["podman", "exec", container_name, "mkdir", "-p", "/home/dev/.luskctl"],
+                check=True,
+            )
         except FileNotFoundError:
+            raise SystemExit("'podman' not found on PATH. Please install podman.")
+        except subprocess.CalledProcessError as e:
             raise SystemExit(
-                f"'{cp_cmd[0]}' not found on PATH. Please install podman or add it to your PATH."
+                f"Failed to create /home/dev/.luskctl in container '{container_name}': {e}"
+            )
+        try:
+            subprocess.run(
+                [
+                    "podman",
+                    "cp",
+                    str(config_src),
+                    f"{container_name}:/home/dev/.luskctl/agent-config.json",
+                ],
+                check=True,
             )
         except subprocess.CalledProcessError as e:
-            raise SystemExit(f"Failed to copy agent config into container '{container_name}': {e}")
+            raise SystemExit(f"Failed to copy config into container '{container_name}': {e}")
 
     cmd = [
         "podman",
