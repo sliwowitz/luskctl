@@ -1,4 +1,4 @@
-"""Tests for autopilot (Level 1+2) features: run-claude, login-claude, agent config."""
+"""Tests for autopilot (Level 1+2) features: run-claude and agent config."""
 
 import os
 import subprocess
@@ -13,11 +13,7 @@ import yaml
 
 from luskctl.lib.containers import _get_container_exit_code, _stream_until_exit
 from luskctl.lib.projects import load_project
-from luskctl.lib.tasks import (
-    task_login_claude,
-    task_new,
-    task_run_headless,
-)
+from luskctl.lib.tasks import task_run_headless
 from test_utils import mock_git_config, write_project
 
 
@@ -442,121 +438,3 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("init-ssh-and-repo.sh", bash_cmd)
                     self.assertIn("start-claude.sh", bash_cmd)
                     self.assertIn("timeout", bash_cmd)
-
-
-class TaskLoginClaudeTests(unittest.TestCase):
-    """Tests for task_login_claude."""
-
-    def _setup_project_with_task(self, base: Path, project_id: str, *, mode: str = "cli") -> Path:
-        config_root = base / "config"
-        state_dir = base / "state"
-        config_root.mkdir(parents=True, exist_ok=True)
-        write_project(config_root, project_id, f"project:\n  id: {project_id}\n")
-
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "LUSKCTL_CONFIG_DIR": str(config_root),
-                "LUSKCTL_STATE_DIR": str(state_dir),
-            },
-        ):
-            task_new(project_id)
-
-        meta_dir = state_dir / "projects" / project_id / "tasks"
-        meta_path = meta_dir / "1.yml"
-        meta = yaml.safe_load(meta_path.read_text())
-        meta["mode"] = mode
-        meta_path.write_text(yaml.safe_dump(meta))
-
-        return state_dir
-
-    def test_login_claude_calls_execvp(self) -> None:
-        """task_login_claude exec's into container with start-claude.sh."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            state_dir = self._setup_project_with_task(base, "proj_lc", mode="cli")
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                with (
-                    unittest.mock.patch(
-                        "luskctl.lib.tasks._get_container_state",
-                        return_value="running",
-                    ),
-                    unittest.mock.patch("luskctl.lib.tasks.os.execvp") as mock_exec,
-                ):
-                    task_login_claude("proj_lc", "1")
-
-                    mock_exec.assert_called_once_with(
-                        "podman",
-                        [
-                            "podman",
-                            "exec",
-                            "-it",
-                            "proj_lc-cli-1",
-                            "bash",
-                            "-lc",
-                            "start-claude.sh",
-                        ],
-                    )
-
-    def test_login_claude_copies_config(self) -> None:
-        """task_login_claude copies config file when provided."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            state_dir = self._setup_project_with_task(base, "proj_lccfg", mode="cli")
-
-            agent_config = base / "agent.json"
-            agent_config.write_text('{"model": "opus"}', encoding="utf-8")
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "luskctl.lib.tasks._get_container_state",
-                        return_value="running",
-                    ),
-                    unittest.mock.patch("luskctl.lib.tasks.os.execvp"),
-                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as mock_run,
-                ):
-                    mock_run.return_value = subprocess.CompletedProcess([], 0)
-                    task_login_claude("proj_lccfg", "1", config_path=str(agent_config))
-
-                    # Verify podman exec mkdir and podman cp were called
-                    self.assertEqual(mock_run.call_count, 2)
-                    mkdir_call = mock_run.call_args_list[0][0][0]
-                    self.assertEqual(mkdir_call[:2], ["podman", "exec"])
-                    self.assertIn("mkdir", mkdir_call)
-                    cp_call = mock_run.call_args_list[1][0][0]
-                    self.assertEqual(cp_call[:2], ["podman", "cp"])
-
-    def test_login_claude_container_not_running(self) -> None:
-        """task_login_claude raises SystemExit when container is not running."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            state_dir = self._setup_project_with_task(base, "proj_lcnr", mode="cli")
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                with unittest.mock.patch(
-                    "luskctl.lib.tasks._get_container_state", return_value="exited"
-                ):
-                    with self.assertRaises(SystemExit) as ctx:
-                        task_login_claude("proj_lcnr", "1")
-                    self.assertIn("not running", str(ctx.exception))

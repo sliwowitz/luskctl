@@ -1,4 +1,4 @@
-"""Tests for autopilot CLI commands: run-claude, login-claude."""
+"""Tests for autopilot CLI commands: run-claude."""
 
 import unittest
 import unittest.mock
@@ -85,48 +85,3 @@ class RunClaudeCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args
             self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.json")
-
-
-class LoginClaudeCliTests(unittest.TestCase):
-    """Tests for luskctl login-claude argument parsing."""
-
-    def test_login_claude_requires_project_and_task(self) -> None:
-        """login-claude requires project_id and task_id arguments."""
-        with (
-            unittest.mock.patch("sys.argv", ["luskctl", "login-claude"]),
-            self.assertRaises(SystemExit) as ctx,
-        ):
-            main()
-        self.assertEqual(ctx.exception.code, 2)
-
-    def test_login_claude_dispatches_correctly(self) -> None:
-        """login-claude dispatches to task_login_claude with correct args."""
-        with (
-            unittest.mock.patch(
-                "sys.argv",
-                ["luskctl", "login-claude", "myproject", "3", "--config", "/path/to/cfg.json"],
-            ),
-            unittest.mock.patch("luskctl.cli.main.task_login_claude") as mock_login,
-        ):
-            main()
-            mock_login.assert_called_once_with(
-                "myproject",
-                "3",
-                config_path="/path/to/cfg.json",
-            )
-
-    def test_login_claude_no_config(self) -> None:
-        """login-claude works without --config flag."""
-        with (
-            unittest.mock.patch(
-                "sys.argv",
-                ["luskctl", "login-claude", "myproject", "1"],
-            ),
-            unittest.mock.patch("luskctl.cli.main.task_login_claude") as mock_login,
-        ):
-            main()
-            mock_login.assert_called_once_with(
-                "myproject",
-                "1",
-                config_path=None,
-            )
