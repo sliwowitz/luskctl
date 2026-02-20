@@ -767,7 +767,9 @@ if _HAS_TEXTUAL:
         args = parser.parse_args()
 
         # Determine tmux mode: explicit flag > config default > False
-        use_tmux = args.tmux if hasattr(args, 'tmux') and args.tmux is not None else get_tui_default_tmux()
+        use_tmux = (
+            args.tmux if hasattr(args, "tmux") and args.tmux is not None else get_tui_default_tmux()
+        )
 
         if use_tmux:
             _launch_in_tmux()

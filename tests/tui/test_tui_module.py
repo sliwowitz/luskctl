@@ -79,18 +79,18 @@ class TuiModuleTests(unittest.TestCase):
         """Test that the TUI module can import and use the tmux configuration function."""
         # Test that we can import the configuration function
         from luskctl.lib.config import get_tui_default_tmux
-        
+
         # Test that it returns False by default
         self.assertFalse(get_tui_default_tmux())
-        
+
         # Test with a temporary config file
-        import tempfile
         import os
+        import tempfile
         from pathlib import Path
-        
+
         with tempfile.TemporaryDirectory() as td:
             cfg_path = Path(td) / "config.yml"
             cfg_path.write_text("tui:\n  default_tmux: true\n", encoding="utf-8")
-            
+
             with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
                 self.assertTrue(get_tui_default_tmux())
