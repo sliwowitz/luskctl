@@ -44,8 +44,11 @@ class DockerTests(unittest.TestCase):
                 self.assertTrue(l2.is_file())
 
                 l0_content = l0.read_text(encoding="utf-8")
-                self.assertIn('LANG="C.UTF-8"', l0_content)
-                self.assertIn('LC_ALL="C.UTF-8"', l0_content)
+                self.assertIn('LANG="en_US.UTF-8"', l0_content)
+                self.assertIn('LC_ALL="en_US.UTF-8"', l0_content)
+                self.assertIn('LANGUAGE="en_US:en"', l0_content)
+                self.assertIn("locales", l0_content)
+                self.assertIn("locale-gen en_US.UTF-8", l0_content)
 
                 content = l2.read_text(encoding="utf-8")
                 self.assertIn(f'SSH_KEY_NAME="id_ed25519_{project_id}"', content)

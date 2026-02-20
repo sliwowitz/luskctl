@@ -5,15 +5,22 @@ FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND=noninteractive \
     REPO_ROOT="/workspace" \
     GIT_RESET_MODE="none" \
-    LANG="C.UTF-8" \
-    LC_ALL="C.UTF-8" \
+    LANG="en_US.UTF-8" \
+    LC_ALL="en_US.UTF-8" \
+    LANGUAGE="en_US:en" \
     USER="dev"
 
 # Basic dev tooling common to all projects
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl gnupg git openssh-client sudo \
+      ca-certificates curl gnupg git locales openssh-client sudo \
       ripgrep vim tmux \
     && rm -rf /var/lib/apt/lists/*
+
+# Ensure en_US.UTF-8 exists so bash and agent-spawned shells can always set LC_ALL safely.
+RUN set -eux; \
+    sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; \
+    grep -q '^en_US.UTF-8 UTF-8' /etc/locale.gen || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen; \
+    locale-gen en_US.UTF-8
 
 RUN set -eux; \
     uid_owner="$(getent passwd 1000 | cut -d: -f1 || true)"; \
