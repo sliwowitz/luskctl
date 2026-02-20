@@ -355,7 +355,12 @@ def _generate_claude_wrapper(
     """Generate the luskctl-claude.sh wrapper function content.
 
     Always includes git env vars. Conditionally includes
-    --dangerously-skip-permissions and --agents.
+    --dangerously-skip-permissions, --add-dir /, and --agents.
+
+    The --add-dir / flag gives Claude full filesystem access inside the
+    container. The container itself is the security boundary (Podman
+    isolation), so restricting file access within it is unnecessary and
+    actively harmful — agents need to read/write ~/.claude, /tmp, etc.
 
     Model, max_turns, and other per-run flags are NOT included here —
     they are passed directly in the headless command or by the user
@@ -365,6 +370,11 @@ def _generate_claude_wrapper(
 
     if skip_permissions:
         lines.append("    _args+=(--dangerously-skip-permissions)")
+
+    # Give Claude unrestricted filesystem access inside the container.
+    # The Podman container itself provides isolation — no need for an
+    # additional sandbox layer within it.
+    lines.append('    _args+=(--add-dir "/")')
 
     if has_agents:
         lines.append("    [ -f /home/dev/.luskctl/agents.json ] && \\")
