@@ -207,3 +207,10 @@ def get_global_default_agent() -> str | None:
     """Return default_agent from global config, or None if not set."""
     cfg = load_global_config()
     return cfg.get("default_agent")
+
+
+def get_tui_default_tmux() -> bool:
+    """Return whether to default to tmux mode for TUI, or False if not set."""
+    cfg = load_global_config()
+    tui_cfg = cfg.get("tui", {}) or {}
+    return bool(tui_cfg.get("default_tmux", False))
