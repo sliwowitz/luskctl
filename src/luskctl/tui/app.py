@@ -590,6 +590,35 @@ if _HAS_TEXTUAL:
                     return
                 await self.refresh_tasks()
 
+            if worker.group == "autopilot-launch":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, error = result
+                if error:
+                    self.notify(f"Autopilot error: {error}")
+                elif task_id:
+                    self.notify(f"Autopilot task {task_id} started for {project_id}")
+                    self._start_autopilot_watcher(project_id, task_id)
+                if project_id == self.current_project_id:
+                    await self.refresh_tasks()
+                return
+
+            if worker.group == "autopilot-wait":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, exit_code, error = result
+                if error:
+                    self.notify(f"Autopilot watcher error for task {task_id}: {error}")
+                elif exit_code == 0:
+                    self.notify(f"Autopilot task {task_id} completed successfully")
+                else:
+                    self.notify(f"Autopilot task {task_id} failed (exit {exit_code})")
+                if project_id == self.current_project_id:
+                    await self.refresh_tasks()
+                return
+
         # ---------- Actions (keys + called from buttons) ----------
 
         async def action_quit(self) -> None:
@@ -678,6 +707,8 @@ if _HAS_TEXTUAL:
                 await self._action_task_start_cli()
             elif action == "task_start_web":
                 await self._action_task_start_web()
+            elif action == "task_start_autopilot":
+                await self._action_task_start_autopilot()
             elif action == "new":
                 await self.action_new_task()
             elif action == "cli":
@@ -694,6 +725,8 @@ if _HAS_TEXTUAL:
                 await self.action_copy_diff_prev()
             elif action == "login":
                 await self._action_login()
+            elif action == "follow_logs":
+                await self._action_follow_logs()
 
     def _launch_in_tmux() -> None:
         """Launch the TUI inside a managed tmux session.

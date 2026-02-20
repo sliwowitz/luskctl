@@ -25,6 +25,7 @@ class TaskMeta:
     web_port: int | None
     backend: str | None = None
     container_state: str | None = None  # Actual podman container state
+    exit_code: int | None = None  # Exit code for headless/autopilot tasks
 
 
 class ProjectListItem(ListItem):
@@ -247,9 +248,11 @@ class TaskList(ListView):
         ("enter", "app.show_task_actions", "Task\u2026"),
         ("H", "app.copy_diff_head", "Diff HEAD"),
         ("P", "app.copy_diff_prev", "Diff PREV"),
+        ("A", "app.run_autopilot_from_main", "Autopilot"),
         ("c", "app.run_cli_from_main", "CLI"),
         ("w", "app.run_web_from_main", "Web"),
         ("l", "app.login_from_main", "Login"),
+        ("f", "app.follow_logs_from_main", "Logs"),
         ("d", "app.delete_task_from_main", "Delete"),
     ]
 
@@ -275,6 +278,8 @@ class TaskList(ListView):
             task_emoji = "⌨️"  # Keyboard emoji for CLI
         elif task.mode == "web":
             task_emoji = get_backend_emoji(task)
+        elif task.mode == "run":
+            task_emoji = "🚀"  # Rocket emoji for autopilot
         elif task.status == "created":
             task_emoji = "🦗"
 
@@ -342,6 +347,7 @@ class TaskList(ListView):
                 workspace=meta.get("workspace", ""),
                 web_port=meta.get("web_port"),
                 backend=meta.get("backend"),
+                exit_code=meta.get("exit_code"),
             )
             # Restore container_state if available
             if task_id in existing_states:
@@ -446,6 +452,9 @@ def render_task_details(
     elif task.mode == "web":
         emoji = get_backend_emoji(task)
         task_emoji = f"{emoji} "
+    elif task.mode == "run":
+        task_emoji = "🚀 "
+        mode_display = "Autopilot"
     elif task.status == "created":
         task_emoji = "🦗 "
         mode_display = "Not assigned (choose CLI or Web mode)"
@@ -495,6 +504,17 @@ def render_task_details(
                 Text(f"podman exec -it {container_name} bash", style=accent_style),
             )
         )
+    if task.mode == "run":
+        if task.exit_code is not None:
+            lines.append(Text(f"Exit code: {task.exit_code}"))
+        if project_id:
+            container_name = f"{project_id}-run-{task.task_id}"
+            lines.append(
+                Text.assemble(
+                    "Logs:      ",
+                    Text(f"podman logs -f {container_name}", style=accent_style),
+                )
+            )
 
     return Text("\n").join(lines)
 

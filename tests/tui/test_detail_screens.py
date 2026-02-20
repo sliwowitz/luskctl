@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 import sys
 import types
+from typing import Any
 from unittest import TestCase, main, mock
 
 from rich.text import Text
@@ -142,6 +143,30 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
         def __init__(self, *args, **kwargs) -> None:
             pass
 
+    class TextArea:
+        text: str
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self.text = ""
+
+        def focus(self) -> None:
+            pass
+
+    class SelectionList:
+        _items: tuple[object, ...]
+        selected: list[object]
+
+        def __init__(self, *items: object, **kwargs: object) -> None:
+            self._items = items
+            self.selected = []
+
+        def focus(self) -> None:
+            pass
+
+        @classmethod
+        def __class_getitem__(cls, item: type) -> type:
+            return cls
+
     widgets_mod.Button = Button
     widgets_mod.Footer = Footer
     widgets_mod.Header = Header
@@ -149,6 +174,8 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
     widgets_mod.ListView = ListView
     widgets_mod.Static = Static
     widgets_mod.OptionList = OptionList
+    widgets_mod.TextArea = TextArea
+    widgets_mod.SelectionList = SelectionList
 
     option_list_mod = types.ModuleType("textual.widgets.option_list")
 
@@ -677,6 +704,200 @@ class MainScreenShortcutTests(TestCase):
         coro = AppClass.action_delete_task_from_main(instance)
         asyncio.run(coro)
         instance.action_delete_task.assert_called_once()
+
+    def test_action_run_autopilot_from_main(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass.action_run_autopilot_from_main(instance)
+        asyncio.run(coro)
+        instance._action_task_start_autopilot.assert_called_once()
+
+    def test_action_follow_logs_from_main(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass.action_follow_logs_from_main(instance)
+        asyncio.run(coro)
+        instance._action_follow_logs.assert_called_once()
+
+
+class AutopilotScreenTests(TestCase):
+    """Tests for AutopilotPromptScreen and AgentSelectionScreen construction."""
+
+    def _import_screens(self) -> tuple[types.ModuleType, types.ModuleType]:
+        stubs = _build_textual_stubs()
+        screens, widgets, _ = _import_fresh(stubs)
+        return screens, widgets
+
+    def test_autopilot_prompt_screen_construction(self) -> None:
+        screens, _ = self._import_screens()
+        screen = screens.AutopilotPromptScreen()
+        self.assertIsNotNone(screen)
+
+    def test_agent_selection_screen_construction(self) -> None:
+        screens, _ = self._import_screens()
+        agents = [
+            {"name": "reviewer", "description": "Code reviewer", "default": True},
+            {"name": "debugger", "description": "Debugger", "default": False},
+        ]
+        screen = screens.AgentSelectionScreen(agents)
+        self.assertIsNotNone(screen)
+        self.assertEqual(len(screen._agents), 2)
+
+    def test_agent_selection_screen_empty_agents(self) -> None:
+        screens, _ = self._import_screens()
+        screen = screens.AgentSelectionScreen([])
+        self.assertIsNotNone(screen)
+        self.assertEqual(len(screen._agents), 0)
+
+
+class AutopilotKeyBindingTests(TestCase):
+    """Tests for autopilot-related key bindings in TaskDetailsScreen."""
+
+    def _import_screens(self) -> tuple[types.ModuleType, types.ModuleType]:
+        stubs = _build_textual_stubs()
+        screens, widgets, _ = _import_fresh(stubs)
+        return screens, widgets
+
+    def _make_key_event(self, key_str: str) -> mock.Mock:
+        event = mock.Mock()
+        event.key = key_str
+        return event
+
+    def test_shift_a_dismisses_task_start_autopilot(self) -> None:
+        screens, _ = self._import_screens()
+        screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = self._make_key_event("A")
+        screen.on_key(event)
+        screen.dismiss.assert_called_once_with("task_start_autopilot")
+        event.stop.assert_called_once()
+
+    def test_lowercase_f_works_with_autopilot_task(self) -> None:
+        screens, widgets = self._import_screens()
+        task = widgets.TaskMeta(
+            task_id="t1", status="running", mode="run", workspace="/w", web_port=None
+        )
+        screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = self._make_key_event("f")
+        screen.on_key(event)
+        screen.dismiss.assert_called_once_with("follow_logs")
+
+    def test_lowercase_f_ignored_for_non_autopilot_task(self) -> None:
+        screens, widgets = self._import_screens()
+        task = widgets.TaskMeta(
+            task_id="t1", status="running", mode="cli", workspace="/w", web_port=None
+        )
+        screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = self._make_key_event("f")
+        screen.on_key(event)
+        screen.dismiss.assert_not_called()
+
+    def test_lowercase_f_blocked_without_tasks(self) -> None:
+        screens, _ = self._import_screens()
+        screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = self._make_key_event("f")
+        screen.on_key(event)
+        screen.dismiss.assert_not_called()
+
+
+class AutopilotDispatchTests(TestCase):
+    """Tests for autopilot action dispatch routing in the app."""
+
+    def _get_app(self) -> tuple[types.ModuleType, Any]:
+        stubs = _build_textual_stubs()
+        _, _, app_mod = _import_fresh(stubs)
+        return app_mod, app_mod.LuskTUI
+
+    def test_task_action_dispatch_autopilot(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass._handle_task_action(instance, "task_start_autopilot")
+        asyncio.run(coro)
+        instance._action_task_start_autopilot.assert_called_once()
+
+    def test_task_action_dispatch_follow_logs(self) -> None:
+        app_mod, AppClass = self._get_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass._handle_task_action(instance, "follow_logs")
+        asyncio.run(coro)
+        instance._action_follow_logs.assert_called_once()
+
+
+class AutopilotRenderTests(TestCase):
+    """Tests for rendering autopilot task details."""
+
+    def _import_widgets(self) -> types.ModuleType:
+        stubs = _build_textual_stubs()
+        _, widgets, _ = _import_fresh(stubs)
+        return widgets
+
+    def test_render_task_details_autopilot_mode(self) -> None:
+        widgets = self._import_widgets()
+        task = widgets.TaskMeta(
+            task_id="5",
+            mode="run",
+            status="running",
+            workspace="/tmp/ws",
+            web_port=None,
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        self.assertIsInstance(result, Text)
+        text_str = str(result)
+        self.assertIn("Autopilot", text_str)
+        self.assertIn("podman logs", text_str)
+
+    def test_render_task_details_autopilot_with_exit_code(self) -> None:
+        widgets = self._import_widgets()
+        task = widgets.TaskMeta(
+            task_id="5",
+            mode="run",
+            status="completed",
+            workspace="/tmp/ws",
+            web_port=None,
+            exit_code=0,
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("Exit code: 0", text_str)
+
+    def test_format_task_label_autopilot(self) -> None:
+        widgets = self._import_widgets()
+        task = widgets.TaskMeta(
+            task_id="3",
+            mode="run",
+            status="running",
+            workspace="/tmp/ws",
+            web_port=None,
+        )
+        task_list = widgets.TaskList()
+        label = task_list._format_task_label(task)
+        self.assertIn("🚀", label)
+
+    def test_task_meta_exit_code_field(self) -> None:
+        widgets = self._import_widgets()
+        task = widgets.TaskMeta(
+            task_id="1",
+            mode="run",
+            status="completed",
+            workspace="/tmp/ws",
+            web_port=None,
+            exit_code=1,
+        )
+        self.assertEqual(task.exit_code, 1)
+
+    def test_task_meta_exit_code_default_none(self) -> None:
+        widgets = self._import_widgets()
+        task = widgets.TaskMeta(
+            task_id="1",
+            mode="cli",
+            status="running",
+            workspace="/tmp/ws",
+            web_port=None,
+        )
+        self.assertIsNone(task.exit_code)
 
 
 if __name__ == "__main__":

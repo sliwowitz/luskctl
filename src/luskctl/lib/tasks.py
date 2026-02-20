@@ -94,6 +94,27 @@ def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
 
 
+def _update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
+    """Update task metadata with exit code and final status.
+
+    Args:
+        project_id: The project ID
+        task_id: The task ID
+        exit_code: The exit code from the task, or None if unknown/failed
+    """
+    meta_dir = _tasks_meta_dir(project_id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        return
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    if exit_code is not None:
+        meta["exit_code"] = exit_code
+        meta["status"] = "completed" if exit_code == 0 else "failed"
+    else:
+        meta["status"] = "failed"
+    meta_path.write_text(yaml.safe_dump(meta))
+
+
 def _log_debug(message: str) -> None:
     """Append a simple debug line to the luskctl library log.
 
@@ -929,10 +950,7 @@ def task_run_headless(
         exit_code = _stream_until_exit(container_name)
         _print_run_summary(task_dir / "workspace")
 
-        # Update metadata with final status
-        meta["status"] = "completed" if exit_code == 0 else "failed"
-        meta["exit_code"] = exit_code
-        meta_path.write_text(yaml.safe_dump(meta))
+        _update_task_exit_code(project.id, task_id, exit_code)
 
         if exit_code != 0:
             print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
