@@ -429,10 +429,21 @@ class ActionsMixin:
                 text=True,
                 timeout=7200,  # 2h safety cap
             )
-            exit_code = int(result.stdout.strip()) if result.returncode == 0 else None
+            if result.returncode != 0:
+                err = (result.stderr or result.stdout or "").strip()
+                return project_id, task_id, None, f"podman wait failed: {err}"
+
+            try:
+                exit_code = int(result.stdout.strip())
+            except ValueError:
+                return (
+                    project_id,
+                    task_id,
+                    None,
+                    f"podman wait returned non-integer: {result.stdout.strip()!r}",
+                )
 
             _update_task_exit_code(project_id, task_id, exit_code)
-
             return project_id, task_id, exit_code, None
         except subprocess.TimeoutExpired:
             return project_id, task_id, None, "Watcher timed out"

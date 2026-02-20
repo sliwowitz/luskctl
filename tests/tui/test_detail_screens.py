@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 import sys
 import types
+from typing import Any
 from unittest import TestCase, main, mock
 
 from rich.text import Text
@@ -143,14 +144,19 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
             pass
 
     class TextArea:
-        def __init__(self, *args, **kwargs) -> None:
+        text: str
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
             self.text = ""
 
         def focus(self) -> None:
             pass
 
     class SelectionList:
-        def __init__(self, *items, **kwargs) -> None:
+        _items: tuple[object, ...]
+        selected: list[object]
+
+        def __init__(self, *items: object, **kwargs: object) -> None:
             self._items = items
             self.selected = []
 
@@ -158,7 +164,7 @@ def _build_textual_stubs() -> dict[str, types.ModuleType]:
             pass
 
         @classmethod
-        def __class_getitem__(cls, item) -> type:
+        def __class_getitem__(cls, item: type) -> type:
             return cls
 
     widgets_mod.Button = Button
@@ -717,7 +723,7 @@ class MainScreenShortcutTests(TestCase):
 class AutopilotScreenTests(TestCase):
     """Tests for AutopilotPromptScreen and AgentSelectionScreen construction."""
 
-    def _import_screens(self):
+    def _import_screens(self) -> tuple[types.ModuleType, types.ModuleType]:
         stubs = _build_textual_stubs()
         screens, widgets, _ = _import_fresh(stubs)
         return screens, widgets
@@ -747,12 +753,12 @@ class AutopilotScreenTests(TestCase):
 class AutopilotKeyBindingTests(TestCase):
     """Tests for autopilot-related key bindings in TaskDetailsScreen."""
 
-    def _import_screens(self):
+    def _import_screens(self) -> tuple[types.ModuleType, types.ModuleType]:
         stubs = _build_textual_stubs()
         screens, widgets, _ = _import_fresh(stubs)
         return screens, widgets
 
-    def _make_key_event(self, key_str):
+    def _make_key_event(self, key_str: str) -> mock.Mock:
         event = mock.Mock()
         event.key = key_str
         return event
@@ -800,7 +806,7 @@ class AutopilotKeyBindingTests(TestCase):
 class AutopilotDispatchTests(TestCase):
     """Tests for autopilot action dispatch routing in the app."""
 
-    def _get_app(self):
+    def _get_app(self) -> tuple[types.ModuleType, Any]:
         stubs = _build_textual_stubs()
         _, _, app_mod = _import_fresh(stubs)
         return app_mod, app_mod.LuskTUI
@@ -823,7 +829,7 @@ class AutopilotDispatchTests(TestCase):
 class AutopilotRenderTests(TestCase):
     """Tests for rendering autopilot task details."""
 
-    def _import_widgets(self):
+    def _import_widgets(self) -> types.ModuleType:
         stubs = _build_textual_stubs()
         _, widgets, _ = _import_fresh(stubs)
         return widgets
