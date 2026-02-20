@@ -283,9 +283,8 @@ class AutopilotPromptScreen(screen.ModalScreen[str | None]):
     (headless Claude) mode. The user can enter their prompt in a text area and
     submit it or cancel.
 
-    Returns:
-        ModalScreen[str | None]: The user's prompt string if submitted, or None
-        if cancelled (e.g., via Escape key or Cancel button).
+    The screen returns the prompt string if submitted, or None if cancelled
+    (e.g., via Escape key or Cancel button).
 
     Usage:
         Create an instance and push onto the modal stack. The screen will
