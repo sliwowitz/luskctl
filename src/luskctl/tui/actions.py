@@ -15,8 +15,10 @@ import sys
 
 from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
 from ..lib.clipboard import copy_to_clipboard_detailed
+from ..lib.config import state_root
 from ..lib.docker import build_images, generate_dockerfiles
 from ..lib.git_gate import sync_project_gate
+from ..lib.projects import load_project
 from ..lib.shell_launch import launch_login
 from ..lib.ssh import init_project_ssh
 from ..lib.task_env import WEB_BACKENDS
@@ -27,8 +29,10 @@ from ..lib.tasks import (
     task_new,
     task_restart,
     task_run_cli,
+    task_run_headless,
     task_run_web,
 )
+from .screens import AgentSelectionScreen, AutopilotPromptScreen
 from .widgets import TaskList
 
 
@@ -296,6 +300,156 @@ class ActionsMixin:
             input("\n[Press Enter to return to LuskTUI] ")
         await self.refresh_tasks()
 
+    async def _action_task_start_autopilot(self) -> None:
+        """Create a new task and run Claude headlessly (autopilot)."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+
+        # Show prompt input screen
+        await self.push_screen(
+            AutopilotPromptScreen(),
+            self._on_autopilot_prompt_result,
+        )
+
+    async def _on_autopilot_prompt_result(self, prompt: str | None) -> None:
+        """Handle the prompt returned from AutopilotPromptScreen."""
+        if not prompt or not self.current_project_id:
+            return
+
+        pid = self.current_project_id
+
+        # Load project to check for subagents
+        try:
+            project = load_project(pid)
+        except Exception as e:
+            self.notify(f"Error loading project: {e}")
+            return
+
+        subagents = project.agent_config.get("subagents", [])
+
+        if subagents:
+            # Show agent selection screen
+            await self.push_screen(
+                AgentSelectionScreen(subagents),
+                lambda selected, p=prompt: self._on_agent_selection_result(p, selected),
+            )
+        else:
+            # No agents configured, launch directly
+            await self._launch_autopilot(prompt, agents=None)
+
+    async def _on_agent_selection_result(self, prompt: str, selected: list[str] | None) -> None:
+        """Handle the agent list returned from AgentSelectionScreen."""
+        if selected is None:
+            # User cancelled agent selection
+            return
+        await self._launch_autopilot(prompt, agents=selected)
+
+    async def _launch_autopilot(self, prompt: str, agents: list[str] | None = None) -> None:
+        """Launch a headless autopilot task in a background worker."""
+        if not self.current_project_id:
+            return
+        pid = self.current_project_id
+        self.notify(f"Starting autopilot task for {pid}...")
+        self.run_worker(
+            lambda: self._run_headless_worker(pid, prompt, agents),
+            name=f"autopilot-launch:{pid}",
+            group="autopilot-launch",
+            thread=True,
+            exit_on_error=False,
+        )
+
+    def _run_headless_worker(
+        self, project_id: str, prompt: str, agents: list[str] | None
+    ) -> tuple[str, str, str | None]:
+        """Background worker: launch task_run_headless and return result."""
+        try:
+            task_id = task_run_headless(project_id, prompt, follow=False, agents=agents)
+            return project_id, task_id, None
+        except SystemExit as e:
+            return project_id, "", str(e)
+        except Exception as e:
+            return project_id, "", str(e)
+
+    def _start_autopilot_watcher(self, project_id: str, task_id: str) -> None:
+        """Spawn a background worker that waits for the container to finish
+        and updates task metadata with the exit code."""
+        container_name = f"{project_id}-run-{task_id}"
+        self.run_worker(
+            lambda: self._autopilot_wait_worker(project_id, task_id, container_name),
+            name=f"autopilot-wait:{project_id}:{task_id}",
+            group="autopilot-wait",
+            thread=True,
+            exit_on_error=False,
+        )
+
+    def _autopilot_wait_worker(
+        self, project_id: str, task_id: str, container_name: str
+    ) -> tuple[str, str, int | None, str | None]:
+        """Background worker: wait for the container to exit and update metadata."""
+        try:
+            result = subprocess.run(
+                ["podman", "wait", container_name],
+                capture_output=True,
+                text=True,
+                timeout=7200,  # 2h safety cap
+            )
+            exit_code = int(result.stdout.strip()) if result.returncode == 0 else None
+
+            # Update task metadata with exit_code and final status
+            meta_dir = state_root() / "projects" / project_id / "tasks"
+            meta_path = meta_dir / f"{task_id}.yml"
+            if meta_path.is_file():
+                import yaml
+
+                meta = yaml.safe_load(meta_path.read_text()) or {}
+                if exit_code is not None:
+                    meta["exit_code"] = exit_code
+                    meta["status"] = "completed" if exit_code == 0 else "failed"
+                else:
+                    meta["status"] = "failed"
+                meta_path.write_text(yaml.safe_dump(meta))
+
+            return project_id, task_id, exit_code, None
+        except subprocess.TimeoutExpired:
+            return project_id, task_id, None, "Watcher timed out"
+        except Exception as e:
+            return project_id, task_id, None, str(e)
+
+    async def _action_follow_logs(self) -> None:
+        """Follow logs for an autopilot task."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        if self.current_task.mode != "run":
+            self.notify("Follow logs is only available for autopilot tasks.")
+            return
+
+        pid = self.current_project_id
+        tid = self.current_task.task_id
+        container_name = f"{pid}-run-{tid}"
+        cmd = ["podman", "logs", "-f", container_name]
+        title = f"logs:{container_name}"
+
+        method, port = launch_login(cmd, title=title)
+
+        if method == "tmux":
+            self.notify(f"Logs opened in tmux window: {container_name}")
+        elif method == "terminal":
+            self.notify(f"Logs opened in new terminal: {container_name}")
+        elif method == "web" and port is not None:
+            self.open_url(f"http://localhost:{port}")
+            self.notify(f"Logs opened in browser tab: {container_name}")
+        else:
+            # Fallback: suspend TUI
+            with self.suspend():
+                try:
+                    subprocess.run(cmd)
+                except Exception as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
+
     async def _action_restart_task(self) -> None:
         """Restart a stopped task container."""
         if not self.current_project_id or not self.current_task:
@@ -484,3 +638,11 @@ class ActionsMixin:
     async def action_login_from_main(self) -> None:
         """Login to the selected task from the main screen."""
         await self._action_login()
+
+    async def action_run_autopilot_from_main(self) -> None:
+        """Start a new autopilot task from the main screen."""
+        await self._action_task_start_autopilot()
+
+    async def action_follow_logs_from_main(self) -> None:
+        """Follow logs for the selected autopilot task from the main screen."""
+        await self._action_follow_logs()

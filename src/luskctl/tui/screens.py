@@ -2,8 +2,8 @@
 
 from textual import events, screen
 from textual.app import ComposeResult
-from textual.containers import Vertical
-from textual.widgets import Static
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Button, Static
 
 try:  # pragma: no cover - optional import for test stubs
     from textual.widgets import OptionList
@@ -19,6 +19,16 @@ try:  # pragma: no cover - optional import for test stubs
     from textual.binding import Binding
 except Exception:  # pragma: no cover - textual may be a stub module
     Binding = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets import TextArea
+except Exception:  # pragma: no cover - textual may be a stub module
+    TextArea = None  # type: ignore[assignment,misc]
+
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets import SelectionList
+except Exception:  # pragma: no cover - textual may be a stub module
+    SelectionList = None  # type: ignore[assignment,misc]
 
 from ..lib.git_gate import GateStalenessInfo
 from ..lib.projects import Project as CodexProject
@@ -254,6 +264,159 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
 
 # ---------------------------------------------------------------------------
+# Autopilot Prompt Screen
+# ---------------------------------------------------------------------------
+
+
+class AutopilotPromptScreen(screen.ModalScreen[str | None]):
+    """Modal for entering an autopilot prompt."""
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    AutopilotPromptScreen {
+        align: center middle;
+    }
+
+    #autopilot-dialog {
+        width: 80;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #prompt-area {
+        height: 8;
+        margin-bottom: 1;
+    }
+
+    #prompt-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #prompt-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="autopilot-dialog") as dialog:
+            yield TextArea(id="prompt-area")
+            with Horizontal(id="prompt-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+                yield Button("Run ▶", id="btn-run", variant="primary")
+        dialog.border_title = "Autopilot Prompt"
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        area = self.query_one("#prompt-area", TextArea)
+        area.focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-run":
+            self._submit()
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def _submit(self) -> None:
+        area = self.query_one("#prompt-area", TextArea)
+        text = area.text.strip()
+        if text:
+            self.dismiss(text)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
+# Agent Selection Screen
+# ---------------------------------------------------------------------------
+
+
+class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
+    """Modal for selecting non-default agents to include in an autopilot run."""
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    AgentSelectionScreen {
+        align: center middle;
+    }
+
+    #agent-dialog {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #agent-selection {
+        height: auto;
+        max-height: 12;
+        margin-bottom: 1;
+    }
+
+    #agent-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+    """
+
+    def __init__(self, agents: list[dict]) -> None:
+        """agents: list of subagent dicts with 'name', 'description', 'default' fields."""
+        super().__init__()
+        self._agents = agents
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="agent-dialog") as dialog:
+            items = []
+            for agent in self._agents:
+                name = agent.get("name", "unnamed")
+                desc = agent.get("description", "")
+                label = f"{name}: {desc}" if desc else name
+                # Pre-select agents marked as default
+                initial = bool(agent.get("default", False))
+                items.append((label, name, initial))
+            yield SelectionList(*items, id="agent-selection")
+            with Horizontal(id="agent-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+                yield Button("OK", id="btn-ok", variant="primary")
+        dialog.border_title = "Select Agents"
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        btn = self.query_one("#btn-ok", Button)
+        btn.focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-ok":
+            self._submit()
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def _submit(self) -> None:
+        sel = self.query_one("#agent-selection", SelectionList)
+        selected = list(sel.selected)
+        self.dismiss(selected)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
 # Task Details Screen
 # ---------------------------------------------------------------------------
 
@@ -305,9 +468,14 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         options: list[Option | None] = [
             Option("Start CLI task  \\[N]  (new task + run CLI)", id="task_start_cli"),
             Option("Start \\[W]eb task  (new task + run Web)", id="task_start_web"),
+            Option(
+                "Start \\[A]utopilot task  (new task + run headless)", id="task_start_autopilot"
+            ),
         ]
         if self._has_tasks:
             options.append(Option("\\[l]ogin to container", id="login"))
+            if self._task_meta and self._task_meta.mode == "run":
+                options.append(Option("\\[f]ollow logs", id="follow_logs"))
             options.append(None)
             options.append(Option("run \\[c]li agent", id="cli"))
             options.append(Option("run \\[w]eb UI", id="web"))
@@ -345,10 +513,11 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # Shift keys (uppercase) — N/W/C always available, H/P require tasks
+        # Shift keys (uppercase) — N/W/A/C always available, H/P require tasks
         shift_map = {
             "N": "task_start_cli",
             "W": "task_start_web",
+            "A": "task_start_autopilot",
             "C": "new",
             "H": "diff_head",
             "P": "diff_prev",
@@ -361,7 +530,14 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             return
 
         # Lowercase keys — all require tasks to exist
-        lower_map = {"d": "delete", "c": "cli", "w": "web", "r": "restart", "l": "login"}
+        lower_map = {
+            "d": "delete",
+            "c": "cli",
+            "w": "web",
+            "r": "restart",
+            "l": "login",
+            "f": "follow_logs",
+        }
         if key in lower_map:
             if not self._has_tasks:
                 return
@@ -377,6 +553,9 @@ class TaskDetailsScreen(screen.Screen[str | None]):
 
     def action_task_start_web(self) -> None:
         self.dismiss("task_start_web")
+
+    def action_task_start_autopilot(self) -> None:
+        self.dismiss("task_start_autopilot")
 
     def action_new(self) -> None:
         self.dismiss("new")
@@ -405,6 +584,10 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         """
         if self._has_tasks:
             self.dismiss("login")
+
+    def action_follow_logs(self) -> None:
+        if self._has_tasks:
+            self.dismiss("follow_logs")
 
     def action_diff_head(self) -> None:
         if self._has_tasks:
