@@ -246,11 +246,12 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         )
 
     def test_basic_wrapper(self) -> None:
-        """Wrapper includes skip-permissions and git env vars."""
+        """Wrapper includes skip-permissions, add-dir /, and git env vars."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(has_agents=False, project=project)
         self.assertIn("claude()", wrapper)
         self.assertIn("--dangerously-skip-permissions", wrapper)
+        self.assertIn('--add-dir "/"', wrapper)
         self.assertIn("GIT_AUTHOR_NAME=Claude", wrapper)
         self.assertIn("GIT_COMMITTER_NAME", wrapper)
         self.assertIn("Test User", wrapper)
@@ -272,6 +273,8 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
             skip_permissions=False,
         )
         self.assertNotIn("--dangerously-skip-permissions", wrapper)
+        # --add-dir / is always present regardless of skip_permissions
+        self.assertIn('--add-dir "/"', wrapper)
 
     def test_wrapper_no_model_or_mcp(self) -> None:
         """Wrapper does not contain --model, --mcp-config, or --append-system-prompt."""
