@@ -58,6 +58,22 @@ tui:
   # Can be overridden with --no-tmux flag.
   # default_tmux: true
 
+# Agent configuration (applied to all projects, can be overridden per-project).
+# agent:
+#   # Sub-agents available in all projects
+#   subagents:
+#     - name: global-reviewer
+#       description: Code reviewer available in all projects
+#       tools: [Read, Grep, Glob]
+#       model: sonnet
+#       system_prompt: |
+#         You are a code reviewer...
+#     - file: ~/.config/luskctl/agents/debugger.md
+#   # MCP servers available in all projects
+#   mcp_servers:
+#     global-server:
+#       command: /usr/bin/my-global-mcp
+
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no
 # global or environment switch.

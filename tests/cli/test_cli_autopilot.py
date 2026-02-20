@@ -76,7 +76,7 @@ class RunClaudeCliTests(unittest.TestCase):
                     "myproject",
                     "test",
                     "--config",
-                    "/path/to/agent.json",
+                    "/path/to/agent.yml",
                 ],
             ),
             unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
@@ -84,4 +84,4 @@ class RunClaudeCliTests(unittest.TestCase):
             main()
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args
-            self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.json")
+            self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.yml")

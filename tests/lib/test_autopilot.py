@@ -1,5 +1,6 @@
 """Tests for autopilot (Level 1+2) features: run-claude and agent config."""
 
+import json
 import os
 import subprocess
 import tempfile
@@ -13,15 +14,21 @@ import yaml
 
 from luskctl.lib.containers import _get_container_exit_code, _stream_until_exit
 from luskctl.lib.projects import load_project
-from luskctl.lib.tasks import task_run_headless
+from luskctl.lib.tasks import (
+    _generate_claude_wrapper,
+    _merge_agent_configs,
+    _parse_md_agent,
+    _subagents_to_json,
+    task_run_headless,
+)
 from test_utils import mock_git_config, write_project
 
 
 class AgentConfigProjectTests(unittest.TestCase):
     """Tests for agent config parsing in projects.py."""
 
-    def test_agent_default_config_none_when_absent(self) -> None:
-        """Project has agent_default_config=None when not configured."""
+    def test_agent_config_empty_when_absent(self) -> None:
+        """Project has agent_config={} when not configured."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -33,20 +40,18 @@ class AgentConfigProjectTests(unittest.TestCase):
             ):
                 with mock_git_config():
                     p = load_project("proj_noagent")
-                self.assertIsNone(p.agent_default_config)
+                self.assertEqual(p.agent_config, {})
 
-    def test_agent_default_config_parsed(self) -> None:
-        """Project parses agent.default_config path from project.yml."""
+    def test_agent_config_parsed_as_dict(self) -> None:
+        """Project parses agent: section as a dict."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
-            config_file = base / "agent-config.json"
-            config_file.write_text('{"model": "sonnet"}', encoding="utf-8")
 
             write_project(
                 config_root,
                 "proj_agent",
-                f"project:\n  id: proj_agent\nagent:\n  default_config: {config_file}\n",
+                "project:\n  id: proj_agent\nagent:\n  model: opus\n  max_turns: 50\n",
             )
 
             with unittest.mock.patch.dict(
@@ -55,8 +60,218 @@ class AgentConfigProjectTests(unittest.TestCase):
             ):
                 with mock_git_config():
                     p = load_project("proj_agent")
-                self.assertIsNotNone(p.agent_default_config)
-                self.assertEqual(p.agent_default_config, config_file.resolve())
+                self.assertEqual(p.agent_config["model"], "opus")
+                self.assertEqual(p.agent_config["max_turns"], 50)
+
+    def test_agent_config_resolves_subagent_file_paths(self) -> None:
+        """Project resolves relative file: paths in subagents."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+
+            write_project(
+                config_root,
+                "proj_sa",
+                ("project:\n  id: proj_sa\nagent:\n  subagents:\n    - file: agents/reviewer.md\n"),
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"LUSKCTL_CONFIG_DIR": str(config_root), "LUSKCTL_STATE_DIR": str(base / "s")},
+            ):
+                with mock_git_config():
+                    p = load_project("proj_sa")
+                # File path should be resolved to absolute
+                sa = p.agent_config["subagents"][0]
+                self.assertTrue(Path(sa["file"]).is_absolute())
+                self.assertIn("agents/reviewer.md", sa["file"])
+
+
+class MergeAgentConfigsTests(unittest.TestCase):
+    """Tests for _merge_agent_configs."""
+
+    def test_scalar_override(self) -> None:
+        """Higher priority config overrides scalars."""
+        global_cfg = {"model": "haiku", "max_turns": 10}
+        project_cfg = {"model": "opus"}
+        merged = _merge_agent_configs(global_cfg, project_cfg)
+        self.assertEqual(merged["model"], "opus")
+        self.assertEqual(merged["max_turns"], 10)
+
+    def test_subagents_merge_by_name(self) -> None:
+        """Sub-agents are merged by name, higher priority wins on conflict."""
+        global_cfg = {
+            "subagents": [
+                {"name": "reviewer", "model": "haiku"},
+                {"name": "debugger", "model": "sonnet"},
+            ]
+        }
+        project_cfg = {
+            "subagents": [
+                {"name": "reviewer", "model": "opus"},
+                {"name": "planner", "model": "sonnet"},
+            ]
+        }
+        merged = _merge_agent_configs(global_cfg, project_cfg)
+        agents_by_name = {sa["name"]: sa for sa in merged["subagents"]}
+        self.assertEqual(len(agents_by_name), 3)
+        self.assertEqual(agents_by_name["reviewer"]["model"], "opus")
+        self.assertEqual(agents_by_name["debugger"]["model"], "sonnet")
+        self.assertEqual(agents_by_name["planner"]["model"], "sonnet")
+
+    def test_mcp_servers_merge_by_name(self) -> None:
+        """MCP servers are merged by server name."""
+        global_cfg = {"mcp_servers": {"srv1": {"command": "/usr/bin/a"}}}
+        project_cfg = {
+            "mcp_servers": {
+                "srv1": {"command": "/usr/bin/b"},
+                "srv2": {"command": "/usr/bin/c"},
+            }
+        }
+        merged = _merge_agent_configs(global_cfg, project_cfg)
+        self.assertEqual(merged["mcp_servers"]["srv1"]["command"], "/usr/bin/b")
+        self.assertEqual(merged["mcp_servers"]["srv2"]["command"], "/usr/bin/c")
+
+    def test_empty_configs(self) -> None:
+        """Merging empty configs returns empty dict."""
+        self.assertEqual(_merge_agent_configs({}, {}), {})
+        self.assertEqual(_merge_agent_configs({}, None), {})
+
+    def test_three_level_merge(self) -> None:
+        """Three-level merge with CLI overrides."""
+        global_cfg = {"model": "haiku", "max_turns": 10}
+        project_cfg = {"model": "sonnet"}
+        cli_cfg = {"model": "opus"}
+        merged = _merge_agent_configs(global_cfg, project_cfg, cli_cfg)
+        self.assertEqual(merged["model"], "opus")
+        self.assertEqual(merged["max_turns"], 10)
+
+
+class SubagentsToJsonTests(unittest.TestCase):
+    """Tests for _subagents_to_json."""
+
+    def test_inline_definition(self) -> None:
+        """Inline sub-agent defs map system_prompt to prompt."""
+        subagents = [
+            {
+                "name": "reviewer",
+                "description": "Code reviewer",
+                "tools": ["Read", "Grep"],
+                "model": "sonnet",
+                "system_prompt": "You are a code reviewer.",
+            }
+        ]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "reviewer")
+        self.assertEqual(result[0]["prompt"], "You are a code reviewer.")
+        self.assertNotIn("system_prompt", result[0])
+
+    def test_file_reference(self) -> None:
+        """File references parse .md YAML frontmatter + body."""
+        with tempfile.TemporaryDirectory() as td:
+            md_file = Path(td) / "reviewer.md"
+            md_file.write_text(
+                "---\nname: reviewer\ndescription: Code reviewer\n"
+                "tools: [Read, Grep]\nmodel: sonnet\n---\n"
+                "You are a code reviewer.\n",
+                encoding="utf-8",
+            )
+            subagents = [{"file": str(md_file)}]
+            result = json.loads(_subagents_to_json(subagents))
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["name"], "reviewer")
+            self.assertEqual(result[0]["prompt"], "You are a code reviewer.")
+
+    def test_missing_file_skipped(self) -> None:
+        """Missing file references are skipped."""
+        subagents = [{"file": "/nonexistent/agent.md"}]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(len(result), 0)
+
+
+class ParseMdAgentTests(unittest.TestCase):
+    """Tests for _parse_md_agent."""
+
+    def test_parse_with_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            md = Path(td) / "test.md"
+            md.write_text(
+                "---\nname: test\ntools: [Read]\n---\nPrompt body.",
+                encoding="utf-8",
+            )
+            result = _parse_md_agent(str(md))
+            self.assertEqual(result["name"], "test")
+            self.assertEqual(result["prompt"], "Prompt body.")
+
+    def test_parse_without_frontmatter(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            md = Path(td) / "test.md"
+            md.write_text("Just a prompt.", encoding="utf-8")
+            result = _parse_md_agent(str(md))
+            self.assertEqual(result["prompt"], "Just a prompt.")
+
+    def test_nonexistent_file(self) -> None:
+        result = _parse_md_agent("/nonexistent/file.md")
+        self.assertEqual(result, {})
+
+
+class GenerateClaudeWrapperTests(unittest.TestCase):
+    """Tests for _generate_claude_wrapper."""
+
+    def _make_project(self):
+        from luskctl.lib.projects import Project
+
+        return Project(
+            id="testproj",
+            security_class="online",
+            upstream_url=None,
+            default_branch="main",
+            root=Path("/tmp/testproj"),
+            tasks_root=Path("/tmp/testproj/tasks"),
+            gate_path=Path("/tmp/testproj/gate"),
+            staging_root=None,
+            ssh_key_name=None,
+            ssh_host_dir=None,
+            human_name="Test User",
+            human_email="test@example.com",
+        )
+
+    def test_basic_wrapper(self) -> None:
+        """Wrapper includes skip-permissions and git env vars."""
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({}, project)
+        self.assertIn("claude()", wrapper)
+        self.assertIn("--dangerously-skip-permissions", wrapper)
+        self.assertIn("GIT_AUTHOR_NAME=Claude", wrapper)
+        self.assertIn("GIT_COMMITTER_NAME", wrapper)
+        self.assertIn("Test User", wrapper)
+
+    def test_wrapper_with_model(self) -> None:
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({"model": "opus"}, project)
+        self.assertIn("--model opus", wrapper)
+
+    def test_wrapper_with_subagents(self) -> None:
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({"subagents": [{"name": "test"}]}, project)
+        self.assertIn("agents.json", wrapper)
+
+    def test_wrapper_with_mcp(self) -> None:
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({"mcp_servers": {"srv": {"command": "/bin/x"}}}, project)
+        self.assertIn("mcp.json", wrapper)
+
+    def test_wrapper_skip_perms_false(self) -> None:
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({"dangerously_skip_permissions": False}, project)
+        self.assertNotIn("--dangerously-skip-permissions", wrapper)
+
+    def test_wrapper_with_system_prompt(self) -> None:
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper({"system_prompt": "Be helpful"}, project)
+        self.assertIn("--append-system-prompt", wrapper)
+        self.assertIn("Be helpful", wrapper)
 
 
 class StreamUntilExitTests(unittest.TestCase):
@@ -187,15 +402,12 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     cmd_str = " ".join(cmd)
                     self.assertIn("/home/dev/.luskctl:Z", cmd_str)
 
-    def test_headless_copies_config_file(self) -> None:
-        """task_run_headless copies agent config when provided."""
+    def test_headless_generates_claude_wrapper(self) -> None:
+        """task_run_headless generates luskctl-claude.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_cfg")
+            config_file = self._make_project(base, "proj_wrap")
             state_dir = base / "state"
-
-            agent_config = base / "my-agent-config.json"
-            agent_config.write_text('{"model": "opus"}', encoding="utf-8")
 
             with unittest.mock.patch.dict(
                 os.environ,
@@ -215,25 +427,31 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
                     with redirect_stdout(buffer):
-                        task_run_headless("proj_cfg", "test prompt", config_path=str(agent_config))
+                        task_run_headless("proj_wrap", "test")
 
-                    # Verify config was copied
-                    copied = (
+                    # Verify wrapper was written
+                    wrapper = (
                         state_dir
                         / "tasks"
-                        / "proj_cfg"
+                        / "proj_wrap"
                         / "1"
                         / "agent-config"
-                        / "agent-config.json"
+                        / "luskctl-claude.sh"
                     )
-                    self.assertTrue(copied.is_file())
-                    self.assertEqual(copied.read_text(), '{"model": "opus"}')
+                    self.assertTrue(wrapper.is_file())
+                    content = wrapper.read_text()
+                    self.assertIn("claude()", content)
+                    self.assertIn("--dangerously-skip-permissions", content)
 
-    def test_headless_sets_env_overrides(self) -> None:
-        """task_run_headless passes model and max_turns as env vars."""
+    def test_headless_merges_project_agent_config(self) -> None:
+        """task_run_headless merges project agent config into wrapper."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_env")
+            config_file = self._make_project(
+                base,
+                "proj_merge",
+                "agent:\n  model: opus\n  max_turns: 50\n",
+            )
             state_dir = base / "state"
 
             with unittest.mock.patch.dict(
@@ -254,12 +472,63 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
                     with redirect_stdout(buffer):
-                        task_run_headless("proj_env", "test", model="opus", max_turns=50)
+                        task_run_headless("proj_merge", "test")
 
-                    cmd = run_mock.call_args[0][0]
-                    env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
-                    self.assertIn("LUSKCTL_AGENT_MODEL=opus", env_entries)
-                    self.assertIn("LUSKCTL_AGENT_MAX_TURNS=50", env_entries)
+                    wrapper = (
+                        state_dir
+                        / "tasks"
+                        / "proj_merge"
+                        / "1"
+                        / "agent-config"
+                        / "luskctl-claude.sh"
+                    )
+                    content = wrapper.read_text()
+                    self.assertIn("--model opus", content)
+                    self.assertIn("--max-turns 50", content)
+
+    def test_headless_cli_overrides_project_config(self) -> None:
+        """CLI model/max_turns override project config in the wrapper."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(
+                base,
+                "proj_cli_over",
+                "agent:\n  model: haiku\n",
+            )
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks._stream_until_exit", return_value=0),
+                    unittest.mock.patch("luskctl.lib.tasks._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_headless("proj_cli_over", "test", model="opus", max_turns=100)
+
+                    wrapper = (
+                        state_dir
+                        / "tasks"
+                        / "proj_cli_over"
+                        / "1"
+                        / "agent-config"
+                        / "luskctl-claude.sh"
+                    )
+                    content = wrapper.read_text()
+                    # CLI overrides should win
+                    self.assertIn("--model opus", content)
+                    self.assertIn("--max-turns 100", content)
 
     def test_headless_container_name_uses_run_prefix(self) -> None:
         """task_run_headless names the container <project>-run-<task_id>."""
@@ -358,55 +627,8 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("detached", output.lower())
                     self.assertIn("proj_nf-run-1", output)
 
-    def test_headless_uses_project_default_config(self) -> None:
-        """task_run_headless falls back to project's agent_default_config."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            state_dir = base / "state"
-            envs_dir = base / "envs"
-
-            # Create a default config file
-            default_config = base / "default-agent.json"
-            default_config.write_text('{"model": "haiku"}', encoding="utf-8")
-
-            config_root = base / "config"
-            config_file = base / "config.yml"
-            config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
-            write_project(
-                config_root,
-                "proj_dc",
-                (f"project:\n  id: proj_dc\nagent:\n  default_config: {default_config}\n"),
-            )
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
-                    unittest.mock.patch("luskctl.lib.tasks._stream_until_exit", return_value=0),
-                    unittest.mock.patch("luskctl.lib.tasks._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless("proj_dc", "test prompt")
-
-                    # Verify default config was copied
-                    copied = (
-                        state_dir / "tasks" / "proj_dc" / "1" / "agent-config" / "agent-config.json"
-                    )
-                    self.assertTrue(copied.is_file())
-                    self.assertEqual(copied.read_text(), '{"model": "haiku"}')
-
-    def test_headless_uses_start_claude_in_command(self) -> None:
-        """task_run_headless podman command invokes start-claude.sh."""
+    def test_headless_uses_claude_function_in_command(self) -> None:
+        """task_run_headless podman command invokes claude function (not start-claude.sh)."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_cmd")
@@ -433,8 +655,54 @@ class TaskRunHeadlessTests(unittest.TestCase):
                         task_run_headless("proj_cmd", "test")
 
                     cmd = run_mock.call_args[0][0]
-                    # The last arg should be a bash command that includes start-claude.sh
                     bash_cmd = cmd[-1]
                     self.assertIn("init-ssh-and-repo.sh", bash_cmd)
-                    self.assertIn("start-claude.sh", bash_cmd)
+                    # Should use claude function, not start-claude.sh
+                    self.assertIn("claude -p", bash_cmd)
+                    self.assertNotIn("start-claude.sh", bash_cmd)
                     self.assertIn("timeout", bash_cmd)
+                    self.assertIn("--output-format stream-json", bash_cmd)
+
+    def test_headless_with_config_file(self) -> None:
+        """task_run_headless reads YAML config file and merges it."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(base, "proj_cfgfile")
+            state_dir = base / "state"
+
+            # Create a YAML agent config file
+            agent_config = base / "my-agent-config.yml"
+            agent_config.write_text("model: sonnet\nmax_turns: 25\n", encoding="utf-8")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks._stream_until_exit", return_value=0),
+                    unittest.mock.patch("luskctl.lib.tasks._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_headless("proj_cfgfile", "test", config_path=str(agent_config))
+
+                    # Verify wrapper reflects config file settings
+                    wrapper = (
+                        state_dir
+                        / "tasks"
+                        / "proj_cfgfile"
+                        / "1"
+                        / "agent-config"
+                        / "luskctl-claude.sh"
+                    )
+                    content = wrapper.read_text()
+                    self.assertIn("--model sonnet", content)
+                    self.assertIn("--max-turns 25", content)

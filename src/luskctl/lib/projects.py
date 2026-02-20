@@ -72,8 +72,8 @@ class Project:
     auto_sync_branches: list[str] = field(default_factory=list)
     # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
     default_agent: str | None = None
-    # Optional path to a default agent-config.json for autopilot/headless runs
-    agent_default_config: Path | None = None
+    # Agent configuration dict (from project.yml agent: section)
+    agent_config: dict = field(default_factory=dict)
 
 
 def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -218,16 +218,15 @@ def load_project(project_id: str) -> Project:
     if not default_agent:
         default_agent = get_global_default_agent()
 
-    # Optional agent config section for autopilot/headless runs
+    # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
-    agent_default_config_str = agent_cfg.get("default_config")
-    agent_default_config: Path | None = None
-    if agent_default_config_str:
-        _agent_cfg_path = Path(str(agent_default_config_str)).expanduser()
-        if _agent_cfg_path.is_absolute():
-            agent_default_config = _agent_cfg_path.resolve()
-        else:
-            agent_default_config = (root / _agent_cfg_path).expanduser().resolve()
+    # Resolve subagent file: paths relative to project root
+    for sa in agent_cfg.get("subagents", []) or []:
+        if isinstance(sa, dict) and "file" in sa:
+            file_path = Path(str(sa["file"])).expanduser()
+            if not file_path.is_absolute():
+                file_path = root / file_path
+            sa["file"] = str(file_path.resolve())
 
     p = Project(
         id=pid,
@@ -251,6 +250,6 @@ def load_project(project_id: str) -> Project:
         auto_sync_enabled=auto_sync_enabled,
         auto_sync_branches=auto_sync_branches,
         default_agent=default_agent,
-        agent_default_config=agent_default_config,
+        agent_config=agent_cfg,
     )
     return p

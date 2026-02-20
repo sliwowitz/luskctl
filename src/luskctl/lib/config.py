@@ -214,3 +214,9 @@ def get_tui_default_tmux() -> bool:
     cfg = load_global_config()
     tui_cfg = cfg.get("tui", {}) or {}
     return bool(tui_cfg.get("default_tmux", False))
+
+
+def get_global_agent_config() -> dict:
+    """Return the agent: section from the global config, or empty dict."""
+    cfg = load_global_config()
+    return cfg.get("agent", {}) or {}

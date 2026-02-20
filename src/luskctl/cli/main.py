@@ -409,7 +409,9 @@ def main() -> None:
     except Exception:
         pass
     p_run_claude.add_argument("prompt", help="Task prompt for Claude")
-    p_run_claude.add_argument("--config", dest="agent_config", help="Path to agent-config.json")
+    p_run_claude.add_argument(
+        "--config", dest="agent_config", help="Path to agent config YAML file"
+    )
     p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
     p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
     p_run_claude.add_argument("--timeout", type=int, help="Maximum runtime in seconds")

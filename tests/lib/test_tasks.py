@@ -1700,22 +1700,18 @@ class LoginTests(unittest.TestCase):
                     cmd = get_login_command("proj_loginweb", "1")
                     self.assertEqual(cmd[3], "proj_loginweb-web-1")
 
-    def test_login_injects_project_agent_config(self) -> None:
-        """get_login_command copies agent_default_config into the container."""
+    def test_login_no_longer_injects_agent_config(self) -> None:
+        """get_login_command does NOT inject agent config (handled via mount)."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
             state_dir = base / "state"
             config_root.mkdir(parents=True, exist_ok=True)
 
-            # Create agent config file
-            agent_cfg = base / "agent-config.json"
-            agent_cfg.write_text('{"model": "sonnet"}', encoding="utf-8")
-
             write_project(
                 config_root,
                 "proj_login_cfg",
-                (f"project:\n  id: proj_login_cfg\nagent:\n  default_config: {agent_cfg}\n"),
+                "project:\n  id: proj_login_cfg\nagent:\n  model: sonnet\n",
             )
 
             with unittest.mock.patch.dict(
@@ -1748,18 +1744,11 @@ class LoginTests(unittest.TestCase):
                     mock_git_config(),
                     unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as mock_run,
                 ):
-                    mock_run.return_value = subprocess.CompletedProcess([], 0)
                     cmd = get_login_command("proj_login_cfg", "1")
 
                     # Should still return the tmux command
                     self.assertEqual(cmd[3], "proj_login_cfg-cli-1")
                     self.assertIn("tmux", cmd)
 
-                    # Verify podman exec mkdir + podman cp were called
-                    self.assertEqual(mock_run.call_count, 2)
-                    mkdir_call = mock_run.call_args_list[0][0][0]
-                    self.assertEqual(mkdir_call[:2], ["podman", "exec"])
-                    self.assertIn("mkdir", mkdir_call)
-                    cp_call = mock_run.call_args_list[1][0][0]
-                    self.assertEqual(cp_call[:2], ["podman", "cp"])
-                    self.assertIn("agent-config.json", cp_call[2])
+                    # No podman exec/cp calls — config injection is via mount
+                    mock_run.assert_not_called()
