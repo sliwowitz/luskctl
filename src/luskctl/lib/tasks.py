@@ -381,8 +381,7 @@ def _prepare_agent_config_dir(
     """
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
-    agent_config_dir.mkdir(parents=True, exist_ok=True)
-
+    _ensure_dir(agent_config_dir)
     # Build agents JSON (may be empty dict "{}")
     has_agents = False
     if subagents:
