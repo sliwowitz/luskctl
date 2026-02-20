@@ -354,8 +354,8 @@ def _generate_claude_wrapper(
     human_email = shlex.quote(project.human_email or "nobody@localhost")
     lines.append("    GIT_AUTHOR_NAME=Claude \\")
     lines.append("    GIT_AUTHOR_EMAIL=noreply@anthropic.com \\")
-    lines.append(f'    GIT_COMMITTER_NAME="${{HUMAN_GIT_NAME:-{human_name}}}" \\')
-    lines.append(f'    GIT_COMMITTER_EMAIL="${{HUMAN_GIT_EMAIL:-{human_email}}}" \\')
+    lines.append(f"    GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\")
+    lines.append(f"    GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\")
     lines.append('    command claude "${_args[@]}" "$@"')
     lines.append("}")
 
