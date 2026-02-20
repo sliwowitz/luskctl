@@ -705,7 +705,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("proj_nf-run-1", output)
 
     def test_headless_uses_claude_function_in_command(self) -> None:
-        """task_run_headless podman command invokes claude function (not start-claude.sh)."""
+        """task_run_headless podman command passes flags directly to claude."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_cmd")
@@ -734,11 +734,15 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     cmd = run_mock.call_args[0][0]
                     bash_cmd = cmd[-1]
                     self.assertIn("init-ssh-and-repo.sh", bash_cmd)
-                    # Should use claude function, not start-claude.sh
-                    self.assertIn("claude -p", bash_cmd)
                     self.assertNotIn("start-claude.sh", bash_cmd)
                     self.assertIn("timeout", bash_cmd)
                     self.assertIn("--output-format stream-json", bash_cmd)
+                    # Flags passed directly (not via wrapper) so timeout
+                    # doesn't bypass them
+                    self.assertIn("--dangerously-skip-permissions", bash_cmd)
+                    self.assertIn('--add-dir "/"', bash_cmd)
+                    self.assertIn("GIT_AUTHOR_NAME=Claude", bash_cmd)
+                    self.assertIn("-p", bash_cmd)
 
     def test_headless_with_config_file_subagents(self) -> None:
         """task_run_headless reads subagents from YAML config file."""
