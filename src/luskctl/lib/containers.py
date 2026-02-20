@@ -70,7 +70,7 @@ def _stop_task_containers(project: "Project", task_id: str) -> None:
     container. The task itself is already being deleted at this point, so
     a forceful remove is acceptable and keeps state consistent.
     """
-    from .tasks import _log_debug
+    from .logging_utils import _log_debug
 
     # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
     names = [
