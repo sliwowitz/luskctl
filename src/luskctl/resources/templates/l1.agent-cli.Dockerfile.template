@@ -67,7 +67,10 @@ RUN set -eux; \
     # Add Mistral model sync to bashrc (only for interactive shells)
     printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
-# Symlink for luskctl project config (resolved at runtime via mount)
+# Symlink for luskctl project config (resolved at runtime via mount).
+# NOTE (#180): This wrapper is only invoked when bash interprets `claude`
+# directly (interactive sessions).  Headless mode uses `timeout` which
+# exec's the claude binary and bypasses the wrapper; see task_run_headless().
 RUN ln -s /home/dev/.luskctl/luskctl-claude.sh /etc/profile.d/zz-luskctl-project.sh
 
 # === User operations ===
