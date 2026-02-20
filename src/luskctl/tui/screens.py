@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from typing import TypedDict
+
 from textual import events, screen
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -268,8 +270,27 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 
 
+class AgentInfo(TypedDict):
+    name: str
+    description: str
+    default: bool
+
+
 class AutopilotPromptScreen(screen.ModalScreen[str | None]):
-    """Modal for entering an autopilot prompt."""
+    """Modal for entering an autopilot prompt.
+
+    A modal dialog that prompts the user to enter a prompt for the autopilot
+    (headless Claude) mode. The user can enter their prompt in a text area and
+    submit it or cancel.
+
+    Returns:
+        ModalScreen[str | None]: The user's prompt string if submitted, or None
+        if cancelled (e.g., via Escape key or Cancel button).
+
+    Usage:
+        Create an instance and push onto the modal stack. The screen will
+        dismiss with the prompt string on submit, or None on cancel.
+    """
 
     BINDINGS = [
         _modal_binding("escape", "cancel", "Cancel"),
@@ -375,8 +396,8 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
     }
     """
 
-    def __init__(self, agents: list[dict]) -> None:
-        """agents: list of subagent dicts with 'name', 'description', 'default' fields."""
+    def __init__(self, agents: list[AgentInfo]) -> None:
+        """agents: list of AgentInfo dicts with 'name', 'description', 'default' fields."""
         super().__init__()
         self._agents = agents
 

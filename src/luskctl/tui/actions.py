@@ -15,7 +15,6 @@ import sys
 
 from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
 from ..lib.clipboard import copy_to_clipboard_detailed
-from ..lib.config import state_root
 from ..lib.docker import build_images, generate_dockerfiles
 from ..lib.git_gate import sync_project_gate
 from ..lib.projects import load_project
@@ -23,6 +22,7 @@ from ..lib.shell_launch import launch_login
 from ..lib.ssh import init_project_ssh
 from ..lib.task_env import WEB_BACKENDS
 from ..lib.tasks import (
+    _update_task_exit_code,
     get_login_command,
     get_workspace_git_diff,
     task_delete,
@@ -396,19 +396,7 @@ class ActionsMixin:
             )
             exit_code = int(result.stdout.strip()) if result.returncode == 0 else None
 
-            # Update task metadata with exit_code and final status
-            meta_dir = state_root() / "projects" / project_id / "tasks"
-            meta_path = meta_dir / f"{task_id}.yml"
-            if meta_path.is_file():
-                import yaml
-
-                meta = yaml.safe_load(meta_path.read_text()) or {}
-                if exit_code is not None:
-                    meta["exit_code"] = exit_code
-                    meta["status"] = "completed" if exit_code == 0 else "failed"
-                else:
-                    meta["status"] = "failed"
-                meta_path.write_text(yaml.safe_dump(meta))
+            _update_task_exit_code(project_id, task_id, exit_code)
 
             return project_id, task_id, exit_code, None
         except subprocess.TimeoutExpired:
