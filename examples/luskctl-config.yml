@@ -58,6 +58,23 @@ tui:
   # Can be overridden with --no-tmux flag.
   # default_tmux: true
 
+# Agent configuration
+# -----------------------------------------------------------------
+# Native Claude handles global agents and MCPs:
+#   - Global agents:  ~/.claude/agents/        (available to all projects)
+#   - Global MCPs:    ~/.claude/settings.json  (mcpServers section)
+#   - Project agents: <workspace>/.claude/agents/
+#   - Project MCPs:   <workspace>/.claude/settings.json
+#
+# luskctl converts per-project sub-agent YAML definitions (in project.yml)
+# to JSON for the --agents flag at task runtime. See project.yml for examples.
+#
+# Run `luskctl config` to see the actual paths on your system.
+#
+# TODO: future — support global agent definitions here (agent.subagents)
+# that would be merged with per-project subagents. Use a generic merge
+# approach compatible with multiple agent runtimes.
+
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no
 # global or environment switch.

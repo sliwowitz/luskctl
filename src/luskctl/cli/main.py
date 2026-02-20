@@ -45,6 +45,7 @@ from ..lib.tasks import (
     task_new,
     task_restart,
     task_run_cli,
+    task_run_headless,
     task_run_web,
     task_status,
     task_stop,
@@ -204,6 +205,21 @@ def _print_config() -> None:
                     f"{_gray(str(path), color_enabled)} "
                     f"(exists: {_yes_no(path.is_file(), color_enabled)})"
                 )
+
+    # Native Claude configuration locations
+    home = Path.home()
+    claude_agents_dir = home / ".claude" / "agents"
+    claude_settings = home / ".claude" / "settings.json"
+    print("Native Claude configuration (edit with your OS tools):")
+    print(
+        f"- Global agents dir: {_gray(str(claude_agents_dir), color_enabled)} "
+        f"(exists: {_yes_no(claude_agents_dir.is_dir(), color_enabled)})"
+    )
+    print(
+        f"- Global settings: {_gray(str(claude_settings), color_enabled)} "
+        f"(exists: {_yes_no(claude_settings.is_file(), color_enabled)})"
+    )
+    print("  (MCPs go in settings.json under mcpServers)")
 
     # ENVIRONMENT
     print("Environment overrides (if set):")
@@ -398,6 +414,35 @@ def main() -> None:
     except Exception:
         pass
 
+    # run-claude (headless autopilot)
+    p_run_claude = sub.add_parser(
+        "run-claude", help="Run Claude headlessly in a new task (autopilot mode)"
+    )
+    _a = p_run_claude.add_argument("project_id", help="Project ID")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_run_claude.add_argument("prompt", help="Task prompt for Claude")
+    p_run_claude.add_argument(
+        "--config", dest="agent_config", help="Path to agent config YAML file"
+    )
+    p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
+    p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
+    p_run_claude.add_argument("--timeout", type=int, help="Maximum runtime in seconds")
+    p_run_claude.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="Detach after starting (don't stream output)",
+    )
+    p_run_claude.add_argument(
+        "--agent",
+        dest="selected_agents",
+        action="append",
+        default=None,
+        help="Include a non-default agent by name (repeatable)",
+    )
+
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
@@ -427,6 +472,13 @@ def main() -> None:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except Exception:
         pass
+    t_run_cli.add_argument(
+        "--agent",
+        dest="selected_agents",
+        action="append",
+        default=None,
+        help="Include a non-default agent by name (repeatable)",
+    )
 
     t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
     _a = t_run_ui.add_argument("project_id")
@@ -444,6 +496,13 @@ def main() -> None:
         "--backend",
         dest="ui_backend",
         help=f"Web backend ({known_backends})",
+    )
+    t_run_ui.add_argument(
+        "--agent",
+        dest="selected_agents",
+        action="append",
+        default=None,
+        help="Include a non-default agent by name (repeatable)",
     )
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
@@ -504,6 +563,13 @@ def main() -> None:
     t_start.add_argument(
         "--backend",
         help="Web backend (default from project config or 'codex')",
+    )
+    t_start.add_argument(
+        "--agent",
+        dest="selected_agents",
+        action="append",
+        default=None,
+        help="Include a non-default agent by name (repeatable)",
     )
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
@@ -578,15 +644,35 @@ def main() -> None:
                 print(f"- {p.id} [{p.security_class}] upstream={upstream} config_root={p.root}")
     elif args.cmd == "login":
         task_login(args.project_id, args.task_id)
+    elif args.cmd == "run-claude":
+        task_run_headless(
+            args.project_id,
+            args.prompt,
+            config_path=getattr(args, "agent_config", None),
+            model=getattr(args, "model", None),
+            max_turns=getattr(args, "max_turns", None),
+            timeout=getattr(args, "timeout", None),
+            follow=not getattr(args, "no_follow", False),
+            agents=getattr(args, "selected_agents", None),
+        )
     elif args.cmd == "task":
         if args.task_cmd == "new":
             task_new(args.project_id)
         elif args.task_cmd == "list":
             task_list(args.project_id)
         elif args.task_cmd == "run-cli":
-            task_run_cli(args.project_id, args.task_id)
+            task_run_cli(
+                args.project_id,
+                args.task_id,
+                agents=getattr(args, "selected_agents", None),
+            )
         elif args.task_cmd == "run-web":
-            task_run_web(args.project_id, args.task_id, backend=getattr(args, "ui_backend", None))
+            task_run_web(
+                args.project_id,
+                args.task_id,
+                backend=getattr(args, "ui_backend", None),
+                agents=getattr(args, "selected_agents", None),
+            )
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
         elif args.task_cmd == "stop":
@@ -596,10 +682,16 @@ def main() -> None:
             task_restart(args.project_id, args.task_id, backend=backend)
         elif args.task_cmd == "start":
             task_id = task_new(args.project_id)
+            selected = getattr(args, "selected_agents", None)
             if args.web:
-                task_run_web(args.project_id, task_id, backend=getattr(args, "backend", None))
+                task_run_web(
+                    args.project_id,
+                    task_id,
+                    backend=getattr(args, "backend", None),
+                    agents=selected,
+                )
             else:
-                task_run_cli(args.project_id, task_id)
+                task_run_cli(args.project_id, task_id, agents=selected)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
         else:

@@ -1699,3 +1699,56 @@ class LoginTests(unittest.TestCase):
                 ):
                     cmd = get_login_command("proj_loginweb", "1")
                     self.assertEqual(cmd[3], "proj_loginweb-web-1")
+
+    def test_login_no_longer_injects_agent_config(self) -> None:
+        """get_login_command does NOT inject agent config (handled via mount)."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_root = base / "config"
+            state_dir = base / "state"
+            config_root.mkdir(parents=True, exist_ok=True)
+
+            write_project(
+                config_root,
+                "proj_login_cfg",
+                "project:\n  id: proj_login_cfg\nagent:\n  model: sonnet\n",
+            )
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                task_new("proj_login_cfg")
+
+            meta_dir = state_dir / "projects" / "proj_login_cfg" / "tasks"
+            meta_path = meta_dir / "1.yml"
+            meta = yaml.safe_load(meta_path.read_text())
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml.safe_dump(meta))
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(config_root),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                },
+            ):
+                with (
+                    unittest.mock.patch(
+                        "luskctl.lib.tasks._get_container_state",
+                        return_value="running",
+                    ),
+                    mock_git_config(),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as mock_run,
+                ):
+                    cmd = get_login_command("proj_login_cfg", "1")
+
+                    # Should still return the tmux command
+                    self.assertEqual(cmd[3], "proj_login_cfg-cli-1")
+                    self.assertIn("tmux", cmd)
+
+                    # No podman exec/cp calls — config injection is via mount
+                    mock_run.assert_not_called()

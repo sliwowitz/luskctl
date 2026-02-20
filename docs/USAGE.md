@@ -8,6 +8,7 @@ A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman.
 - [Runtime Locations](#runtime-locations)
 - [Global Configuration](#global-configuration)
 - [From Zero to First Run](#from-zero-to-first-run)
+- [Headless Claude Runs (Autopilot)](#headless-claude-runs-autopilot)
 - [GPU Passthrough](#gpu-passthrough)
 - [Tips](#tips)
 - [FAQ](#faq)
@@ -285,6 +286,135 @@ keyboard shortcuts. Login sessions open as additional tmux windows — press
 
 The container's tmux prefix (`^a`) is different from the host's (`^b`) to avoid
 conflicts. The container status bar shows `host: ^b` as a reminder.
+
+---
+
+## Headless Claude Runs (Autopilot)
+
+Run Claude headlessly in a container — no interactive session needed. Useful for
+CI/CD pipelines, batch tasks, or scripted workflows.
+
+### Basic Usage
+
+```bash
+# Run Claude with a prompt (creates a new task automatically)
+luskctl run-claude myproj "Fix the authentication bug in login.py"
+
+# Override model and set a timeout
+luskctl run-claude myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
+
+# Detach immediately (don't stream output)
+luskctl run-claude myproj "Refactor the database layer" --no-follow
+```
+
+The command creates a new task, starts a container, runs `claude` with the given
+prompt, and streams the output. When Claude finishes, the task is marked as
+completed and a diff summary is printed.
+
+### Sub-Agent Configuration
+
+Define sub-agents in your `project.yml` under the `agent:` section. Each
+sub-agent gets a `default` flag — default agents are always included, others
+are available on demand via `--agent`.
+
+```yaml
+# ~/.config/luskctl/projects/myproj/project.yml
+project:
+  id: myproj
+  security_class: online
+
+git:
+  upstream_url: git@github.com:yourorg/yourrepo.git
+  default_branch: main
+
+agent:
+  subagents:
+    # Always included in every task
+    - name: code-reviewer
+      description: Reviews code for quality and correctness
+      tools: [Read, Grep, Glob]
+      model: sonnet
+      default: true
+      system_prompt: |
+        You are a code reviewer. Focus on correctness, security, and clarity.
+
+    # Only included when explicitly selected with --agent
+    - name: debugger
+      description: Debugging specialist
+      tools: [Read, Edit, Bash, Grep]
+      model: opus
+      default: false
+      system_prompt: |
+        You are an expert debugger. Use systematic analysis.
+
+    # Reference a .md file (YAML frontmatter + body as prompt)
+    - file: agents/planner.md
+      default: false
+```
+
+#### Selecting Non-Default Agents
+
+```bash
+# Include the debugger agent for this run
+luskctl run-claude myproj "Find and fix the memory leak" --agent debugger
+
+# Include multiple non-default agents
+luskctl run-claude myproj "Debug and plan a fix" --agent debugger --agent planner
+```
+
+The `--agent` flag also works with interactive modes:
+
+```bash
+luskctl task run-cli myproj 1 --agent debugger
+luskctl task run-web myproj 1 --agent debugger
+luskctl task start myproj --agent debugger
+```
+
+#### Agent .md File Format
+
+Agent definitions can be stored as `.md` files with YAML frontmatter:
+
+```markdown
+---
+name: planner
+description: Architecture and planning specialist
+tools: [Read, Grep, Glob]
+model: sonnet
+---
+You are an architecture planner. Analyze the codebase and propose
+structured implementation plans before writing code.
+```
+
+Reference them in `project.yml` with `file:` (paths relative to project root).
+
+#### Providing Extra Agents via Config File
+
+Pass an additional YAML file with `--config` to add more sub-agents at runtime:
+
+```bash
+luskctl run-claude myproj "Review the PR" --config /path/to/extra-agents.yml
+```
+
+The file should contain a `subagents:` list in the same format as `project.yml`.
+
+### Global Agents and MCPs
+
+Global agents and MCP servers are managed natively by Claude — luskctl does not
+interfere with them:
+
+| What | Where |
+|------|-------|
+| Global agents | `~/.claude/agents/` |
+| Global MCPs | `~/.claude/settings.json` (`mcpServers` section) |
+| Project agents | `<workspace>/.claude/agents/` |
+| Project MCPs | `<workspace>/.claude/settings.json` |
+
+Per-sub-agent MCPs can be defined inline using the `mcpServers` field in the
+agent definition (same format as Claude's native agent JSON).
+
+Run `luskctl config` to see the actual paths on your system.
+
+---
 
 ### UI Mode Configuration
 

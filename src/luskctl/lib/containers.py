@@ -72,10 +72,11 @@ def _stop_task_containers(project: "Project", task_id: str) -> None:
     """
     from .tasks import _log_debug
 
-    # The naming scheme is kept in sync with task_run_cli/task_run_ui.
+    # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
     names = [
         f"{project.id}-cli-{task_id}",
         f"{project.id}-web-{task_id}",
+        f"{project.id}-run-{task_id}",
     ]
 
     for name in names:
@@ -143,6 +144,43 @@ def _gpu_run_args(project: Project) -> list[str]:
     if hooks_dir.is_dir():
         args.extend(["--hooks-dir", str(hooks_dir)])
     return args
+
+
+def _get_container_exit_code(container_name: str) -> int:
+    """Return the exit code of a stopped container. Returns -1 on error."""
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.ExitCode}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        return int(out)
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        return -1
+
+
+def _stream_until_exit(container_name: str, timeout_sec: float | None = None) -> int:
+    """Stream container logs until the container exits. Returns exit code.
+
+    This is used for headless/autopilot containers where the container runs
+    a finite task (e.g. claude -p) and we want to stream all output until it
+    completes, rather than detaching after a readiness marker.
+
+    The ``timeout_sec`` parameter limits how long we follow logs, but this
+    helper will still wait for the container to exit before returning an
+    exit code.
+    """
+    _stream_initial_logs(
+        container_name=container_name,
+        timeout_sec=timeout_sec,
+        ready_check=lambda line: False,  # never "ready", stream until exit
+    )
+    # Ensure the container has actually exited before reading its exit code.
+    # _stream_initial_logs can stop due to timeout while the container
+    # continues running; in that case we poll until it exits.
+    while _is_container_running(container_name):
+        time.sleep(0.5)
+    return _get_container_exit_code(container_name)
 
 
 def _stream_initial_logs(container_name: str, timeout_sec: float | None, ready_check) -> bool:
