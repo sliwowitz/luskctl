@@ -16,7 +16,6 @@ from luskctl.lib.containers import _get_container_exit_code, _stream_until_exit
 from luskctl.lib.projects import load_project
 from luskctl.lib.tasks import (
     _generate_claude_wrapper,
-    _merge_agent_configs,
     _parse_md_agent,
     _subagents_to_json,
     task_run_headless,
@@ -51,7 +50,11 @@ class AgentConfigProjectTests(unittest.TestCase):
             write_project(
                 config_root,
                 "proj_agent",
-                "project:\n  id: proj_agent\nagent:\n  model: opus\n  max_turns: 50\n",
+                (
+                    "project:\n  id: proj_agent\nagent:\n  subagents:\n"
+                    "    - name: reviewer\n      default: true\n"
+                    "      system_prompt: Review code\n"
+                ),
             )
 
             with unittest.mock.patch.dict(
@@ -60,8 +63,8 @@ class AgentConfigProjectTests(unittest.TestCase):
             ):
                 with mock_git_config():
                     p = load_project("proj_agent")
-                self.assertEqual(p.agent_config["model"], "opus")
-                self.assertEqual(p.agent_config["max_turns"], 50)
+                self.assertIn("subagents", p.agent_config)
+                self.assertEqual(p.agent_config["subagents"][0]["name"], "reviewer")
 
     def test_agent_config_resolves_subagent_file_paths(self) -> None:
         """Project resolves relative file: paths in subagents."""
@@ -87,88 +90,72 @@ class AgentConfigProjectTests(unittest.TestCase):
                 self.assertIn("agents/reviewer.md", sa["file"])
 
 
-class MergeAgentConfigsTests(unittest.TestCase):
-    """Tests for _merge_agent_configs."""
-
-    def test_scalar_override(self) -> None:
-        """Higher priority config overrides scalars."""
-        global_cfg = {"model": "haiku", "max_turns": 10}
-        project_cfg = {"model": "opus"}
-        merged = _merge_agent_configs(global_cfg, project_cfg)
-        self.assertEqual(merged["model"], "opus")
-        self.assertEqual(merged["max_turns"], 10)
-
-    def test_subagents_merge_by_name(self) -> None:
-        """Sub-agents are merged by name, higher priority wins on conflict."""
-        global_cfg = {
-            "subagents": [
-                {"name": "reviewer", "model": "haiku"},
-                {"name": "debugger", "model": "sonnet"},
-            ]
-        }
-        project_cfg = {
-            "subagents": [
-                {"name": "reviewer", "model": "opus"},
-                {"name": "planner", "model": "sonnet"},
-            ]
-        }
-        merged = _merge_agent_configs(global_cfg, project_cfg)
-        agents_by_name = {sa["name"]: sa for sa in merged["subagents"]}
-        self.assertEqual(len(agents_by_name), 3)
-        self.assertEqual(agents_by_name["reviewer"]["model"], "opus")
-        self.assertEqual(agents_by_name["debugger"]["model"], "sonnet")
-        self.assertEqual(agents_by_name["planner"]["model"], "sonnet")
-
-    def test_mcp_servers_merge_by_name(self) -> None:
-        """MCP servers are merged by server name."""
-        global_cfg = {"mcp_servers": {"srv1": {"command": "/usr/bin/a"}}}
-        project_cfg = {
-            "mcp_servers": {
-                "srv1": {"command": "/usr/bin/b"},
-                "srv2": {"command": "/usr/bin/c"},
-            }
-        }
-        merged = _merge_agent_configs(global_cfg, project_cfg)
-        self.assertEqual(merged["mcp_servers"]["srv1"]["command"], "/usr/bin/b")
-        self.assertEqual(merged["mcp_servers"]["srv2"]["command"], "/usr/bin/c")
-
-    def test_empty_configs(self) -> None:
-        """Merging empty configs returns empty dict."""
-        self.assertEqual(_merge_agent_configs({}, {}), {})
-        self.assertEqual(_merge_agent_configs({}, None), {})
-
-    def test_three_level_merge(self) -> None:
-        """Three-level merge with CLI overrides."""
-        global_cfg = {"model": "haiku", "max_turns": 10}
-        project_cfg = {"model": "sonnet"}
-        cli_cfg = {"model": "opus"}
-        merged = _merge_agent_configs(global_cfg, project_cfg, cli_cfg)
-        self.assertEqual(merged["model"], "opus")
-        self.assertEqual(merged["max_turns"], 10)
-
-
 class SubagentsToJsonTests(unittest.TestCase):
-    """Tests for _subagents_to_json."""
+    """Tests for _subagents_to_json (dict output keyed by agent name)."""
 
-    def test_inline_definition(self) -> None:
-        """Inline sub-agent defs map system_prompt to prompt."""
+    def test_inline_definition_default_true(self) -> None:
+        """Inline sub-agent with default=True is included, output is dict keyed by name."""
         subagents = [
             {
                 "name": "reviewer",
                 "description": "Code reviewer",
                 "tools": ["Read", "Grep"],
                 "model": "sonnet",
+                "default": True,
                 "system_prompt": "You are a code reviewer.",
             }
         ]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["name"], "reviewer")
-        self.assertEqual(result[0]["prompt"], "You are a code reviewer.")
-        self.assertNotIn("system_prompt", result[0])
+        self.assertIsInstance(result, dict)
+        self.assertIn("reviewer", result)
+        self.assertEqual(result["reviewer"]["prompt"], "You are a code reviewer.")
+        self.assertEqual(result["reviewer"]["description"], "Code reviewer")
+        self.assertEqual(result["reviewer"]["tools"], ["Read", "Grep"])
+        self.assertEqual(result["reviewer"]["model"], "sonnet")
+        # Non-Claude fields stripped
+        self.assertNotIn("system_prompt", result["reviewer"])
+        self.assertNotIn("name", result["reviewer"])
+        self.assertNotIn("default", result["reviewer"])
 
-    def test_file_reference(self) -> None:
-        """File references parse .md YAML frontmatter + body."""
+    def test_default_false_excluded_without_selection(self) -> None:
+        """Agents with default=False are excluded when not selected."""
+        subagents = [
+            {"name": "debugger", "default": False, "model": "sonnet", "system_prompt": "Debug."},
+        ]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(result, {})
+
+    def test_no_default_flag_excluded(self) -> None:
+        """Agents without a default flag are excluded (default=False is the default)."""
+        subagents = [
+            {"name": "debugger", "model": "sonnet", "system_prompt": "Debug."},
+        ]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(result, {})
+
+    def test_selected_agents_included(self) -> None:
+        """Non-default agents are included when passed in selected_agents."""
+        subagents = [
+            {"name": "debugger", "default": False, "model": "sonnet", "system_prompt": "Debug."},
+        ]
+        result = json.loads(_subagents_to_json(subagents, selected_agents=["debugger"]))
+        self.assertIn("debugger", result)
+        self.assertEqual(result["debugger"]["prompt"], "Debug.")
+
+    def test_mixed_default_and_selected(self) -> None:
+        """Default agents + selected non-default agents are both included."""
+        subagents = [
+            {"name": "reviewer", "default": True, "model": "sonnet", "system_prompt": "Review."},
+            {"name": "debugger", "default": False, "model": "opus", "system_prompt": "Debug."},
+            {"name": "planner", "default": False, "model": "haiku", "system_prompt": "Plan."},
+        ]
+        result = json.loads(_subagents_to_json(subagents, selected_agents=["debugger"]))
+        self.assertIn("reviewer", result)
+        self.assertIn("debugger", result)
+        self.assertNotIn("planner", result)
+
+    def test_file_reference_with_default(self) -> None:
+        """File references with default flag are handled correctly."""
         with tempfile.TemporaryDirectory() as td:
             md_file = Path(td) / "reviewer.md"
             md_file.write_text(
@@ -177,17 +164,38 @@ class SubagentsToJsonTests(unittest.TestCase):
                 "You are a code reviewer.\n",
                 encoding="utf-8",
             )
-            subagents = [{"file": str(md_file)}]
+            subagents = [{"file": str(md_file), "default": True}]
             result = json.loads(_subagents_to_json(subagents))
-            self.assertEqual(len(result), 1)
-            self.assertEqual(result[0]["name"], "reviewer")
-            self.assertEqual(result[0]["prompt"], "You are a code reviewer.")
+            self.assertIn("reviewer", result)
+            self.assertEqual(result["reviewer"]["prompt"], "You are a code reviewer.")
+
+    def test_passthrough_native_claude_fields(self) -> None:
+        """Native Claude fields like mcpServers, hooks are passed through."""
+        subagents = [
+            {
+                "name": "advanced",
+                "default": True,
+                "model": "sonnet",
+                "mcpServers": {"srv": {"command": "/bin/x"}},
+                "hooks": {"onStart": "echo hi"},
+                "system_prompt": "Advanced agent.",
+            }
+        ]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(result["advanced"]["mcpServers"], {"srv": {"command": "/bin/x"}})
+        self.assertEqual(result["advanced"]["hooks"], {"onStart": "echo hi"})
 
     def test_missing_file_skipped(self) -> None:
         """Missing file references are skipped."""
-        subagents = [{"file": "/nonexistent/agent.md"}]
+        subagents = [{"file": "/nonexistent/agent.md", "default": True}]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(len(result), 0)
+        self.assertEqual(result, {})
+
+    def test_agent_without_name_skipped(self) -> None:
+        """Agents without a name are skipped."""
+        subagents = [{"default": True, "model": "sonnet", "system_prompt": "No name."}]
+        result = json.loads(_subagents_to_json(subagents))
+        self.assertEqual(result, {})
 
 
 class ParseMdAgentTests(unittest.TestCase):
@@ -240,38 +248,39 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
     def test_basic_wrapper(self) -> None:
         """Wrapper includes skip-permissions and git env vars."""
         project = self._make_project()
-        wrapper = _generate_claude_wrapper({}, project)
+        wrapper = _generate_claude_wrapper(has_agents=False, project=project)
         self.assertIn("claude()", wrapper)
         self.assertIn("--dangerously-skip-permissions", wrapper)
         self.assertIn("GIT_AUTHOR_NAME=Claude", wrapper)
         self.assertIn("GIT_COMMITTER_NAME", wrapper)
         self.assertIn("Test User", wrapper)
+        # Should NOT contain agents reference when has_agents=False
+        self.assertNotIn("agents.json", wrapper)
 
-    def test_wrapper_with_model(self) -> None:
+    def test_wrapper_with_agents(self) -> None:
+        """Wrapper includes agents.json reference when has_agents=True."""
         project = self._make_project()
-        wrapper = _generate_claude_wrapper({"model": "opus"}, project)
-        self.assertIn("--model opus", wrapper)
-
-    def test_wrapper_with_subagents(self) -> None:
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper({"subagents": [{"name": "test"}]}, project)
+        wrapper = _generate_claude_wrapper(has_agents=True, project=project)
         self.assertIn("agents.json", wrapper)
 
-    def test_wrapper_with_mcp(self) -> None:
-        project = self._make_project()
-        wrapper = _generate_claude_wrapper({"mcp_servers": {"srv": {"command": "/bin/x"}}}, project)
-        self.assertIn("mcp.json", wrapper)
-
     def test_wrapper_skip_perms_false(self) -> None:
+        """Wrapper omits --dangerously-skip-permissions when skip_permissions=False."""
         project = self._make_project()
-        wrapper = _generate_claude_wrapper({"dangerously_skip_permissions": False}, project)
+        wrapper = _generate_claude_wrapper(
+            has_agents=False,
+            project=project,
+            skip_permissions=False,
+        )
         self.assertNotIn("--dangerously-skip-permissions", wrapper)
 
-    def test_wrapper_with_system_prompt(self) -> None:
+    def test_wrapper_no_model_or_mcp(self) -> None:
+        """Wrapper does not contain --model, --mcp-config, or --append-system-prompt."""
         project = self._make_project()
-        wrapper = _generate_claude_wrapper({"system_prompt": "Be helpful"}, project)
-        self.assertIn("--append-system-prompt", wrapper)
-        self.assertIn("Be helpful", wrapper)
+        wrapper = _generate_claude_wrapper(has_agents=True, project=project)
+        self.assertNotIn("--model", wrapper)
+        self.assertNotIn("--mcp-config", wrapper)
+        self.assertNotIn("--append-system-prompt", wrapper)
+        self.assertNotIn("--max-turns", wrapper)
 
 
 class StreamUntilExitTests(unittest.TestCase):
@@ -443,14 +452,23 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("claude()", content)
                     self.assertIn("--dangerously-skip-permissions", content)
 
-    def test_headless_merges_project_agent_config(self) -> None:
-        """task_run_headless merges project agent config into wrapper."""
+    def test_headless_with_default_subagents(self) -> None:
+        """task_run_headless includes default subagents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(
                 base,
-                "proj_merge",
-                "agent:\n  model: opus\n  max_turns: 50\n",
+                "proj_agents",
+                (
+                    "agent:\n"
+                    "  subagents:\n"
+                    "    - name: reviewer\n"
+                    "      default: true\n"
+                    "      system_prompt: Review code\n"
+                    "    - name: debugger\n"
+                    "      default: false\n"
+                    "      system_prompt: Debug code\n"
+                ),
             )
             state_dir = base / "state"
 
@@ -472,28 +490,37 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
                     with redirect_stdout(buffer):
-                        task_run_headless("proj_merge", "test")
+                        task_run_headless("proj_agents", "test")
 
-                    wrapper = (
-                        state_dir
-                        / "tasks"
-                        / "proj_merge"
-                        / "1"
-                        / "agent-config"
-                        / "luskctl-claude.sh"
+                    agents_file = (
+                        state_dir / "tasks" / "proj_agents" / "1" / "agent-config" / "agents.json"
                     )
-                    content = wrapper.read_text()
-                    self.assertIn("--model opus", content)
-                    self.assertIn("--max-turns 50", content)
+                    self.assertTrue(agents_file.is_file())
+                    agents_data = json.loads(agents_file.read_text())
+                    # Only default agents should be included
+                    self.assertIn("reviewer", agents_data)
+                    self.assertNotIn("debugger", agents_data)
+                    # Verify dict-keyed-by-name format
+                    self.assertIsInstance(agents_data, dict)
+                    self.assertEqual(agents_data["reviewer"]["prompt"], "Review code")
 
-    def test_headless_cli_overrides_project_config(self) -> None:
-        """CLI model/max_turns override project config in the wrapper."""
+    def test_headless_with_agent_selection(self) -> None:
+        """task_run_headless includes selected non-default agents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(
                 base,
-                "proj_cli_over",
-                "agent:\n  model: haiku\n",
+                "proj_sel",
+                (
+                    "agent:\n"
+                    "  subagents:\n"
+                    "    - name: reviewer\n"
+                    "      default: true\n"
+                    "      system_prompt: Review code\n"
+                    "    - name: debugger\n"
+                    "      default: false\n"
+                    "      system_prompt: Debug code\n"
+                ),
             )
             state_dir = base / "state"
 
@@ -515,20 +542,67 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
                     with redirect_stdout(buffer):
-                        task_run_headless("proj_cli_over", "test", model="opus", max_turns=100)
+                        task_run_headless("proj_sel", "test", agents=["debugger"])
 
+                    agents_file = (
+                        state_dir / "tasks" / "proj_sel" / "1" / "agent-config" / "agents.json"
+                    )
+                    self.assertTrue(agents_file.is_file())
+                    agents_data = json.loads(agents_file.read_text())
+                    # Both default and selected should be included
+                    self.assertIn("reviewer", agents_data)
+                    self.assertIn("debugger", agents_data)
+
+    def test_headless_cli_model_max_turns_in_command(self) -> None:
+        """CLI model/max_turns appear in headless bash command, not in wrapper."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(base, "proj_flags")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch("luskctl.lib.tasks.subprocess.run") as run_mock,
+                    unittest.mock.patch("luskctl.lib.tasks._stream_until_exit", return_value=0),
+                    unittest.mock.patch("luskctl.lib.tasks._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_headless(
+                            "proj_flags",
+                            "test",
+                            model="opus",
+                            max_turns=100,
+                        )
+
+                    # Model/max_turns should be in the bash command
+                    cmd = run_mock.call_args[0][0]
+                    bash_cmd = cmd[-1]
+                    self.assertIn("--model opus", bash_cmd)
+                    self.assertIn("--max-turns 100", bash_cmd)
+
+                    # But NOT in the wrapper
                     wrapper = (
                         state_dir
                         / "tasks"
-                        / "proj_cli_over"
+                        / "proj_flags"
                         / "1"
                         / "agent-config"
                         / "luskctl-claude.sh"
                     )
                     content = wrapper.read_text()
-                    # CLI overrides should win
-                    self.assertIn("--model opus", content)
-                    self.assertIn("--max-turns 100", content)
+                    self.assertNotIn("--model", content)
+                    self.assertNotIn("--max-turns", content)
 
     def test_headless_container_name_uses_run_prefix(self) -> None:
         """task_run_headless names the container <project>-run-<task_id>."""
@@ -663,16 +737,22 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("timeout", bash_cmd)
                     self.assertIn("--output-format stream-json", bash_cmd)
 
-    def test_headless_with_config_file(self) -> None:
-        """task_run_headless reads YAML config file and merges it."""
+    def test_headless_with_config_file_subagents(self) -> None:
+        """task_run_headless reads subagents from YAML config file."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_cfgfile")
             state_dir = base / "state"
 
-            # Create a YAML agent config file
+            # Create a YAML agent config file with subagents
             agent_config = base / "my-agent-config.yml"
-            agent_config.write_text("model: sonnet\nmax_turns: 25\n", encoding="utf-8")
+            agent_config.write_text(
+                "subagents:\n"
+                "  - name: extra-agent\n"
+                "    default: true\n"
+                "    system_prompt: I am an extra agent\n",
+                encoding="utf-8",
+            )
 
             with unittest.mock.patch.dict(
                 os.environ,
@@ -692,17 +772,17 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
                     with redirect_stdout(buffer):
-                        task_run_headless("proj_cfgfile", "test", config_path=str(agent_config))
+                        task_run_headless(
+                            "proj_cfgfile",
+                            "test",
+                            config_path=str(agent_config),
+                        )
 
-                    # Verify wrapper reflects config file settings
-                    wrapper = (
-                        state_dir
-                        / "tasks"
-                        / "proj_cfgfile"
-                        / "1"
-                        / "agent-config"
-                        / "luskctl-claude.sh"
+                    # Verify agents.json contains the config file agent
+                    agents_file = (
+                        state_dir / "tasks" / "proj_cfgfile" / "1" / "agent-config" / "agents.json"
                     )
-                    content = wrapper.read_text()
-                    self.assertIn("--model sonnet", content)
-                    self.assertIn("--max-turns 25", content)
+                    self.assertTrue(agents_file.is_file())
+                    agents_data = json.loads(agents_file.read_text())
+                    self.assertIn("extra-agent", agents_data)
+                    self.assertEqual(agents_data["extra-agent"]["prompt"], "I am an extra agent")

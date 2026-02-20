@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .config import get_global_agent_config, state_root
+from .config import state_root
 from .containers import (
     _get_container_state,
     _gpu_run_args,
@@ -219,36 +219,10 @@ def _check_mode(meta: dict, expected: str) -> None:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
 
 
-def _merge_agent_configs(*configs: dict) -> dict:
-    """Merge agent config dicts with increasing priority.
-
-    Scalars (model, max_turns, system_prompt, dangerously_skip_permissions):
-    higher priority overrides.
-    Sub-agents and MCP servers: merge by name, higher priority wins on conflict.
-    """
-    merged: dict = {}
-    for cfg in configs:
-        if not cfg:
-            continue
-        # Scalars: higher priority wins
-        for key in ("model", "max_turns", "system_prompt", "dangerously_skip_permissions"):
-            if key in cfg:
-                merged[key] = cfg[key]
-        # Sub-agents: merge by name
-        if "subagents" in cfg:
-            existing = {
-                sa.get("name") or sa.get("file", ""): sa for sa in merged.get("subagents", [])
-            }
-            for sa in cfg["subagents"]:
-                key = sa.get("name") or sa.get("file", "")
-                existing[key] = sa
-            merged["subagents"] = list(existing.values())
-        # MCP servers: merge by server name
-        if "mcp_servers" in cfg:
-            existing_mcp = merged.get("mcp_servers", {})
-            existing_mcp.update(cfg["mcp_servers"])
-            merged["mcp_servers"] = existing_mcp
-    return merged
+# TODO: future — support global agent definitions in luskctl-config.yml (agent.subagents).
+# When implemented, global subagents would be merged with per-project subagents before
+# filtering by default/selected. Use a generic merge approach that can be reused across
+# different agent runtimes (Claude, Codex, OpenCode, etc.).
 
 
 def _parse_md_agent(file_path: str) -> dict:
@@ -279,67 +253,101 @@ def _parse_md_agent(file_path: str) -> dict:
     return {"prompt": content.strip()}
 
 
-def _subagents_to_json(subagents: list[dict]) -> str:
-    """Convert sub-agent list to JSON string for --agents flag.
+# All native Claude agent fields to pass through to --agents JSON.
+_CLAUDE_AGENT_FIELDS = frozenset(
+    {
+        "description",
+        "tools",
+        "disallowedTools",
+        "model",
+        "permissionMode",
+        "mcpServers",
+        "hooks",
+        "maxTurns",
+        "skills",
+        "memory",
+        "background",
+        "isolation",
+    }
+)
+
+
+def _subagents_to_json(
+    subagents: list[dict],
+    selected_agents: list[str] | None = None,
+) -> str:
+    """Convert sub-agent list to JSON dict string for --agents flag.
+
+    Filters to include agents where default=True plus any agents whose
+    name appears in selected_agents. Output is a JSON dict keyed by
+    agent name (the format expected by Claude's --agents flag).
 
     - file: refs are parsed from .md YAML frontmatter + body
-    - Inline defs: system_prompt -> prompt, pass through other fields
+    - Inline defs: system_prompt -> prompt, pass through native Claude fields
+    - Strips non-Claude fields: default, name (name becomes the dict key)
     """
-    result = []
+    result: dict[str, dict] = {}
+    selected = set(selected_agents) if selected_agents else set()
+
     for sa in subagents:
+        # Resolve file references first
         if "file" in sa:
             agent = _parse_md_agent(sa["file"])
-            if agent:
-                result.append(agent)
+            if not agent:
+                continue
+            # Merge the default flag from the YAML definition
+            if "default" in sa:
+                agent["default"] = sa["default"]
         else:
-            agent = {}
-            for key in ("name", "description", "tools", "model"):
-                if key in sa:
-                    agent[key] = sa[key]
-            if "system_prompt" in sa:
-                agent["prompt"] = sa["system_prompt"]
-            if agent:
-                result.append(agent)
+            agent = dict(sa)  # shallow copy
+
+        name = agent.get("name")
+        if not name:
+            continue  # skip agents without a name
+
+        # Filter: include if default=True OR if name in selected_agents
+        is_default = agent.get("default", False)
+        if not is_default and name not in selected:
+            continue
+
+        # Build the output entry
+        entry: dict = {}
+        for field in _CLAUDE_AGENT_FIELDS:
+            if field in agent:
+                entry[field] = agent[field]
+        # Map system_prompt -> prompt
+        if "system_prompt" in agent:
+            entry["prompt"] = agent["system_prompt"]
+        elif "prompt" in agent:
+            entry["prompt"] = agent["prompt"]
+
+        result[name] = entry
+
     return json.dumps(result)
 
 
-def _generate_claude_wrapper(merged_config: dict, project: Project) -> str:
+def _generate_claude_wrapper(
+    has_agents: bool,
+    project: Project,
+    skip_permissions: bool = True,
+) -> str:
     """Generate the luskctl-claude.sh wrapper function content.
 
-    Always includes git env vars and --dangerously-skip-permissions.
-    Conditionally includes --agents, --mcp-config, --model, --max-turns,
-    --append-system-prompt.
+    Always includes git env vars. Conditionally includes
+    --dangerously-skip-permissions and --agents.
+
+    Model, max_turns, and other per-run flags are NOT included here —
+    they are passed directly in the headless command or by the user
+    in interactive mode.
     """
     lines = ["# Generated by luskctl", "claude() {", "    local _args=()"]
 
-    # dangerously_skip_permissions: default true unless explicitly false
-    skip_perms = merged_config.get("dangerously_skip_permissions", True)
-    if skip_perms is not False:
+    if skip_permissions:
         lines.append("    _args+=(--dangerously-skip-permissions)")
 
-    # Sub-agents
-    if merged_config.get("subagents"):
+    if has_agents:
         lines.append("    [ -f /home/dev/.luskctl/agents.json ] && \\")
         lines.append('        _args+=(--agents "$(cat /home/dev/.luskctl/agents.json)")')
-
-    # MCP servers
-    if merged_config.get("mcp_servers"):
-        lines.append("    [ -f /home/dev/.luskctl/mcp.json ] && \\")
-        lines.append("        _args+=(--mcp-config /home/dev/.luskctl/mcp.json)")
-
-    # Model
-    if merged_config.get("model"):
-        lines.append(f"    _args+=(--model {shlex.quote(str(merged_config['model']))})")
-
-    # Max turns
-    if merged_config.get("max_turns"):
-        lines.append(f"    _args+=(--max-turns {int(merged_config['max_turns'])})")
-
-    # System prompt
-    if merged_config.get("system_prompt"):
-        lines.append(
-            f"    _args+=(--append-system-prompt {shlex.quote(merged_config['system_prompt'])})"
-        )
 
     # Git env vars and exec
     human_name = shlex.quote(project.human_name or "Nobody")
@@ -357,15 +365,16 @@ def _generate_claude_wrapper(merged_config: dict, project: Project) -> str:
 def _prepare_agent_config_dir(
     project: Project,
     task_id: str,
-    merged_config: dict,
+    subagents: list[dict],
+    selected_agents: list[str] | None = None,
     prompt: str | None = None,
+    skip_permissions: bool = True,
 ) -> Path:
     """Create and populate the agent-config directory for a task.
 
     Writes:
-    - luskctl-claude.sh (always)
-    - agents.json (if sub-agents configured)
-    - mcp.json (if MCP servers configured)
+    - luskctl-claude.sh (always) — wrapper function with git env vars
+    - agents.json (if sub-agents produce non-empty dict after filtering)
     - prompt.txt (if prompt given, headless only)
 
     Returns the agent_config_dir path.
@@ -374,19 +383,18 @@ def _prepare_agent_config_dir(
     agent_config_dir = task_dir / "agent-config"
     agent_config_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build agents JSON (may be empty dict "{}")
+    has_agents = False
+    if subagents:
+        agents_json = _subagents_to_json(subagents, selected_agents)
+        agents_dict = json.loads(agents_json)
+        if agents_dict:  # non-empty dict
+            (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
+            has_agents = True
+
     # Always write the claude wrapper function
-    wrapper = _generate_claude_wrapper(merged_config, project)
+    wrapper = _generate_claude_wrapper(has_agents, project, skip_permissions)
     (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
-
-    # Sub-agents JSON
-    if merged_config.get("subagents"):
-        agents_json = _subagents_to_json(merged_config["subagents"])
-        (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
-
-    # MCP servers JSON
-    if merged_config.get("mcp_servers"):
-        mcp_json = json.dumps({"mcpServers": merged_config["mcp_servers"]})
-        (agent_config_dir / "mcp.json").write_text(mcp_json, encoding="utf-8")
 
     # Prompt (headless only)
     if prompt is not None:
@@ -511,7 +519,7 @@ def task_login(project_id: str, task_id: str) -> None:
         )
 
 
-def task_run_cli(project_id: str, task_id: str) -> None:
+def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -561,10 +569,9 @@ def task_run_cli(project_id: str, task_id: str) -> None:
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    # Merge agent configs and prepare agent-config dir
-    global_agent = get_global_agent_config()
-    merged = _merge_agent_configs(global_agent, project.agent_config)
-    agent_config_dir = _prepare_agent_config_dir(project, task_id, merged)
+    # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
+    subagents = list(project.agent_config.get("subagents") or [])
+    agent_config_dir = _prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     # Run detached and keep the container alive so users can exec into it later
@@ -627,7 +634,12 @@ def task_run_cli(project_id: str, task_id: str) -> None:
     )
 
 
-def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> None:
+def task_run_web(
+    project_id: str,
+    task_id: str,
+    backend: str | None = None,
+    agents: list[str] | None = None,
+) -> None:
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -649,10 +661,9 @@ def task_run_web(project_id: str, task_id: str, backend: str | None = None) -> N
 
     env, volumes = _build_task_env_and_volumes(project, task_id)
 
-    # Merge agent configs and prepare agent-config dir
-    global_agent = get_global_agent_config()
-    merged = _merge_agent_configs(global_agent, project.agent_config)
-    agent_config_dir = _prepare_agent_config_dir(project, task_id, merged)
+    # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
+    subagents = list(project.agent_config.get("subagents") or [])
+    agent_config_dir = _prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     env = _apply_web_env_overrides(env, backend, project.default_agent)
@@ -820,40 +831,42 @@ def task_run_headless(
     max_turns: int | None = None,
     timeout: int | None = None,
     follow: bool = True,
+    agents: list[str] | None = None,
 ) -> str:
     """Run Claude headlessly (autopilot mode) in a new task container.
 
-    Creates a new task, merges agent configs (global + project + CLI),
-    generates the claude wrapper function, then launches a detached container
-    that runs init-ssh-and-repo.sh followed by the claude wrapper.
+    Creates a new task, prepares the agent-config directory with the claude
+    wrapper function and filtered subagents, then launches a detached container
+    that runs init-ssh-and-repo.sh followed by the claude command.
 
     Returns the task_id.
     """
     project = load_project(project_id)
 
-    # Load CLI config file if provided
-    cli_config: dict = {}
+    # Load CLI config file if provided (adds subagents to project's list)
+    extra_subagents: list[dict] = []
     if config_path:
         config_src = Path(config_path)
         if not config_src.is_file():
             raise SystemExit(f"Agent config file not found: {config_path}")
         cli_config = yaml.safe_load(config_src.read_text(encoding="utf-8")) or {}
+        extra_subagents = cli_config.get("subagents", []) or []
 
     # Create a new task
     task_id = task_new(project_id)
 
-    # Merge agent configs: global < project < CLI file < CLI flags
-    global_agent = get_global_agent_config()
-    cli_overrides: dict = {}
-    if model:
-        cli_overrides["model"] = model
-    if max_turns:
-        cli_overrides["max_turns"] = max_turns
-    merged = _merge_agent_configs(global_agent, project.agent_config, cli_config, cli_overrides)
+    # Collect subagents from project + config file
+    subagents = list(project.agent_config.get("subagents") or []) + extra_subagents
 
-    # Prepare agent-config dir with wrapper, agents.json, mcp.json, prompt.txt
+    # Prepare agent-config dir with wrapper, agents.json, prompt.txt
     task_dir = project.tasks_root / str(task_id)
-    agent_config_dir = _prepare_agent_config_dir(project, task_id, merged, prompt=prompt)
+    agent_config_dir = _prepare_agent_config_dir(
+        project,
+        task_id,
+        subagents,
+        agents,
+        prompt=prompt,
+    )
 
     # Build env and volumes
     env, volumes = _build_task_env_and_volumes(project, task_id)
@@ -863,12 +876,20 @@ def task_run_headless(
 
     effective_timeout = timeout or 1800
 
+    # Build CLI flags for model/max_turns (passed directly in headless command)
+    claude_flags = ""
+    if model:
+        claude_flags += f" --model {shlex.quote(model)}"
+    if max_turns:
+        claude_flags += f" --max-turns {int(max_turns)}"
+
     # Build podman command (DETACHED)
     # bash -l sources profile.d -> aliases file -> our claude function
     container_name = f"{project.id}-run-{task_id}"
     headless_cmd = (
         f"init-ssh-and-repo.sh && timeout {effective_timeout} claude -p "
-        '"$(cat /home/dev/.luskctl/prompt.txt)" --output-format stream-json'
+        '"$(cat /home/dev/.luskctl/prompt.txt)"'
+        f"{claude_flags} --output-format stream-json"
     )
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()

@@ -48,6 +48,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 max_turns=50,
                 timeout=3600,
                 follow=True,
+                agents=None,
             )
 
     def test_run_claude_no_follow_flag(self) -> None:
@@ -85,3 +86,59 @@ class RunClaudeCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args
             self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.yml")
+
+    def test_run_claude_with_agent_selection(self) -> None:
+        """run-claude --agent passes agents list to task_run_headless."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                [
+                    "luskctl",
+                    "run-claude",
+                    "myproject",
+                    "test",
+                    "--agent",
+                    "debugger",
+                    "--agent",
+                    "planner",
+                ],
+            ),
+            unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once()
+            call_kwargs = mock_run.call_args
+            self.assertEqual(call_kwargs[1]["agents"], ["debugger", "planner"])
+
+    def test_task_run_cli_with_agent_selection(self) -> None:
+        """task run-cli --agent passes agents to task_run_cli."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["luskctl", "task", "run-cli", "myproject", "1", "--agent", "debugger"],
+            ),
+            unittest.mock.patch("luskctl.cli.main.task_run_cli") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once_with(
+                "myproject",
+                "1",
+                agents=["debugger"],
+            )
+
+    def test_task_run_web_with_agent_selection(self) -> None:
+        """task run-web --agent passes agents to task_run_web."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["luskctl", "task", "run-web", "myproject", "1", "--agent", "reviewer"],
+            ),
+            unittest.mock.patch("luskctl.cli.main.task_run_web") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once_with(
+                "myproject",
+                "1",
+                backend=None,
+                agents=["reviewer"],
+            )

@@ -216,7 +216,7 @@ def get_tui_default_tmux() -> bool:
     return bool(tui_cfg.get("default_tmux", False))
 
 
-def get_global_agent_config() -> dict:
-    """Return the agent: section from the global config, or empty dict."""
-    cfg = load_global_config()
-    return cfg.get("agent", {}) or {}
+# TODO: future — support global agent definitions (agent.subagents) in the global
+# config file. When implemented, these would be passed to every project and merged
+# with per-project agent definitions. Use a generic merge approach compatible with
+# multiple agent runtimes (Claude, Codex, OpenCode, etc.).
