@@ -22,6 +22,7 @@ from ..lib.shell_launch import launch_login
 from ..lib.ssh import init_project_ssh
 from ..lib.task_env import WEB_BACKENDS
 from ..lib.tasks import (
+    _parse_md_agent,
     _update_task_exit_code,
     get_login_command,
     get_workspace_git_diff,
@@ -32,7 +33,7 @@ from ..lib.tasks import (
     task_run_headless,
     task_run_web,
 )
-from .screens import AgentSelectionScreen, AutopilotPromptScreen
+from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen
 from .widgets import TaskList
 
 
@@ -46,6 +47,39 @@ class ActionsMixin:
     """
 
     # ---------- Helpers ----------
+
+    @staticmethod
+    def _normalize_subagents(subagents: list[dict]) -> list[AgentInfo]:
+        """Resolve ``file:`` shorthand entries into full agent dicts.
+
+        Each entry in *subagents* may be either an inline dict (already has
+        ``name``, ``description``, etc.) or a ``file:`` reference whose
+        ``name`` and ``description`` live inside the ``.md`` YAML frontmatter.
+        This normalises both forms into :class:`AgentInfo` dicts so the UI
+        screens always have ``name`` and ``description`` to display.
+        """
+        result: list[AgentInfo] = []
+        for sa in subagents:
+            if "file" in sa:
+                parsed = _parse_md_agent(sa["file"])
+                if not parsed:
+                    continue
+                if "default" in sa:
+                    parsed["default"] = sa["default"]
+                agent = parsed
+            else:
+                agent = dict(sa)
+            name = agent.get("name")
+            if not name:
+                continue
+            result.append(
+                AgentInfo(
+                    name=name,
+                    description=agent.get("description", ""),
+                    default=bool(agent.get("default", False)),
+                )
+            )
+        return result
 
     def _prompt_ui_backend(self) -> str:
         backends = list(WEB_BACKENDS)
@@ -326,7 +360,8 @@ class ActionsMixin:
             self.notify(f"Error loading project: {e}")
             return
 
-        subagents = project.agent_config.get("subagents", [])
+        raw_subagents = project.agent_config.get("subagents", [])
+        subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
 
         if subagents:
             # Show agent selection screen

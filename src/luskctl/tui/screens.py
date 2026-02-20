@@ -271,6 +271,14 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
 
 class AgentInfo(TypedDict):
+    """Metadata for a single agent shown in the autopilot selection screen.
+
+    Attributes:
+        name: Unique agent identifier used as the dict key in ``--agents`` JSON.
+        description: Human-readable summary of the agent's purpose.
+        default: Whether the agent is pre-selected when the selection screen opens.
+    """
+
     name: str
     description: str
     default: bool
@@ -283,12 +291,8 @@ class AutopilotPromptScreen(screen.ModalScreen[str | None]):
     (headless Claude) mode. The user can enter their prompt in a text area and
     submit it or cancel.
 
-    The screen returns the prompt string if submitted, or None if cancelled
-    (e.g., via Escape key or Cancel button).
-
-    Usage:
-        Create an instance and push onto the modal stack. The screen will
-        dismiss with the prompt string on submit, or None on cancel.
+    The screen dismisses with the prompt string if submitted, or ``None``
+    if cancelled (e.g. via Escape or the Cancel button).
     """
 
     BINDINGS = [
@@ -556,13 +560,19 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             "w": "web",
             "r": "restart",
             "l": "login",
-            "f": "follow_logs",
         }
         if key in lower_map:
             if not self._has_tasks:
                 return
             self.dismiss(lower_map[key])
             event.stop()
+            return
+
+        # 'f' (follow logs) — only available for autopilot tasks
+        if key == "f":
+            if self._has_tasks and self._task_meta and self._task_meta.mode == "run":
+                self.dismiss("follow_logs")
+                event.stop()
 
     # Action methods for programmatic access
     def action_dismiss(self) -> None:

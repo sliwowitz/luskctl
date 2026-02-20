@@ -766,13 +766,27 @@ class AutopilotKeyBindingTests(TestCase):
         screen.dismiss.assert_called_once_with("task_start_autopilot")
         event.stop.assert_called_once()
 
-    def test_lowercase_f_works_with_tasks(self) -> None:
-        screens, _ = self._import_screens()
-        screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
+    def test_lowercase_f_works_with_autopilot_task(self) -> None:
+        screens, widgets = self._import_screens()
+        task = widgets.TaskMeta(
+            task_id="t1", status="running", mode="run", workspace="/w", web_port=None
+        )
+        screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
         screen.dismiss = mock.Mock()
         event = self._make_key_event("f")
         screen.on_key(event)
         screen.dismiss.assert_called_once_with("follow_logs")
+
+    def test_lowercase_f_ignored_for_non_autopilot_task(self) -> None:
+        screens, widgets = self._import_screens()
+        task = widgets.TaskMeta(
+            task_id="t1", status="running", mode="cli", workspace="/w", web_port=None
+        )
+        screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
+        screen.dismiss = mock.Mock()
+        event = self._make_key_event("f")
+        screen.on_key(event)
+        screen.dismiss.assert_not_called()
 
     def test_lowercase_f_blocked_without_tasks(self) -> None:
         screens, _ = self._import_screens()
