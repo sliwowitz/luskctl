@@ -37,6 +37,7 @@ if _HAS_TEXTUAL:
     from textual.worker import Worker, WorkerState
 
     from ..lib.clipboard import get_clipboard_helper_status
+    from ..lib.config import get_tui_default_tmux
     from ..lib.git_gate import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
@@ -745,6 +746,9 @@ if _HAS_TEXTUAL:
         Supports ``--tmux`` to wrap the TUI in a managed host tmux session
         (blue status bar, login windows as extra tmux windows).  Without the
         flag the TUI runs directly in the current terminal.
+
+        If neither --tmux nor --no-tmux is specified, the behavior is controlled
+        by the global config setting `tui.default_tmux` (defaults to False).
         """
         import argparse
 
@@ -754,9 +758,18 @@ if _HAS_TEXTUAL:
             action="store_true",
             help="Launch TUI inside a managed tmux session",
         )
+        parser.add_argument(
+            "--no-tmux",
+            dest="tmux",
+            action="store_false",
+            help="Launch TUI directly in current terminal (default if not configured)",
+        )
         args = parser.parse_args()
 
-        if args.tmux:
+        # Determine tmux mode: explicit flag > config default > False
+        use_tmux = args.tmux if hasattr(args, 'tmux') and args.tmux is not None else get_tui_default_tmux()
+
+        if use_tmux:
             _launch_in_tmux()
             return
         LuskTUI().run()

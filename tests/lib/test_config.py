@@ -57,3 +57,24 @@ class ConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
                 self.assertEqual(cfg.get_ui_base_port(), 8123)
                 self.assertEqual(cfg.get_envs_base_dir(), envs_dir.resolve())
+
+    def test_tui_default_tmux_from_config(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("tui:\n  default_tmux: true\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
+                self.assertTrue(cfg.get_tui_default_tmux())
+
+    def test_tui_default_tmux_default_false(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
+                self.assertFalse(cfg.get_tui_default_tmux())
+
+    def test_tui_default_tmux_explicit_false(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("tui:\n  default_tmux: false\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
+                self.assertFalse(cfg.get_tui_default_tmux())

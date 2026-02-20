@@ -50,6 +50,14 @@ git:
 # Valid values: codex, claude, mistral
 # default_agent: claude
 
+# TUI Configuration
+tui:
+  # Default to launching the TUI in tmux mode (equivalent to always using --tmux).
+  # When enabled, `luskctl-tui` will automatically wrap the TUI in a managed tmux
+  # session with blue status bar and keyboard shortcuts.
+  # Can be overridden with --no-tmux flag.
+  # default_tmux: true
+
 # Note: GPU passthrough is a per-project opt-in only. Configure it in
 # <project>/project.yml under `run.gpus` (true or "all"). There is no
 # global or environment switch.
