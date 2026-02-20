@@ -888,7 +888,7 @@ def task_run_headless(
     headless_cmd = (
         f"init-ssh-and-repo.sh && timeout {effective_timeout} claude -p "
         '"$(cat /home/dev/.luskctl/prompt.txt)"'
-        f"{claude_flags} --output-format stream-json"
+        f"{claude_flags} --output-format stream-json --verbose"
     )
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
