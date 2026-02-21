@@ -128,10 +128,16 @@ def _stream_initial_logs(
 
     Returns True if ready marker was found, False on timeout.
     """
+    import sys
     import threading
     import time
 
-    def stream_logs():
+    from .logging_utils import _log_debug
+
+    # Mutable container so stream_logs can propagate its result back.
+    holder: list[bool] = [False]
+
+    def stream_logs() -> None:
         try:
             proc = subprocess.Popen(
                 ["podman", "logs", "-f", container_name],
@@ -141,9 +147,10 @@ def _stream_initial_logs(
             )
 
             start_time = time.time()
-            timeout = timeout_sec if timeout_sec is not None else 60.0
 
-            while time.time() - start_time < timeout:
+            while True:
+                if timeout_sec is not None and time.time() - start_time >= timeout_sec:
+                    break
                 if proc.poll() is not None:
                     break
 
@@ -154,39 +161,46 @@ def _stream_initial_logs(
                         continue
 
                     line = line.strip()
-                    if line and ready_check(line):
-                        proc.terminate()
-                        return True
-                except Exception:
+                    if line:
+                        print(line, file=sys.stdout, flush=True)
+                        if ready_check(line):
+                            holder[0] = True
+                            proc.terminate()
+                            return
+                except Exception as exc:
+                    _log_debug(f"_stream_initial_logs readline error: {exc}")
                     break
 
             proc.terminate()
-            return False
-        except Exception:
-            return False
+        except Exception as exc:
+            _log_debug(f"_stream_initial_logs error: {exc}")
 
-    # Run in a thread to handle timeout properly
-    result = False
-    stream_thread = threading.Thread(target=lambda: stream_logs())
+    stream_thread = threading.Thread(target=stream_logs)
     stream_thread.start()
-    stream_thread.join(timeout_sec if timeout_sec is not None else 60.0)
+    stream_thread.join(timeout_sec)
 
-    return result
+    return holder[0]
 
 
 def _stream_until_exit(container_name: str, timeout_sec: float | None = None) -> int:
-    """Stream logs from a container until it exits.
+    """Wait for a container to exit and return its exit code.
 
-    Returns the exit code of the container.
+    Returns the container's exit code, 124 on timeout, or 1 if podman is not found.
     """
     try:
-        subprocess.run(
+        proc = subprocess.run(
             ["podman", "wait", container_name],
-            check=True,
+            check=False,
             capture_output=True,
+            timeout=timeout_sec,
         )
-        return 0  # podman wait returns 0 on success
+        stdout = proc.stdout.decode().strip() if isinstance(proc.stdout, bytes) else proc.stdout
+        if stdout:
+            return int(stdout)
+        return proc.returncode
+    except subprocess.TimeoutExpired:
+        return 124
     except subprocess.CalledProcessError as e:
-        return e.returncode
-    except FileNotFoundError:
+        return e.returncode if e.returncode else 1
+    except (FileNotFoundError, ValueError):
         return 1

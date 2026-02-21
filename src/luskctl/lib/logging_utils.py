@@ -8,7 +8,17 @@ def _log_debug(message: str) -> None:
     with normal CLI or TUI behavior. It can be used to compare behavior
     between different frontends (e.g. CLI vs TUI) when calling the shared
     helpers in this module.
+
+    Writes timestamped lines to ~/.luskctl.log. Fully exception-safe: any IO
+    error is silently ignored so this function never raises or affects callers.
     """
-    # Implementation can be added here
-    # For now, this breaks the circular dependency
-    pass
+    try:
+        import os
+        import time
+
+        log_path = os.path.join(os.path.expanduser("~"), ".luskctl.log")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        with open(log_path, "a") as f:
+            f.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
