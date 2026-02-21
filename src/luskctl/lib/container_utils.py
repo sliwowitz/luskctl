@@ -234,7 +234,5 @@ def _wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int
         return proc.returncode
     except subprocess.TimeoutExpired:
         return 124
-    except subprocess.CalledProcessError as e:
-        return e.returncode if e.returncode else 1
     except (FileNotFoundError, ValueError):
         return 1
