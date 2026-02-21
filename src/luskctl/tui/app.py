@@ -39,8 +39,7 @@ if _HAS_TEXTUAL:
     from ..lib.containers.project_state import get_project_state, is_task_image_old
     from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import get_tui_default_tmux
-    from ..lib.core.projects import Project as CodexProject
-    from ..lib.core.projects import list_projects, load_project
+    from ..lib.core.projects import Project as CodexProject, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
     from ..lib.core.version import get_version_info as _get_version_info

@@ -4,8 +4,7 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .paths import config_root as _config_root_base
-from .paths import state_root as _state_root_base
+from .paths import config_root as _config_root_base, state_root as _state_root_base
 
 # ---------- Prefix & roots ----------
 
