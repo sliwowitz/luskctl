@@ -8,7 +8,7 @@ import socket
 
 import yaml
 
-from .config import get_ui_base_port, state_root
+from ..core.config import get_ui_base_port, state_root
 
 
 def _is_port_free(port: int) -> bool:

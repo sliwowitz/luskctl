@@ -4,7 +4,16 @@ import subprocess
 from collections.abc import Callable
 from typing import Any
 
-from .projects import Project
+from ..core.projects import Project, load_project
+
+# ---------- Container naming ----------
+
+CONTAINER_MODES = ("cli", "web", "run")
+
+
+def container_name(project_id: str, mode: str, task_id: str) -> str:
+    """Return the canonical container name for a task."""
+    return f"{project_id}-{mode}-{task_id}"
 
 
 def _get_container_state(container_name: str) -> str | None:
@@ -55,14 +64,10 @@ def _stop_task_containers(project: Any, task_id: str) -> None:
     container. The task itself is already being deleted at this point, so
     a forceful remove is acceptable and keeps state consistent.
     """
-    from .logging_utils import _log_debug
+    from .._util.logging_utils import _log_debug
 
     # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
-    names = [
-        f"{project.id}-cli-{task_id}",
-        f"{project.id}-web-{task_id}",
-        f"{project.id}-run-{task_id}",
-    ]
+    names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
 
     for name in names:
         try:
@@ -135,7 +140,7 @@ def _stream_initial_logs(
     import threading
     import time
 
-    from .logging_utils import _log_debug
+    from .._util.logging_utils import _log_debug
 
     # Mutable container so stream_logs can propagate its result back.
     holder: list[bool] = [False]
@@ -236,3 +241,50 @@ def _wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int
         return 124
     except (FileNotFoundError, ValueError):
         return 1
+
+
+def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
+    """Get actual container state for a task.
+
+    This is intended for TUI background workers to check container status.
+    Returns 'running', 'exited', 'paused', etc., or None if container not found.
+    """
+    if not mode:
+        return None
+    try:
+        project = load_project(project_id)
+    except (SystemExit, ValueError):
+        return None
+    cname = container_name(project.id, mode, task_id)
+    return _get_container_state(cname)
+
+
+def _get_container_exit_code(container_name: str) -> int:
+    """Return the exit code of a stopped container. Returns -1 on error."""
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.ExitCode}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        return int(out)
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
+        return -1
+
+
+def _stream_until_exit(container_name: str, timeout_sec: float | None = None) -> int:
+    """Stream container logs until the container exits. Returns exit code.
+
+    This is used for headless/autopilot containers where the container runs
+    a finite task and we want to stream all output until it completes.
+    """
+    import time
+
+    _stream_initial_logs(
+        container_name=container_name,
+        timeout_sec=timeout_sec,
+        ready_check=lambda line: False,  # never "ready", stream until exit
+    )
+    while _is_container_running(container_name):
+        time.sleep(0.5)
+    return _get_container_exit_code(container_name)

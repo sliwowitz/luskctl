@@ -32,8 +32,8 @@ try:  # pragma: no cover - optional import for test stubs
 except Exception:  # pragma: no cover - textual may be a stub module
     SelectionList = None  # type: ignore[assignment,misc]
 
-from ..lib.git_gate import GateStalenessInfo
-from ..lib.projects import Project as CodexProject
+from ..core.projects import Project as CodexProject
+from ..security.git_gate import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
 
 

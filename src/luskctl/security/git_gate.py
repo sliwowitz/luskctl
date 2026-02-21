@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .config import get_envs_base_dir
-from .projects import _effective_ssh_key_name, list_projects, load_project
+from ..core.config import get_envs_base_dir
+from ..core.projects import effective_ssh_key_name, list_projects, load_project
 
 # ---------- Staleness dataclass ----------
 
@@ -117,7 +117,7 @@ def _git_env_with_ssh(project) -> dict:
         # effective key name logic as ssh-init / containers so that even when
         # ssh.key_name is omitted we still look for the derived default
         # (id_<type>_<project_id>), while keeping this best-effort.
-        effective_name = _effective_ssh_key_name(project, key_type="ed25519")
+        effective_name = effective_ssh_key_name(project, key_type="ed25519")
         key_path = Path(ssh_dir) / effective_name
         if key_path.is_file():
             ssh_cmd += ["-o", f"IdentityFile={key_path}"]

@@ -1,4 +1,3 @@
-import json
 import os
 import shlex
 import shutil
@@ -7,39 +6,41 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .config import state_root
-from .container_utils import (
+from .._util.logging_utils import _log_debug
+from .._util.podman import _podman_userns_args
+from ..core.config import state_root
+from ..core.images import project_cli_image, project_web_image
+from ..core.projects import Project, load_project
+from ..ui.terminal import (
+    blue as _blue,
+)
+from ..ui.terminal import (
+    green as _green,
+)
+from ..ui.terminal import (
+    red as _red,
+)
+from ..ui.terminal import (
+    supports_color as _supports_color,
+)
+from ..ui.terminal import (
+    yellow as _yellow,
+)
+from .agents import _prepare_agent_config_dir
+from .environment import (
+    _apply_web_env_overrides,
+    _build_task_env_and_volumes,
+    _ensure_dir,
+)
+from .ports import _assign_web_port
+from .runtime import (
     _get_container_state,
     _gpu_run_args,
     _is_container_running,
     _stop_task_containers,
     _stream_initial_logs,
     _wait_for_exit,
-)
-from .images import project_cli_image, project_web_image
-from .logging_utils import _log_debug
-from .podman import _podman_userns_args
-from .projects import Project, load_project
-from .task_env import (
-    _apply_web_env_overrides,
-    _build_task_env_and_volumes,
-    _ensure_dir,
-)
-from .task_ports import _assign_web_port
-from .terminal import (
-    blue as _blue,
-)
-from .terminal import (
-    green as _green,
-)
-from .terminal import (
-    red as _red,
-)
-from .terminal import (
-    supports_color as _supports_color,
-)
-from .terminal import (
-    yellow as _yellow,
+    container_name,
 )
 
 
@@ -95,7 +96,7 @@ def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
 
 
-def _update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
+def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
     """Update task metadata with exit code and final status.
 
     Args:
@@ -218,205 +219,6 @@ def _check_mode(meta: dict, expected: str) -> None:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
 
 
-# TODO: future — support global agent definitions in luskctl-config.yml (agent.subagents).
-# When implemented, global subagents would be merged with per-project subagents before
-# filtering by default/selected. Use a generic merge approach that can be reused across
-# different agent runtimes (Claude, Codex, OpenCode, etc.).
-
-
-def _parse_md_agent(file_path: str) -> dict:
-    """Parse a .md file with YAML frontmatter into an agent dict.
-
-    Expected format:
-        ---
-        name: agent-name
-        description: ...
-        tools: [Read, Grep]
-        model: sonnet
-        ---
-        System prompt body...
-    """
-    path = Path(file_path)
-    if not path.is_file():
-        return {}
-    content = path.read_text(encoding="utf-8")
-    # Split YAML frontmatter from body
-    if content.startswith("---"):
-        parts = content.split("---", 2)
-        if len(parts) >= 3:
-            frontmatter = yaml.safe_load(parts[1]) or {}
-            body = parts[2].strip()
-            frontmatter["prompt"] = body
-            return frontmatter
-    # No frontmatter: treat entire file as prompt
-    return {"prompt": content.strip()}
-
-
-# All native Claude agent fields to pass through to --agents JSON.
-_CLAUDE_AGENT_FIELDS = frozenset(
-    {
-        "description",
-        "tools",
-        "disallowedTools",
-        "model",
-        "permissionMode",
-        "mcpServers",
-        "hooks",
-        "maxTurns",
-        "skills",
-        "memory",
-        "background",
-        "isolation",
-    }
-)
-
-
-def _subagents_to_json(
-    subagents: list[dict],
-    selected_agents: list[str] | None = None,
-) -> str:
-    """Convert sub-agent list to JSON dict string for --agents flag.
-
-    Filters to include agents where default=True plus any agents whose
-    name appears in selected_agents. Output is a JSON dict keyed by
-    agent name (the format expected by Claude's --agents flag).
-
-    - file: refs are parsed from .md YAML frontmatter + body
-    - Inline defs: system_prompt -> prompt, pass through native Claude fields
-    - Strips non-Claude fields: default, name (name becomes the dict key)
-    """
-    result: dict[str, dict] = {}
-    selected = set(selected_agents) if selected_agents else set()
-
-    for sa in subagents:
-        # Resolve file references first
-        if "file" in sa:
-            agent = _parse_md_agent(sa["file"])
-            if not agent:
-                continue
-            # Merge the default flag from the YAML definition
-            if "default" in sa:
-                agent["default"] = sa["default"]
-        else:
-            agent = dict(sa)  # shallow copy
-
-        name = agent.get("name")
-        if not name:
-            continue  # skip agents without a name
-
-        # Filter: include if default=True OR if name in selected_agents
-        is_default = agent.get("default", False)
-        if not is_default and name not in selected:
-            continue
-
-        # Build the output entry
-        entry: dict = {}
-        for field in _CLAUDE_AGENT_FIELDS:
-            if field in agent:
-                entry[field] = agent[field]
-        # Map system_prompt -> prompt
-        if "system_prompt" in agent:
-            entry["prompt"] = agent["system_prompt"]
-        elif "prompt" in agent:
-            entry["prompt"] = agent["prompt"]
-
-        result[name] = entry
-
-    return json.dumps(result)
-
-
-def _generate_claude_wrapper(
-    has_agents: bool,
-    project: Project,
-    skip_permissions: bool = True,
-) -> str:
-    """Generate the luskctl-claude.sh wrapper function content.
-
-    Always includes git env vars. Conditionally includes
-    --dangerously-skip-permissions, --add-dir /, and --agents.
-
-    The --add-dir / flag gives Claude full filesystem access inside the
-    container. The container itself is the security boundary (Podman
-    isolation), so restricting file access within it is unnecessary and
-    actively harmful — agents need to read/write ~/.claude, /tmp, etc.
-
-    Model, max_turns, and other per-run flags are NOT included here —
-    they are passed directly in the headless command or by the user
-    in interactive mode.
-
-    NOTE (#180): This wrapper is only effective when bash interprets the
-    ``claude`` command word directly (interactive sessions).  In headless
-    mode, ``timeout`` exec's the claude binary and bypasses this function,
-    so task_run_headless() duplicates these flags inline.  The two code
-    paths should be unified; see #180.
-    """
-    lines = ["# Generated by luskctl", "claude() {", "    local _args=()"]
-
-    if skip_permissions:
-        lines.append("    _args+=(--dangerously-skip-permissions)")
-
-    # Give Claude unrestricted filesystem access inside the container.
-    # The Podman container itself provides isolation — no need for an
-    # additional sandbox layer within it.
-    lines.append('    _args+=(--add-dir "/")')
-
-    if has_agents:
-        lines.append("    [ -f /home/dev/.luskctl/agents.json ] && \\")
-        lines.append('        _args+=(--agents "$(cat /home/dev/.luskctl/agents.json)")')
-
-    # Git env vars and exec
-    human_name = shlex.quote(project.human_name or "Nobody")
-    human_email = shlex.quote(project.human_email or "nobody@localhost")
-    lines.append("    GIT_AUTHOR_NAME=Claude \\")
-    lines.append("    GIT_AUTHOR_EMAIL=noreply@anthropic.com \\")
-    lines.append(f"    GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\")
-    lines.append(f"    GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\")
-    lines.append('    command claude "${_args[@]}" "$@"')
-    lines.append("}")
-
-    return "\n".join(lines) + "\n"
-
-
-def _prepare_agent_config_dir(
-    project: Project,
-    task_id: str,
-    subagents: list[dict],
-    selected_agents: list[str] | None = None,
-    prompt: str | None = None,
-    skip_permissions: bool = True,
-) -> Path:
-    """Create and populate the agent-config directory for a task.
-
-    Writes:
-    - luskctl-claude.sh (always) — wrapper function with git env vars
-    - agents.json (if sub-agents produce non-empty dict after filtering)
-    - prompt.txt (if prompt given, headless only)
-
-    Returns the agent_config_dir path.
-    """
-    task_dir = project.tasks_root / str(task_id)
-    agent_config_dir = task_dir / "agent-config"
-    _ensure_dir(agent_config_dir)
-    # Build agents JSON (may be empty dict "{}")
-    has_agents = False
-    if subagents:
-        agents_json = _subagents_to_json(subagents, selected_agents)
-        agents_dict = json.loads(agents_json)
-        if agents_dict:  # non-empty dict
-            (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
-            has_agents = True
-
-    # Always write the claude wrapper function
-    wrapper = _generate_claude_wrapper(has_agents, project, skip_permissions)
-    (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
-
-    # Prompt (headless only)
-    if prompt is not None:
-        (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-
-    return agent_config_dir
-
-
 def task_delete(project_id: str, task_id: str) -> None:
     """Delete a task's workspace, metadata, and any associated containers.
 
@@ -478,19 +280,19 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
             f"or 'luskctl task run-web {project_id} {task_id}'."
         )
 
-    container_name = f"{project.id}-{mode}-{task_id}"
-    state = _get_container_state(container_name)
+    cname = container_name(project.id, mode, task_id)
+    state = _get_container_state(cname)
     if state is None:
         raise SystemExit(
-            f"Container {container_name} does not exist. "
+            f"Container {cname} does not exist. "
             f"Run 'luskctl task restart {project_id} {task_id}' first."
         )
     if state != "running":
         raise SystemExit(
-            f"Container {container_name} is not running (state: {state}). "
+            f"Container {cname} is not running (state: {state}). "
             f"Run 'luskctl task restart {project_id} {task_id}' first."
         )
-    return container_name, mode, project
+    return cname, mode, project
 
 
 def get_login_command(project_id: str, task_id: str) -> list[str]:
@@ -502,12 +304,12 @@ def get_login_command(project_id: str, task_id: str) -> list[str]:
     Agent config is injected via the mount at container creation time,
     so no runtime injection is needed here.
     """
-    container_name, _mode, _project = _validate_login(project_id, task_id)
+    cname, _mode, _project = _validate_login(project_id, task_id)
     return [
         "podman",
         "exec",
         "-it",
-        container_name,
+        cname,
         "tmux",
         "new-session",
         "-A",
@@ -541,25 +343,25 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
     meta = yaml.safe_load(meta_path.read_text()) or {}
     _check_mode(meta, "cli")
 
-    container_name = f"{project.id}-cli-{task_id}"
-    container_state = _get_container_state(container_name)
+    cname = container_name(project.id, "cli", task_id)
+    container_state = _get_container_state(cname)
 
     # If container already exists, handle it
     if container_state is not None:
         color_enabled = _supports_color()
         if container_state == "running":
-            print(f"Container {_green(container_name, color_enabled)} is already running.")
+            print(f"Container {_green(cname, color_enabled)} is already running.")
             login_cmd = f"luskctl login {project.id} {task_id}"
-            raw_cmd = f"podman exec -it {container_name} bash"
+            raw_cmd = f"podman exec -it {cname} bash"
             print(f"Login with: {_blue(login_cmd, color_enabled)}")
             print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
             return
         else:
             # Container exists but is stopped/exited - start it
-            print(f"Starting existing container {_green(container_name, color_enabled)}...")
+            print(f"Starting existing container {_green(cname, color_enabled)}...")
             try:
                 subprocess.run(
-                    ["podman", "start", container_name],
+                    ["podman", "start", cname],
                     check=True,
                     stdout=subprocess.DEVNULL,
                 )
@@ -575,7 +377,7 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
             meta_path.write_text(yaml.safe_dump(meta))
             print("Container started.")
             login_cmd = f"luskctl login {project.id} {task_id}"
-            raw_cmd = f"podman exec -it {container_name} bash"
+            raw_cmd = f"podman exec -it {cname} bash"
             print(f"Login with: {_blue(login_cmd, color_enabled)}")
             print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
             return
@@ -602,7 +404,7 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
     # Name, workdir, image and command
     cmd += [
         "--name",
-        f"{project.id}-cli-{task_id}",
+        cname,
         "-w",
         "/workspace",
         project_cli_image(project.id),
@@ -622,7 +424,7 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
     _stream_initial_logs(
-        container_name=f"{project.id}-cli-{task_id}",
+        container_name=cname,
         timeout_sec=60.0,
         ready_check=lambda line: "__CLI_READY__" in line or ">> init complete" in line,
     )
@@ -633,14 +435,13 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
-    container_name = f"{project.id}-cli-{task_id}"
     login_cmd = f"luskctl login {project.id} {task_id}"
-    raw_cmd = f"podman exec -it {container_name} bash"
-    stop_command = f"podman stop {container_name}"
+    raw_cmd = f"podman exec -it {cname} bash"
+    stop_command = f"podman stop {cname}"
 
     print(
         "\nCLI container is running in the background."
-        f"\n- Name:     {_green(container_name, color_enabled)}"
+        f"\n- Name:     {_green(cname, color_enabled)}"
         f"\n- To enter: {_blue(login_cmd, color_enabled)}"
         f"\n  (or:      {_blue(raw_cmd, color_enabled)})"
         f"\n- To stop:  {_red(stop_command, color_enabled)}\n"
@@ -691,23 +492,23 @@ def task_run_web(
     if port_updated or backend_updated or mode_updated:
         meta_path.write_text(yaml.safe_dump(meta))
 
-    container_name = f"{project.id}-web-{task_id}"
-    container_state = _get_container_state(container_name)
+    cname = container_name(project.id, "web", task_id)
+    container_state = _get_container_state(cname)
 
     # If container already exists, handle it
     if container_state is not None:
         color_enabled = _supports_color()
         url = f"http://127.0.0.1:{port}/"
         if container_state == "running":
-            print(f"Container {_green(container_name, color_enabled)} is already running.")
+            print(f"Container {_green(cname, color_enabled)} is already running.")
             print(f"Web UI: {_blue(url, color_enabled)}")
             return
         else:
             # Container exists but is stopped/exited - start it
-            print(f"Starting existing container {_green(container_name, color_enabled)}...")
+            print(f"Starting existing container {_green(cname, color_enabled)}...")
             try:
                 subprocess.run(
-                    ["podman", "start", container_name],
+                    ["podman", "start", cname],
                     check=True,
                     stdout=subprocess.DEVNULL,
                 )
@@ -738,7 +539,7 @@ def task_run_web(
         cmd += ["-e", f"{k}={v}"]
     cmd += [
         "--name",
-        container_name,
+        cname,
         "-w",
         "/workspace",
         project_web_image(project.id),
@@ -773,7 +574,7 @@ def task_run_web(
     # init script keeps making progress, the user sees the live logs and can
     # decide to Ctrl+C if it hangs.
     ready = _stream_initial_logs(
-        container_name=container_name,
+        container_name=cname,
         timeout_sec=None,
         ready_check=_web_ready,
     )
@@ -782,7 +583,7 @@ def task_run_web(
     # still running. This prevents false "Web UI is up" messages in cases where
     # the web process failed to start (e.g. Node error) and the container
     # exited before emitting the readiness marker.
-    running = _is_container_running(container_name)
+    running = _is_container_running(cname)
 
     if ready and running:
         if meta.get("status") != "running":
@@ -797,19 +598,19 @@ def task_run_web(
             "Check the container logs for errors."
         )
         print(
-            f"- Last known name: {container_name}\n"
-            f"- Check logs (if still available): podman logs {container_name}\n"
+            f"- Last known name: {cname}\n"
+            f"- Check logs (if still available): podman logs {cname}\n"
             f"- You may need to re-run: luskctl task run-web {project.id} {task_id}"
         )
         # Exit with non-zero status to signal that the web UI did not start.
         raise SystemExit(1)
 
     url = f"http://127.0.0.1:{port}/"
-    log_command = f"podman logs -f {container_name}"
-    stop_command = f"podman stop {container_name}"
+    log_command = f"podman logs -f {cname}"
+    stop_command = f"podman stop {cname}"
 
     print(
-        f"- Name: {_green(container_name, color_enabled)}"
+        f"- Name: {_green(cname, color_enabled)}"
         f"\n- Routed URL: {_blue(url, color_enabled)}"
         f"\n- Check logs: {_yellow(log_command, color_enabled)}"
         f"\n- Stop:       {_red(stop_command, color_enabled)}"
@@ -905,7 +706,7 @@ def task_run_headless(
     # for interactive sessions where the user types `claude` at the prompt.
     # Ideally the wrapper and headless paths should share a single source of
     # truth for these flags; see #180.
-    container_name = f"{project.id}-run-{task_id}"
+    cname = container_name(project.id, "run", task_id)
 
     # Agents flag: load from agents.json if it was written
     agents_flag = ""
@@ -941,7 +742,7 @@ def task_run_headless(
         cmd += ["-e", f"{k}={v}"]
     cmd += [
         "--name",
-        container_name,
+        cname,
         "-w",
         "/workspace",
         project_cli_image(project.id),
@@ -968,20 +769,20 @@ def task_run_headless(
     color_enabled = _supports_color()
 
     if follow:
-        exit_code = _wait_for_exit(container_name)
+        exit_code = _wait_for_exit(cname)
         _print_run_summary(task_dir / "workspace")
 
-        _update_task_exit_code(project.id, task_id, exit_code)
+        update_task_exit_code(project.id, task_id, exit_code)
 
         if exit_code != 0:
             print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
     else:
-        log_command = f"podman logs -f {container_name}"
-        stop_command = f"podman stop {container_name}"
+        log_command = f"podman logs -f {cname}"
+        stop_command = f"podman stop {cname}"
         print(
             f"\nHeadless Claude task started (detached)."
             f"\n- Task:  {task_id}"
-            f"\n- Name:  {_green(container_name, color_enabled)}"
+            f"\n- Name:  {_green(cname, color_enabled)}"
             f"\n- Logs:  {_blue(log_command, color_enabled)}"
             f"\n- Stop:  {_red(stop_command, color_enabled)}\n"
         )
@@ -1006,9 +807,9 @@ def task_stop(project_id: str, task_id: str) -> None:
     if not mode:
         raise SystemExit(f"Task {task_id} has never been run (no mode set)")
 
-    container_name = f"{project.id}-{mode}-{task_id}"
+    cname = container_name(project.id, mode, task_id)
 
-    state = _get_container_state(container_name)
+    state = _get_container_state(cname)
     if state is None:
         raise SystemExit(f"Task {task_id} container does not exist")
     if state not in ("running", "paused"):
@@ -1016,7 +817,7 @@ def task_stop(project_id: str, task_id: str) -> None:
 
     try:
         subprocess.run(
-            ["podman", "stop", container_name],
+            ["podman", "stop", cname],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -1030,7 +831,7 @@ def task_stop(project_id: str, task_id: str) -> None:
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
-    print(f"Stopped task {task_id}: {_green(container_name, color_enabled)}")
+    print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")
     print(f"Restart with: luskctl task restart {project_id} {task_id}")
 
 
@@ -1051,19 +852,19 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
     if not mode:
         raise SystemExit(f"Task {task_id} has never been run (no mode set)")
 
-    container_name = f"{project.id}-{mode}-{task_id}"
-    container_state = _get_container_state(container_name)
+    cname = container_name(project.id, mode, task_id)
+    container_state = _get_container_state(cname)
 
     if container_state == "running":
         color_enabled = _supports_color()
-        print(f"Task {task_id} is already running: {_green(container_name, color_enabled)}")
+        print(f"Task {task_id} is already running: {_green(cname, color_enabled)}")
         return
 
     if container_state is not None:
         # Container exists but is stopped/exited - restart it
         try:
             subprocess.run(
-                ["podman", "start", container_name],
+                ["podman", "start", cname],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -1077,10 +878,10 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
         meta_path.write_text(yaml.safe_dump(meta))
 
         color_enabled = _supports_color()
-        print(f"Restarted task {task_id}: {_green(container_name, color_enabled)}")
+        print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")
         if mode == "cli":
             login_cmd = f"luskctl login {project_id} {task_id}"
-            raw_cmd = f"podman exec -it {container_name} bash"
+            raw_cmd = f"podman exec -it {cname} bash"
             print(f"Login with: {_blue(login_cmd, color_enabled)}")
             print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
         elif mode == "web":
@@ -1089,7 +890,7 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
                 print(f"Web UI: http://127.0.0.1:{port}/")
     else:
         # Container doesn't exist - re-run the task
-        print(f"Container {container_name} not found, re-running task...")
+        print(f"Container {cname} not found, re-running task...")
         if mode == "cli":
             task_run_cli(project_id, task_id)
         elif mode == "web":
@@ -1115,10 +916,10 @@ def task_status(project_id: str, task_id: str) -> None:
 
     # Get actual container state if mode is set
     container_state = None
-    container_name = None
+    cname = None
     if mode:
-        container_name = f"{project.id}-{mode}-{task_id}"
-        container_state = _get_container_state(container_name)
+        cname = container_name(project.id, mode, task_id)
+        container_state = _get_container_state(cname)
 
     # Determine if there's a mismatch
     # Metadata "running" or "created" with mode should have a running container
@@ -1129,8 +930,8 @@ def task_status(project_id: str, task_id: str) -> None:
     print(f"Task {task_id}:")
     print(f"  Metadata status: {metadata_status}")
     print(f"  Mode:            {mode or 'not set'}")
-    if container_name:
-        print(f"  Container:       {container_name}")
+    if cname:
+        print(f"  Container:       {cname}")
     if container_state:
         state_color = _green if container_state == "running" else _yellow
         print(f"  Container state: {state_color(container_state, color_enabled)}")

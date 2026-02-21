@@ -4,7 +4,7 @@ from pathlib import Path
 
 def mock_git_config():
     """Return a mock for _get_global_git_config that returns None (no global git config)."""
-    return unittest.mock.patch("luskctl.lib.projects._get_global_git_config", return_value=None)
+    return unittest.mock.patch("luskctl.core.projects._get_global_git_config", return_value=None)
 
 
 def write_project(root: Path, project_id: str, yaml_text: str) -> Path:

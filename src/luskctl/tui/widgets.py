@@ -12,8 +12,8 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, ListItem, ListView, Static
 
-from ..lib.git_gate import GateStalenessInfo
-from ..lib.projects import Project as CodexProject
+from ..core.projects import Project as CodexProject
+from ..security.git_gate import GateStalenessInfo
 
 
 @dataclass

@@ -5,10 +5,10 @@ import subprocess
 from importlib import resources
 from pathlib import Path
 
-from .config import get_envs_base_dir
-from .fs import _ensure_dir_writable
-from .projects import _effective_ssh_key_name, load_project
-from .template_utils import render_template
+from .._util.fs import _ensure_dir_writable
+from .._util.template_utils import render_template
+from ..core.config import get_envs_base_dir
+from ..core.projects import effective_ssh_key_name, load_project
 
 
 # ---------- SSH shared dir initialization ----------
@@ -45,7 +45,7 @@ def init_project_ssh(
     # configuration using the shared helper so ssh-init, containers and git
     # helpers all agree on the filename.
     if not key_name:
-        key_name = _effective_ssh_key_name(project, key_type=key_type)
+        key_name = effective_ssh_key_name(project, key_type=key_type)
 
     priv_path = target_dir / key_name
     pub_path = target_dir / f"{key_name}.pub"
@@ -171,7 +171,7 @@ def init_project_ssh(
         # Reading the public key is best-effort.
         pass
     # When ssh.key_name is omitted in project.yml, we still derive a stable
-    # default filename (id_<algo>_<project_id>) via _effective_ssh_key_name.
+    # default filename (id_<algo>_<project_id>) via effective_ssh_key_name.
     # Containers receive only this bare filename via SSH_KEY_NAME and mount
     # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
     # host-side while the filename is consistent everywhere.

@@ -78,7 +78,7 @@ class TuiModuleTests(unittest.TestCase):
     def test_tmux_configuration_integration(self) -> None:
         """Test that the TUI module can import and use the tmux configuration function."""
         # Test that we can import the configuration function
-        from luskctl.lib.config import get_tui_default_tmux
+        from luskctl.core.config import get_tui_default_tmux
 
         # Test that it returns False by default
         self.assertFalse(get_tui_default_tmux())

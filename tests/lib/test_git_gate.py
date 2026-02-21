@@ -5,7 +5,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.git_gate import (
+from luskctl.security.git_gate import (
     compare_gate_vs_upstream,
     find_projects_sharing_gate,
     get_gate_branch_head,
@@ -73,7 +73,7 @@ class GitGateTests(unittest.TestCase):
             ):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
 
-                with unittest.mock.patch("luskctl.lib.git_gate.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.security.git_gate.subprocess.run") as run_mock:
                     config_result = unittest.mock.Mock()
                     config_result.returncode = 1
                     config_result.stdout = ""
@@ -180,7 +180,7 @@ git:
                 )
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_last_commit(project_id)
 
@@ -223,7 +223,7 @@ git:
                 mock_result.stdout = "abc123def456789\trefs/heads/main\n"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -290,7 +290,7 @@ git:
                 mock_result.stderr = "fatal: could not read from remote repository"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -328,7 +328,7 @@ git:
                 mock_result.stdout = ""
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id)
 
@@ -362,7 +362,7 @@ git:
             ):
                 # Mock timeout
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run",
+                    "luskctl.security.git_gate.subprocess.run",
                     side_effect=subprocess.TimeoutExpired("git", 30),
                 ):
                     result = get_upstream_head(project_id)
@@ -401,7 +401,7 @@ git:
                 mock_result.stdout = "fedcba987654321\trefs/heads/develop\n"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_upstream_head(project_id, branch="develop")
 
@@ -449,7 +449,7 @@ git:
                 mock_result.stdout = "abc123def456789\n"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_branch_head(project_id)
 
@@ -523,7 +523,7 @@ git:
                 mock_result.stderr = "fatal: ref does not exist"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = get_gate_branch_head(project_id, branch="nonexistent")
 
@@ -567,11 +567,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=commit_hash
+                    "luskctl.security.git_gate.get_gate_branch_head", return_value=commit_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "luskctl.lib.git_gate.get_upstream_head",
+                        "luskctl.security.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": commit_hash,
                             "ref_name": "refs/heads/main",
@@ -625,11 +625,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.security.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "luskctl.lib.git_gate.get_upstream_head",
+                        "luskctl.security.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": upstream_hash,
                             "ref_name": "refs/heads/main",
@@ -638,7 +638,7 @@ git:
                     ):
                         # Mock _count_commits_behind
                         with unittest.mock.patch(
-                            "luskctl.lib.git_gate._count_commits_behind", return_value=5
+                            "luskctl.security.git_gate._count_commits_behind", return_value=5
                         ):
                             result = compare_gate_vs_upstream(project_id)
 
@@ -677,7 +677,7 @@ git:
             ):
                 # Mock get_gate_branch_head to return None
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=None
+                    "luskctl.security.git_gate.get_gate_branch_head", return_value=None
                 ):
                     result = compare_gate_vs_upstream(project_id)
 
@@ -725,11 +725,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.security.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head to return None
                     with unittest.mock.patch(
-                        "luskctl.lib.git_gate.get_upstream_head", return_value=None
+                        "luskctl.security.git_gate.get_upstream_head", return_value=None
                     ):
                         result = compare_gate_vs_upstream(project_id)
 
@@ -778,11 +778,11 @@ git:
 
                 # Mock get_gate_branch_head
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.get_gate_branch_head", return_value=gate_hash
+                    "luskctl.security.git_gate.get_gate_branch_head", return_value=gate_hash
                 ):
                     # Mock get_upstream_head
                     with unittest.mock.patch(
-                        "luskctl.lib.git_gate.get_upstream_head",
+                        "luskctl.security.git_gate.get_upstream_head",
                         return_value={
                             "commit_hash": upstream_hash,
                             "ref_name": "refs/heads/main",
@@ -791,7 +791,7 @@ git:
                     ):
                         # Mock _count_commits_behind to return None
                         with unittest.mock.patch(
-                            "luskctl.lib.git_gate._count_commits_behind", return_value=None
+                            "luskctl.security.git_gate._count_commits_behind", return_value=None
                         ):
                             result = compare_gate_vs_upstream(project_id)
 
@@ -838,7 +838,7 @@ git:
                 mock_result.stdout = "Fetching origin\n"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id)
 
@@ -917,7 +917,7 @@ git:
                 mock_result.stderr = "fatal: could not fetch origin"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id)
 
@@ -959,7 +959,7 @@ git:
             ):
                 # Mock timeout
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run",
+                    "luskctl.security.git_gate.subprocess.run",
                     side_effect=subprocess.TimeoutExpired("git", 120),
                 ):
                     result = sync_gate_branches(project_id)
@@ -1006,7 +1006,7 @@ git:
                 mock_result.stdout = "Fetching origin\n"
 
                 with unittest.mock.patch(
-                    "luskctl.lib.git_gate.subprocess.run", return_value=mock_result
+                    "luskctl.security.git_gate.subprocess.run", return_value=mock_result
                 ):
                     result = sync_gate_branches(project_id, branches=["main", "develop"])
 

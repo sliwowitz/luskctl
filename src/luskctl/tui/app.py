@@ -36,20 +36,20 @@ if _HAS_TEXTUAL:
     from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
-    from ..lib.clipboard import get_clipboard_helper_status
-    from ..lib.config import get_tui_default_tmux
-    from ..lib.git_gate import (
+    from ..containers.project_state import get_project_state, is_task_image_old
+    from ..containers.tasks import get_tasks
+    from ..core.config import get_tui_default_tmux
+    from ..core.projects import Project as CodexProject
+    from ..core.projects import list_projects, load_project
+
+    # Import version info function (shared with CLI --version)
+    from ..core.version import get_version_info as _get_version_info
+    from ..security.git_gate import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
     )
-    from ..lib.project_state import _is_task_image_old, get_project_state
-    from ..lib.projects import Project as CodexProject
-    from ..lib.projects import list_projects, load_project
-    from ..lib.tasks import get_tasks
-
-    # Import version info function from lib (shared with CLI --version)
-    from ..lib.version import get_version_info as _get_version_info
     from .actions import ActionsMixin
+    from .clipboard import get_clipboard_helper_status
     from .polling import PollingMixin
     from .screens import ProjectDetailsScreen, TaskDetailsScreen
     from .widgets import (
@@ -474,7 +474,7 @@ if _HAS_TEXTUAL:
         def _load_task_image_status(
             self, project_id: str, task: TaskMeta
         ) -> tuple[str, str, bool | None]:
-            image_old = _is_task_image_old(project_id, task)
+            image_old = is_task_image_old(project_id, task)
             return project_id, task.task_id, image_old
 
         # ---------- Selection handlers (from widgets) ----------
