@@ -5,10 +5,10 @@ import subprocess
 from importlib import resources
 from pathlib import Path
 
-from ..core.config import get_envs_base_dir
 from .._util.fs import _ensure_dir_writable
-from ..core.projects import effective_ssh_key_name, load_project
 from .._util.template_utils import render_template
+from ..core.config import get_envs_base_dir
+from ..core.projects import effective_ssh_key_name, load_project
 
 
 # ---------- SSH shared dir initialization ----------

@@ -8,10 +8,10 @@ from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
 
-from ..core.config import user_projects_root
-from ..ui.editor import open_in_editor
 from .._util.fs import _ensure_dir_writable
 from .._util.template_utils import render_template
+from ..core.config import user_projects_root
+from ..ui.editor import open_in_editor
 
 # Template variants: (label, filename)
 TEMPLATES: list[tuple[str, str]] = [

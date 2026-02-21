@@ -52,6 +52,8 @@ depends_on = [
 path = "luskctl.tui"
 layer = "presentation"
 depends_on = [
+    "luskctl.containers.agents",
+    "luskctl.containers.autopilot",
     "luskctl.containers.docker",
     "luskctl.containers.environment",
     "luskctl.containers.project_state",
@@ -63,8 +65,6 @@ depends_on = [
     "luskctl.security.auth",
     "luskctl.security.git_gate",
     "luskctl.security.ssh",
-    "luskctl.ui.clipboard",
-    "luskctl.ui.shell_launch",
 ]
 
 # ── SERVICES LAYER ──────────────────────────────────────────────────
@@ -72,13 +72,25 @@ depends_on = [
 # ·· containers ··  Task lifecycle, container runtime, Dockerfiles
 #
 
-# Task orchestration (largest module — 1146 lines)
+# Agent configuration (parsing, filtering, wrapper generation)
+[[modules]]
+path = "luskctl.containers.agents"
+layer = "services"
+depends_on = ["luskctl.core.projects", "luskctl.containers.environment"]
+
+# Autopilot container lifecycle (wait, logs)
+[[modules]]
+path = "luskctl.containers.autopilot"
+layer = "services"
+depends_on = ["luskctl.containers.tasks"]
+
+# Task orchestration
 [[modules]]
 path = "luskctl.containers.tasks"
 layer = "services"
 depends_on = [
+    "luskctl.containers.agents",
     "luskctl.containers.environment",
-    "luskctl.containers.podman",
     "luskctl.containers.ports",
     "luskctl.containers.runtime",
     "luskctl.core.config",
@@ -86,6 +98,7 @@ depends_on = [
     "luskctl.core.projects",
     "luskctl.ui.terminal",
     "luskctl._util.logging_utils",
+    "luskctl._util.podman",
 ]
 
 # Container state, GPU args, log streaming
@@ -114,9 +127,10 @@ depends_on = ["luskctl.core.config", "luskctl.core.images", "luskctl.core.projec
 
 # Podman user namespace handling
 [[modules]]
-path = "luskctl.containers.podman"
-layer = "services"
+path = "luskctl._util.podman"
+layer = "core"
 depends_on = []
+utility = true
 
 # Project infrastructure state (queries podman & filesystem)
 [[modules]]
@@ -139,7 +153,7 @@ depends_on = [
 path = "luskctl.security.auth"
 layer = "services"
 depends_on = [
-    "luskctl.containers.podman",
+    "luskctl._util.podman",
     "luskctl.core.config",
     "luskctl.core.images",
     "luskctl.core.projects",
@@ -240,23 +254,9 @@ layer = "core"
 depends_on = []
 utility = true
 
-# System clipboard
-[[modules]]
-path = "luskctl.ui.clipboard"
-layer = "core"
-depends_on = []
-utility = true
-
 # $EDITOR launching
 [[modules]]
 path = "luskctl.ui.editor"
-layer = "core"
-depends_on = []
-utility = true
-
-# Terminal detection & session spawning (tmux, gnome-terminal, konsole, ttyd)
-[[modules]]
-path = "luskctl.ui.shell_launch"
 layer = "core"
 depends_on = []
 utility = true
@@ -295,10 +295,12 @@ layer = "presentation"
 depends_on = [
     "luskctl._util.fs",
     "luskctl._util.logging_utils",
+    "luskctl._util.podman",
     "luskctl._util.template_utils",
+    "luskctl.containers.agents",
+    "luskctl.containers.autopilot",
     "luskctl.containers.docker",
     "luskctl.containers.environment",
-    "luskctl.containers.podman",
     "luskctl.containers.ports",
     "luskctl.containers.project_state",
     "luskctl.containers.runtime",
@@ -312,9 +314,8 @@ depends_on = [
     "luskctl.security.auth",
     "luskctl.security.git_gate",
     "luskctl.security.ssh",
-    "luskctl.ui.clipboard",
+    "luskctl.tui",
     "luskctl.ui.editor",
-    "luskctl.ui.shell_launch",
     "luskctl.ui.terminal",
     "luskctl.wizards.new_project",
 ]
@@ -345,10 +346,13 @@ expose = [
     "get_tasks",
     "get_login_command",
     "get_workspace_git_diff",
-    "parse_md_agent",
     "update_task_exit_code",
 ]
 from = ["luskctl.containers.tasks"]
+
+[[interfaces]]
+expose = ["parse_md_agent", "_prepare_agent_config_dir"]
+from = ["luskctl.containers.agents"]
 
 [[interfaces]]
 expose = [

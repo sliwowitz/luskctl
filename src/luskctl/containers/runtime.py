@@ -6,6 +6,15 @@ from typing import Any
 
 from ..core.projects import Project, load_project
 
+# ---------- Container naming ----------
+
+CONTAINER_MODES = ("cli", "web", "run")
+
+
+def container_name(project_id: str, mode: str, task_id: str) -> str:
+    """Return the canonical container name for a task."""
+    return f"{project_id}-{mode}-{task_id}"
+
 
 def _get_container_state(container_name: str) -> str | None:
     """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
@@ -58,11 +67,7 @@ def _stop_task_containers(project: Any, task_id: str) -> None:
     from .._util.logging_utils import _log_debug
 
     # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
-    names = [
-        f"{project.id}-cli-{task_id}",
-        f"{project.id}-web-{task_id}",
-        f"{project.id}-run-{task_id}",
-    ]
+    names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
 
     for name in names:
         try:
@@ -247,8 +252,8 @@ def get_task_container_state(project_id: str, task_id: str, mode: str | None) ->
     if not mode:
         return None
     project = load_project(project_id)
-    container_name = f"{project.id}-{mode}-{task_id}"
-    return _get_container_state(container_name)
+    cname = container_name(project.id, mode, task_id)
+    return _get_container_state(cname)
 
 
 def _get_container_exit_code(container_name: str) -> int:

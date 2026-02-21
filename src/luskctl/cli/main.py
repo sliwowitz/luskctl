@@ -5,7 +5,23 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from ..containers.docker import build_images, generate_dockerfiles
+from ..containers.environment import WEB_BACKENDS
+from ..containers.tasks import (
+    get_tasks as _get_tasks,
+)
+from ..containers.tasks import (
+    task_delete,
+    task_list,
+    task_login,
+    task_new,
+    task_restart,
+    task_run_cli,
+    task_run_headless,
+    task_run_web,
+    task_status,
+    task_stop,
+)
 from ..core.config import (
     build_root as _build_root,
 )
@@ -30,31 +46,15 @@ from ..core.config import (
 from ..core.config import (
     user_projects_root as _user_projects_root,
 )
-from ..containers.docker import build_images, generate_dockerfiles
-from ..security.git_gate import sync_project_gate
 from ..core.projects import list_projects
+from ..core.version import format_version_string, get_version_info
+from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from ..security.git_gate import sync_project_gate
 from ..security.ssh import init_project_ssh
-from ..containers.environment import WEB_BACKENDS
-from ..containers.tasks import (
-    get_tasks as _get_tasks,
-)
-from ..containers.tasks import (
-    task_delete,
-    task_list,
-    task_login,
-    task_new,
-    task_restart,
-    task_run_cli,
-    task_run_headless,
-    task_run_web,
-    task_status,
-    task_stop,
-)
 from ..ui.terminal import gray as _gray
 from ..ui.terminal import supports_color as _supports_color
 from ..ui.terminal import violet as _violet
 from ..ui.terminal import yes_no as _yes_no
-from ..core.version import format_version_string, get_version_info
 from ..wizards.new_project import run_wizard
 
 # Optional: bash completion via argcomplete

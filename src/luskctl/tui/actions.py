@@ -13,17 +13,12 @@ import os
 import subprocess
 import sys
 
-from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from ..ui.clipboard import copy_to_clipboard_detailed
+from ..containers.agents import parse_md_agent
+from ..containers.autopilot import follow_container_logs_cmd, wait_for_container_exit
 from ..containers.docker import build_images, generate_dockerfiles
-from ..security.git_gate import sync_project_gate
-from ..core.projects import load_project
-from ..ui.shell_launch import launch_login
-from ..security.ssh import init_project_ssh
 from ..containers.environment import WEB_BACKENDS
+from ..containers.runtime import container_name
 from ..containers.tasks import (
-    parse_md_agent,
-    update_task_exit_code,
     get_login_command,
     get_workspace_git_diff,
     task_delete,
@@ -33,7 +28,13 @@ from ..containers.tasks import (
     task_run_headless,
     task_run_web,
 )
+from ..core.projects import load_project
+from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from ..security.git_gate import sync_project_gate
+from ..security.ssh import init_project_ssh
+from .clipboard import copy_to_clipboard_detailed
 from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen
+from .shell_launch import launch_login
 from .widgets import TaskList
 
 
@@ -409,9 +410,9 @@ class ActionsMixin:
     def _start_autopilot_watcher(self, project_id: str, task_id: str) -> None:
         """Spawn a background worker that waits for the container to finish
         and updates task metadata with the exit code."""
-        container_name = f"{project_id}-run-{task_id}"
+        cname = container_name(project_id, "run", task_id)
         self.run_worker(
-            lambda: self._autopilot_wait_worker(project_id, task_id, container_name),
+            lambda: self._autopilot_wait_worker(project_id, task_id, cname),
             name=f"autopilot-wait:{project_id}:{task_id}",
             group="autopilot-wait",
             thread=True,
@@ -419,36 +420,11 @@ class ActionsMixin:
         )
 
     def _autopilot_wait_worker(
-        self, project_id: str, task_id: str, container_name: str
+        self, project_id: str, task_id: str, cname: str
     ) -> tuple[str, str, int | None, str | None]:
         """Background worker: wait for the container to exit and update metadata."""
-        try:
-            result = subprocess.run(
-                ["podman", "wait", container_name],
-                capture_output=True,
-                text=True,
-                timeout=7200,  # 2h safety cap
-            )
-            if result.returncode != 0:
-                err = (result.stderr or result.stdout or "").strip()
-                return project_id, task_id, None, f"podman wait failed: {err}"
-
-            try:
-                exit_code = int(result.stdout.strip())
-            except ValueError:
-                return (
-                    project_id,
-                    task_id,
-                    None,
-                    f"podman wait returned non-integer: {result.stdout.strip()!r}",
-                )
-
-            update_task_exit_code(project_id, task_id, exit_code)
-            return project_id, task_id, exit_code, None
-        except subprocess.TimeoutExpired:
-            return project_id, task_id, None, "Watcher timed out"
-        except Exception as e:
-            return project_id, task_id, None, str(e)
+        exit_code, error = wait_for_container_exit(cname, project_id, task_id)
+        return project_id, task_id, exit_code, error
 
     async def _action_follow_logs(self) -> None:
         """Follow logs for an autopilot task."""
@@ -461,19 +437,19 @@ class ActionsMixin:
 
         pid = self.current_project_id
         tid = self.current_task.task_id
-        container_name = f"{pid}-run-{tid}"
-        cmd = ["podman", "logs", "-f", container_name]
-        title = f"logs:{container_name}"
+        cname = container_name(pid, "run", tid)
+        cmd = follow_container_logs_cmd(cname)
+        title = f"logs:{cname}"
 
         method, port = launch_login(cmd, title=title)
 
         if method == "tmux":
-            self.notify(f"Logs opened in tmux window: {container_name}")
+            self.notify(f"Logs opened in tmux window: {cname}")
         elif method == "terminal":
-            self.notify(f"Logs opened in new terminal: {container_name}")
+            self.notify(f"Logs opened in new terminal: {cname}")
         elif method == "web" and port is not None:
             self.open_url(f"http://localhost:{port}")
-            self.notify(f"Logs opened in browser tab: {container_name}")
+            self.notify(f"Logs opened in browser tab: {cname}")
         else:
             # Fallback: suspend TUI
             with self.suspend():
@@ -513,18 +489,18 @@ class ActionsMixin:
             return
 
         mode = self.current_task.mode or "cli"
-        container_name = f"{pid}-{mode}-{tid}"
-        title = f"login:{container_name}"
+        cname = container_name(pid, mode, tid)
+        title = f"login:{cname}"
 
         method, port = launch_login(cmd, title=title)
 
         if method == "tmux":
-            self.notify(f"Opened in tmux window: {container_name}")
+            self.notify(f"Opened in tmux window: {cname}")
         elif method == "terminal":
-            self.notify(f"Opened in new terminal: {container_name}")
+            self.notify(f"Opened in new terminal: {cname}")
         elif method == "web" and port is not None:
             self.open_url(f"http://localhost:{port}")
-            self.notify(f"Opened terminal in browser tab: {container_name}")
+            self.notify(f"Opened terminal in browser tab: {cname}")
         else:
             # Fallback: suspend TUI
             with self.suspend():

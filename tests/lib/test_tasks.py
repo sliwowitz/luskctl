@@ -9,14 +9,8 @@ from pathlib import Path
 
 import yaml
 
-from luskctl.ui.clipboard import (
-    copy_to_clipboard,
-    copy_to_clipboard_detailed,
-    get_clipboard_helper_status,
-)
-from luskctl.containers.runtime import _get_container_state, get_task_container_state
-from luskctl.core.projects import load_project
 from luskctl.containers.environment import _apply_web_env_overrides, _build_task_env_and_volumes
+from luskctl.containers.runtime import _get_container_state, get_task_container_state
 from luskctl.containers.tasks import (
     get_login_command,
     get_workspace_git_diff,
@@ -28,6 +22,12 @@ from luskctl.containers.tasks import (
     task_run_web,
     task_status,
     task_stop,
+)
+from luskctl.core.projects import load_project
+from luskctl.tui.clipboard import (
+    copy_to_clipboard,
+    copy_to_clipboard_detailed,
+    get_clipboard_helper_status,
 )
 from test_utils import mock_git_config, parse_meta_value, write_project
 
@@ -992,11 +992,11 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
-        with unittest.mock.patch("luskctl.ui.clipboard.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.tui.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.ui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
-                with unittest.mock.patch("luskctl.ui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -1033,9 +1033,9 @@ class TaskTests(unittest.TestCase):
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
-        with unittest.mock.patch("luskctl.ui.clipboard.sys.platform", "darwin"):
+        with unittest.mock.patch("luskctl.tui.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.ui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
+                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
                 status = get_clipboard_helper_status()
                 self.assertTrue(status.available)

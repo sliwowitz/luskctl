@@ -269,112 +269,51 @@ def build_images(
     # Cache bust timestamp for agent installs
     cache_bust = str(int(time.time()))
 
+    def _build_cmd(
+        dockerfile: Path,
+        base_image_arg: str,
+        target_image: str,
+        *,
+        build_args: dict[str, str] | None = None,
+        labels: dict[str, str] | None = None,
+        pull: bool = False,
+    ) -> list[str]:
+        cmd = ["podman", "build", "-f", str(dockerfile)]
+        cmd += ["--build-arg", f"BASE_IMAGE={base_image_arg}"]
+        for k, v in (build_args or {}).items():
+            cmd += ["--build-arg", f"{k}={v}"]
+        for k, v in (labels or {}).items():
+            cmd += ["--label", f"{k}={v}"]
+        cmd += ["-t", target_image]
+        if full_rebuild:
+            cmd.append("--no-cache")
+        if pull:
+            cmd.append("--pull=always")
+        cmd.append(context_dir)
+        return cmd
+
     cmds = []
 
     # Build L0 and L1 layers when --agents or --full-rebuild
     if rebuild_agents or full_rebuild:
-        # L0 build command
-        l0_cmd = [
-            "podman",
-            "build",
-            "-f",
-            str(l0),
-            "--build-arg",
-            f"BASE_IMAGE={base_image}",
-            "-t",
-            l0_image,
-        ]
-        if full_rebuild:
-            l0_cmd.extend(["--no-cache", "--pull=always"])
-        l0_cmd.append(context_dir)
-        cmds.append(l0_cmd)
-
-        # L1 CLI build command - with cache bust for fresh agent installs
-        l1_cli_cmd = [
-            "podman",
-            "build",
-            "-f",
-            str(l1_cli),
-            "--build-arg",
-            f"BASE_IMAGE={l0_image}",
-            "--build-arg",
-            f"AGENT_CACHE_BUST={cache_bust}",
-            "-t",
-            l1_cli_image,
-        ]
-        if full_rebuild:
-            l1_cli_cmd.append("--no-cache")
-        l1_cli_cmd.append(context_dir)
-        cmds.append(l1_cli_cmd)
-
-        # L1 UI build command
-        l1_ui_cmd = [
-            "podman",
-            "build",
-            "-f",
-            str(l1_ui),
-            "--build-arg",
-            f"BASE_IMAGE={l0_image}",
-            "-t",
-            l1_ui_image,
-        ]
-        if full_rebuild:
-            l1_ui_cmd.append("--no-cache")
-        l1_ui_cmd.append(context_dir)
-        cmds.append(l1_ui_cmd)
+        cmds.append(_build_cmd(l0, base_image, l0_image, pull=full_rebuild))
+        cmds.append(
+            _build_cmd(
+                l1_cli,
+                l0_image,
+                l1_cli_image,
+                build_args={"AGENT_CACHE_BUST": cache_bust},
+            )
+        )
+        cmds.append(_build_cmd(l1_ui, l0_image, l1_ui_image))
 
     # Always build L2 project images
-    l2_cli_cmd = [
-        "podman",
-        "build",
-        "-f",
-        str(l2),
-        "--build-arg",
-        f"BASE_IMAGE={l1_cli_image}",
-        "--label",
-        f"luskctl.build_context_hash={context_hash}",
-        "-t",
-        l2_cli_image,
-    ]
-    if full_rebuild:
-        l2_cli_cmd.append("--no-cache")
-    l2_cli_cmd.append(context_dir)
-    cmds.append(l2_cli_cmd)
-
-    l2_ui_cmd = [
-        "podman",
-        "build",
-        "-f",
-        str(l2),
-        "--build-arg",
-        f"BASE_IMAGE={l1_ui_image}",
-        "--label",
-        f"luskctl.build_context_hash={context_hash}",
-        "-t",
-        l2_ui_image,
-    ]
-    if full_rebuild:
-        l2_ui_cmd.append("--no-cache")
-    l2_ui_cmd.append(context_dir)
-    cmds.append(l2_ui_cmd)
+    hash_label = {"luskctl.build_context_hash": context_hash}
+    cmds.append(_build_cmd(l2, l1_cli_image, l2_cli_image, labels=hash_label))
+    cmds.append(_build_cmd(l2, l1_ui_image, l2_ui_image, labels=hash_label))
 
     if include_dev:
-        l2_dev_cmd = [
-            "podman",
-            "build",
-            "-f",
-            str(l2),
-            "--build-arg",
-            f"BASE_IMAGE={l0_image}",
-            "--label",
-            f"luskctl.build_context_hash={context_hash}",
-            "-t",
-            l2_dev_image,
-        ]
-        if full_rebuild:
-            l2_dev_cmd.append("--no-cache")
-        l2_dev_cmd.append(context_dir)
-        cmds.append(l2_dev_cmd)
+        cmds.append(_build_cmd(l2, l0_image, l2_dev_image, labels=hash_label))
 
     for cmd in cmds:
         print("$", " ".join(cmd))
