@@ -12,7 +12,7 @@ sys.modules["textual.containers"] = mock.MagicMock()
 sys.modules["textual.message"] = mock.MagicMock()
 sys.modules["yaml"] = mock.MagicMock()
 
-from luskctl.security.git_gate import GateStalenessInfo
+from luskctl.lib.security.git_gate import GateStalenessInfo
 
 
 class MockProject:

@@ -5,7 +5,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.ui.editor import _resolve_editor, open_in_editor
+from luskctl.ui_utils.editor import _resolve_editor, open_in_editor
 
 
 def _only_custom_editor(cmd: str) -> str | None:
@@ -57,7 +57,7 @@ class ResolveEditorTests(unittest.TestCase):
 class OpenInEditorTests(unittest.TestCase):
     """Tests for open_in_editor()."""
 
-    @unittest.mock.patch("luskctl.ui.editor._resolve_editor", return_value="nano")
+    @unittest.mock.patch("luskctl.ui_utils.editor._resolve_editor", return_value="nano")
     @unittest.mock.patch("subprocess.run")
     def test_success_returns_true(
         self,
@@ -69,12 +69,12 @@ class OpenInEditorTests(unittest.TestCase):
             self.assertTrue(open_in_editor(path))
             mock_run.assert_called_once_with(["nano", str(path)], check=True)
 
-    @unittest.mock.patch("luskctl.ui.editor._resolve_editor", return_value=None)
+    @unittest.mock.patch("luskctl.ui_utils.editor._resolve_editor", return_value=None)
     def test_no_editor_returns_false(self, _resolve: unittest.mock.Mock) -> None:
         with tempfile.NamedTemporaryFile(suffix=".yml") as f:
             self.assertFalse(open_in_editor(Path(f.name)))
 
-    @unittest.mock.patch("luskctl.ui.editor._resolve_editor", return_value="nano")
+    @unittest.mock.patch("luskctl.ui_utils.editor._resolve_editor", return_value="nano")
     @unittest.mock.patch(
         "subprocess.run",
         side_effect=subprocess.CalledProcessError(1, "nano"),
@@ -87,7 +87,7 @@ class OpenInEditorTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".yml") as f:
             self.assertFalse(open_in_editor(Path(f.name)))
 
-    @unittest.mock.patch("luskctl.ui.editor._resolve_editor", return_value="nano")
+    @unittest.mock.patch("luskctl.ui_utils.editor._resolve_editor", return_value="nano")
     @unittest.mock.patch("subprocess.run", side_effect=FileNotFoundError)
     def test_editor_not_found_returns_false(
         self,
@@ -97,7 +97,7 @@ class OpenInEditorTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".yml") as f:
             self.assertFalse(open_in_editor(Path(f.name)))
 
-    @unittest.mock.patch("luskctl.ui.editor._resolve_editor", return_value=None)
+    @unittest.mock.patch("luskctl.ui_utils.editor._resolve_editor", return_value=None)
     @unittest.mock.patch("builtins.print")
     def test_no_editor_prints_message(
         self,

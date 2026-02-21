@@ -34,17 +34,17 @@ layers = [
 path = "luskctl.cli"
 layer = "presentation"
 depends_on = [
-    "luskctl.containers.docker",
-    "luskctl.containers.environment",
-    "luskctl.containers.tasks",
-    "luskctl.core.config",
-    "luskctl.core.projects",
-    "luskctl.core.version",
-    "luskctl.security.auth",
-    "luskctl.security.git_gate",
-    "luskctl.security.ssh",
-    "luskctl.ui.terminal",
-    "luskctl.wizards.new_project",
+    "luskctl.lib.containers.docker",
+    "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.tasks",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.projects",
+    "luskctl.lib.core.version",
+    "luskctl.lib.security.auth",
+    "luskctl.lib.security.git_gate",
+    "luskctl.lib.security.ssh",
+    "luskctl.ui_utils.terminal",
+    "luskctl.lib.wizards.new_project",
 ]
 
 # TUI frontend
@@ -52,19 +52,19 @@ depends_on = [
 path = "luskctl.tui"
 layer = "presentation"
 depends_on = [
-    "luskctl.containers.agents",
-    "luskctl.containers.autopilot",
-    "luskctl.containers.docker",
-    "luskctl.containers.environment",
-    "luskctl.containers.project_state",
-    "luskctl.containers.runtime",
-    "luskctl.containers.tasks",
-    "luskctl.core.config",
-    "luskctl.core.projects",
-    "luskctl.core.version",
-    "luskctl.security.auth",
-    "luskctl.security.git_gate",
-    "luskctl.security.ssh",
+    "luskctl.lib.containers.agents",
+    "luskctl.lib.containers.autopilot",
+    "luskctl.lib.containers.docker",
+    "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.project_state",
+    "luskctl.lib.containers.runtime",
+    "luskctl.lib.containers.tasks",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.projects",
+    "luskctl.lib.core.version",
+    "luskctl.lib.security.auth",
+    "luskctl.lib.security.git_gate",
+    "luskctl.lib.security.ssh",
 ]
 
 # ── SERVICES LAYER ──────────────────────────────────────────────────
@@ -74,74 +74,67 @@ depends_on = [
 
 # Agent configuration (parsing, filtering, wrapper generation)
 [[modules]]
-path = "luskctl.containers.agents"
+path = "luskctl.lib.containers.agents"
 layer = "services"
-depends_on = ["luskctl.core.projects", "luskctl.containers.environment"]
+depends_on = ["luskctl.lib.core.projects", "luskctl.lib.containers.environment"]
 
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
-path = "luskctl.containers.autopilot"
+path = "luskctl.lib.containers.autopilot"
 layer = "services"
-depends_on = ["luskctl.containers.tasks"]
+depends_on = ["luskctl.lib.containers.tasks"]
 
 # Task orchestration
 [[modules]]
-path = "luskctl.containers.tasks"
+path = "luskctl.lib.containers.tasks"
 layer = "services"
 depends_on = [
-    "luskctl.containers.agents",
-    "luskctl.containers.environment",
-    "luskctl.containers.ports",
-    "luskctl.containers.runtime",
-    "luskctl.core.config",
-    "luskctl.core.images",
-    "luskctl.core.projects",
-    "luskctl.ui.terminal",
-    "luskctl._util.logging_utils",
-    "luskctl._util.podman",
+    "luskctl.lib.containers.agents",
+    "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.ports",
+    "luskctl.lib.containers.runtime",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.images",
+    "luskctl.lib.core.projects",
+    "luskctl.ui_utils.terminal",
+    "luskctl.lib._util.logging_utils",
+    "luskctl.lib._util.podman",
 ]
 
 # Container state, GPU args, log streaming
 [[modules]]
-path = "luskctl.containers.runtime"
+path = "luskctl.lib.containers.runtime"
 layer = "services"
-depends_on = ["luskctl.core.projects", "luskctl._util.logging_utils"]
+depends_on = ["luskctl.lib.core.projects", "luskctl.lib._util.logging_utils"]
 
 # Task environment & volume mounts
 [[modules]]
-path = "luskctl.containers.environment"
+path = "luskctl.lib.containers.environment"
 layer = "services"
-depends_on = ["luskctl.core.config", "luskctl.core.projects", "luskctl._util.fs"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib._util.fs"]
 
 # Task port allocation
 [[modules]]
-path = "luskctl.containers.ports"
+path = "luskctl.lib.containers.ports"
 layer = "services"
-depends_on = ["luskctl.core.config"]
+depends_on = ["luskctl.lib.core.config"]
 
 # Dockerfile generation & image building
 [[modules]]
-path = "luskctl.containers.docker"
+path = "luskctl.lib.containers.docker"
 layer = "services"
-depends_on = ["luskctl.core.config", "luskctl.core.images", "luskctl.core.projects"]
-
-# Podman user namespace handling
-[[modules]]
-path = "luskctl._util.podman"
-layer = "core"
-depends_on = []
-utility = true
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.images", "luskctl.lib.core.projects"]
 
 # Project infrastructure state (queries podman & filesystem)
 [[modules]]
-path = "luskctl.containers.project_state"
+path = "luskctl.lib.containers.project_state"
 layer = "services"
 depends_on = [
-    "luskctl.containers.docker",
-    "luskctl.core.config",
-    "luskctl.core.images",
-    "luskctl.core.projects",
-    "luskctl.security.git_gate",
+    "luskctl.lib.containers.docker",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.images",
+    "luskctl.lib.core.projects",
+    "luskctl.lib.security.git_gate",
 ]
 
 #
@@ -150,32 +143,32 @@ depends_on = [
 
 # API key authentication workflows
 [[modules]]
-path = "luskctl.security.auth"
+path = "luskctl.lib.security.auth"
 layer = "services"
 depends_on = [
-    "luskctl._util.podman",
-    "luskctl.core.config",
-    "luskctl.core.images",
-    "luskctl.core.projects",
-    "luskctl._util.fs",
+    "luskctl.lib._util.podman",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.images",
+    "luskctl.lib.core.projects",
+    "luskctl.lib._util.fs",
 ]
 
 # SSH key management
 [[modules]]
-path = "luskctl.security.ssh"
+path = "luskctl.lib.security.ssh"
 layer = "services"
 depends_on = [
-    "luskctl.core.config",
-    "luskctl.core.projects",
-    "luskctl._util.fs",
-    "luskctl._util.template_utils",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.projects",
+    "luskctl.lib._util.fs",
+    "luskctl.lib._util.template_utils",
 ]
 
 # Git gate sync & validation
 [[modules]]
-path = "luskctl.security.git_gate"
+path = "luskctl.lib.security.git_gate"
 layer = "services"
-depends_on = ["luskctl.core.config", "luskctl.core.projects"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects"]
 
 #
 # ·· wizards ··  Interactive workflows
@@ -183,13 +176,13 @@ depends_on = ["luskctl.core.config", "luskctl.core.projects"]
 
 # Interactive project creation
 [[modules]]
-path = "luskctl.wizards.new_project"
+path = "luskctl.lib.wizards.new_project"
 layer = "services"
 depends_on = [
-    "luskctl.core.config",
-    "luskctl.ui.editor",
-    "luskctl._util.fs",
-    "luskctl._util.template_utils",
+    "luskctl.lib.core.config",
+    "luskctl.ui_utils.editor",
+    "luskctl.lib._util.fs",
+    "luskctl.lib._util.template_utils",
 ]
 
 #
@@ -198,15 +191,9 @@ depends_on = [
 
 # Mistral model sync
 [[modules]]
-path = "luskctl.integrations.mistral_model_sync"
+path = "luskctl.lib.integrations.mistral_model_sync"
 layer = "services"
 depends_on = []
-
-# Version info
-[[modules]]
-path = "luskctl.core.version"
-layer = "core"
-depends_on = ["luskctl"]
 
 # ── CORE LAYER ──────────────────────────────────────────────────────
 #
@@ -219,44 +206,50 @@ path = "luskctl"
 layer = "core"
 depends_on = []
 
+# Version info
+[[modules]]
+path = "luskctl.lib.core.version"
+layer = "core"
+depends_on = ["luskctl"]
+
 # Path resolution (FHS/XDG)
 [[modules]]
-path = "luskctl.core.paths"
+path = "luskctl.lib.core.paths"
 layer = "core"
 depends_on = []
 
 # Configuration management
 [[modules]]
-path = "luskctl.core.config"
+path = "luskctl.lib.core.config"
 layer = "core"
-depends_on = ["luskctl.core.paths"]
+depends_on = ["luskctl.lib.core.paths"]
 
 # Project data model & loader
 [[modules]]
-path = "luskctl.core.projects"
+path = "luskctl.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.core.config"]
+depends_on = ["luskctl.lib.core.config"]
 
 # Image naming conventions
 [[modules]]
-path = "luskctl.core.images"
+path = "luskctl.lib.core.images"
 layer = "core"
 depends_on = []
 
 #
-# ·· ui ··  User-facing interaction (terminal, clipboard, editor, shell)
+# ·· ui ··  Shared UI helpers (terminal, editor)
 #
 
 # Terminal ANSI formatting
 [[modules]]
-path = "luskctl.ui.terminal"
+path = "luskctl.ui_utils.terminal"
 layer = "core"
 depends_on = []
 utility = true
 
 # $EDITOR launching
 [[modules]]
-path = "luskctl.ui.editor"
+path = "luskctl.ui_utils.editor"
 layer = "core"
 depends_on = []
 utility = true
@@ -265,60 +258,33 @@ utility = true
 # ·· _util ··  Pure internal helpers
 #
 
+# Podman user namespace handling
+[[modules]]
+path = "luskctl.lib._util.podman"
+layer = "core"
+depends_on = []
+utility = true
+
 # Filesystem helpers (mkdir, writable check)
 [[modules]]
-path = "luskctl._util.fs"
+path = "luskctl.lib._util.fs"
 layer = "core"
 depends_on = []
 utility = true
 
 # Simple {{VAR}} template rendering
 [[modules]]
-path = "luskctl._util.template_utils"
+path = "luskctl.lib._util.template_utils"
 layer = "core"
 depends_on = []
 utility = true
 
 # Debug logging stub
 [[modules]]
-path = "luskctl._util.logging_utils"
+path = "luskctl.lib._util.logging_utils"
 layer = "core"
 depends_on = []
 utility = true
-
-# ── Backward-compat shim ──────────────────────────────────────────
-# The lib/ package re-exports everything for old import paths.
-# It depends on all new packages.
-[[modules]]
-path = "luskctl.lib"
-layer = "presentation"
-depends_on = [
-    "luskctl._util.fs",
-    "luskctl._util.logging_utils",
-    "luskctl._util.podman",
-    "luskctl._util.template_utils",
-    "luskctl.containers.agents",
-    "luskctl.containers.autopilot",
-    "luskctl.containers.docker",
-    "luskctl.containers.environment",
-    "luskctl.containers.ports",
-    "luskctl.containers.project_state",
-    "luskctl.containers.runtime",
-    "luskctl.containers.tasks",
-    "luskctl.core.config",
-    "luskctl.core.images",
-    "luskctl.core.paths",
-    "luskctl.core.projects",
-    "luskctl.core.version",
-    "luskctl.integrations.mistral_model_sync",
-    "luskctl.security.auth",
-    "luskctl.security.git_gate",
-    "luskctl.security.ssh",
-    "luskctl.tui",
-    "luskctl.ui.editor",
-    "luskctl.ui.terminal",
-    "luskctl.wizards.new_project",
-]
 
 # ── Interfaces ──────────────────────────────────────────────────────
 
@@ -329,7 +295,7 @@ expose = [
     "load_project",
     "effective_ssh_key_name",
 ]
-from = ["luskctl.core.projects"]
+from = ["luskctl.lib.core.projects"]
 
 [[interfaces]]
 expose = [
@@ -348,11 +314,11 @@ expose = [
     "get_workspace_git_diff",
     "update_task_exit_code",
 ]
-from = ["luskctl.containers.tasks"]
+from = ["luskctl.lib.containers.tasks"]
 
 [[interfaces]]
 expose = ["parse_md_agent", "_prepare_agent_config_dir"]
-from = ["luskctl.containers.agents"]
+from = ["luskctl.lib.containers.agents"]
 
 [[interfaces]]
 expose = [
@@ -361,7 +327,7 @@ expose = [
     "mistral_auth",
     "blablador_auth",
 ]
-from = ["luskctl.security.auth"]
+from = ["luskctl.lib.security.auth"]
 
 [[interfaces]]
 expose = [
@@ -370,11 +336,11 @@ expose = [
     "build_context_hash",
     "dockerfiles_match_templates",
 ]
-from = ["luskctl.containers.docker"]
+from = ["luskctl.lib.containers.docker"]
 
 [[interfaces]]
 expose = ["init_project_ssh"]
-from = ["luskctl.security.ssh"]
+from = ["luskctl.lib.security.ssh"]
 
 [[interfaces]]
 expose = [
@@ -385,8 +351,8 @@ expose = [
     "find_projects_sharing_gate",
     "get_gate_last_commit",
 ]
-from = ["luskctl.security.git_gate"]
+from = ["luskctl.lib.security.git_gate"]
 
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
-from = ["luskctl.containers.project_state"]
+from = ["luskctl.lib.containers.project_state"]

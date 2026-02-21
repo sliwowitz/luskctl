@@ -32,7 +32,7 @@ class PollingMixin:
 
         Only polls for gatekeeping projects with polling enabled and a gate initialized.
         """
-        from ..core.projects import load_project
+        from ..lib.core.projects import load_project
 
         self._stop_upstream_polling()  # Stop any existing timer
         self._staleness_info = None
@@ -117,7 +117,7 @@ class PollingMixin:
         """Background worker to check container state."""
         import asyncio
 
-        from ..containers.runtime import get_task_container_state
+        from ..lib.containers.runtime import get_task_container_state
 
         try:
             state = await asyncio.get_event_loop().run_in_executor(
@@ -150,7 +150,7 @@ class PollingMixin:
         """Background worker to check upstream (runs in thread pool)."""
         import asyncio
 
-        from ..security.git_gate import compare_gate_vs_upstream
+        from ..lib.security.git_gate import compare_gate_vs_upstream
 
         try:
             # Run blocking call in thread pool
@@ -203,7 +203,7 @@ class PollingMixin:
         """
         import time
 
-        from ..core.projects import load_project
+        from ..lib.core.projects import load_project
 
         if not project_id or project_id != self.current_project_id:
             return
@@ -243,7 +243,7 @@ class PollingMixin:
         """Background worker to sync gate from upstream."""
         import asyncio
 
-        from ..security.git_gate import compare_gate_vs_upstream, sync_gate_branches
+        from ..lib.security.git_gate import compare_gate_vs_upstream, sync_gate_branches
 
         try:
             # Run blocking sync in thread pool

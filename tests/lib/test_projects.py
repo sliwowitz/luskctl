@@ -4,9 +4,9 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.containers.project_state import get_project_state
-from luskctl.core.config import build_root, state_root
-from luskctl.core.projects import list_projects, load_project
+from luskctl.lib.containers.project_state import get_project_state
+from luskctl.lib.core.config import build_root, state_root
+from luskctl.lib.core.projects import list_projects, load_project
 from test_utils import write_project
 
 
@@ -117,7 +117,7 @@ class ProjectTests(unittest.TestCase):
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
                 with unittest.mock.patch(
-                    "luskctl.containers.project_state.subprocess.run"
+                    "luskctl.lib.containers.project_state.subprocess.run"
                 ) as run_mock:
                     run_mock.return_value.returncode = 0
                     state = get_project_state(project_id)

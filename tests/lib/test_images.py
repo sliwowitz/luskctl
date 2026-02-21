@@ -1,6 +1,6 @@
 import unittest
 
-from luskctl.lib import images
+from luskctl.lib.core import images
 
 
 class ImagesTests(unittest.TestCase):

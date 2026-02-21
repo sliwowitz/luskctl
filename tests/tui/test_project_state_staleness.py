@@ -4,7 +4,7 @@ import sys
 import types
 from unittest import TestCase, main, mock
 
-from luskctl.security.git_gate import GateStalenessInfo
+from luskctl.lib.security.git_gate import GateStalenessInfo
 
 
 def _build_textual_stubs() -> dict[str, types.ModuleType]:
