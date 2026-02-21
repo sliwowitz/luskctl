@@ -18,7 +18,7 @@ def _log_debug(message: str) -> None:
 
         log_path = os.path.join(os.path.expanduser("~"), ".luskctl.log")
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        with open(log_path, "a") as f:
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass

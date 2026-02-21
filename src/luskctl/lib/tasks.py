@@ -14,7 +14,7 @@ from .container_utils import (
     _is_container_running,
     _stop_task_containers,
     _stream_initial_logs,
-    _stream_until_exit,
+    _wait_for_exit,
 )
 from .images import project_cli_image, project_web_image
 from .logging_utils import _log_debug
@@ -968,7 +968,7 @@ def task_run_headless(
     color_enabled = _supports_color()
 
     if follow:
-        exit_code = _stream_until_exit(container_name)
+        exit_code = _wait_for_exit(container_name)
         _print_run_summary(task_dir / "workspace")
 
         _update_task_exit_code(project.id, task_id, exit_code)

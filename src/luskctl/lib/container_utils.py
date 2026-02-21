@@ -127,7 +127,10 @@ def _stream_initial_logs(
     """Stream logs from a container until ready marker is seen or timeout.
 
     Returns True if ready marker was found, False on timeout.
+    Uses select.select for non-blocking reads so the thread can exit cleanly
+    when the caller's join timeout expires.
     """
+    import select
     import sys
     import threading
     import time
@@ -136,6 +139,10 @@ def _stream_initial_logs(
 
     # Mutable container so stream_logs can propagate its result back.
     holder: list[bool] = [False]
+    # Event to signal the thread to stop (set when join times out).
+    stop_event = threading.Event()
+    # Keep a reference to proc so we can terminate it from the outer scope.
+    proc_holder: list[subprocess.Popen | None] = [None]
 
     def stream_logs() -> None:
         try:
@@ -143,33 +150,52 @@ def _stream_initial_logs(
                 ["podman", "logs", "-f", container_name],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                text=True,
             )
+            proc_holder[0] = proc
 
             start_time = time.time()
+            buf = b""
 
-            while True:
+            while not stop_event.is_set():
                 if timeout_sec is not None and time.time() - start_time >= timeout_sec:
                     break
                 if proc.poll() is not None:
+                    # Process exited; drain remaining output.
+                    remaining = proc.stdout.read()
+                    if remaining:
+                        buf += remaining
                     break
 
                 try:
-                    line = proc.stdout.readline()
-                    if not line:
-                        time.sleep(0.1)
+                    ready, _, _ = select.select([proc.stdout], [], [], 0.2)
+                    if not ready:
                         continue
+                    chunk = proc.stdout.read1(4096) if hasattr(proc.stdout, "read1") else b""
+                    if not chunk:
+                        continue
+                    buf += chunk
+                except Exception as exc:
+                    _log_debug(f"_stream_initial_logs read error: {exc}")
+                    break
 
-                    line = line.strip()
+                # Process complete lines from the buffer.
+                while b"\n" in buf:
+                    raw_line, buf = buf.split(b"\n", 1)
+                    line = raw_line.decode("utf-8", errors="replace").strip()
                     if line:
                         print(line, file=sys.stdout, flush=True)
                         if ready_check(line):
                             holder[0] = True
                             proc.terminate()
                             return
-                except Exception as exc:
-                    _log_debug(f"_stream_initial_logs readline error: {exc}")
-                    break
+
+            # Flush any trailing partial line.
+            if buf:
+                line = buf.decode("utf-8", errors="replace").strip()
+                if line:
+                    print(line, file=sys.stdout, flush=True)
+                    if ready_check(line):
+                        holder[0] = True
 
             proc.terminate()
         except Exception as exc:
@@ -179,10 +205,18 @@ def _stream_initial_logs(
     stream_thread.start()
     stream_thread.join(timeout_sec)
 
+    if stream_thread.is_alive():
+        # Join timed out — signal and clean up.
+        stop_event.set()
+        proc = proc_holder[0]
+        if proc is not None:
+            proc.terminate()
+        stream_thread.join(timeout=5)
+
     return holder[0]
 
 
-def _stream_until_exit(container_name: str, timeout_sec: float | None = None) -> int:
+def _wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int:
     """Wait for a container to exit and return its exit code.
 
     Returns the container's exit code, 124 on timeout, or 1 if podman is not found.
