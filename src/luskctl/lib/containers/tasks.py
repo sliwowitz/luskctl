@@ -8,17 +8,9 @@ import yaml  # pip install pyyaml
 
 from luskctl.ui_utils.terminal import (
     blue as _blue,
-)
-from luskctl.ui_utils.terminal import (
     green as _green,
-)
-from luskctl.ui_utils.terminal import (
     red as _red,
-)
-from luskctl.ui_utils.terminal import (
     supports_color as _supports_color,
-)
-from luskctl.ui_utils.terminal import (
     yellow as _yellow,
 )
 

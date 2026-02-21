@@ -102,6 +102,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["luskctl"]
+combine-as-imports = true
 
 [tool.ruff.format]
 quote-style = "double"
