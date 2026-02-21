@@ -5,8 +5,6 @@ from pathlib import Path
 try:
     from platformdirs import (
         user_config_dir as _user_config_dir,
-    )
-    from platformdirs import (
         user_data_dir as _user_data_dir,
     )
 except ImportError:  # optional dependency

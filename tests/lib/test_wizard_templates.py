@@ -2,8 +2,8 @@ import unittest
 from importlib import resources
 from importlib.resources.abc import Traversable
 
-from luskctl._util.template_utils import render_template
-from luskctl.wizards.new_project import TEMPLATES as WIZARD_TEMPLATES
+from luskctl.lib._util.template_utils import render_template
+from luskctl.lib.wizards.new_project import TEMPLATES as WIZARD_TEMPLATES
 
 TEMPLATE_DIR: Traversable = resources.files("luskctl") / "resources" / "templates" / "projects"
 

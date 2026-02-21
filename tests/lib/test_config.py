@@ -4,7 +4,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib import config as cfg
+from luskctl.lib.core import config as cfg
 
 
 class ConfigTests(unittest.TestCase):

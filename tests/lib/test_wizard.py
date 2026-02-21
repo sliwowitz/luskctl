@@ -3,7 +3,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.wizards.new_project import (
+from luskctl.lib.wizards.new_project import (
     TEMPLATES,
     _validate_project_id,
     collect_wizard_inputs,
@@ -132,7 +132,7 @@ class GenerateConfigTests(unittest.TestCase):
     def test_generates_project_yml(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with unittest.mock.patch(
-                "luskctl.wizards.new_project.user_projects_root", return_value=Path(td)
+                "luskctl.lib.wizards.new_project.user_projects_root", return_value=Path(td)
             ):
                 values = {
                     "template_index": 0,
@@ -154,7 +154,7 @@ class GenerateConfigTests(unittest.TestCase):
     def test_generates_gatekeeping_template(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with unittest.mock.patch(
-                "luskctl.wizards.new_project.user_projects_root", return_value=Path(td)
+                "luskctl.lib.wizards.new_project.user_projects_root", return_value=Path(td)
             ):
                 values = {
                     "template_index": 2,
@@ -174,7 +174,7 @@ class GenerateConfigTests(unittest.TestCase):
     def test_creates_project_directory(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with unittest.mock.patch(
-                "luskctl.wizards.new_project.user_projects_root", return_value=Path(td)
+                "luskctl.lib.wizards.new_project.user_projects_root", return_value=Path(td)
             ):
                 values = {
                     "template_index": 0,
@@ -190,7 +190,7 @@ class GenerateConfigTests(unittest.TestCase):
     def test_nvidia_template_includes_gpus(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with unittest.mock.patch(
-                "luskctl.wizards.new_project.user_projects_root", return_value=Path(td)
+                "luskctl.lib.wizards.new_project.user_projects_root", return_value=Path(td)
             ):
                 values = {
                     "template_index": 1,
@@ -207,7 +207,7 @@ class GenerateConfigTests(unittest.TestCase):
     def test_all_placeholders_replaced(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             with unittest.mock.patch(
-                "luskctl.wizards.new_project.user_projects_root", return_value=Path(td)
+                "luskctl.lib.wizards.new_project.user_projects_root", return_value=Path(td)
             ):
                 for idx in range(len(TEMPLATES)):
                     values = {
@@ -228,9 +228,9 @@ class GenerateConfigTests(unittest.TestCase):
 class RunWizardTests(unittest.TestCase):
     """Tests for run_wizard() orchestration."""
 
-    @unittest.mock.patch("luskctl.wizards.new_project.open_in_editor", return_value=True)
-    @unittest.mock.patch("luskctl.wizards.new_project.generate_config")
-    @unittest.mock.patch("luskctl.wizards.new_project.collect_wizard_inputs")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.open_in_editor", return_value=True)
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.collect_wizard_inputs")
     def test_run_wizard_with_edit_and_init(
         self,
         mock_collect: unittest.mock.Mock,
@@ -254,8 +254,8 @@ class RunWizardTests(unittest.TestCase):
         mock_editor.assert_called_once()
         mock_init.assert_called_once_with("proj1")
 
-    @unittest.mock.patch("luskctl.wizards.new_project.generate_config")
-    @unittest.mock.patch("luskctl.wizards.new_project.collect_wizard_inputs")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.collect_wizard_inputs")
     def test_run_wizard_skip_edit_and_init(
         self,
         mock_collect: unittest.mock.Mock,
@@ -277,13 +277,13 @@ class RunWizardTests(unittest.TestCase):
         self.assertEqual(result, Path("/tmp/proj2/project.yml"))
         mock_init.assert_not_called()
 
-    @unittest.mock.patch("luskctl.wizards.new_project.collect_wizard_inputs", return_value=None)
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.collect_wizard_inputs", return_value=None)
     def test_run_wizard_cancellation_returns_none(self, _collect: unittest.mock.Mock) -> None:
         result = run_wizard()
         self.assertIsNone(result)
 
-    @unittest.mock.patch("luskctl.wizards.new_project.generate_config")
-    @unittest.mock.patch("luskctl.wizards.new_project.collect_wizard_inputs")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.collect_wizard_inputs")
     def test_run_wizard_no_init_fn(
         self,
         mock_collect: unittest.mock.Mock,
@@ -303,8 +303,8 @@ class RunWizardTests(unittest.TestCase):
 
         self.assertIsNotNone(result)
 
-    @unittest.mock.patch("luskctl.wizards.new_project.generate_config")
-    @unittest.mock.patch("luskctl.wizards.new_project.collect_wizard_inputs")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.generate_config")
+    @unittest.mock.patch("luskctl.lib.wizards.new_project.collect_wizard_inputs")
     def test_run_wizard_ctrl_c_after_generate(
         self,
         mock_collect: unittest.mock.Mock,

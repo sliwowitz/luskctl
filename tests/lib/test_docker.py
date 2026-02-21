@@ -4,8 +4,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.containers.docker import generate_dockerfiles
-from luskctl.core.config import build_root
+from luskctl.lib.containers.docker import build_images, generate_dockerfiles
+from luskctl.lib.core.config import build_root
 from test_utils import write_project
 
 
@@ -150,8 +150,6 @@ class DockerTests(unittest.TestCase):
                     "LUSKCTL_STATE_DIR": str(state_dir),
                 },
             ):
-                from luskctl.containers.docker import build_images
-
                 generate_dockerfiles(project_id)
 
                 # Mock subprocess.run to capture build commands

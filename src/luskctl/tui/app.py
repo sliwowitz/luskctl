@@ -36,15 +36,14 @@ if _HAS_TEXTUAL:
     from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
-    from ..containers.project_state import get_project_state, is_task_image_old
-    from ..containers.tasks import get_tasks
-    from ..core.config import get_tui_default_tmux
-    from ..core.projects import Project as CodexProject
-    from ..core.projects import list_projects, load_project
+    from ..lib.containers.project_state import get_project_state, is_task_image_old
+    from ..lib.containers.tasks import get_tasks
+    from ..lib.core.config import get_tui_default_tmux
+    from ..lib.core.projects import Project as CodexProject, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
-    from ..core.version import get_version_info as _get_version_info
-    from ..security.git_gate import (
+    from ..lib.core.version import get_version_info as _get_version_info
+    from ..lib.security.git_gate import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
     )
