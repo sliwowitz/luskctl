@@ -1,0 +1,238 @@
+"""Container utility functions that can be safely imported by other modules."""
+
+import subprocess
+from collections.abc import Callable
+from typing import Any
+
+from .projects import Project
+
+
+def _get_container_state(container_name: str) -> str | None:
+    """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
+
+    This uses `podman inspect` to get the actual container state. Returns None
+    if the container doesn't exist or podman is not available.
+    """
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.Status}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        return out.lower() if out else None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+
+def _is_container_running(container_name: str) -> bool:
+    """Return True if a podman container with the given name is running.
+
+    This uses `podman inspect` and treats missing containers or any
+    inspection error as "not running".
+    """
+    try:
+        out = subprocess.check_output(
+            ["podman", "inspect", "-f", "{{.State.Running}}", container_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+    return out.lower() == "true"
+
+
+def _stop_task_containers(project: Any, task_id: str) -> None:
+    """Best-effort removal of any containers associated with a task.
+
+    We intentionally ignore most errors here: task deletion should succeed
+    even if podman isn't installed, the containers are already gone, or the
+    container names never existed. This helper is used when deleting a
+    task's workspace/metadata to avoid leaving behind containers that would
+    later conflict with a new task reusing the same ID.
+
+    We use ``podman rm -f`` rather than ``podman stop`` to make teardown
+    deterministic and avoid hangs waiting for graceful shutdown inside the
+    container. The task itself is already being deleted at this point, so
+    a forceful remove is acceptable and keeps state consistent.
+    """
+    from .logging_utils import _log_debug
+
+    # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
+    names = [
+        f"{project.id}-cli-{task_id}",
+        f"{project.id}-web-{task_id}",
+        f"{project.id}-run-{task_id}",
+    ]
+
+    for name in names:
+        try:
+            _log_debug(f"stop_containers: podman rm -f {name} (start)")
+            # "podman rm -f" force-removes the container even if it is
+            # currently running. If the container does not exist this will
+            # fail, but we treat that as a non-fatal condition and simply
+            # continue.
+            subprocess.run(
+                ["podman", "rm", "-f", name],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _log_debug(f"stop_containers: podman rm -f {name} (done)")
+        except Exception:
+            # We intentionally ignore all errors here.
+            pass
+
+
+def _gpu_run_args(project: "Project") -> list[str]:
+    """Return additional podman run args to enable NVIDIA GPU if configured.
+
+    Per-project only: GPUs are enabled exclusively by the project's project.yml.
+    Default is disabled. Global config and environment variables are ignored.
+    """
+    import yaml
+
+    # Project-level setting from project.yml (only source of truth)
+    enabled = False
+    try:
+        proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
+        run_cfg = proj_cfg.get("run", {}) or {}
+        gpus = run_cfg.get("gpus", run_cfg.get("gpu"))
+        if isinstance(gpus, str):
+            enabled = gpus.lower() == "all"
+        elif isinstance(gpus, bool):
+            enabled = gpus
+    except Exception:
+        enabled = False
+
+    if not enabled:
+        return []
+
+    args: list[str] = [
+        "--device",
+        "nvidia.com/gpu=all",
+        "-e",
+        "NVIDIA_VISIBLE_DEVICES=all",
+        "-e",
+        "NVIDIA_DRIVER_CAPABILITIES=all",
+    ]
+
+    return args
+
+
+def _stream_initial_logs(
+    container_name: str,
+    timeout_sec: float | None,
+    ready_check: Callable[[str], bool],
+) -> bool:
+    """Stream logs from a container until ready marker is seen or timeout.
+
+    Returns True if ready marker was found, False on timeout.
+    Uses select.select for non-blocking reads so the thread can exit cleanly
+    when the caller's join timeout expires.
+    """
+    import select
+    import sys
+    import threading
+    import time
+
+    from .logging_utils import _log_debug
+
+    # Mutable container so stream_logs can propagate its result back.
+    holder: list[bool] = [False]
+    # Event to signal the thread to stop (set when join times out).
+    stop_event = threading.Event()
+    # Keep a reference to proc so we can terminate it from the outer scope.
+    proc_holder: list[subprocess.Popen | None] = [None]
+
+    def stream_logs() -> None:
+        try:
+            proc = subprocess.Popen(
+                ["podman", "logs", "-f", container_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            proc_holder[0] = proc
+
+            start_time = time.time()
+            buf = b""
+
+            while not stop_event.is_set():
+                if timeout_sec is not None and time.time() - start_time >= timeout_sec:
+                    break
+                if proc.poll() is not None:
+                    # Process exited; drain remaining output.
+                    remaining = proc.stdout.read()
+                    if remaining:
+                        buf += remaining
+                    break
+
+                try:
+                    ready, _, _ = select.select([proc.stdout], [], [], 0.2)
+                    if not ready:
+                        continue
+                    chunk = proc.stdout.read1(4096) if hasattr(proc.stdout, "read1") else b""
+                    if not chunk:
+                        continue
+                    buf += chunk
+                except Exception as exc:
+                    _log_debug(f"_stream_initial_logs read error: {exc}")
+                    break
+
+                # Process complete lines from the buffer.
+                while b"\n" in buf:
+                    raw_line, buf = buf.split(b"\n", 1)
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if line:
+                        print(line, file=sys.stdout, flush=True)
+                        if ready_check(line):
+                            holder[0] = True
+                            proc.terminate()
+                            return
+
+            # Flush any trailing partial line.
+            if buf:
+                line = buf.decode("utf-8", errors="replace").strip()
+                if line:
+                    print(line, file=sys.stdout, flush=True)
+                    if ready_check(line):
+                        holder[0] = True
+
+            proc.terminate()
+        except Exception as exc:
+            _log_debug(f"_stream_initial_logs error: {exc}")
+
+    stream_thread = threading.Thread(target=stream_logs)
+    stream_thread.start()
+    stream_thread.join(timeout_sec)
+
+    if stream_thread.is_alive():
+        # Join timed out — signal and clean up.
+        stop_event.set()
+        proc = proc_holder[0]
+        if proc is not None:
+            proc.terminate()
+        stream_thread.join(timeout=5)
+
+    return holder[0]
+
+
+def _wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int:
+    """Wait for a container to exit and return its exit code.
+
+    Returns the container's exit code, 124 on timeout, or 1 if podman is not found.
+    """
+    try:
+        proc = subprocess.run(
+            ["podman", "wait", container_name],
+            check=False,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        stdout = proc.stdout.decode().strip() if isinstance(proc.stdout, bytes) else proc.stdout
+        if stdout:
+            return int(stdout)
+        return proc.returncode
+    except subprocess.TimeoutExpired:
+        return 124
+    except (FileNotFoundError, ValueError):
+        return 1

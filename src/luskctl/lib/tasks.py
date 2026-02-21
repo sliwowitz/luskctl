@@ -8,15 +8,16 @@ from pathlib import Path
 import yaml  # pip install pyyaml
 
 from .config import state_root
-from .containers import (
+from .container_utils import (
     _get_container_state,
     _gpu_run_args,
     _is_container_running,
     _stop_task_containers,
     _stream_initial_logs,
-    _stream_until_exit,
+    _wait_for_exit,
 )
 from .images import project_cli_image, project_web_image
+from .logging_utils import _log_debug
 from .podman import _podman_userns_args
 from .projects import Project, load_project
 from .task_env import (
@@ -113,29 +114,6 @@ def _update_task_exit_code(project_id: str, task_id: str, exit_code: int | None)
     else:
         meta["status"] = "failed"
     meta_path.write_text(yaml.safe_dump(meta))
-
-
-def _log_debug(message: str) -> None:
-    """Append a simple debug line to the luskctl library log.
-
-    This is intentionally very small and best-effort so it never interferes
-    with normal CLI or TUI behavior. It can be used to compare behavior
-    between different frontends (e.g. CLI vs TUI) when calling the shared
-    helpers in this module.
-    """
-
-    try:
-        from datetime import datetime as _dt
-        from pathlib import Path as _Path
-
-        log_path = _Path("/tmp/luskctl-lib.log")
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        ts = _dt.now().isoformat(timespec="seconds")
-        with log_path.open("a", encoding="utf-8") as _f:
-            _f.write(f"[luskctl DEBUG] {ts} {message}\n")
-    except Exception:
-        # Logging must never change behavior of library code.
-        pass
 
 
 def task_new(project_id: str) -> str:
@@ -447,7 +425,6 @@ def task_delete(project_id: str, task_id: str) -> None:
     stopped best-effort via podman using the naming scheme
     "<project.id>-<mode>-<task_id>".
     """
-
     _log_debug(f"task_delete: start project_id={project_id} task_id={task_id}")
 
     project = load_project(project_id)
@@ -991,7 +968,7 @@ def task_run_headless(
     color_enabled = _supports_color()
 
     if follow:
-        exit_code = _stream_until_exit(container_name)
+        exit_code = _wait_for_exit(container_name)
         _print_run_summary(task_dir / "workspace")
 
         _update_task_exit_code(project.id, task_id, exit_code)
