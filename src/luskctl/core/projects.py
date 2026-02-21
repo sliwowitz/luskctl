@@ -76,7 +76,7 @@ class Project:
     agent_config: dict = field(default_factory=dict)
 
 
-def _effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
+def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
     """Return the SSH key filename that should be used for this project.
 
     Precedence:

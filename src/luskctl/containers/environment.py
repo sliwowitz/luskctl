@@ -8,9 +8,9 @@ task container.
 import os
 from pathlib import Path
 
-from .config import get_envs_base_dir
-from .fs import _ensure_dir_writable
-from .projects import Project
+from ..core.config import get_envs_base_dir
+from .._util.fs import _ensure_dir_writable
+from ..core.projects import Project
 
 # ---------- Constants ----------
 

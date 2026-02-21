@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .config import build_root
-from .images import (
+from ..core.config import build_root
+from ..core.images import (
     agent_cli_image,
     agent_ui_image,
     base_dev_image,
@@ -16,7 +16,7 @@ from .images import (
     project_dev_image,
     project_web_image,
 )
-from .projects import _effective_ssh_key_name, load_project
+from ..core.projects import effective_ssh_key_name, load_project
 
 # ---------- Dockerfile gen & build ----------
 
@@ -140,7 +140,7 @@ def _render_dockerfiles(project) -> dict[str, str]:
     # SSH_KEY_NAME inside containers should mirror the filename that ssh-init
     # generated (or will generate) for this project. We assume the default
     # key_type (ed25519) here, which matches init_project_ssh's default.
-    effective_ssh_key_name = _effective_ssh_key_name(project, key_type="ed25519")
+    ssh_key_name = effective_ssh_key_name(project, key_type="ed25519")
 
     variables = {
         "PROJECT_ID": project.id,
@@ -149,7 +149,7 @@ def _render_dockerfiles(project) -> dict[str, str]:
         "DEFAULT_BRANCH": project.default_branch,
         # Template-specific extras
         "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
-        "SSH_KEY_NAME": effective_ssh_key_name,
+        "SSH_KEY_NAME": ssh_key_name,
         # For gatekeeping projects, default CODE_REPO to the git-gate mount path.
         # For online projects, default to the real upstream URL.
         # These defaults can be overridden at runtime via -e flags.

@@ -9,11 +9,11 @@ check podman, load project, ensure host dir, cleanup old container, run.
 import shutil
 import subprocess
 
-from .config import get_envs_base_dir
-from .fs import _ensure_dir_writable
-from .images import project_cli_image
-from .podman import _podman_userns_args
-from .projects import load_project
+from ..core.config import get_envs_base_dir
+from .._util.fs import _ensure_dir_writable
+from ..core.images import project_cli_image
+from ..containers.podman import _podman_userns_args
+from ..core.projects import load_project
 
 # ---------- Shared helper ----------
 

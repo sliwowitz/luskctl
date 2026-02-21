@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .config import state_root
-from .container_utils import (
+from ..core.config import state_root
+from .runtime import (
     _get_container_state,
     _gpu_run_args,
     _is_container_running,
@@ -16,29 +16,29 @@ from .container_utils import (
     _stream_initial_logs,
     _wait_for_exit,
 )
-from .images import project_cli_image, project_web_image
-from .logging_utils import _log_debug
+from ..core.images import project_cli_image, project_web_image
+from .._util.logging_utils import _log_debug
 from .podman import _podman_userns_args
-from .projects import Project, load_project
-from .task_env import (
+from ..core.projects import Project, load_project
+from .environment import (
     _apply_web_env_overrides,
     _build_task_env_and_volumes,
     _ensure_dir,
 )
-from .task_ports import _assign_web_port
-from .terminal import (
+from .ports import _assign_web_port
+from ..ui.terminal import (
     blue as _blue,
 )
-from .terminal import (
+from ..ui.terminal import (
     green as _green,
 )
-from .terminal import (
+from ..ui.terminal import (
     red as _red,
 )
-from .terminal import (
+from ..ui.terminal import (
     supports_color as _supports_color,
 )
-from .terminal import (
+from ..ui.terminal import (
     yellow as _yellow,
 )
 
@@ -95,7 +95,7 @@ def _tasks_meta_dir(project_id: str) -> Path:
     return state_root() / "projects" / project_id / "tasks"
 
 
-def _update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
+def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) -> None:
     """Update task metadata with exit code and final status.
 
     Args:
@@ -224,7 +224,7 @@ def _check_mode(meta: dict, expected: str) -> None:
 # different agent runtimes (Claude, Codex, OpenCode, etc.).
 
 
-def _parse_md_agent(file_path: str) -> dict:
+def parse_md_agent(file_path: str) -> dict:
     """Parse a .md file with YAML frontmatter into an agent dict.
 
     Expected format:
@@ -291,7 +291,7 @@ def _subagents_to_json(
     for sa in subagents:
         # Resolve file references first
         if "file" in sa:
-            agent = _parse_md_agent(sa["file"])
+            agent = parse_md_agent(sa["file"])
             if not agent:
                 continue
             # Merge the default flag from the YAML definition
@@ -971,7 +971,7 @@ def task_run_headless(
         exit_code = _wait_for_exit(container_name)
         _print_run_summary(task_dir / "workspace")
 
-        _update_task_exit_code(project.id, task_id, exit_code)
+        update_task_exit_code(project.id, task_id, exit_code)
 
         if exit_code != 0:
             print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")

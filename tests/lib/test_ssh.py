@@ -4,7 +4,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.ssh import init_project_ssh
+from luskctl.security.ssh import init_project_ssh
 from test_utils import mock_git_config, write_project
 
 
@@ -31,7 +31,7 @@ class SshTests(unittest.TestCase):
             with (
                 unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_DIR": str(config_root)}),
                 mock_git_config(),
-                unittest.mock.patch("luskctl.lib.ssh.subprocess.run") as run_mock,
+                unittest.mock.patch("luskctl.security.ssh.subprocess.run") as run_mock,
             ):
                 result = init_project_ssh(project_id, key_name=key_name)
 

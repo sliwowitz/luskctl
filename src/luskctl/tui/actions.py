@@ -13,17 +13,17 @@ import os
 import subprocess
 import sys
 
-from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from ..lib.clipboard import copy_to_clipboard_detailed
-from ..lib.docker import build_images, generate_dockerfiles
-from ..lib.git_gate import sync_project_gate
-from ..lib.projects import load_project
-from ..lib.shell_launch import launch_login
-from ..lib.ssh import init_project_ssh
-from ..lib.task_env import WEB_BACKENDS
-from ..lib.tasks import (
-    _parse_md_agent,
-    _update_task_exit_code,
+from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from ..ui.clipboard import copy_to_clipboard_detailed
+from ..containers.docker import build_images, generate_dockerfiles
+from ..security.git_gate import sync_project_gate
+from ..core.projects import load_project
+from ..ui.shell_launch import launch_login
+from ..security.ssh import init_project_ssh
+from ..containers.environment import WEB_BACKENDS
+from ..containers.tasks import (
+    parse_md_agent,
+    update_task_exit_code,
     get_login_command,
     get_workspace_git_diff,
     task_delete,
@@ -61,7 +61,7 @@ class ActionsMixin:
         result: list[AgentInfo] = []
         for sa in subagents:
             if "file" in sa:
-                parsed = _parse_md_agent(sa["file"])
+                parsed = parse_md_agent(sa["file"])
                 if not parsed:
                     continue
                 if "default" in sa:
@@ -443,7 +443,7 @@ class ActionsMixin:
                     f"podman wait returned non-integer: {result.stdout.strip()!r}",
                 )
 
-            _update_task_exit_code(project_id, task_id, exit_code)
+            update_task_exit_code(project_id, task_id, exit_code)
             return project_id, task_id, exit_code, None
         except subprocess.TimeoutExpired:
             return project_id, task_id, None, "Watcher timed out"

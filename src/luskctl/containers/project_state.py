@@ -10,9 +10,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .config import build_root, get_envs_base_dir
-from .images import project_cli_image, project_web_image
-from .projects import load_project
+from ..core.config import build_root, get_envs_base_dir
+from ..core.images import project_cli_image, project_web_image
+from ..core.projects import load_project
 
 
 def get_project_state(project_id: str) -> dict:
@@ -131,7 +131,7 @@ def get_project_state(project_id: str) -> dict:
     # Get gate commit info if gate exists
     gate_last_commit = None
     if has_gate:
-        from .git_gate import get_gate_last_commit
+        from ..security.git_gate import get_gate_last_commit
 
         gate_last_commit = get_gate_last_commit(project_id)
 
@@ -202,7 +202,7 @@ def _parse_podman_created(value: str) -> datetime | None:
         return None
 
 
-def _is_task_image_old(project_id: str | None, task: Any) -> bool | None:
+def is_task_image_old(project_id: str | None, task: Any) -> bool | None:
     """Check if the image used by a task's container is outdated.
 
     Compares the build context hash label on the running container's image

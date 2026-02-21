@@ -1,0 +1,388 @@
+exclude = [
+    "**/__pycache__",
+    "**/tests/**",
+    "build",
+    "dist",
+    ".venv",
+    "docs",
+    "examples",
+    "tmp",
+    "analyze_final_state.py",
+]
+
+source_roots = ["src"]
+exact = false
+forbid_circular_dependencies = true
+ignore_type_checking_imports = true
+
+# ── Layer Architecture ──────────────────────────────────────────────
+#
+#   presentation   CLI and TUI frontends (can depend on services + core)
+#   services       Domain services / orchestrators (can depend on core)
+#   core           Foundation types, config, and pure utilities
+#
+layers = [
+    "presentation",
+    "services",
+    "core",
+]
+
+# ── PRESENTATION LAYER ──────────────────────────────────────────────
+
+# CLI frontend
+[[modules]]
+path = "luskctl.cli"
+layer = "presentation"
+depends_on = [
+    "luskctl.containers.docker",
+    "luskctl.containers.environment",
+    "luskctl.containers.tasks",
+    "luskctl.core.config",
+    "luskctl.core.projects",
+    "luskctl.core.version",
+    "luskctl.security.auth",
+    "luskctl.security.git_gate",
+    "luskctl.security.ssh",
+    "luskctl.ui.terminal",
+    "luskctl.wizards.new_project",
+]
+
+# TUI frontend
+[[modules]]
+path = "luskctl.tui"
+layer = "presentation"
+depends_on = [
+    "luskctl.containers.docker",
+    "luskctl.containers.environment",
+    "luskctl.containers.project_state",
+    "luskctl.containers.runtime",
+    "luskctl.containers.tasks",
+    "luskctl.core.config",
+    "luskctl.core.projects",
+    "luskctl.core.version",
+    "luskctl.security.auth",
+    "luskctl.security.git_gate",
+    "luskctl.security.ssh",
+    "luskctl.ui.clipboard",
+    "luskctl.ui.shell_launch",
+]
+
+# ── SERVICES LAYER ──────────────────────────────────────────────────
+#
+# ·· containers ··  Task lifecycle, container runtime, Dockerfiles
+#
+
+# Task orchestration (largest module — 1146 lines)
+[[modules]]
+path = "luskctl.containers.tasks"
+layer = "services"
+depends_on = [
+    "luskctl.containers.environment",
+    "luskctl.containers.podman",
+    "luskctl.containers.ports",
+    "luskctl.containers.runtime",
+    "luskctl.core.config",
+    "luskctl.core.images",
+    "luskctl.core.projects",
+    "luskctl.ui.terminal",
+    "luskctl._util.logging_utils",
+]
+
+# Container state, GPU args, log streaming
+[[modules]]
+path = "luskctl.containers.runtime"
+layer = "services"
+depends_on = ["luskctl.core.projects", "luskctl._util.logging_utils"]
+
+# Task environment & volume mounts
+[[modules]]
+path = "luskctl.containers.environment"
+layer = "services"
+depends_on = ["luskctl.core.config", "luskctl.core.projects", "luskctl._util.fs"]
+
+# Task port allocation
+[[modules]]
+path = "luskctl.containers.ports"
+layer = "services"
+depends_on = ["luskctl.core.config"]
+
+# Dockerfile generation & image building
+[[modules]]
+path = "luskctl.containers.docker"
+layer = "services"
+depends_on = ["luskctl.core.config", "luskctl.core.images", "luskctl.core.projects"]
+
+# Podman user namespace handling
+[[modules]]
+path = "luskctl.containers.podman"
+layer = "services"
+depends_on = []
+
+# Project infrastructure state (queries podman & filesystem)
+[[modules]]
+path = "luskctl.containers.project_state"
+layer = "services"
+depends_on = [
+    "luskctl.containers.docker",
+    "luskctl.core.config",
+    "luskctl.core.images",
+    "luskctl.core.projects",
+    "luskctl.security.git_gate",
+]
+
+#
+# ·· security ··  Auth, SSH, git gate
+#
+
+# API key authentication workflows
+[[modules]]
+path = "luskctl.security.auth"
+layer = "services"
+depends_on = [
+    "luskctl.containers.podman",
+    "luskctl.core.config",
+    "luskctl.core.images",
+    "luskctl.core.projects",
+    "luskctl._util.fs",
+]
+
+# SSH key management
+[[modules]]
+path = "luskctl.security.ssh"
+layer = "services"
+depends_on = [
+    "luskctl.core.config",
+    "luskctl.core.projects",
+    "luskctl._util.fs",
+    "luskctl._util.template_utils",
+]
+
+# Git gate sync & validation
+[[modules]]
+path = "luskctl.security.git_gate"
+layer = "services"
+depends_on = ["luskctl.core.config", "luskctl.core.projects"]
+
+#
+# ·· wizards ··  Interactive workflows
+#
+
+# Interactive project creation
+[[modules]]
+path = "luskctl.wizards.new_project"
+layer = "services"
+depends_on = [
+    "luskctl.core.config",
+    "luskctl.ui.editor",
+    "luskctl._util.fs",
+    "luskctl._util.template_utils",
+]
+
+#
+# ·· integrations ··  External API clients
+#
+
+# Mistral model sync
+[[modules]]
+path = "luskctl.integrations.mistral_model_sync"
+layer = "services"
+depends_on = []
+
+# Version info
+[[modules]]
+path = "luskctl.core.version"
+layer = "services"
+depends_on = ["luskctl"]
+
+# ── CORE LAYER ──────────────────────────────────────────────────────
+#
+# ·· core ··  Foundation types & config
+#
+
+# Top-level package (version metadata only)
+[[modules]]
+path = "luskctl"
+layer = "core"
+depends_on = []
+
+# Path resolution (FHS/XDG)
+[[modules]]
+path = "luskctl.core.paths"
+layer = "core"
+depends_on = []
+
+# Configuration management
+[[modules]]
+path = "luskctl.core.config"
+layer = "core"
+depends_on = ["luskctl.core.paths"]
+
+# Project data model & loader
+[[modules]]
+path = "luskctl.core.projects"
+layer = "core"
+depends_on = ["luskctl.core.config"]
+
+# Image naming conventions
+[[modules]]
+path = "luskctl.core.images"
+layer = "core"
+depends_on = []
+
+#
+# ·· ui ··  User-facing interaction (terminal, clipboard, editor, shell)
+#
+
+# Terminal ANSI formatting
+[[modules]]
+path = "luskctl.ui.terminal"
+layer = "core"
+depends_on = []
+utility = true
+
+# System clipboard
+[[modules]]
+path = "luskctl.ui.clipboard"
+layer = "core"
+depends_on = []
+utility = true
+
+# $EDITOR launching
+[[modules]]
+path = "luskctl.ui.editor"
+layer = "core"
+depends_on = []
+utility = true
+
+# Terminal detection & session spawning (tmux, gnome-terminal, konsole, ttyd)
+[[modules]]
+path = "luskctl.ui.shell_launch"
+layer = "core"
+depends_on = []
+utility = true
+
+#
+# ·· _util ··  Pure internal helpers
+#
+
+# Filesystem helpers (mkdir, writable check)
+[[modules]]
+path = "luskctl._util.fs"
+layer = "core"
+depends_on = []
+utility = true
+
+# Simple {{VAR}} template rendering
+[[modules]]
+path = "luskctl._util.template_utils"
+layer = "core"
+depends_on = []
+utility = true
+
+# Debug logging stub
+[[modules]]
+path = "luskctl._util.logging_utils"
+layer = "core"
+depends_on = []
+utility = true
+
+# ── Backward-compat shim ──────────────────────────────────────────
+# The lib/ package re-exports everything for old import paths.
+# It depends on all new packages.
+[[modules]]
+path = "luskctl.lib"
+layer = "presentation"
+depends_on = [
+    "luskctl._util.fs",
+    "luskctl._util.logging_utils",
+    "luskctl._util.template_utils",
+    "luskctl.containers.docker",
+    "luskctl.containers.environment",
+    "luskctl.containers.podman",
+    "luskctl.containers.ports",
+    "luskctl.containers.project_state",
+    "luskctl.containers.runtime",
+    "luskctl.containers.tasks",
+    "luskctl.core.config",
+    "luskctl.core.images",
+    "luskctl.core.paths",
+    "luskctl.core.projects",
+    "luskctl.core.version",
+    "luskctl.integrations.mistral_model_sync",
+    "luskctl.security.auth",
+    "luskctl.security.git_gate",
+    "luskctl.security.ssh",
+    "luskctl.ui.clipboard",
+    "luskctl.ui.editor",
+    "luskctl.ui.shell_launch",
+    "luskctl.ui.terminal",
+    "luskctl.wizards.new_project",
+]
+
+# ── Interfaces ──────────────────────────────────────────────────────
+
+[[interfaces]]
+expose = [
+    "Project",
+    "list_projects",
+    "load_project",
+    "effective_ssh_key_name",
+]
+from = ["luskctl.core.projects"]
+
+[[interfaces]]
+expose = [
+    "task_new",
+    "task_run_cli",
+    "task_run_web",
+    "task_run_headless",
+    "task_stop",
+    "task_restart",
+    "task_delete",
+    "task_login",
+    "task_list",
+    "task_status",
+    "get_tasks",
+    "get_login_command",
+    "get_workspace_git_diff",
+    "parse_md_agent",
+    "update_task_exit_code",
+]
+from = ["luskctl.containers.tasks"]
+
+[[interfaces]]
+expose = [
+    "codex_auth",
+    "claude_auth",
+    "mistral_auth",
+    "blablador_auth",
+]
+from = ["luskctl.security.auth"]
+
+[[interfaces]]
+expose = [
+    "generate_dockerfiles",
+    "build_images",
+    "build_context_hash",
+    "dockerfiles_match_templates",
+]
+from = ["luskctl.containers.docker"]
+
+[[interfaces]]
+expose = ["init_project_ssh"]
+from = ["luskctl.security.ssh"]
+
+[[interfaces]]
+expose = [
+    "sync_project_gate",
+    "compare_gate_vs_upstream",
+    "sync_gate_branches",
+    "GateStalenessInfo",
+    "find_projects_sharing_gate",
+    "get_gate_last_commit",
+]
+from = ["luskctl.security.git_gate"]
+
+[[interfaces]]
+expose = ["get_project_state", "is_task_image_old"]
+from = ["luskctl.containers.project_state"]

@@ -22,6 +22,22 @@ jobs:
         with:
           args: format --check
 
+  boundary-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tach
+        run: pip install tach
+
+      - name: Check module boundaries
+        run: tach check
+
   test:
     runs-on: ubuntu-latest
     steps:

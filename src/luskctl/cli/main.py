@@ -5,40 +5,40 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from ..lib.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from ..lib.config import (
+from ..security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from ..core.config import (
     build_root as _build_root,
 )
-from ..lib.config import (
+from ..core.config import (
     config_root as _config_root,
 )
-from ..lib.config import (
+from ..core.config import (
     get_envs_base_dir as _get_envs_base_dir,
 )
-from ..lib.config import (
+from ..core.config import (
     get_ui_base_port as _get_ui_base_port,
 )
-from ..lib.config import (
+from ..core.config import (
     global_config_path as _global_config_path,
 )
-from ..lib.config import (
+from ..core.config import (
     global_config_search_paths as _global_config_search_paths,
 )
-from ..lib.config import (
+from ..core.config import (
     state_root as _state_root,
 )
-from ..lib.config import (
+from ..core.config import (
     user_projects_root as _user_projects_root,
 )
-from ..lib.docker import build_images, generate_dockerfiles
-from ..lib.git_gate import sync_project_gate
-from ..lib.projects import list_projects
-from ..lib.ssh import init_project_ssh
-from ..lib.task_env import WEB_BACKENDS
-from ..lib.tasks import (
+from ..containers.docker import build_images, generate_dockerfiles
+from ..security.git_gate import sync_project_gate
+from ..core.projects import list_projects
+from ..security.ssh import init_project_ssh
+from ..containers.environment import WEB_BACKENDS
+from ..containers.tasks import (
     get_tasks as _get_tasks,
 )
-from ..lib.tasks import (
+from ..containers.tasks import (
     task_delete,
     task_list,
     task_login,
@@ -50,12 +50,12 @@ from ..lib.tasks import (
     task_status,
     task_stop,
 )
-from ..lib.terminal import gray as _gray
-from ..lib.terminal import supports_color as _supports_color
-from ..lib.terminal import violet as _violet
-from ..lib.terminal import yes_no as _yes_no
-from ..lib.version import format_version_string, get_version_info
-from ..lib.wizard import run_wizard
+from ..ui.terminal import gray as _gray
+from ..ui.terminal import supports_color as _supports_color
+from ..ui.terminal import violet as _violet
+from ..ui.terminal import yes_no as _yes_no
+from ..core.version import format_version_string, get_version_info
+from ..wizards.new_project import run_wizard
 
 # Optional: bash completion via argcomplete
 try:

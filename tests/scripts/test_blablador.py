@@ -17,8 +17,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.config import build_root
-from luskctl.lib.docker import generate_dockerfiles
+from luskctl.core.config import build_root
+from luskctl.containers.docker import generate_dockerfiles
 from test_utils import write_project
 
 
