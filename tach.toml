@@ -205,7 +205,7 @@ depends_on = []
 # Version info
 [[modules]]
 path = "luskctl.core.version"
-layer = "services"
+layer = "core"
 depends_on = ["luskctl"]
 
 # ── CORE LAYER ──────────────────────────────────────────────────────

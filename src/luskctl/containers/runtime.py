@@ -251,7 +251,10 @@ def get_task_container_state(project_id: str, task_id: str, mode: str | None) ->
     """
     if not mode:
         return None
-    project = load_project(project_id)
+    try:
+        project = load_project(project_id)
+    except (SystemExit, ValueError):
+        return None
     cname = container_name(project.id, mode, task_id)
     return _get_container_state(cname)
 

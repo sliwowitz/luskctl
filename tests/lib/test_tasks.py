@@ -64,7 +64,7 @@ def _assert_volume_mount(volumes: list[str], expected_base: str, expected_suffix
 class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("luskctl.containers.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
                 result = copy_to_clipboard_detailed("hello")
         self.assertFalse(result.ok)
         self.assertIsNotNone(result.hint)
@@ -76,9 +76,9 @@ class TaskTests(unittest.TestCase):
 
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch(
-                "luskctl.containers.tasks.shutil.which", side_effect=which_side_effect
+                "luskctl.tui.clipboard.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("luskctl.containers.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                     result = copy_to_clipboard_detailed("hello")
 
@@ -955,9 +955,9 @@ class TaskTests(unittest.TestCase):
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
             with unittest.mock.patch(
-                "luskctl.containers.tasks.shutil.which", return_value="/usr/bin/wl-copy"
+                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/wl-copy"
             ):
-                with unittest.mock.patch("luskctl.containers.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard("test content")
@@ -978,9 +978,9 @@ class TaskTests(unittest.TestCase):
 
         with unittest.mock.patch.dict(os.environ, env, clear=False):
             with unittest.mock.patch(
-                "luskctl.containers.tasks.shutil.which", return_value="/usr/bin/xclip"
+                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/xclip"
             ):
-                with unittest.mock.patch("luskctl.containers.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard("test content")
@@ -1017,9 +1017,9 @@ class TaskTests(unittest.TestCase):
                 return None
 
             with unittest.mock.patch(
-                "luskctl.containers.tasks.shutil.which", side_effect=which_side_effect
+                "luskctl.tui.clipboard.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("luskctl.containers.tasks.subprocess.run") as run_mock:
+                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.side_effect = subprocess.CalledProcessError(
                         1, ["xclip"], stderr="boom"
                     )
@@ -1047,7 +1047,7 @@ class TaskTests(unittest.TestCase):
         with unittest.mock.patch.dict(
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
-            with unittest.mock.patch("luskctl.containers.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -1056,7 +1056,7 @@ class TaskTests(unittest.TestCase):
     def test_get_clipboard_helper_status_no_helpers_x11(self) -> None:
         """Test get_clipboard_helper_status returns hint for X11 when no helpers available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("luskctl.containers.tasks.shutil.which", return_value=None):
+            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -1194,7 +1194,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_running(self) -> None:
         """_get_container_state returns 'running' for running container."""
         with unittest.mock.patch(
-            "luskctl.containers.tasks.subprocess.check_output", return_value="running\n"
+            "luskctl.containers.runtime.subprocess.check_output", return_value="running\n"
         ):
             state = _get_container_state("test-container")
             self.assertEqual(state, "running")
@@ -1202,7 +1202,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_exited(self) -> None:
         """_get_container_state returns 'exited' for stopped container."""
         with unittest.mock.patch(
-            "luskctl.containers.tasks.subprocess.check_output", return_value="exited\n"
+            "luskctl.containers.runtime.subprocess.check_output", return_value="exited\n"
         ):
             state = _get_container_state("test-container")
             self.assertEqual(state, "exited")
@@ -1210,7 +1210,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_not_found(self) -> None:
         """_get_container_state returns None if container doesn't exist."""
         with unittest.mock.patch(
-            "luskctl.containers.tasks.subprocess.check_output",
+            "luskctl.containers.runtime.subprocess.check_output",
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
             state = _get_container_state("test-container")
@@ -1219,7 +1219,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_podman_not_found(self) -> None:
         """_get_container_state returns None if podman is not installed."""
         with unittest.mock.patch(
-            "luskctl.containers.tasks.subprocess.check_output",
+            "luskctl.containers.runtime.subprocess.check_output",
             side_effect=FileNotFoundError("podman"),
         ):
             state = _get_container_state("test-container")
