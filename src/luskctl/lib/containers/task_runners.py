@@ -489,8 +489,15 @@ def task_run_headless(
 def task_restart(project_id: str, task_id: str, backend: str | None = None) -> None:
     """Restart a stopped task or re-run if the container is gone.
 
-    If the container exists in stopped/exited state, uses `podman start`.
+    If the container exists in stopped/exited state, uses ``podman start``.
     If the container doesn't exist, delegates to task_run_cli or task_run_web.
+
+    Note:
+        Headless (mode ``"run"``) tasks cannot be auto-restarted because they
+        require the original prompt and context.  Attempting to restart a
+        headless task whose container no longer exists will raise ``SystemExit``.
+        Re-run headless tasks manually via ``luskctl run`` with the original
+        prompt instead.
     """
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id)

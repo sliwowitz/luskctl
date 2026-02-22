@@ -7,7 +7,7 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _ensure_dir_writable(path: Path, label: str) -> None:
+def ensure_dir_writable(path: Path, label: str) -> None:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except Exception as e:

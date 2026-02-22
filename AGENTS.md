@@ -36,6 +36,7 @@ make check     # Run both lint and test (equivalent to CI)
 ```
 
 **When `pyproject.toml` changes** (added/removed/changed dependencies):
+
 ```bash
 poetry lock --no-update   # Regenerate lockfile (commit poetry.lock alongside pyproject.toml)
 ```

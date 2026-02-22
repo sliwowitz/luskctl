@@ -17,12 +17,15 @@ from luskctl.lib._util.ansi import (  # noqa: F401  -- re-exports
 
 
 def yes_no(value: bool, enabled: bool) -> str:
+    """Return green ``"yes"`` or red ``"no"`` based on *value* when *enabled*."""
     return color("yes" if value else "no", "32" if value else "31", enabled)
 
 
 def violet(text: str, enabled: bool) -> str:
+    """Return *text* in violet (ANSI 35) when *enabled*."""
     return color(text, "35", enabled)
 
 
 def gray(text: str, enabled: bool) -> str:
+    """Return *text* in gray (ANSI 90) when *enabled*."""
     return color(text, "90", enabled)

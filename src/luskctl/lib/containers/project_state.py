@@ -132,10 +132,13 @@ def get_project_state(
     gate_dir = project.gate_path
     has_gate = gate_dir.is_dir()
 
-    # Get gate commit info if gate exists
+    # Get gate commit info if gate exists (best-effort; errors degrade to None)
     gate_last_commit = None
     if has_gate and gate_commit_provider is not None:
-        gate_last_commit = gate_commit_provider(project_id)
+        try:
+            gate_last_commit = gate_commit_provider(project_id)
+        except Exception:
+            gate_last_commit = None
 
     return {
         "dockerfiles": has_dockerfiles,

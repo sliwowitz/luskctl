@@ -21,22 +21,33 @@ def supports_color() -> bool:
 
 
 def color(text: str, code: str, enabled: bool) -> str:
+    """Wrap *text* in ANSI escape codes when *enabled* is True.
+
+    Args:
+        text: The string to colorize.
+        code: ANSI SGR parameter (e.g. ``"31"`` for red).
+        enabled: When False the original *text* is returned unchanged.
+    """
     if not enabled:
         return text
     return f"\x1b[{code}m{text}\x1b[0m"
 
 
 def yellow(text: str, enabled: bool) -> str:
+    """Return *text* in yellow (ANSI 33) when *enabled*."""
     return color(text, "33", enabled)
 
 
 def blue(text: str, enabled: bool) -> str:
+    """Return *text* in blue (ANSI 34) when *enabled*."""
     return color(text, "34", enabled)
 
 
 def green(text: str, enabled: bool) -> str:
+    """Return *text* in green (ANSI 32) when *enabled*."""
     return color(text, "32", enabled)
 
 
 def red(text: str, enabled: bool) -> str:
+    """Return *text* in red (ANSI 31) when *enabled*."""
     return color(text, "31", enabled)
