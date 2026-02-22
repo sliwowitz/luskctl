@@ -43,7 +43,7 @@ rich = ">=13.0"
 platformdirs = ">=4.5.1"
 
 [tool.poetry.group.dev.dependencies]
-pydevd-pycharm = "253.29346.142"
+pydevd-pycharm = "261.20869.49"
 ruff = ">=0.8"
 markdown-it-py = ">=4.0.0"
 mdit-py-plugins = ">=0.5.0"
