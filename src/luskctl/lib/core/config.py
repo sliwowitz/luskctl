@@ -1,5 +1,6 @@
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -86,7 +87,7 @@ def global_config_path() -> Path:
     return candidates[-1]
 
 
-# ---------- Global config (UI base port) ----------
+# ---------- Global config (cached) ----------
 
 
 def load_global_config() -> dict:
@@ -94,6 +95,42 @@ def load_global_config() -> dict:
     if not cfg_path.is_file():
         return {}
     return yaml.safe_load(cfg_path.read_text()) or {}
+
+
+def get_global_section(key: str) -> dict:
+    """Return a top-level section from the global config, defaulting to ``{}``."""
+    cfg = load_global_config()
+    return cfg.get(key, {}) or {}
+
+
+# ---------- Path resolution ----------
+
+
+def _resolve_path(
+    env_var: str | None,
+    config_key: tuple[str, str] | None,
+    default: Callable[[], Path],
+) -> Path:
+    """Resolve a path: env var → global config → computed default.
+
+    This replaces the repeated try/except + load_global_config() pattern
+    that was duplicated across ``state_root``, ``build_root``, etc.
+    """
+    if env_var:
+        env = os.environ.get(env_var)
+        if env:
+            return Path(env).expanduser().resolve()
+
+    if config_key:
+        try:
+            section = get_global_section(config_key[0])
+            val = section.get(config_key[1])
+            if val:
+                return Path(val).expanduser().resolve()
+        except Exception:
+            pass
+
+    return default().resolve()
 
 
 def state_root() -> Path:
@@ -104,37 +141,25 @@ def state_root() -> Path:
     - If set in global config (paths.state_root), use it.
     - Otherwise, use luskctl.lib.paths.state_root() (FHS/XDG handling).
     """
-    # Environment override should always win
-    env = os.environ.get("LUSKCTL_STATE_DIR")
-    if env:
-        return Path(env).expanduser().resolve()
-
-    try:
-        cfg = load_global_config()
-        cfg_path = (cfg.get("paths", {}) or {}).get("state_root")
-        if cfg_path:
-            return Path(cfg_path).expanduser().resolve()
-    except Exception:
-        # Be resilient to any config read error
-        pass
-    return _state_root_base().resolve()
+    return _resolve_path("LUSKCTL_STATE_DIR", ("paths", "state_root"), _state_root_base)
 
 
 def user_projects_root() -> Path:
-    # Global config override
-    try:
-        cfg = load_global_config()
-        up = (cfg.get("paths", {}) or {}).get("user_projects_root")
-        if up:
-            return Path(up).expanduser().resolve()
-    except Exception:
-        # Fall back to state_root() if global config is missing or invalid.
-        pass
+    """User projects directory.
 
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    if xdg:
-        return Path(xdg) / "luskctl" / "projects"
-    return Path.home() / ".config" / "luskctl" / "projects"
+    Precedence:
+    - Global config: paths.user_projects_root
+    - XDG_CONFIG_HOME/luskctl/projects
+    - ~/.config/luskctl/projects
+    """
+
+    def _default() -> Path:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            return Path(xdg) / "luskctl" / "projects"
+        return Path.home() / ".config" / "luskctl" / "projects"
+
+    return _resolve_path(None, ("paths", "user_projects_root"), _default)
 
 
 def build_root() -> Path:
@@ -145,24 +170,11 @@ def build_root() -> Path:
     - Global config: paths.build_root
     - Otherwise: state_root()/build
     """
-    # Global config preferred
-    try:
-        cfg = load_global_config()
-        paths_cfg = cfg.get("paths", {}) or {}
-        br = paths_cfg.get("build_root")
-        if br:
-            return Path(br).expanduser().resolve()
-    except Exception:
-        pass
-
-    sr = state_root()
-    return (sr / "build").resolve()
+    return _resolve_path(None, ("paths", "build_root"), lambda: state_root() / "build")
 
 
 def get_ui_base_port() -> int:
-    cfg = load_global_config()
-    ui_cfg = cfg.get("ui", {}) or {}
-    return int(ui_cfg.get("base_port", 7860))
+    return int(get_global_section("ui").get("base_port", 7860))
 
 
 def get_envs_base_dir() -> Path:
@@ -174,32 +186,17 @@ def get_envs_base_dir() -> Path:
 
     Default: ~/.local/share/luskctl/envs (or /var/lib/luskctl/envs if root)
     """
-    cfg = load_global_config()
-    envs_cfg = cfg.get("envs", {}) or {}
-
-    # If explicitly configured, use that
-    if "base_dir" in envs_cfg:
-        base = envs_cfg["base_dir"]
-        return Path(str(base)).expanduser().resolve()
-
-    # Otherwise, use the same pattern as state_root()
-    # For non-root users: ~/.local/share/luskctl/envs
-    # For root users: /var/lib/luskctl/envs
-    return (_state_root_base() / "envs").resolve()
+    return _resolve_path(None, ("envs", "base_dir"), lambda: _state_root_base() / "envs")
 
 
 def get_global_human_name() -> str | None:
     """Return git.human_name from global config, or None if not set."""
-    cfg = load_global_config()
-    git_cfg = cfg.get("git", {}) or {}
-    return git_cfg.get("human_name")
+    return get_global_section("git").get("human_name")
 
 
 def get_global_human_email() -> str | None:
     """Return git.human_email from global config, or None if not set."""
-    cfg = load_global_config()
-    git_cfg = cfg.get("git", {}) or {}
-    return git_cfg.get("human_email")
+    return get_global_section("git").get("human_email")
 
 
 def get_global_default_agent() -> str | None:
@@ -210,12 +207,9 @@ def get_global_default_agent() -> str | None:
 
 def get_tui_default_tmux() -> bool:
     """Return whether to default to tmux mode for TUI, or False if not set."""
-    cfg = load_global_config()
-    tui_cfg = cfg.get("tui", {}) or {}
-    return bool(tui_cfg.get("default_tmux", False))
+    return bool(get_global_section("tui").get("default_tmux", False))
 
 
-# TODO: future — support global agent definitions (agent.subagents) in the global
-# config file. When implemented, these would be passed to every project and merged
-# with per-project agent definitions. Use a generic merge approach compatible with
-# multiple agent runtimes (Claude, Codex, OpenCode, etc.).
+def get_global_agent_config() -> dict:
+    """Return the ``agent:`` section from the global config, or ``{}``."""
+    return get_global_section("agent")

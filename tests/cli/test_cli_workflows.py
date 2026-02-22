@@ -73,7 +73,7 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_new.assert_called_once_with("proj1")
-        mock_run_cli.assert_called_once_with("proj1", "42", agents=None)
+        mock_run_cli.assert_called_once_with("proj1", "42", agents=None, preset=None)
 
     @unittest.mock.patch("luskctl.cli.main.task_run_web")
     @unittest.mock.patch("luskctl.cli.main.task_new", return_value="7")
@@ -84,7 +84,7 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_new.assert_called_once_with("proj2")
-        mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None)
+        mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None, preset=None)
 
     @unittest.mock.patch("luskctl.cli.main.task_run_web")
     @unittest.mock.patch("luskctl.cli.main.task_new", return_value="3")
@@ -98,7 +98,9 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_new.assert_called_once_with("proj3")
-        mock_run_web.assert_called_once_with("proj3", "3", backend="gradio", agents=None)
+        mock_run_web.assert_called_once_with(
+            "proj3", "3", backend="gradio", agents=None, preset=None
+        )
 
     @unittest.mock.patch("luskctl.cli.main._cmd_project_init")
     def test_project_init_dispatch(self, mock_init) -> None:

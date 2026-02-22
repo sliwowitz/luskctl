@@ -21,6 +21,7 @@ from .._util.ansi import (
 from .._util.podman import _podman_userns_args
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
+from .agent_config import resolve_agent_config
 from .agents import prepare_agent_config_dir
 from .environment import (
     apply_web_env_overrides,
@@ -42,7 +43,9 @@ from .tasks import (
 )
 
 
-def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None) -> None:
+def task_run_cli(
+    project_id: str, task_id: str, agents: list[str] | None = None, preset: str | None = None
+) -> None:
     """Launch a CLI-mode task container and wait for its readiness marker.
 
     Creates (or reattaches to) a detached Podman container for interactive
@@ -101,8 +104,9 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
 
     env, volumes = build_task_env_and_volumes(project, task_id)
 
-    # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
-    subagents = list(project.agent_config.get("subagents") or [])
+    # Resolve layered agent config (global → project → preset → CLI overrides)
+    effective = resolve_agent_config(project_id, preset=preset)
+    subagents = list(effective.get("subagents") or [])
     agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -180,6 +184,7 @@ def task_run_web(
     task_id: str,
     backend: str | None = None,
     agents: list[str] | None = None,
+    preset: str | None = None,
 ) -> None:
     """Launch a web-mode task container with a browser-accessible IDE backend.
 
@@ -203,8 +208,9 @@ def task_run_web(
 
     env, volumes = build_task_env_and_volumes(project, task_id)
 
-    # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
-    subagents = list(project.agent_config.get("subagents") or [])
+    # Resolve layered agent config (global → project → preset → CLI overrides)
+    effective = resolve_agent_config(project_id, preset=preset)
+    subagents = list(effective.get("subagents") or [])
     agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -382,6 +388,7 @@ def task_run_headless(
     timeout: int | None = None,
     follow: bool = True,
     agents: list[str] | None = None,
+    preset: str | None = None,
 ) -> str:
     """Run Claude headlessly (autopilot mode) in a new task container.
 
@@ -393,20 +400,25 @@ def task_run_headless(
     """
     project = load_project(project_id)
 
-    # Load CLI config file if provided (adds subagents to project's list)
-    extra_subagents: list[dict] = []
+    # Build CLI overrides from --config file and explicit flags
+    cli_overrides: dict = {}
     if config_path:
         config_src = Path(config_path)
         if not config_src.is_file():
             raise SystemExit(f"Agent config file not found: {config_path}")
         cli_config = yaml.safe_load(config_src.read_text(encoding="utf-8")) or {}
-        extra_subagents = cli_config.get("subagents", []) or []
+        cli_overrides = cli_config
+
+    # Resolve layered agent config (global → project → preset → CLI overrides)
+    effective = resolve_agent_config(
+        project_id, preset=preset, cli_overrides=cli_overrides if cli_overrides else None
+    )
 
     # Create a new task
     task_id = task_new(project_id)
 
-    # Collect subagents from project + config file
-    subagents = list(project.agent_config.get("subagents") or []) + extra_subagents
+    # Collect subagents from resolved config
+    subagents = list(effective.get("subagents") or [])
 
     # Prepare agent-config dir with wrapper, agents.json, prompt.txt
     task_dir = project.tasks_root / str(task_id)
@@ -499,6 +511,8 @@ def task_run_headless(
     meta, meta_path = load_task_meta(project.id, task_id)
     meta["status"] = "running"
     meta["mode"] = "run"
+    if preset:
+        meta["preset"] = preset
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
