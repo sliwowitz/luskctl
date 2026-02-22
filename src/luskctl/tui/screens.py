@@ -33,7 +33,7 @@ except Exception:  # pragma: no cover - textual may be a stub module
     SelectionList = None  # type: ignore[assignment,misc]
 
 from ..lib.core.projects import Project as CodexProject
-from ..lib.security.git_gate import GateStalenessInfo
+from ..lib.facade import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
 
 

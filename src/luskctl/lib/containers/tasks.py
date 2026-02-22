@@ -19,14 +19,14 @@ from .._util.ansi import (
     supports_color as _supports_color,
     yellow as _yellow,
 )
+from .._util.fs import ensure_dir
 from .._util.logging_utils import _log_debug
 from ..core.config import state_root
 from ..core.projects import Project, load_project
-from .environment import _ensure_dir
 from .runtime import (
-    _get_container_state,
-    _stop_task_containers,
     container_name,
+    get_container_state,
+    stop_task_containers,
 )
 
 
@@ -130,22 +130,22 @@ def task_new(project_id: str) -> str:
     """
     project = load_project(project_id)
     tasks_root = project.tasks_root
-    _ensure_dir(tasks_root)
+    ensure_dir(tasks_root)
     meta_dir = _tasks_meta_dir(project.id)
-    _ensure_dir(meta_dir)
+    ensure_dir(meta_dir)
 
     # Simple ID: numeric increment
     existing = sorted([p.stem for p in meta_dir.glob("*.yml") if p.stem.isdigit()], key=int)
     next_id = str(int(existing[-1]) + 1 if existing else 1)
 
     ws = tasks_root / next_id
-    _ensure_dir(ws)
+    ensure_dir(ws)
 
     # Create the workspace subdirectory and place a marker file to signal
     # that this is a fresh task. The init script will reset to latest HEAD
     # when it sees this marker, then remove it. See docstring above.
     workspace_dir = ws / "workspace"
-    _ensure_dir(workspace_dir)
+    ensure_dir(workspace_dir)
     marker_path = workspace_dir / ".new-task-marker"
     marker_path.write_text(
         "# This marker signals that the workspace should be reset to the latest remote HEAD.\n"
@@ -205,6 +205,24 @@ def _check_mode(meta: dict, expected: str) -> None:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
 
 
+def load_task_meta(
+    project_id: str, task_id: str, expected_mode: str | None = None
+) -> tuple[dict, Path]:
+    """Load task metadata and optionally validate mode.
+
+    Returns (meta, meta_path). Raises SystemExit if task is unknown or mode
+    conflicts with *expected_mode*.
+    """
+    meta_dir = _tasks_meta_dir(project_id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    if expected_mode is not None:
+        _check_mode(meta, expected_mode)
+    return meta, meta_path
+
+
 def task_delete(project_id: str, task_id: str) -> None:
     """Delete a task's workspace, metadata, and any associated containers.
 
@@ -229,7 +247,7 @@ def task_delete(project_id: str, task_id: str) -> None:
     # Stop any matching containers first to avoid name conflicts if a new
     # task is later created with the same ID.
     _log_debug("task_delete: calling _stop_task_containers")
-    _stop_task_containers(project, str(task_id))
+    stop_task_containers(project, str(task_id))
     _log_debug("task_delete: _stop_task_containers returned")
 
     if workspace.is_dir():
@@ -267,7 +285,7 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
         )
 
     cname = container_name(project.id, mode, task_id)
-    state = _get_container_state(cname)
+    state = get_container_state(cname)
     if state is None:
         raise SystemExit(
             f"Container {cname} does not exist. "
@@ -339,7 +357,7 @@ def task_stop(project_id: str, task_id: str) -> None:
 
     cname = container_name(project.id, mode, task_id)
 
-    state = _get_container_state(cname)
+    state = get_container_state(cname)
     if state is None:
         raise SystemExit(f"Task {task_id} container does not exist")
     if state not in ("running", "paused"):
@@ -385,7 +403,7 @@ def task_status(project_id: str, task_id: str) -> None:
     cname = None
     if mode:
         cname = container_name(project.id, mode, task_id)
-        container_state = _get_container_state(cname)
+        container_state = get_container_state(cname)
 
     # Determine if there's a mismatch
     # Metadata "running" or "created" with mode should have a running container

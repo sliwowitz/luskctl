@@ -16,7 +16,7 @@ def container_name(project_id: str, mode: str, task_id: str) -> str:
     return f"{project_id}-{mode}-{task_id}"
 
 
-def _get_container_state(container_name: str) -> str | None:
+def get_container_state(container_name: str) -> str | None:
     """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
 
     This uses `podman inspect` to get the actual container state. Returns None
@@ -33,7 +33,7 @@ def _get_container_state(container_name: str) -> str | None:
         return None
 
 
-def _is_container_running(container_name: str) -> bool:
+def is_container_running(container_name: str) -> bool:
     """Return True if a podman container with the given name is running.
 
     This uses `podman inspect` and treats missing containers or any
@@ -50,7 +50,7 @@ def _is_container_running(container_name: str) -> bool:
     return out.lower() == "true"
 
 
-def _stop_task_containers(project: Any, task_id: str) -> None:
+def stop_task_containers(project: Any, task_id: str) -> None:
     """Best-effort removal of any containers associated with a task.
 
     We intentionally ignore most errors here: task deletion should succeed
@@ -88,7 +88,7 @@ def _stop_task_containers(project: Any, task_id: str) -> None:
             pass
 
 
-def _gpu_run_args(project: "Project") -> list[str]:
+def gpu_run_args(project: "Project") -> list[str]:
     """Return additional podman run args to enable NVIDIA GPU if configured.
 
     Per-project only: GPUs are enabled exclusively by the project's project.yml.
@@ -124,7 +124,7 @@ def _gpu_run_args(project: "Project") -> list[str]:
     return args
 
 
-def _stream_initial_logs(
+def stream_initial_logs(
     container_name: str,
     timeout_sec: float | None,
     ready_check: Callable[[str], bool],
@@ -221,7 +221,7 @@ def _stream_initial_logs(
     return holder[0]
 
 
-def _wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int:
+def wait_for_exit(container_name: str, timeout_sec: float | None = None) -> int:
     """Wait for a container to exit and return its exit code.
 
     Returns the container's exit code, 124 on timeout, or 1 if podman is not found.
@@ -256,7 +256,7 @@ def get_task_container_state(project_id: str, task_id: str, mode: str | None) ->
     except (SystemExit, ValueError):
         return None
     cname = container_name(project.id, mode, task_id)
-    return _get_container_state(cname)
+    return get_container_state(cname)
 
 
 def _get_container_exit_code(container_name: str) -> int:
@@ -280,11 +280,11 @@ def _stream_until_exit(container_name: str, timeout_sec: float | None = None) ->
     """
     import time
 
-    _stream_initial_logs(
+    stream_initial_logs(
         container_name=container_name,
         timeout_sec=timeout_sec,
         ready_check=lambda line: False,  # never "ready", stream until exit
     )
-    while _is_container_running(container_name):
+    while is_container_running(container_name):
         time.sleep(0.5)
     return _get_container_exit_code(container_name)

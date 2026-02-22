@@ -2,6 +2,11 @@ import os
 from pathlib import Path
 
 
+def ensure_dir(path: Path) -> None:
+    """Create a directory (and parents) if it doesn't exist."""
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def _ensure_dir_writable(path: Path, label: str) -> None:
     try:
         path.mkdir(parents=True, exist_ok=True)

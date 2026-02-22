@@ -10,8 +10,16 @@ helpers for multi-step workflows like project initialization.
 
 from .containers.docker import build_images, generate_dockerfiles
 from .containers.environment import WEB_BACKENDS
+from .containers.project_state import get_project_state, is_task_image_old
 from .security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from .security.git_gate import sync_project_gate
+from .security.git_gate import (
+    GateStalenessInfo,
+    compare_gate_vs_upstream,
+    find_projects_sharing_gate,
+    get_gate_last_commit,
+    sync_gate_branches,
+    sync_project_gate,
+)
 from .security.ssh import init_project_ssh
 
 __all__ = [
@@ -28,4 +36,13 @@ __all__ = [
     "claude_auth",
     "mistral_auth",
     "blablador_auth",
+    # Git gate
+    "compare_gate_vs_upstream",
+    "sync_gate_branches",
+    "get_gate_last_commit",
+    "GateStalenessInfo",
+    "find_projects_sharing_gate",
+    # Project state
+    "get_project_state",
+    "is_task_image_old",
 ]

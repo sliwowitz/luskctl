@@ -9,8 +9,8 @@ from pathlib import Path
 
 import yaml
 
-from luskctl.lib.containers.environment import _apply_web_env_overrides, _build_task_env_and_volumes
-from luskctl.lib.containers.runtime import _get_container_state, get_task_container_state
+from luskctl.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
+from luskctl.lib.containers.runtime import get_container_state, get_task_container_state
 from luskctl.lib.containers.task_runners import task_restart, task_run_cli, task_run_web
 from luskctl.lib.containers.tasks import (
     get_login_command,
@@ -196,7 +196,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(
+                env, volumes = build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="7",
                 )
@@ -239,7 +239,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(
+                env, volumes = build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="9",
                 )
@@ -281,7 +281,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(load_project(project_id), task_id="8")
+                env, volumes = build_task_env_and_volumes(load_project(project_id), task_id="8")
                 self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
                 self.assertEqual(env["GIT_BRANCH"], "main")
                 _assert_volume_mount(volumes, f"{gate_dir}:/git-gate/gate.git", ":z")
@@ -301,7 +301,7 @@ class TaskTests(unittest.TestCase):
             },
             clear=True,
         ):
-            merged = _apply_web_env_overrides(base_env, "CLAUDE")
+            merged = apply_web_env_overrides(base_env, "CLAUDE")
 
         # Container receives LUSKUI_* passthrough
         self.assertEqual(merged["LUSKUI_BACKEND"], "claude")
@@ -347,19 +347,19 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._stream_initial_logs",
+                        "luskctl.lib.containers.task_runners.stream_initial_logs",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value=None,  # No existing container
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._is_container_running",
+                        "luskctl.lib.containers.task_runners.is_container_running",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._assign_web_port",
+                        "luskctl.lib.containers.task_runners.assign_web_port",
                         return_value=7788,
                     ),
                     unittest.mock.patch(
@@ -410,11 +410,11 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._stream_initial_logs",
+                        "luskctl.lib.containers.task_runners.stream_initial_logs",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value=None,  # No existing container
                     ),
                     unittest.mock.patch(
@@ -469,19 +469,19 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._stream_initial_logs",
+                        "luskctl.lib.containers.task_runners.stream_initial_logs",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value=None,  # No existing container
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._is_container_running",
+                        "luskctl.lib.containers.task_runners.is_container_running",
                         return_value=True,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._assign_web_port",
+                        "luskctl.lib.containers.task_runners.assign_web_port",
                         return_value=7788,
                     ),
                     unittest.mock.patch(
@@ -533,7 +533,7 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch(
@@ -586,7 +586,7 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
@@ -649,7 +649,7 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch(
@@ -709,7 +709,7 @@ class TaskTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
@@ -1109,7 +1109,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(
+                env, volumes = build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="10",
                 )
@@ -1151,7 +1151,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(
+                env, volumes = build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="11",
                 )
@@ -1192,7 +1192,7 @@ class TaskTests(unittest.TestCase):
                 gate_dir = state_dir / "gate" / f"{project_id}.git"
                 gate_dir.mkdir(parents=True, exist_ok=True)
 
-                env, volumes = _build_task_env_and_volumes(
+                env, volumes = build_task_env_and_volumes(
                     project=load_project(project_id),
                     task_id="12",
                 )
@@ -1212,7 +1212,7 @@ class ContainerLifecycleTests(unittest.TestCase):
         with unittest.mock.patch(
             "luskctl.lib.containers.runtime.subprocess.check_output", return_value="running\n"
         ):
-            state = _get_container_state("test-container")
+            state = get_container_state("test-container")
             self.assertEqual(state, "running")
 
     def test_get_container_state_exited(self) -> None:
@@ -1220,7 +1220,7 @@ class ContainerLifecycleTests(unittest.TestCase):
         with unittest.mock.patch(
             "luskctl.lib.containers.runtime.subprocess.check_output", return_value="exited\n"
         ):
-            state = _get_container_state("test-container")
+            state = get_container_state("test-container")
             self.assertEqual(state, "exited")
 
     def test_get_container_state_not_found(self) -> None:
@@ -1229,7 +1229,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             "luskctl.lib.containers.runtime.subprocess.check_output",
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
-            state = _get_container_state("test-container")
+            state = get_container_state("test-container")
             self.assertIsNone(state)
 
     def test_get_container_state_podman_not_found(self) -> None:
@@ -1238,7 +1238,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             "luskctl.lib.containers.runtime.subprocess.check_output",
             side_effect=FileNotFoundError("podman"),
         ):
-            state = _get_container_state("test-container")
+            state = get_container_state("test-container")
             self.assertIsNone(state)
 
     def test_task_stop_updates_metadata(self) -> None:
@@ -1278,7 +1278,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._get_container_state", return_value="running"
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="running"
                     ),
                     unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                 ):
@@ -1358,7 +1358,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
@@ -1413,7 +1413,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners._get_container_state",
+                        "luskctl.lib.containers.task_runners.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch(
@@ -1465,7 +1465,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._get_container_state", return_value="exited"
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
                     ),
                 ):
                     output = StringIO()
@@ -1506,7 +1506,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.runtime._get_container_state",
+                        "luskctl.lib.containers.runtime.get_container_state",
                         return_value="running",
                     ) as mock_state,
                 ):
@@ -1607,7 +1607,7 @@ class LoginTests(unittest.TestCase):
                 },
             ):
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks._get_container_state", return_value=None
+                    "luskctl.lib.containers.tasks.get_container_state", return_value=None
                 ):
                     with self.assertRaises(SystemExit) as ctx:
                         task_login("proj_login_nf", "1")
@@ -1627,7 +1627,7 @@ class LoginTests(unittest.TestCase):
                 },
             ):
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks._get_container_state", return_value="exited"
+                    "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
                 ):
                     with self.assertRaises(SystemExit) as ctx:
                         task_login("proj_login_nr", "1")
@@ -1648,7 +1648,7 @@ class LoginTests(unittest.TestCase):
             ):
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._get_container_state",
+                        "luskctl.lib.containers.tasks.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch("luskctl.lib.containers.tasks.os.execvp") as mock_exec,
@@ -1684,7 +1684,7 @@ class LoginTests(unittest.TestCase):
                 },
             ):
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks._get_container_state",
+                    "luskctl.lib.containers.tasks.get_container_state",
                     return_value="running",
                 ):
                     cmd = get_login_command("proj_logincmd", "1")
@@ -1717,7 +1717,7 @@ class LoginTests(unittest.TestCase):
                 },
             ):
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks._get_container_state",
+                    "luskctl.lib.containers.tasks.get_container_state",
                     return_value="running",
                 ):
                     cmd = get_login_command("proj_loginweb", "1")
@@ -1761,7 +1761,7 @@ class LoginTests(unittest.TestCase):
             ):
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._get_container_state",
+                        "luskctl.lib.containers.tasks.get_container_state",
                         return_value="running",
                     ),
                     mock_git_config(),

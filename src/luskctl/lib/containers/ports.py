@@ -41,7 +41,7 @@ def _collect_all_web_ports() -> set[int]:
     return ports
 
 
-def _assign_web_port() -> int:
+def assign_web_port() -> int:
     """Find a free web port starting from the configured UI base port.
 
     Scans up to 200 successive ports (base_port through base_port + 199),

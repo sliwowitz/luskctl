@@ -21,23 +21,22 @@ from .._util.ansi import (
 from .._util.podman import _podman_userns_args
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
-from .agents import _prepare_agent_config_dir
+from .agents import prepare_agent_config_dir
 from .environment import (
-    _apply_web_env_overrides,
-    _build_task_env_and_volumes,
+    apply_web_env_overrides,
+    build_task_env_and_volumes,
 )
-from .ports import _assign_web_port
+from .ports import assign_web_port
 from .runtime import (
-    _get_container_state,
-    _gpu_run_args,
-    _is_container_running,
-    _stream_initial_logs,
-    _wait_for_exit,
     container_name,
+    get_container_state,
+    gpu_run_args,
+    is_container_running,
+    stream_initial_logs,
+    wait_for_exit,
 )
 from .tasks import (
-    _check_mode,
-    _tasks_meta_dir,
+    load_task_meta,
     task_new,
     update_task_exit_code,
 )
@@ -45,15 +44,10 @@ from .tasks import (
 
 def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None) -> None:
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
-    _check_mode(meta, "cli")
+    meta, meta_path = load_task_meta(project.id, task_id, "cli")
 
     cname = container_name(project.id, "cli", task_id)
-    container_state = _get_container_state(cname)
+    container_state = get_container_state(cname)
 
     # If container already exists, handle it
     if container_state is not None:
@@ -91,11 +85,11 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
             print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
             return
 
-    env, volumes = _build_task_env_and_volumes(project, task_id)
+    env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
     subagents = list(project.agent_config.get("subagents") or [])
-    agent_config_dir = _prepare_agent_config_dir(project, task_id, subagents, agents)
+    agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     # Run detached and keep the container alive so users can exec into it later
@@ -103,7 +97,7 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
     # This allows `task restart` to quickly resume stopped containers.
     cmd = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
-    cmd += _gpu_run_args(project)
+    cmd += gpu_run_args(project)
     # Volumes
     for v in volumes:
         cmd += ["-v", v]
@@ -132,7 +126,7 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
         raise SystemExit(f"Run failed: {e}")
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
-    _stream_initial_logs(
+    stream_initial_logs(
         container_name=cname,
         timeout_sec=60.0,
         ready_check=lambda line: "__CLI_READY__" in line or ">> init complete" in line,
@@ -164,12 +158,7 @@ def task_run_web(
     agents: list[str] | None = None,
 ) -> None:
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
-    _check_mode(meta, "web")
+    meta, meta_path = load_task_meta(project.id, task_id, "web")
 
     mode_updated = meta.get("mode") != "web"
     if mode_updated:
@@ -178,18 +167,18 @@ def task_run_web(
     port = meta.get("web_port")
     port_updated = False
     if not isinstance(port, int):
-        port = _assign_web_port()
+        port = assign_web_port()
         meta["web_port"] = port
         port_updated = True
 
-    env, volumes = _build_task_env_and_volumes(project, task_id)
+    env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Prepare agent-config dir (subagents from project YAML, filtered by default/selected)
     subagents = list(project.agent_config.get("subagents") or [])
-    agent_config_dir = _prepare_agent_config_dir(project, task_id, subagents, agents)
+    agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
-    env = _apply_web_env_overrides(env, backend, project.default_agent)
+    env = apply_web_env_overrides(env, backend, project.default_agent)
 
     # Save the effective backend to task metadata for UI display
     effective_backend = env.get("LUSKUI_BACKEND", "codex")
@@ -202,7 +191,7 @@ def task_run_web(
         meta_path.write_text(yaml.safe_dump(meta))
 
     cname = container_name(project.id, "web", task_id)
-    container_state = _get_container_state(cname)
+    container_state = get_container_state(cname)
 
     # If container already exists, handle it
     if container_state is not None:
@@ -239,7 +228,7 @@ def task_run_web(
     # This allows `task restart` to quickly resume stopped containers.
     cmd = ["podman", "run", "-d", "-p", f"127.0.0.1:{port}:7860"]
     cmd += _podman_userns_args()
-    cmd += _gpu_run_args(project)
+    cmd += gpu_run_args(project)
     # Volumes
     for v in volumes:
         cmd += ["-v", v]
@@ -282,7 +271,7 @@ def task_run_web(
     # container exits. We deliberately do *not* time out here: as long as the
     # init script keeps making progress, the user sees the live logs and can
     # decide to Ctrl+C if it hangs.
-    ready = _stream_initial_logs(
+    ready = stream_initial_logs(
         container_name=cname,
         timeout_sec=None,
         ready_check=_web_ready,
@@ -292,7 +281,7 @@ def task_run_web(
     # still running. This prevents false "Web UI is up" messages in cases where
     # the web process failed to start (e.g. Node error) and the container
     # exited before emitting the readiness marker.
-    running = _is_container_running(cname)
+    running = is_container_running(cname)
 
     if ready and running:
         if meta.get("status") != "running":
@@ -383,7 +372,7 @@ def task_run_headless(
 
     # Prepare agent-config dir with wrapper, agents.json, prompt.txt
     task_dir = project.tasks_root / str(task_id)
-    agent_config_dir = _prepare_agent_config_dir(
+    agent_config_dir = prepare_agent_config_dir(
         project,
         task_id,
         subagents,
@@ -392,7 +381,7 @@ def task_run_headless(
     )
 
     # Build env and volumes
-    env, volumes = _build_task_env_and_volumes(project, task_id)
+    env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Mount agent-config dir to /home/dev/.luskctl
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
@@ -444,7 +433,7 @@ def task_run_headless(
     )
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
-    cmd += _gpu_run_args(project)
+    cmd += gpu_run_args(project)
     for v in volumes:
         cmd += ["-v", v]
     for k, v in env.items():
@@ -468,9 +457,7 @@ def task_run_headless(
         raise SystemExit(f"Run failed: {e}")
 
     # Update task metadata
-    meta_dir = _tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta, meta_path = load_task_meta(project.id, task_id)
     meta["status"] = "running"
     meta["mode"] = "run"
     meta_path.write_text(yaml.safe_dump(meta))
@@ -478,7 +465,7 @@ def task_run_headless(
     color_enabled = _supports_color()
 
     if follow:
-        exit_code = _wait_for_exit(cname)
+        exit_code = wait_for_exit(cname)
         _print_run_summary(task_dir / "workspace")
 
         update_task_exit_code(project.id, task_id, exit_code)
@@ -506,18 +493,14 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
     If the container doesn't exist, delegates to task_run_cli or task_run_web.
     """
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta, meta_path = load_task_meta(project.id, task_id)
 
     mode = meta.get("mode")
     if not mode:
         raise SystemExit(f"Task {task_id} has never been run (no mode set)")
 
     cname = container_name(project.id, mode, task_id)
-    container_state = _get_container_state(cname)
+    container_state = get_container_state(cname)
 
     if container_state == "running":
         color_enabled = _supports_color()

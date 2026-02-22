@@ -150,7 +150,7 @@ class PollingMixin:
         """Background worker to check upstream (runs in thread pool)."""
         import asyncio
 
-        from ..lib.security.git_gate import compare_gate_vs_upstream
+        from ..lib.facade import compare_gate_vs_upstream
 
         try:
             # Run blocking call in thread pool
@@ -243,7 +243,7 @@ class PollingMixin:
         """Background worker to sync gate from upstream."""
         import asyncio
 
-        from ..lib.security.git_gate import compare_gate_vs_upstream, sync_gate_branches
+        from ..lib.facade import compare_gate_vs_upstream, sync_gate_branches
 
         try:
             # Run blocking sync in thread pool
