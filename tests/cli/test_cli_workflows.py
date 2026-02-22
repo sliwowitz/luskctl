@@ -2,13 +2,22 @@ import unittest
 import unittest.mock
 
 
+def _patch_init_steps(func):
+    """Apply project-init step mocks to a test method.
+
+    Mock args are injected as: mock_ssh, mock_gen, mock_build, mock_gate.
+    """
+    func = unittest.mock.patch("luskctl.cli.main.init_project_ssh")(func)
+    func = unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")(func)
+    func = unittest.mock.patch("luskctl.cli.main.build_images")(func)
+    func = unittest.mock.patch("luskctl.cli.main.sync_project_gate")(func)
+    return func
+
+
 class ProjectInitTests(unittest.TestCase):
     """Tests for the project-init convenience command."""
 
-    @unittest.mock.patch("luskctl.cli.main.sync_project_gate")
-    @unittest.mock.patch("luskctl.cli.main.build_images")
-    @unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")
-    @unittest.mock.patch("luskctl.cli.main.init_project_ssh")
+    @_patch_init_steps
     def test_cmd_project_init_calls_four_steps(
         self, mock_ssh, mock_gen, mock_build, mock_gate
     ) -> None:
@@ -23,10 +32,7 @@ class ProjectInitTests(unittest.TestCase):
         mock_build.assert_called_once_with("myproj")
         mock_gate.assert_called_once_with("myproj")
 
-    @unittest.mock.patch("luskctl.cli.main.sync_project_gate")
-    @unittest.mock.patch("luskctl.cli.main.build_images")
-    @unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")
-    @unittest.mock.patch("luskctl.cli.main.init_project_ssh")
+    @_patch_init_steps
     def test_cmd_project_init_calls_in_order(
         self, mock_ssh, mock_gen, mock_build, mock_gate
     ) -> None:
@@ -45,10 +51,7 @@ class ProjectInitTests(unittest.TestCase):
 
         self.assertEqual(call_order, ["ssh", "generate", "build", "gate"])
 
-    @unittest.mock.patch("luskctl.cli.main.sync_project_gate")
-    @unittest.mock.patch("luskctl.cli.main.build_images")
-    @unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")
-    @unittest.mock.patch("luskctl.cli.main.init_project_ssh")
+    @_patch_init_steps
     def test_cmd_project_init_gate_failure_raises(
         self, mock_ssh, mock_gen, mock_build, mock_gate
     ) -> None:

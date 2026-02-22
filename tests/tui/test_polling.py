@@ -13,6 +13,7 @@ sys.modules["textual.message"] = mock.MagicMock()
 sys.modules["yaml"] = mock.MagicMock()
 
 from luskctl.lib.security.git_gate import GateStalenessInfo
+from test_utils import make_staleness_info
 
 
 class MockProject:
@@ -60,60 +61,26 @@ class PollingStateTests(TestCase):
                 last_notified_stale = False
 
         # First stale notification
-        stale1 = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
-            upstream_head="bbb",
-            is_stale=True,
-            commits_behind=3,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
-        )
+        stale1 = make_staleness_info(commits_behind=3)
         on_staleness_updated(stale1)
         self.assertEqual(len(notifications), 1)
         self.assertTrue(last_notified_stale)
 
         # Second stale poll - should NOT notify again
-        stale2 = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
-            upstream_head="ccc",
-            is_stale=True,
-            commits_behind=5,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
-        )
+        stale2 = make_staleness_info(upstream_head="ccc", commits_behind=5)
         on_staleness_updated(stale2)
         self.assertEqual(len(notifications), 1)  # Still 1
 
         # Up to date - should reset flag
-        up_to_date = GateStalenessInfo(
-            branch="main",
-            gate_head="ccc",
-            upstream_head="ccc",
-            is_stale=False,
-            commits_behind=0,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
+        up_to_date = make_staleness_info(
+            gate_head="ccc", upstream_head="ccc", is_stale=False, commits_behind=0
         )
         on_staleness_updated(up_to_date)
         self.assertEqual(len(notifications), 1)
         self.assertFalse(last_notified_stale)
 
         # Stale again - should notify
-        stale3 = GateStalenessInfo(
-            branch="main",
-            gate_head="ccc",
-            upstream_head="ddd",
-            is_stale=True,
-            commits_behind=1,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
-        )
+        stale3 = make_staleness_info(gate_head="ccc", upstream_head="ddd")
         on_staleness_updated(stale3)
         self.assertEqual(len(notifications), 2)
 
@@ -132,14 +99,11 @@ class PollingStateTests(TestCase):
                 last_notified_stale = False
 
         # Error occurs - should preserve stale state
-        error_result = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
+        error_result = make_staleness_info(
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
             commits_ahead=None,
-            last_checked="now",
             error="Could not reach upstream",
         )
         on_staleness_updated(error_result)
@@ -191,43 +155,24 @@ class PollingStateTests(TestCase):
                 last_notified_stale = False
 
         # Sync completed but still stale
-        still_stale = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
-            upstream_head="bbb",
-            is_stale=True,
-            commits_behind=1,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
-        )
+        still_stale = make_staleness_info()
         sync_completed(still_stale)
         self.assertTrue(last_notified_stale)  # Not reset
 
         # Sync completed with error
-        error_result = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
+        error_result = make_staleness_info(
             upstream_head=None,
             is_stale=False,
             commits_behind=None,
             commits_ahead=None,
-            last_checked="now",
             error="Network error",
         )
         sync_completed(error_result)
         self.assertTrue(last_notified_stale)  # Not reset
 
         # Sync completed and up-to-date
-        up_to_date = GateStalenessInfo(
-            branch="main",
-            gate_head="bbb",
-            upstream_head="bbb",
-            is_stale=False,
-            commits_behind=0,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
+        up_to_date = make_staleness_info(
+            gate_head="bbb", upstream_head="bbb", is_stale=False, commits_behind=0
         )
         sync_completed(up_to_date)
         self.assertFalse(last_notified_stale)  # Reset
@@ -251,16 +196,7 @@ class PollingStateTests(TestCase):
         current_project_id = "proj2"
 
         # Poll completes with proj1 result
-        result = GateStalenessInfo(
-            branch="main",
-            gate_head="aaa",
-            upstream_head="bbb",
-            is_stale=True,
-            commits_behind=3,
-            commits_ahead=0,
-            last_checked="now",
-            error=None,
-        )
+        result = make_staleness_info(commits_behind=3)
         on_poll_complete(poll_project, result)
 
         # Result should be discarded

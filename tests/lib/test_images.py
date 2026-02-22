@@ -7,60 +7,34 @@ class ImagesTests(unittest.TestCase):
     """Tests for the images module."""
 
     # Tests for _base_tag function
-    def test_base_tag_empty_string(self) -> None:
-        """Empty string should return default tag."""
-        result = images._base_tag("")
-        self.assertEqual(result, "ubuntu-24.04")
 
-    def test_base_tag_whitespace_only(self) -> None:
-        """Whitespace-only string should return default tag."""
-        result = images._base_tag("   ")
-        self.assertEqual(result, "ubuntu-24.04")
-
-    def test_base_tag_simple_valid_name(self) -> None:
-        """Simple valid name should be normalized."""
-        result = images._base_tag("ubuntu-22.04")
-        self.assertEqual(result, "ubuntu-22.04")
-
-    def test_base_tag_uppercase_converted(self) -> None:
-        """Uppercase should be converted to lowercase."""
-        result = images._base_tag("Ubuntu-22.04")
-        self.assertEqual(result, "ubuntu-22.04")
-
-    def test_base_tag_special_characters_sanitized(self) -> None:
-        """Special characters should be replaced with hyphens."""
-        result = images._base_tag("ubuntu@22#04")
-        self.assertEqual(result, "ubuntu-22-04")
-
-    def test_base_tag_multiple_special_chars(self) -> None:
-        """Multiple special characters should be replaced."""
-        result = images._base_tag("test@#$%^&*()image")
-        self.assertEqual(result, "test-image")
-
-    def test_base_tag_leading_trailing_special_chars(self) -> None:
-        """Leading/trailing dots and hyphens should be stripped."""
-        result = images._base_tag("--ubuntu-22.04--")
-        self.assertEqual(result, "ubuntu-22.04")
-
-    def test_base_tag_dots_preserved(self) -> None:
-        """Dots in valid positions should be preserved."""
-        result = images._base_tag("ubuntu.22.04")
-        self.assertEqual(result, "ubuntu.22.04")
-
-    def test_base_tag_underscores_preserved(self) -> None:
-        """Underscores should be preserved."""
-        result = images._base_tag("ubuntu_22_04")
-        self.assertEqual(result, "ubuntu_22_04")
-
-    def test_base_tag_mixed_valid_chars(self) -> None:
-        """Mixed valid characters should be preserved."""
-        result = images._base_tag("ubuntu-22.04_LTS")
-        self.assertEqual(result, "ubuntu-22.04_lts")
-
-    def test_base_tag_only_special_chars(self) -> None:
-        """String with only special characters should return default."""
-        result = images._base_tag("@#$%^&*()")
-        self.assertEqual(result, "ubuntu-24.04")
+    def test_base_tag_simple_cases(self) -> None:
+        """Simple input/expected _base_tag tests."""
+        cases = [
+            ("", "ubuntu-24.04", "empty string should return default tag"),
+            ("   ", "ubuntu-24.04", "whitespace-only should return default tag"),
+            ("ubuntu-22.04", "ubuntu-22.04", "simple valid name should be normalized"),
+            ("Ubuntu-22.04", "ubuntu-22.04", "uppercase should be converted to lowercase"),
+            ("ubuntu@22#04", "ubuntu-22-04", "special characters should be replaced with hyphens"),
+            ("test@#$%^&*()image", "test-image", "multiple special characters should be replaced"),
+            (
+                "--ubuntu-22.04--",
+                "ubuntu-22.04",
+                "leading/trailing dots and hyphens should be stripped",
+            ),
+            ("ubuntu.22.04", "ubuntu.22.04", "dots in valid positions should be preserved"),
+            ("ubuntu_22_04", "ubuntu_22_04", "underscores should be preserved"),
+            (
+                "ubuntu-22.04_LTS",
+                "ubuntu-22.04_lts",
+                "mixed valid characters should be preserved",
+            ),
+            ("@#$%^&*()", "ubuntu-24.04", "only special characters should return default"),
+        ]
+        for input_val, expected, description in cases:
+            with self.subTest(input=input_val, expected=expected, msg=description):
+                result = images._base_tag(input_val)
+                self.assertEqual(result, expected)
 
     def test_base_tag_long_name_under_limit(self) -> None:
         """Long name under 120 chars should not be truncated."""
@@ -106,50 +80,51 @@ class ImagesTests(unittest.TestCase):
         self.assertNotIn("@", result)
 
     # Tests for image naming functions
-    def test_base_dev_image(self) -> None:
-        """base_dev_image should return correct L0 image name."""
-        result = images.base_dev_image("ubuntu-22.04")
-        self.assertEqual(result, "luskctl-l0:ubuntu-22.04")
 
-    def test_base_dev_image_with_special_chars(self) -> None:
-        """base_dev_image should sanitize base_image."""
-        result = images.base_dev_image("ubuntu@22.04")
-        self.assertEqual(result, "luskctl-l0:ubuntu-22.04")
+    def test_base_dev_image(self) -> None:
+        """base_dev_image should return correct L0 image name and sanitize input."""
+        cases = [
+            ("ubuntu-22.04", "luskctl-l0:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "luskctl-l0:ubuntu-22.04", "special chars sanitized"),
+        ]
+        for input_val, expected, description in cases:
+            with self.subTest(input=input_val, expected=expected, msg=description):
+                result = images.base_dev_image(input_val)
+                self.assertEqual(result, expected)
 
     def test_agent_cli_image(self) -> None:
-        """agent_cli_image should return correct L1 CLI image name."""
-        result = images.agent_cli_image("ubuntu-22.04")
-        self.assertEqual(result, "luskctl-l1-cli:ubuntu-22.04")
-
-    def test_agent_cli_image_with_special_chars(self) -> None:
-        """agent_cli_image should sanitize base_image."""
-        result = images.agent_cli_image("ubuntu@22.04")
-        self.assertEqual(result, "luskctl-l1-cli:ubuntu-22.04")
+        """agent_cli_image should return correct L1 CLI image name and sanitize input."""
+        cases = [
+            ("ubuntu-22.04", "luskctl-l1-cli:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "luskctl-l1-cli:ubuntu-22.04", "special chars sanitized"),
+        ]
+        for input_val, expected, description in cases:
+            with self.subTest(input=input_val, expected=expected, msg=description):
+                result = images.agent_cli_image(input_val)
+                self.assertEqual(result, expected)
 
     def test_agent_ui_image(self) -> None:
-        """agent_ui_image should return correct L1 UI image name."""
-        result = images.agent_ui_image("ubuntu-22.04")
-        self.assertEqual(result, "luskctl-l1-ui:ubuntu-22.04")
+        """agent_ui_image should return correct L1 UI image name and sanitize input."""
+        cases = [
+            ("ubuntu-22.04", "luskctl-l1-ui:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "luskctl-l1-ui:ubuntu-22.04", "special chars sanitized"),
+        ]
+        for input_val, expected, description in cases:
+            with self.subTest(input=input_val, expected=expected, msg=description):
+                result = images.agent_ui_image(input_val)
+                self.assertEqual(result, expected)
 
-    def test_agent_ui_image_with_special_chars(self) -> None:
-        """agent_ui_image should sanitize base_image."""
-        result = images.agent_ui_image("ubuntu@22.04")
-        self.assertEqual(result, "luskctl-l1-ui:ubuntu-22.04")
-
-    def test_project_cli_image(self) -> None:
-        """project_cli_image should return correct L2 CLI image name."""
-        result = images.project_cli_image("my-project")
-        self.assertEqual(result, "my-project:l2-cli")
-
-    def test_project_web_image(self) -> None:
-        """project_web_image should return correct L2 web image name."""
-        result = images.project_web_image("my-project")
-        self.assertEqual(result, "my-project:l2-web")
-
-    def test_project_dev_image(self) -> None:
-        """project_dev_image should return correct L2 dev image name."""
-        result = images.project_dev_image("my-project")
-        self.assertEqual(result, "my-project:l2-dev")
+    def test_project_images(self) -> None:
+        """Project image functions should return correct L2 image names."""
+        cases = [
+            (images.project_cli_image, "my-project", "my-project:l2-cli", "CLI image"),
+            (images.project_web_image, "my-project", "my-project:l2-web", "web image"),
+            (images.project_dev_image, "my-project", "my-project:l2-dev", "dev image"),
+        ]
+        for func, input_val, expected, description in cases:
+            with self.subTest(func=func.__name__, expected=expected, msg=description):
+                result = func(input_val)
+                self.assertEqual(result, expected)
 
     def test_all_functions_with_empty_base_image(self) -> None:
         """All base_image functions should handle empty string."""
