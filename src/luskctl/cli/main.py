@@ -87,38 +87,16 @@ def _cmd_config_show(project_id: str, preset: str | None) -> None:
     """Show resolved agent config with provenance annotations."""
     import json
 
-    from ..lib._util.config_stack import ConfigScope, ConfigStack
-    from ..lib.core.config import get_global_agent_config
-    from ..lib.core.projects import load_project
+    from ..lib.containers.agent_config import build_agent_config_stack
 
     color_enabled = _supports_color()
 
-    # Build the stack manually so we can annotate each level
-    stack = ConfigStack()
-    levels: list[tuple[str, dict]] = []
-
-    global_cfg = get_global_agent_config()
-    if global_cfg:
-        stack.push(ConfigScope("global", None, global_cfg))
-        levels.append(("global", global_cfg))
-
-    project = load_project(project_id)
-    if project.agent_config:
-        stack.push(ConfigScope("project", project.root / "project.yml", project.agent_config))
-        levels.append(("project", project.agent_config))
-
-    if preset:
-        from ..lib.core.projects import find_preset_path, load_preset
-
-        preset_data = load_preset(project_id, preset)
-        if preset_data:
-            stack.push(ConfigScope("preset", find_preset_path(project, preset), preset_data))
-            levels.append((f"preset:{preset}", preset_data))
-
+    stack = build_agent_config_stack(project_id, preset=preset)
     resolved = stack.resolve()
+    scopes = stack.scopes
 
     # Print provenance per level
-    if not levels and not resolved:
+    if not scopes and not resolved:
         print(f"No agent config defined for project '{project_id}'")
         return
 
@@ -127,9 +105,9 @@ def _cmd_config_show(project_id: str, preset: str | None) -> None:
         print(f"  (with preset: {preset})")
     print()
 
-    for level_name, data in levels:
-        keys = ", ".join(sorted(data.keys()))
-        print(f"  [{_gray(level_name, color_enabled)}] keys: {keys}")
+    for scope in scopes:
+        keys = ", ".join(sorted(scope.data.keys()))
+        print(f"  [{_gray(scope.level, color_enabled)}] keys: {keys}")
 
     print()
     print(json.dumps(resolved, indent=2, default=str))

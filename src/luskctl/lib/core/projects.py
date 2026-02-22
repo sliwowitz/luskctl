@@ -157,6 +157,23 @@ def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
     return f"id_{algo}_{project.id}"
 
 
+def _validate_project_id(project_id: str) -> None:
+    """Ensure a project ID is safe for use as a directory name.
+
+    Raises SystemExit if the ID is empty, contains path separators or traversal
+    sequences, or uses characters outside ``[a-zA-Z0-9_-]``.
+    """
+    import re
+
+    if not project_id:
+        raise SystemExit("Project ID must not be empty")
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", project_id):
+        raise SystemExit(
+            f"Invalid project ID '{project_id}': "
+            "only letters, digits, hyphens, and underscores are allowed"
+        )
+
+
 def derive_project(source_id: str, new_id: str) -> Path:
     """Create a new project config derived from an existing one.
 
@@ -166,8 +183,14 @@ def derive_project(source_id: str, new_id: str) -> Path:
 
     Raises SystemExit if the source project is not found or the target already exists.
     """
+    _validate_project_id(new_id)
     source = load_project(source_id)
-    target_root = user_projects_root() / new_id
+    projects_root = user_projects_root().resolve()
+    target_root = (projects_root / new_id).resolve()
+
+    # Guard against directory traversal (belt-and-suspenders with the regex above)
+    if not str(target_root).startswith(str(projects_root)):
+        raise SystemExit(f"Invalid project ID '{new_id}': path escapes projects directory")
 
     if target_root.exists():
         raise SystemExit(f"Project '{new_id}' already exists at {target_root}")

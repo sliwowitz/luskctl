@@ -12,16 +12,15 @@ from luskctl.lib.core.config import get_global_agent_config
 from luskctl.lib.core.projects import load_project
 
 
-def resolve_agent_config(
+def build_agent_config_stack(
     project_id: str,
     preset: str | None = None,
     cli_overrides: dict | None = None,
-) -> dict:
+) -> ConfigStack:
     """Build config stack: global → project → preset → CLI overrides.
 
-    Returns the merged agent config dict (may be empty).  The result has the
-    same shape as ``project.agent_config`` (keys like ``subagents``, ``model``,
-    ``max_turns``, etc.) and feeds directly into ``prepare_agent_config_dir()``.
+    Returns the :class:`ConfigStack` so callers can either ``.resolve()`` it
+    for the merged dict or inspect ``.scopes`` for provenance display.
     """
     stack = ConfigStack()
 
@@ -47,4 +46,19 @@ def resolve_agent_config(
     if cli_overrides:
         stack.push(ConfigScope("cli", None, cli_overrides))
 
-    return stack.resolve()
+    return stack
+
+
+def resolve_agent_config(
+    project_id: str,
+    preset: str | None = None,
+    cli_overrides: dict | None = None,
+) -> dict:
+    """Build config stack and return the merged agent config dict.
+
+    Convenience wrapper around :func:`build_agent_config_stack` for callers
+    that only need the final resolved dict (e.g. task runners).
+    """
+    return build_agent_config_stack(
+        project_id, preset=preset, cli_overrides=cli_overrides
+    ).resolve()
