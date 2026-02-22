@@ -163,6 +163,8 @@ def task_run_cli(
     # Mark task as started (not completed) for CLI mode
     meta["status"] = "running"
     meta["mode"] = "cli"
+    if preset:
+        meta["preset"] = preset
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
@@ -199,6 +201,11 @@ def task_run_web(
     if mode_updated:
         meta["mode"] = "web"
 
+    preset_updated = False
+    if preset and meta.get("preset") != preset:
+        meta["preset"] = preset
+        preset_updated = True
+
     port = meta.get("web_port")
     port_updated = False
     if not isinstance(port, int):
@@ -223,7 +230,7 @@ def task_run_web(
         meta["backend"] = effective_backend
 
     # Write metadata once if anything was updated
-    if port_updated or backend_updated or mode_updated:
+    if port_updated or backend_updated or mode_updated or preset_updated:
         meta_path.write_text(yaml.safe_dump(meta))
 
     cname = container_name(project.id, "web", task_id)

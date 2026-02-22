@@ -98,9 +98,16 @@ def load_global_config() -> dict:
 
 
 def get_global_section(key: str) -> dict:
-    """Return a top-level section from the global config, defaulting to ``{}``."""
+    """Return a top-level section from the global config, defaulting to ``{}``.
+
+    If the value under *key* is not a dict (e.g. the user wrote ``git: "oops"``),
+    returns ``{}`` to avoid ``AttributeError`` in callers that expect ``.get()``.
+    """
     cfg = load_global_config()
-    return cfg.get(key, {}) or {}
+    value = cfg.get(key, {})
+    if not isinstance(value, dict):
+        return {}
+    return value or {}
 
 
 # ---------- Path resolution ----------
@@ -174,6 +181,7 @@ def build_root() -> Path:
 
 
 def get_ui_base_port() -> int:
+    """Return the base port for the web UI (default 7860)."""
     return int(get_global_section("ui").get("base_port", 7860))
 
 

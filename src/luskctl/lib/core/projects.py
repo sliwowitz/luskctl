@@ -115,7 +115,10 @@ def load_preset(project_id: str, preset_name: str) -> dict:
     for ext in (".yml", ".yaml"):
         path = presets_dir / f"{preset_name}{ext}"
         if path.is_file():
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            except yaml.YAMLError as exc:
+                raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
             # Resolve subagent file: paths relative to presets dir
             for sa in data.get("subagents", []) or []:
                 if isinstance(sa, dict) and "file" in sa:
@@ -161,7 +164,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     if target_root.exists():
         raise SystemExit(f"Project '{new_id}' already exists at {target_root}")
 
-    # Read original YAML to preserve structure and comments as much as possible
+    # Read and re-serialise via safe_load/safe_dump (comments are not preserved)
     source_cfg = yaml.safe_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
 
     # Update project ID
