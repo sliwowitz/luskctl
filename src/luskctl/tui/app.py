@@ -441,7 +441,9 @@ if _HAS_TEXTUAL:
         ) -> tuple[str, CodexProject | None, dict | None, GateStalenessInfo | None, str | None]:
             try:
                 project = load_project(project_id)
-                state = get_project_state(project_id)
+                from ..lib.security.git_gate import get_gate_last_commit
+
+                state = get_project_state(project_id, gate_commit_provider=get_gate_last_commit)
                 staleness = None
                 if state.get("gate") and project.upstream_url:
                     try:

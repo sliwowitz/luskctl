@@ -120,7 +120,7 @@ class ProjectTests(unittest.TestCase):
                     "luskctl.lib.containers.project_state.subprocess.run"
                 ) as run_mock:
                     run_mock.return_value.returncode = 0
-                    state = get_project_state(project_id)
+                    state = get_project_state(project_id, gate_commit_provider=lambda pid: None)
 
                 self.assertEqual(
                     state,

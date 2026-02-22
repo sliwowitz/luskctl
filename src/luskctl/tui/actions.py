@@ -15,23 +15,31 @@ import sys
 
 from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import follow_container_logs_cmd, wait_for_container_exit
-from ..lib.containers.docker import build_images, generate_dockerfiles
-from ..lib.containers.environment import WEB_BACKENDS
 from ..lib.containers.runtime import container_name
-from ..lib.containers.tasks import (
-    get_login_command,
-    get_workspace_git_diff,
-    task_delete,
-    task_new,
+from ..lib.containers.task_runners import (
     task_restart,
     task_run_cli,
     task_run_headless,
     task_run_web,
 )
+from ..lib.containers.tasks import (
+    get_login_command,
+    get_workspace_git_diff,
+    task_delete,
+    task_new,
+)
 from ..lib.core.projects import load_project
-from ..lib.security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from ..lib.security.git_gate import sync_project_gate
-from ..lib.security.ssh import init_project_ssh
+from ..lib.facade import (
+    WEB_BACKENDS,
+    blablador_auth,
+    build_images,
+    claude_auth,
+    codex_auth,
+    generate_dockerfiles,
+    init_project_ssh,
+    mistral_auth,
+    sync_project_gate,
+)
 from .clipboard import copy_to_clipboard_detailed
 from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen
 from .shell_launch import launch_login

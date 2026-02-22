@@ -27,6 +27,9 @@ layers = [
     "core",
 ]
 
+[external]
+exclude = ["pydevd_pycharm", "pydevd"]
+
 # ── PRESENTATION LAYER ──────────────────────────────────────────────
 
 # CLI frontend
@@ -34,17 +37,14 @@ layers = [
 path = "luskctl.cli"
 layer = "presentation"
 depends_on = [
-    "luskctl.lib.containers.docker",
-    "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.task_runners",
     "luskctl.lib.containers.tasks",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.core.version",
-    "luskctl.lib.security.auth",
-    "luskctl.lib.security.git_gate",
-    "luskctl.lib.security.ssh",
-    "luskctl.ui_utils.terminal",
+    "luskctl.lib.facade",
     "luskctl.lib.wizards.new_project",
+    "luskctl.ui_utils.terminal",
 ]
 
 # TUI frontend
@@ -54,14 +54,24 @@ layer = "presentation"
 depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.autopilot",
-    "luskctl.lib.containers.docker",
-    "luskctl.lib.containers.environment",
     "luskctl.lib.containers.project_state",
     "luskctl.lib.containers.runtime",
+    "luskctl.lib.containers.task_runners",
     "luskctl.lib.containers.tasks",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.core.version",
+    "luskctl.lib.facade",
+    "luskctl.lib.security.git_gate",
+]
+
+# Service facade (aggregates shared cross-cutting operations)
+[[modules]]
+path = "luskctl.lib.facade"
+layer = "services"
+depends_on = [
+    "luskctl.lib.containers.docker",
+    "luskctl.lib.containers.environment",
     "luskctl.lib.security.auth",
     "luskctl.lib.security.git_gate",
     "luskctl.lib.security.ssh",
@@ -84,20 +94,32 @@ path = "luskctl.lib.containers.autopilot"
 layer = "services"
 depends_on = ["luskctl.lib.containers.tasks"]
 
-# Task orchestration
+# Task metadata, lifecycle, and queries
 [[modules]]
 path = "luskctl.lib.containers.tasks"
+layer = "services"
+depends_on = [
+    "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.runtime",
+    "luskctl.lib.core.config",
+    "luskctl.lib.core.projects",
+    "luskctl.lib._util.ansi",
+    "luskctl.lib._util.logging_utils",
+]
+
+# Task container runners (CLI, web, headless, restart)
+[[modules]]
+path = "luskctl.lib.containers.task_runners"
 layer = "services"
 depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.environment",
     "luskctl.lib.containers.ports",
     "luskctl.lib.containers.runtime",
-    "luskctl.lib.core.config",
+    "luskctl.lib.containers.tasks",
     "luskctl.lib.core.images",
     "luskctl.lib.core.projects",
-    "luskctl.ui_utils.terminal",
-    "luskctl.lib._util.logging_utils",
+    "luskctl.lib._util.ansi",
     "luskctl.lib._util.podman",
 ]
 
@@ -134,7 +156,6 @@ depends_on = [
     "luskctl.lib.core.config",
     "luskctl.lib.core.images",
     "luskctl.lib.core.projects",
-    "luskctl.lib.security.git_gate",
 ]
 
 #
@@ -244,7 +265,7 @@ depends_on = []
 [[modules]]
 path = "luskctl.ui_utils.terminal"
 layer = "core"
-depends_on = []
+depends_on = ["luskctl.lib._util.ansi"]
 utility = true
 
 # $EDITOR launching
@@ -275,6 +296,13 @@ utility = true
 # Simple {{VAR}} template rendering
 [[modules]]
 path = "luskctl.lib._util.template_utils"
+layer = "core"
+depends_on = []
+utility = true
+
+# ANSI color utilities (used by services layer)
+[[modules]]
+path = "luskctl.lib._util.ansi"
 layer = "core"
 depends_on = []
 utility = true
@@ -313,8 +341,14 @@ expose = [
     "get_login_command",
     "get_workspace_git_diff",
     "update_task_exit_code",
+    "_tasks_meta_dir",
+    "_check_mode",
 ]
 from = ["luskctl.lib.containers.tasks"]
+
+[[interfaces]]
+expose = ["task_run_cli", "task_run_web", "task_run_headless", "task_restart"]
+from = ["luskctl.lib.containers.task_runners"]
 
 [[interfaces]]
 expose = ["parse_md_agent", "_prepare_agent_config_dir"]
@@ -356,3 +390,76 @@ from = ["luskctl.lib.security.git_gate"]
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
 from = ["luskctl.lib.containers.project_state"]
+
+# Core module interfaces
+
+[[interfaces]]
+expose = [
+    "config_root",
+    "state_root",
+    "build_root",
+    "user_projects_root",
+    "get_envs_base_dir",
+    "get_ui_base_port",
+    "get_tui_default_tmux",
+    "get_global_human_name",
+    "get_global_human_email",
+    "get_global_default_agent",
+    "global_config_path",
+    "global_config_search_paths",
+    "load_global_config",
+    "get_prefix",
+]
+from = ["luskctl.lib.core.config"]
+
+[[interfaces]]
+expose = [
+    "base_dev_image",
+    "agent_cli_image",
+    "agent_ui_image",
+    "project_cli_image",
+    "project_web_image",
+    "project_dev_image",
+]
+from = ["luskctl.lib.core.images"]
+
+# Service module interfaces
+
+[[interfaces]]
+expose = ["WEB_BACKENDS", "_build_task_env_and_volumes", "_apply_web_env_overrides", "_ensure_dir"]
+from = ["luskctl.lib.containers.environment"]
+
+[[interfaces]]
+expose = [
+    "container_name",
+    "get_task_container_state",
+    "_get_container_state",
+    "_gpu_run_args",
+    "_is_container_running",
+    "_stop_task_containers",
+    "_stream_initial_logs",
+    "_wait_for_exit",
+]
+from = ["luskctl.lib.containers.runtime"]
+
+[[interfaces]]
+expose = ["wait_for_container_exit", "follow_container_logs_cmd"]
+from = ["luskctl.lib.containers.autopilot"]
+
+[[interfaces]]
+expose = ["run_wizard", "collect_wizard_inputs", "generate_config"]
+from = ["luskctl.lib.wizards.new_project"]
+
+[[interfaces]]
+expose = [
+    "generate_dockerfiles",
+    "build_images",
+    "WEB_BACKENDS",
+    "init_project_ssh",
+    "sync_project_gate",
+    "codex_auth",
+    "claude_auth",
+    "mistral_auth",
+    "blablador_auth",
+]
+from = ["luskctl.lib.facade"]

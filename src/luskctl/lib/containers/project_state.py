@@ -6,6 +6,7 @@ for overview displays.
 """
 
 import subprocess
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,10 @@ from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
 
 
-def get_project_state(project_id: str) -> dict:
+def get_project_state(
+    project_id: str,
+    gate_commit_provider: Callable[[str], dict | None] | None = None,
+) -> dict:
     """Return a summary of per-project infrastructure state.
 
     The resulting dict contains boolean flags that can be used by UIs
@@ -130,10 +134,8 @@ def get_project_state(project_id: str) -> dict:
 
     # Get gate commit info if gate exists
     gate_last_commit = None
-    if has_gate:
-        from ..security.git_gate import get_gate_last_commit
-
-        gate_last_commit = get_gate_last_commit(project_id)
+    if has_gate and gate_commit_provider is not None:
+        gate_last_commit = gate_commit_provider(project_id)
 
     return {
         "dockerfiles": has_dockerfiles,

@@ -5,18 +5,18 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from ..lib.containers.docker import build_images, generate_dockerfiles
-from ..lib.containers.environment import WEB_BACKENDS
+from ..lib.containers.task_runners import (
+    task_restart,
+    task_run_cli,
+    task_run_headless,
+    task_run_web,
+)
 from ..lib.containers.tasks import (
     get_tasks as _get_tasks,
     task_delete,
     task_list,
     task_login,
     task_new,
-    task_restart,
-    task_run_cli,
-    task_run_headless,
-    task_run_web,
     task_status,
     task_stop,
 )
@@ -32,9 +32,17 @@ from ..lib.core.config import (
 )
 from ..lib.core.projects import list_projects
 from ..lib.core.version import format_version_string, get_version_info
-from ..lib.security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
-from ..lib.security.git_gate import sync_project_gate
-from ..lib.security.ssh import init_project_ssh
+from ..lib.facade import (
+    WEB_BACKENDS,
+    blablador_auth,
+    build_images,
+    claude_auth,
+    codex_auth,
+    generate_dockerfiles,
+    init_project_ssh,
+    mistral_auth,
+    sync_project_gate,
+)
 from ..lib.wizards.new_project import run_wizard
 from ..ui_utils.terminal import (
     gray as _gray,

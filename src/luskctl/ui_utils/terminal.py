@@ -1,37 +1,19 @@
-import os
-import sys
+"""Terminal ANSI formatting helpers.
 
+Core color functions (``supports_color``, ``color``, ``yellow``, ``blue``,
+``green``, ``red``) are defined in ``luskctl.lib._util.ansi`` so that
+service-layer modules can use them without a cross-layer dependency.
+This module re-exports them and adds higher-level helpers.
+"""
 
-def supports_color() -> bool:
-    """Check if stdout supports color output.
-
-    Follows the NO_COLOR standard (https://no-color.org/).
-    """
-    if "NO_COLOR" in os.environ:
-        return False
-    return sys.stdout.isatty()
-
-
-def color(text: str, code: str, enabled: bool) -> str:
-    if not enabled:
-        return text
-    return f"\x1b[{code}m{text}\x1b[0m"
-
-
-def yellow(text: str, enabled: bool) -> str:
-    return color(text, "33", enabled)
-
-
-def blue(text: str, enabled: bool) -> str:
-    return color(text, "34", enabled)
-
-
-def green(text: str, enabled: bool) -> str:
-    return color(text, "32", enabled)
-
-
-def red(text: str, enabled: bool) -> str:
-    return color(text, "31", enabled)
+from luskctl.lib._util.ansi import (  # noqa: F401  -- re-exports
+    blue,
+    color,
+    green,
+    red,
+    supports_color,
+    yellow,
+)
 
 
 def yes_no(value: bool, enabled: bool) -> str:
