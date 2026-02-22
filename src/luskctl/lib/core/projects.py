@@ -93,6 +93,15 @@ class Project:
         return self.root / "presets"
 
 
+def find_preset_path(project: Project, preset_name: str) -> Path | None:
+    """Return the path of a preset file, or ``None`` if not found."""
+    for ext in (".yml", ".yaml"):
+        path = project.presets_dir / f"{preset_name}{ext}"
+        if path.is_file():
+            return path
+    return None
+
+
 def list_presets(project_id: str) -> list[str]:
     """Return sorted names of available presets for a project (without extension)."""
     project = load_project(project_id)
@@ -111,25 +120,24 @@ def load_preset(project_id: str, preset_name: str) -> dict:
     Raises SystemExit if the preset is not found.
     """
     project = load_project(project_id)
+    path = find_preset_path(project, preset_name)
+    if path is None:
+        available = list_presets(project_id)
+        hint = f"  Available: {', '.join(available)}" if available else "  No presets found."
+        raise SystemExit(f"Preset '{preset_name}' not found in {project.presets_dir}\n{hint}")
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
+    # Resolve subagent file: paths relative to presets dir
     presets_dir = project.presets_dir
-    for ext in (".yml", ".yaml"):
-        path = presets_dir / f"{preset_name}{ext}"
-        if path.is_file():
-            try:
-                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError as exc:
-                raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
-            # Resolve subagent file: paths relative to presets dir
-            for sa in data.get("subagents", []) or []:
-                if isinstance(sa, dict) and "file" in sa:
-                    file_path = Path(str(sa["file"])).expanduser()
-                    if not file_path.is_absolute():
-                        file_path = presets_dir / file_path
-                    sa["file"] = str(file_path.resolve())
-            return data
-    available = list_presets(project_id)
-    hint = f"  Available: {', '.join(available)}" if available else "  No presets found."
-    raise SystemExit(f"Preset '{preset_name}' not found in {presets_dir}\n{hint}")
+    for sa in data.get("subagents", []) or []:
+        if isinstance(sa, dict) and "file" in sa:
+            file_path = Path(str(sa["file"])).expanduser()
+            if not file_path.is_absolute():
+                file_path = presets_dir / file_path
+            sa["file"] = str(file_path.resolve())
+    return data
 
 
 def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:

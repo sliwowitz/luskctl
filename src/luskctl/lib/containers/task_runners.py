@@ -614,9 +614,12 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
     else:
         # Container doesn't exist - re-run the task
         print(f"Container {cname} not found, re-running task...")
+        saved_preset = meta.get("preset")
         if mode == "cli":
-            task_run_cli(project_id, task_id)
+            task_run_cli(project_id, task_id, preset=saved_preset)
         elif mode == "web":
-            task_run_web(project_id, task_id, backend=backend or meta.get("backend"))
+            task_run_web(
+                project_id, task_id, backend=backend or meta.get("backend"), preset=saved_preset
+            )
         else:
             raise SystemExit(f"Unknown mode '{mode}' for task {task_id}")

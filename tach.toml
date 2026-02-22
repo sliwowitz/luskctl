@@ -324,6 +324,7 @@ utility = true
 [[interfaces]]
 expose = [
     "Project",
+    "find_preset_path",
     "list_projects",
     "load_project",
     "load_preset",

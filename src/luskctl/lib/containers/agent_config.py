@@ -37,18 +37,11 @@ def resolve_agent_config(
 
     # 3. Preset (if requested)
     if preset:
-        from luskctl.lib.core.projects import load_preset
+        from luskctl.lib.core.projects import find_preset_path, load_preset
 
         preset_data = load_preset(project_id, preset)
         if preset_data:
-            # Find the actual preset file for provenance
-            preset_source = None
-            for ext in (".yml", ".yaml"):
-                p = project.presets_dir / f"{preset}{ext}"
-                if p.is_file():
-                    preset_source = p
-                    break
-            stack.push(ConfigScope("preset", preset_source, preset_data))
+            stack.push(ConfigScope("preset", find_preset_path(project, preset), preset_data))
 
     # 4. CLI overrides
     if cli_overrides:
