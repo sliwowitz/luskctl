@@ -415,7 +415,7 @@ class TaskTests(unittest.TestCase):
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value=None,  # No existing container
+                        side_effect=[None, "running"],  # No existing container, then alive
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.subprocess.run"

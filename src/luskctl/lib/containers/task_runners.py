@@ -43,6 +43,12 @@ from .tasks import (
 
 
 def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None) -> None:
+    """Launch a CLI-mode task container and wait for its readiness marker.
+
+    Creates (or reattaches to) a detached Podman container for interactive
+    CLI access.  After the container reports ready the task metadata is
+    marked ``running`` and the user is shown login instructions.
+    """
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id, "cli")
 
@@ -132,6 +138,16 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
         ready_check=lambda line: "__CLI_READY__" in line or ">> init complete" in line,
     )
 
+    # Verify the container is still alive after log streaming
+    post_state = get_container_state(cname)
+    if post_state != "running":
+        meta["status"] = "failed"
+        meta_path.write_text(yaml.safe_dump(meta))
+        raise SystemExit(
+            f"Container {cname} exited unexpectedly (state: {post_state}). "
+            f"Check logs with: podman logs {cname}"
+        )
+
     # Mark task as started (not completed) for CLI mode
     meta["status"] = "running"
     meta["mode"] = "cli"
@@ -157,6 +173,12 @@ def task_run_web(
     backend: str | None = None,
     agents: list[str] | None = None,
 ) -> None:
+    """Launch a web-mode task container with a browser-accessible IDE backend.
+
+    Sets up port forwarding, starts a detached Podman container running
+    the chosen *backend* (OpenHands or Open WebUI), and prints the URL
+    the user can open in a browser.
+    """
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id, "web")
 
