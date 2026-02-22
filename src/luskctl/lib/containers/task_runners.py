@@ -81,6 +81,14 @@ def task_run_cli(project_id: str, task_id: str, agents: list[str] | None = None)
                 )
             except subprocess.CalledProcessError as e:
                 raise SystemExit(f"Failed to start container: {e}")
+            post_state = get_container_state(cname)
+            if post_state != "running":
+                meta["status"] = "exited"
+                meta_path.write_text(yaml.safe_dump(meta))
+                raise SystemExit(
+                    f"Container {cname} failed to start (state: {post_state}). "
+                    f"Check logs with: podman logs {cname}"
+                )
             meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
@@ -239,6 +247,14 @@ def task_run_web(
                 )
             except subprocess.CalledProcessError as e:
                 raise SystemExit(f"Failed to start container: {e}")
+            post_state = get_container_state(cname)
+            if post_state != "running":
+                meta["status"] = "exited"
+                meta_path.write_text(yaml.safe_dump(meta))
+                raise SystemExit(
+                    f"Container {cname} failed to start (state: {post_state}). "
+                    f"Check logs with: podman logs {cname}"
+                )
             meta["status"] = "running"
             meta_path.write_text(yaml.safe_dump(meta))
             print("Container started.")
@@ -550,6 +566,15 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
             raise SystemExit("podman not found; please install podman")
         except subprocess.CalledProcessError as e:
             raise SystemExit(f"Failed to start container: {e}")
+
+        post_state = get_container_state(cname)
+        if post_state != "running":
+            meta["status"] = "exited"
+            meta_path.write_text(yaml.safe_dump(meta))
+            raise SystemExit(
+                f"Container {cname} failed to start (state: {post_state}). "
+                f"Check logs with: podman logs {cname}"
+            )
 
         meta["status"] = "running"
         meta_path.write_text(yaml.safe_dump(meta))

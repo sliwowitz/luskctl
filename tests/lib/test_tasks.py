@@ -587,7 +587,7 @@ class TaskTests(unittest.TestCase):
                     mock_git_config(),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],  # Stopped, then alive after start
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.subprocess.run"
@@ -710,7 +710,7 @@ class TaskTests(unittest.TestCase):
                     mock_git_config(),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],  # Stopped, then alive after start
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.subprocess.run"
@@ -1359,7 +1359,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                     mock_git_config(),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],  # Stopped, then alive after start
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.subprocess.run"
