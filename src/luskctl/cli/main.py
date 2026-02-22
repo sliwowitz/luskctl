@@ -22,11 +22,13 @@ from ..lib.containers.tasks import (
 )
 from ..lib.core.config import (
     build_root as _build_root,
+    bundled_presets_dir as _bundled_presets_dir,
     config_root as _config_root,
     get_envs_base_dir as _get_envs_base_dir,
     get_ui_base_port as _get_ui_base_port,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
+    global_presets_dir as _global_presets_dir,
     state_root as _state_root,
     user_projects_root as _user_projects_root,
 )
@@ -167,6 +169,23 @@ def _print_config() -> None:
         f"- System projects root: {_gray(str(sproj), color_enabled)} "
         f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
     )
+    gpresets = _global_presets_dir()
+    print(
+        f"- Global presets dir: {_gray(str(gpresets), color_enabled)} "
+        f"(exists: {_yes_no(Path(gpresets).is_dir(), color_enabled)})"
+    )
+    bpresets = _bundled_presets_dir()
+    bpresets_names: list[str] = []
+    try:
+        bpresets_names = sorted(
+            p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
+        )
+    except Exception:
+        pass
+    print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
+    if bpresets_names:
+        for n in bpresets_names:
+            print(f"  • {n}")
 
     # Project configs discovered
     projs = list_projects()
@@ -486,7 +505,7 @@ def main() -> None:
         "--config", dest="agent_config", help="Path to agent config YAML file"
     )
     p_run_claude.add_argument(
-        "--preset", help="Name of a project preset to apply (from presets/ dir)"
+        "--preset", help="Name of a preset to apply (global or project-level)"
     )
     p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
     p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
@@ -540,7 +559,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_run_cli.add_argument("--preset", help="Name of a project preset to apply (from presets/ dir)")
+    t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
     _a = t_run_ui.add_argument("project_id")
@@ -566,7 +585,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_run_ui.add_argument("--preset", help="Name of a project preset to apply (from presets/ dir)")
+    t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
     _a = t_delete.add_argument("project_id")
@@ -634,7 +653,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_start.add_argument("--preset", help="Name of a project preset to apply (from presets/ dir)")
+    t_start.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
     _a = t_status.add_argument("project_id")
@@ -690,8 +709,8 @@ def main() -> None:
         print(f"Derived project '{args.new_id}' from '{args.source_id}' at {target}")
         print("Next steps:")
         print(f"  1. Edit {target / 'project.yml'} (customize agent: section)")
-        print(f"  2. Add presets: mkdir -p {target / 'presets'}")
-        print(f"  3. Initialize: luskctl project-init {args.new_id}")
+        print(f"  2. Initialize: luskctl project-init {args.new_id}")
+        print("  Tip: global presets are shared across projects (see luskctl config)")
     elif args.cmd == "project-wizard":
         run_wizard(init_fn=_cmd_project_init)
     elif args.cmd == "auth-codex":
@@ -708,13 +727,13 @@ def main() -> None:
         _cmd_config_show(args.project_id, getattr(args, "preset", None))
     elif args.cmd == "presets":
         if args.presets_cmd == "list":
-            names = list_presets(args.project_id)
-            if not names:
+            presets = list_presets(args.project_id)
+            if not presets:
                 print(f"No presets found for project '{args.project_id}'")
             else:
                 print(f"Presets for '{args.project_id}':")
-                for n in names:
-                    print(f"  - {n}")
+                for info in presets:
+                    print(f"  - {info.name} ({info.source})")
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:

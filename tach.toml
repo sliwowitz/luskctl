@@ -324,6 +324,7 @@ utility = true
 [[interfaces]]
 expose = [
     "Project",
+    "PresetInfo",
     "find_preset_path",
     "list_projects",
     "load_project",
@@ -411,6 +412,8 @@ expose = [
     "state_root",
     "build_root",
     "user_projects_root",
+    "global_presets_dir",
+    "bundled_presets_dir",
     "get_envs_base_dir",
     "get_ui_base_port",
     "get_tui_default_tmux",

@@ -1,6 +1,7 @@
 import os
 import sys
 from collections.abc import Callable
+from importlib import resources as _pkg_resources
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -167,6 +168,34 @@ def user_projects_root() -> Path:
         return Path.home() / ".config" / "luskctl" / "projects"
 
     return _resolve_path(None, ("paths", "user_projects_root"), _default)
+
+
+def global_presets_dir() -> Path:
+    """Global presets directory (shared across all projects).
+
+    Precedence:
+    - Global config: paths.global_presets_dir
+    - XDG_CONFIG_HOME/luskctl/presets
+    - ~/.config/luskctl/presets
+    """
+
+    def _default() -> Path:
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            return Path(xdg) / "luskctl" / "presets"
+        return Path.home() / ".config" / "luskctl" / "presets"
+
+    return _resolve_path(None, ("paths", "global_presets_dir"), _default)
+
+
+def bundled_presets_dir() -> Path:
+    """Presets shipped with the luskctl package.
+
+    These serve as ready-to-use defaults that users can reference directly
+    (``--preset solo``) or copy to their global presets dir to customize.
+    Lowest priority in the search order: project > global > bundled.
+    """
+    return Path(str(_pkg_resources.files("luskctl") / "resources" / "presets"))
 
 
 def build_root() -> Path:

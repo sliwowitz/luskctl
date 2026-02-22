@@ -9,9 +9,11 @@ import yaml  # pip install pyyaml
 from .._util.config_stack import ConfigScope, ConfigStack
 from .config import (
     build_root,
+    bundled_presets_dir,
     config_root,
     get_global_default_agent,
     get_global_section,
+    global_presets_dir,
     state_root,
     user_projects_root,
 )
@@ -95,51 +97,84 @@ class Project:
         return self.root / "presets"
 
 
+@dataclass
+class PresetInfo:
+    """Metadata about a discovered preset."""
+
+    name: str
+    source: str  # "project" | "global" | "bundled"
+    path: Path
+
+
 def find_preset_path(project: Project, preset_name: str) -> Path | None:
-    """Return the path of a preset file, or ``None`` if not found."""
-    for ext in (".yml", ".yaml"):
-        path = project.presets_dir / f"{preset_name}{ext}"
-        if path.is_file():
-            return path
+    """Return the path of a preset file, or ``None`` if not found.
+
+    Search order: project presets → global presets → bundled presets.
+    """
+    for search_dir in (project.presets_dir, global_presets_dir(), bundled_presets_dir()):
+        for ext in (".yml", ".yaml"):
+            path = search_dir / f"{preset_name}{ext}"
+            if path.is_file():
+                return path
     return None
 
 
-def list_presets(project_id: str) -> list[str]:
-    """Return sorted names of available presets for a project (without extension)."""
+def list_presets(project_id: str) -> list[PresetInfo]:
+    """Return sorted preset info for a project.
+
+    Search tiers (higher priority overwrites lower):
+    bundled (shipped with luskctl) → global (user-wide) → project.
+    """
     project = load_project(project_id)
+
+    seen: dict[str, PresetInfo] = {}
+    # Bundled first (lowest priority)
+    bdir = bundled_presets_dir()
+    if bdir.is_dir():
+        for p in bdir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="bundled", path=p)
+    # Global overwrites bundled
+    gdir = global_presets_dir()
+    if gdir.is_dir():
+        for p in gdir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="global", path=p)
+    # Project overwrites global
     presets_dir = project.presets_dir
-    if not presets_dir.is_dir():
-        return []
-    return sorted(
-        p.stem for p in presets_dir.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
-    )
+    if presets_dir.is_dir():
+        for p in presets_dir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="project", path=p)
+    return sorted(seen.values(), key=lambda info: info.name)
 
 
-def load_preset(project_id: str, preset_name: str) -> dict[str, Any]:
-    """Load a preset file and return its contents as a dict.
+def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path]:
+    """Load a preset file and return ``(data, path)``.
 
-    Looks for ``<presets_dir>/<preset_name>.yml`` (or ``.yaml``).
+    Search order: project → global → bundled.
     Raises SystemExit if the preset is not found.
     """
     project = load_project(project_id)
     path = find_preset_path(project, preset_name)
     if path is None:
         available = list_presets(project_id)
-        hint = f"  Available: {', '.join(available)}" if available else "  No presets found."
-        raise SystemExit(f"Preset '{preset_name}' not found in {project.presets_dir}\n{hint}")
+        names = ", ".join(info.name for info in available)
+        hint = f"  Available: {names}" if available else "  No presets found."
+        raise SystemExit(f"Preset '{preset_name}' not found.\n{hint}")
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
-    # Resolve subagent file: paths relative to presets dir
-    presets_dir = project.presets_dir
+    # Resolve subagent file: paths relative to the preset file's directory
+    preset_dir = path.parent
     for sa in data.get("subagents", []) or []:
         if isinstance(sa, dict) and "file" in sa:
             file_path = Path(str(sa["file"])).expanduser()
             if not file_path.is_absolute():
-                file_path = presets_dir / file_path
+                file_path = preset_dir / file_path
             sa["file"] = str(file_path.resolve())
-    return data
+    return data, path
 
 
 def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
@@ -170,7 +205,8 @@ def _validate_project_id(project_id: str) -> None:
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", project_id):
         raise SystemExit(
             f"Invalid project ID '{project_id}': "
-            "only letters, digits, hyphens, and underscores are allowed"
+            "must start with a letter or digit, followed by letters, digits, hyphens, "
+            "or underscores"
         )
 
 
