@@ -109,10 +109,9 @@ git:
             # Mock subprocess.run to capture build commands
             build_commands = []
 
-            def mock_run(cmd, **kwargs):
+            def mock_run(cmd: list[str], **kwargs: object) -> unittest.mock.Mock:
                 if isinstance(cmd, list) and "podman" in cmd and "build" in cmd:
                     build_commands.append(cmd)
-                # Create a mock result
                 result = unittest.mock.Mock()
                 result.returncode = 0
                 return result

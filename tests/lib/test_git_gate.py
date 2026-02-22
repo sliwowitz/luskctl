@@ -53,7 +53,7 @@ git:
                 sync_result.stdout = "Fetching origin\n"
                 sync_result.stderr = ""
 
-                def _run_side_effect(*args, **kwargs):
+                def _run_side_effect(*args: object, **kwargs: object) -> unittest.mock.Mock:
                     cmd = args[0]
                     if cmd[:3] == ["git", "clone", "--mirror"]:
                         gate_dir.mkdir(parents=True, exist_ok=True)

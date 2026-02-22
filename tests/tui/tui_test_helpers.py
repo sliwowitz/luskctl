@@ -4,6 +4,8 @@ import importlib
 import importlib.util
 import sys
 import types
+from collections.abc import Callable
+from typing import Any
 from unittest import mock
 
 
@@ -11,8 +13,8 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     """Build stub modules for textual so we can import TUI code without it."""
     textual = types.ModuleType("textual")
 
-    def on(*args, **kwargs):
-        def decorator(fn):
+    def on(*args: Any, **kwargs: Any) -> Callable[..., Any]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             return fn
 
         return decorator
@@ -29,19 +31,19 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     screen_mod = types.ModuleType("textual.screen")
 
     class ModalScreen:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
         @classmethod
-        def __class_getitem__(cls, item):
+        def __class_getitem__(cls, item: type) -> type:
             return cls
 
     class Screen:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
         @classmethod
-        def __class_getitem__(cls, item):
+        def __class_getitem__(cls, item: type) -> type:
             return cls
 
     screen_mod.ModalScreen = ModalScreen
@@ -62,13 +64,13 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     containers_mod = types.ModuleType("textual.containers")
 
     class _ContextStub:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        def __enter__(self):
+        def __enter__(self) -> "_ContextStub":
             return self
 
-        def __exit__(self, *args):
+        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
             pass
 
     class Horizontal(_ContextStub):

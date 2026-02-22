@@ -49,7 +49,7 @@ class PollingStateTests(TestCase):
         last_notified_stale = False
         notifications = []
 
-        def on_staleness_updated(staleness: GateStalenessInfo):
+        def on_staleness_updated(staleness: GateStalenessInfo) -> None:
             nonlocal last_notified_stale
 
             if staleness.error:
@@ -88,7 +88,7 @@ class PollingStateTests(TestCase):
         """Test that errors don't reset the notification state."""
         last_notified_stale = True  # Was stale before
 
-        def on_staleness_updated(staleness: GateStalenessInfo):
+        def on_staleness_updated(staleness: GateStalenessInfo) -> None:
             nonlocal last_notified_stale
 
             if staleness.error:
@@ -114,7 +114,7 @@ class PollingStateTests(TestCase):
         cooldown_dict = {}
         sync_calls = []
 
-        def maybe_auto_sync(project_id: str):
+        def maybe_auto_sync(project_id: str) -> None:
             now = time.time()
             cooldown_until = cooldown_dict.get(project_id, 0)
             if now < cooldown_until:
@@ -148,7 +148,7 @@ class PollingStateTests(TestCase):
         """Test notification flag only resets when confirmed up-to-date."""
         last_notified_stale = True
 
-        def sync_completed(staleness: GateStalenessInfo):
+        def sync_completed(staleness: GateStalenessInfo) -> None:
             nonlocal last_notified_stale
             # Only reset if actually up-to-date with no error
             if not staleness.is_stale and not staleness.error:
@@ -182,7 +182,7 @@ class PollingStateTests(TestCase):
         current_project_id = "proj1"
         staleness_info = None
 
-        def on_poll_complete(poll_project_id: str, staleness: GateStalenessInfo):
+        def on_poll_complete(poll_project_id: str, staleness: GateStalenessInfo) -> None:
             nonlocal staleness_info
             # Validate project hasn't changed
             if poll_project_id != current_project_id:

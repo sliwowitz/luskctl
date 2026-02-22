@@ -3,8 +3,10 @@ import os
 import tempfile
 import types
 import unittest.mock
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 from luskctl.lib.security.git_gate import GateStalenessInfo
 
@@ -40,7 +42,7 @@ def project_env(
     with_gate: bool = False,
     extra_env: dict[str, str] | None = None,
     clear_env: bool = False,
-):
+) -> Iterator[types.SimpleNamespace]:
     """Create a temp project directory, write project config, and patch env vars.
 
     Yields a namespace with: base, config_root, state_dir, envs_dir, config_file, gate_dir.
@@ -84,7 +86,7 @@ def project_env(
             )
 
 
-def make_staleness_info(**overrides) -> GateStalenessInfo:
+def make_staleness_info(**overrides: Any) -> GateStalenessInfo:
     """Create a GateStalenessInfo with sensible defaults."""
     defaults = {
         "branch": "main",
