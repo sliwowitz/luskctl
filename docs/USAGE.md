@@ -434,6 +434,10 @@ Three are bundled and work immediately — no setup needed.
 
 ### Bundled Presets
 
+The current bundled set is a starting point — run `luskctl presets list <project>`
+to see what's available. The names and contents may change in future versions;
+global presets you create will shadow them automatically.
+
 | Preset | What it does | When to use |
 |--------|-------------|-------------|
 | `solo` | Single Sonnet agent, 25 turns | Quick fixes, small features |

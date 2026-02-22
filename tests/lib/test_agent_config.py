@@ -472,11 +472,27 @@ class GlobalPresetProvenanceTests(unittest.TestCase):
             self.assertIn("preset (project)", levels)
 
 
+def _any_bundled_name() -> str:
+    """Return the name of any bundled preset (for tests that need a concrete name)."""
+    from luskctl.lib.core.config import bundled_presets_dir
+
+    bdir = bundled_presets_dir()
+    for p in bdir.iterdir():
+        if p.is_file() and p.suffix in (".yml", ".yaml"):
+            return p.stem
+    raise RuntimeError("No bundled presets found — cannot run bundled preset tests")
+
+
 class BundledPresetTests(unittest.TestCase):
-    """Tests for bundled (shipped) presets."""
+    """Tests for bundled (shipped) presets.
+
+    These tests are name-agnostic: they discover whatever presets happen to
+    be shipped in ``resources/presets/`` rather than hardcoding specific names.
+    Swap the bundled YAML files freely — only the infrastructure is tested here.
+    """
 
     def test_bundled_presets_discoverable(self) -> None:
-        """Bundled presets (solo, review, team) appear in list_presets."""
+        """At least one bundled preset appears in list_presets."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -485,13 +501,12 @@ class BundledPresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     result = list_presets("proj")
-            bundled = {info.name for info in result if info.source == "bundled"}
-            self.assertIn("solo", bundled)
-            self.assertIn("review", bundled)
-            self.assertIn("team", bundled)
+            bundled = [info for info in result if info.source == "bundled"]
+            self.assertGreater(len(bundled), 0, "Expected at least one bundled preset")
 
     def test_bundled_preset_loadable(self) -> None:
-        """Bundled presets can be loaded via load_preset."""
+        """Any bundled preset can be loaded via load_preset."""
+        name = _any_bundled_name()
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -499,12 +514,13 @@ class BundledPresetTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
-                    data, path = load_preset("proj", "solo")
-            self.assertIn("model", data)
+                    data, path = load_preset("proj", name)
+            self.assertIsInstance(data, dict)
             self.assertTrue(path.is_file())
 
     def test_global_shadows_bundled(self) -> None:
         """A global preset with the same name as a bundled preset wins."""
+        name = _any_bundled_name()
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -513,21 +529,22 @@ class BundledPresetTests(unittest.TestCase):
             xdg = base / "xdg"
             global_presets = xdg / "luskctl" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
-            (global_presets / "solo.yml").write_text(
+            (global_presets / f"{name}.yml").write_text(
                 "model: opus\nmax_turns: 99\n", encoding="utf-8"
             )
 
             env = _env(config_root, base / "s", xdg_config_home=xdg)
             with unittest.mock.patch.dict(os.environ, env):
                 with mock_git_config():
-                    data, path = load_preset("proj", "solo")
+                    data, path = load_preset("proj", name)
             # Global version wins
             self.assertEqual(data["model"], "opus")
             self.assertEqual(data["max_turns"], 99)
-            self.assertEqual(path, global_presets / "solo.yml")
+            self.assertEqual(path, global_presets / f"{name}.yml")
 
     def test_project_shadows_bundled(self) -> None:
         """A project preset with the same name as a bundled preset wins."""
+        name = _any_bundled_name()
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -535,16 +552,17 @@ class BundledPresetTests(unittest.TestCase):
 
             proj_presets = config_root / "proj" / "presets"
             proj_presets.mkdir(parents=True, exist_ok=True)
-            (proj_presets / "solo.yml").write_text("model: haiku\n", encoding="utf-8")
+            (proj_presets / f"{name}.yml").write_text("model: haiku\n", encoding="utf-8")
 
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
-                    data, path = load_preset("proj", "solo")
+                    data, path = load_preset("proj", name)
             self.assertEqual(data["model"], "haiku")
-            self.assertEqual(path, proj_presets / "solo.yml")
+            self.assertEqual(path, proj_presets / f"{name}.yml")
 
     def test_bundled_preset_scope_label(self) -> None:
         """Config stack labels bundled presets as 'preset (bundled)'."""
+        name = _any_bundled_name()
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
@@ -552,32 +570,32 @@ class BundledPresetTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
-                    stack = build_agent_config_stack("proj", preset="solo")
+                    stack = build_agent_config_stack("proj", preset=name)
             levels = [s.level for s in stack.scopes]
             self.assertIn("preset (bundled)", levels)
 
-    def test_list_presets_source_labels_bundled_in_listing(self) -> None:
-        """Bundled presets shadowed by global/project get correct source label."""
+    def test_shadowed_bundled_gets_correct_source(self) -> None:
+        """Shadowing one bundled preset changes its source; others stay bundled."""
+        name = _any_bundled_name()
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
-            # Shadow 'solo' at global level
             xdg = base / "xdg"
             global_presets = xdg / "luskctl" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
-            (global_presets / "solo.yml").write_text("model: opus\n", encoding="utf-8")
+            (global_presets / f"{name}.yml").write_text("model: opus\n", encoding="utf-8")
 
             env = _env(config_root, base / "s", xdg_config_home=xdg)
             with unittest.mock.patch.dict(os.environ, env):
                 with mock_git_config():
                     result = list_presets("proj")
             by_name = {info.name: info.source for info in result}
-            # 'solo' should now be global (shadowed), while others remain bundled
-            self.assertEqual(by_name["solo"], "global")
-            self.assertEqual(by_name["review"], "bundled")
-            self.assertEqual(by_name["team"], "bundled")
+            self.assertEqual(by_name[name], "global")
+            # At least one other bundled preset should remain bundled
+            remaining_bundled = [n for n, s in by_name.items() if s == "bundled"]
+            self.assertGreater(len(remaining_bundled), 0)
 
 
 class ValidateProjectIdTests(unittest.TestCase):
