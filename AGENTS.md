@@ -35,6 +35,11 @@ make test      # Run full test suite with coverage
 make check     # Run both lint and test (equivalent to CI)
 ```
 
+**When `pyproject.toml` changes** (added/removed/changed dependencies):
+```bash
+poetry lock --no-update   # Regenerate lockfile (commit poetry.lock alongside pyproject.toml)
+```
+
 **Other useful commands:**
 ```bash
 make install-dev  # Install all development dependencies
