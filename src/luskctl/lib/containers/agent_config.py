@@ -7,6 +7,8 @@ into :func:`~luskctl.lib.containers.agents.prepare_agent_config_dir`.
 
 from __future__ import annotations
 
+from typing import Any
+
 from luskctl.lib._util.config_stack import ConfigScope, ConfigStack
 from luskctl.lib.core.config import get_global_agent_config
 from luskctl.lib.core.projects import load_project
@@ -15,7 +17,7 @@ from luskctl.lib.core.projects import load_project
 def build_agent_config_stack(
     project_id: str,
     preset: str | None = None,
-    cli_overrides: dict | None = None,
+    cli_overrides: dict[str, Any] | None = None,
 ) -> ConfigStack:
     """Build config stack: global → project → preset → CLI overrides.
 
@@ -52,8 +54,8 @@ def build_agent_config_stack(
 def resolve_agent_config(
     project_id: str,
     preset: str | None = None,
-    cli_overrides: dict | None = None,
-) -> dict:
+    cli_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build config stack and return the merged agent config dict.
 
     Convenience wrapper around :func:`build_agent_config_stack` for callers

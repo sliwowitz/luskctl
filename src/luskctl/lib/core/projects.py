@@ -1,3 +1,4 @@
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,9 +32,9 @@ def _get_global_git_config(key: str) -> str | None:
         return None
 
 
-def _git_global_identity() -> dict:
+def _git_global_identity() -> dict[str, str]:
     """Return human_name/human_email from global git config as a dict."""
-    result: dict = {}
+    result: dict[str, str] = {}
     name = _get_global_git_config("user.name")
     if name:
         result["human_name"] = name
@@ -163,8 +164,6 @@ def _validate_project_id(project_id: str) -> None:
     Raises SystemExit if the ID is empty, contains path separators or traversal
     sequences, or uses characters outside ``[a-zA-Z0-9_-]``.
     """
-    import re
-
     if not project_id:
         raise SystemExit("Project ID must not be empty")
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", project_id):
@@ -189,7 +188,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     target_root = (projects_root / new_id).resolve()
 
     # Guard against directory traversal (belt-and-suspenders with the regex above)
-    if not str(target_root).startswith(str(projects_root)):
+    if not target_root.is_relative_to(projects_root):
         raise SystemExit(f"Invalid project ID '{new_id}': path escapes projects directory")
 
     if target_root.exists():
