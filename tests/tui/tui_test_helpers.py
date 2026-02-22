@@ -52,7 +52,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     app_mod = types.ModuleType("textual.app")
 
     class App:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class ComposeResult:
@@ -90,10 +90,10 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     class Button:
         class Pressed:
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class Footer:
@@ -103,31 +103,31 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
         pass
 
     class ListItem:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class ListView:
         class Selected:
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
         class Highlighted:
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class Static:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class OptionList:
         class OptionSelected:
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     class TextArea:
@@ -167,7 +167,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     option_list_mod = types.ModuleType("textual.widgets.option_list")
 
     class Option:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     option_list_mod.Option = Option
@@ -183,7 +183,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     class Worker:
         class StateChanged:
-            def __init__(self, *args, **kwargs) -> None:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
         pass
@@ -198,7 +198,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     binding_mod = types.ModuleType("textual.binding")
 
     class Binding:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
     binding_mod.Binding = Binding
@@ -231,7 +231,7 @@ def import_fresh(
         stubs = build_textual_stubs()
     real_find_spec = importlib.util.find_spec
 
-    def _find_spec(name, *a, **kw):
+    def _find_spec(name: str, *a: Any, **kw: Any) -> Any:
         if name == "textual":
             return mock.Mock()
         return real_find_spec(name, *a, **kw)

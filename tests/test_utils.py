@@ -102,7 +102,7 @@ def make_staleness_info(**overrides: Any) -> GateStalenessInfo:
     return GateStalenessInfo(**defaults)
 
 
-def make_mock_http_response(data: dict) -> unittest.mock.Mock:
+def make_mock_http_response(data: dict[str, object]) -> unittest.mock.Mock:
     """Create a mock HTTP response that returns JSON data as a context manager."""
     mock_response = unittest.mock.Mock()
     mock_response.read.return_value = json.dumps(data).encode("utf-8")
