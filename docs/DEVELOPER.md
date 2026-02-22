@@ -148,6 +148,8 @@ If linting fails, auto-fix with:
 make format    # Auto-fix lint issues and format code
 ```
 
+Tests are written using `unittest` and run with `pytest`.
+
 **Run tests before pushing** (or at least before opening a PR):
 
 ```bash
