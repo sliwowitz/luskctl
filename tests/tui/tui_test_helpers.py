@@ -218,7 +218,9 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     }
 
 
-def import_fresh(stubs=None):
+def import_fresh(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> tuple[types.ModuleType, types.ModuleType, types.ModuleType]:
     """Clear luskctl.tui modules and reimport with stubs.
 
     Returns (screens, widgets, app) module tuple.
@@ -243,25 +245,31 @@ def import_fresh(stubs=None):
             return screens, widgets, app
 
 
-def import_screens(stubs=None):
+def import_screens(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> tuple[types.ModuleType, types.ModuleType]:
     """Import screens and widgets modules with stubs."""
     screens, widgets, _ = import_fresh(stubs)
     return screens, widgets
 
 
-def import_widgets(stubs=None):
+def import_widgets(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> types.ModuleType:
     """Import widgets module with stubs."""
     _, widgets, _ = import_fresh(stubs)
     return widgets
 
 
-def import_app(stubs=None):
+def import_app(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> tuple[types.ModuleType, type]:
     """Import app module with stubs and return (app_mod, AppClass)."""
     _, _, app_mod = import_fresh(stubs)
     return app_mod, app_mod.LuskTUI
 
 
-def make_key_event(key_str):
+def make_key_event(key_str: str) -> mock.Mock:
     """Create a mock key event with the given key string."""
     event = mock.Mock()
     event.key = key_str

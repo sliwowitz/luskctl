@@ -374,11 +374,14 @@ git:
                         "upstream_url": "https://example.com/repo.git",
                     },
                 ):
-                    # Mock _count_commits_behind
+                    # Mock _count_commits_behind and _count_commits_ahead
                     with unittest.mock.patch(
                         "luskctl.lib.security.git_gate._count_commits_behind", return_value=5
                     ):
-                        result = compare_gate_vs_upstream(project_id)
+                        with unittest.mock.patch(
+                            "luskctl.lib.security.git_gate._count_commits_ahead", return_value=0
+                        ):
+                            result = compare_gate_vs_upstream(project_id)
 
             self.assertEqual(result.branch, "main")
             self.assertEqual(result.gate_head, gate_hash)
@@ -468,11 +471,14 @@ git:
                         "upstream_url": "https://example.com/repo.git",
                     },
                 ):
-                    # Mock _count_commits_behind to return None
+                    # Mock _count_commits_behind and _count_commits_ahead to return None
                     with unittest.mock.patch(
                         "luskctl.lib.security.git_gate._count_commits_behind", return_value=None
                     ):
-                        result = compare_gate_vs_upstream(project_id)
+                        with unittest.mock.patch(
+                            "luskctl.lib.security.git_gate._count_commits_ahead", return_value=None
+                        ):
+                            result = compare_gate_vs_upstream(project_id)
 
             self.assertTrue(result.is_stale)
             self.assertIsNone(result.commits_behind)

@@ -120,10 +120,7 @@ git:
             with unittest.mock.patch("subprocess.run", side_effect=mock_run):
                 # Test default (L2 only)
                 build_commands.clear()
-                try:
-                    build_images(project_id)
-                except Exception:
-                    pass  # We're mocking, so it might fail
+                build_images(project_id)
 
                 # Should only build L2 images (2 commands: l2-cli and l2-ui)
                 self.assertEqual(len(build_commands), 2)
@@ -132,10 +129,7 @@ git:
 
                 # Test rebuild_agents=True
                 build_commands.clear()
-                try:
-                    build_images(project_id, rebuild_agents=True)
-                except Exception:
-                    pass  # We're mocking, so it might fail
+                build_images(project_id, rebuild_agents=True)
 
                 # Should build all images (5 commands: L0, L1-cli, L1-ui, L2-cli, L2-ui)
                 self.assertEqual(len(build_commands), 5)
@@ -152,10 +146,7 @@ git:
 
                 # Test full_rebuild=True
                 build_commands.clear()
-                try:
-                    build_images(project_id, full_rebuild=True)
-                except Exception:
-                    pass  # We're mocking, so it might fail
+                build_images(project_id, full_rebuild=True)
 
                 # Should build all images with --no-cache
                 self.assertEqual(len(build_commands), 5)

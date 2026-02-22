@@ -26,12 +26,12 @@ class ProjectStateStalenessTests(TestCase):
                             app, "compare_gate_vs_upstream", return_value=staleness
                         ) as compare:
                             result = app.LuskTUI._load_project_state(mock.Mock(), "proj1")
+                            compare.assert_called_once_with("proj1")
 
                 self.assertEqual(
                     result,
                     ("proj1", project, state, staleness, None),
                 )
-                compare.assert_called_once_with("proj1")
 
 
 if __name__ == "__main__":
