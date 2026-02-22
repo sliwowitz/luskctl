@@ -22,15 +22,17 @@ from ..lib.containers.tasks import (
 )
 from ..lib.core.config import (
     build_root as _build_root,
+    bundled_presets_dir as _bundled_presets_dir,
     config_root as _config_root,
     get_envs_base_dir as _get_envs_base_dir,
     get_ui_base_port as _get_ui_base_port,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
+    global_presets_dir as _global_presets_dir,
     state_root as _state_root,
     user_projects_root as _user_projects_root,
 )
-from ..lib.core.projects import list_projects
+from ..lib.core.projects import derive_project, list_presets, list_projects
 from ..lib.core.version import format_version_string, get_version_info
 from ..lib.facade import (
     WEB_BACKENDS,
@@ -81,6 +83,36 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
     if prefix:
         tids = [t for t in tids if t.startswith(prefix)]
     return tids
+
+
+def _cmd_config_show(project_id: str, preset: str | None) -> None:
+    """Show resolved agent config with provenance annotations."""
+    import json
+
+    from ..lib.containers.agent_config import build_agent_config_stack
+
+    color_enabled = _supports_color()
+
+    stack = build_agent_config_stack(project_id, preset=preset)
+    resolved = stack.resolve()
+    scopes = stack.scopes
+
+    # Print provenance per level
+    if not scopes and not resolved:
+        print(f"No agent config defined for project '{project_id}'")
+        return
+
+    print(f"Resolved agent config for '{project_id}':")
+    if preset:
+        print(f"  (with preset: {preset})")
+    print()
+
+    for scope in scopes:
+        keys = ", ".join(sorted(scope.data.keys()))
+        print(f"  [{_gray(scope.level, color_enabled)}] keys: {keys}")
+
+    print()
+    print(json.dumps(resolved, indent=2, default=str))
 
 
 def _cmd_project_init(project_id: str) -> None:
@@ -137,6 +169,23 @@ def _print_config() -> None:
         f"- System projects root: {_gray(str(sproj), color_enabled)} "
         f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
     )
+    gpresets = _global_presets_dir()
+    print(
+        f"- Global presets dir: {_gray(str(gpresets), color_enabled)} "
+        f"(exists: {_yes_no(Path(gpresets).is_dir(), color_enabled)})"
+    )
+    bpresets = _bundled_presets_dir()
+    bpresets_names: list[str] = []
+    try:
+        bpresets_names = sorted(
+            p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
+        )
+    except Exception:
+        pass
+    print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
+    if bpresets_names:
+        for n in bpresets_names:
+            print(f"  • {n}")
 
     # Project configs discovered
     projs = list_projects()
@@ -261,6 +310,28 @@ def main() -> None:
     # config overview
     sub.add_parser("config", help="Show configuration, template and output paths")
 
+    # config-show (resolved agent config with provenance)
+    p_config_show = sub.add_parser(
+        "config-show",
+        help="Show resolved agent config for a project (with provenance per level)",
+    )
+    _a = p_config_show.add_argument("project_id", help="Project ID")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_config_show.add_argument("--preset", help="Apply a preset before showing resolved config")
+
+    # presets
+    p_presets = sub.add_parser("presets", help="Manage agent config presets")
+    presets_sub = p_presets.add_subparsers(dest="presets_cmd", required=True)
+    p_presets_list = presets_sub.add_parser("list", help="List available presets for a project")
+    _a = p_presets_list.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # generate
     p_gen = sub.add_parser("generate", help="Generate Dockerfiles for a project")
     _a = p_gen.add_argument("project_id")
@@ -351,6 +422,18 @@ def main() -> None:
         help="Interactive wizard to create a new project configuration",
     )
 
+    # project-derive
+    p_derive = sub.add_parser(
+        "project-derive",
+        help="Create a new project derived from an existing one (shared infra, fresh agent config)",
+    )
+    _a = p_derive.add_argument("source_id", help="Source project ID to derive from")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    p_derive.add_argument("new_id", help="New project ID")
+
     # auth-codex
     p_auth_codex = sub.add_parser(
         "auth-codex",
@@ -421,6 +504,9 @@ def main() -> None:
     p_run_claude.add_argument(
         "--config", dest="agent_config", help="Path to agent config YAML file"
     )
+    p_run_claude.add_argument(
+        "--preset", help="Name of a preset to apply (global or project-level)"
+    )
     p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
     p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
     p_run_claude.add_argument("--timeout", type=int, help="Maximum runtime in seconds")
@@ -473,6 +559,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
+    t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
     _a = t_run_ui.add_argument("project_id")
@@ -498,6 +585,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
+    t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
     _a = t_delete.add_argument("project_id")
@@ -565,6 +653,7 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
+    t_start.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
     _a = t_status.add_argument("project_id")
@@ -615,6 +704,13 @@ def main() -> None:
         )
     elif args.cmd == "project-init":
         _cmd_project_init(args.project_id)
+    elif args.cmd == "project-derive":
+        target = derive_project(args.source_id, args.new_id)
+        print(f"Derived project '{args.new_id}' from '{args.source_id}' at {target}")
+        print("Next steps:")
+        print(f"  1. Edit {target / 'project.yml'} (customize agent: section)")
+        print(f"  2. Initialize: luskctl project-init {args.new_id}")
+        print("  Tip: global presets are shared across projects (see luskctl config)")
     elif args.cmd == "project-wizard":
         run_wizard(init_fn=_cmd_project_init)
     elif args.cmd == "auth-codex":
@@ -627,6 +723,17 @@ def main() -> None:
         blablador_auth(args.project_id)
     elif args.cmd == "config":
         _print_config()
+    elif args.cmd == "config-show":
+        _cmd_config_show(args.project_id, getattr(args, "preset", None))
+    elif args.cmd == "presets":
+        if args.presets_cmd == "list":
+            presets = list_presets(args.project_id)
+            if not presets:
+                print(f"No presets found for project '{args.project_id}'")
+            else:
+                print(f"Presets for '{args.project_id}':")
+                for info in presets:
+                    print(f"  - {info.name} ({info.source})")
     elif args.cmd == "projects":
         projs = list_projects()
         if not projs:
@@ -648,6 +755,7 @@ def main() -> None:
             timeout=getattr(args, "timeout", None),
             follow=not getattr(args, "no_follow", False),
             agents=getattr(args, "selected_agents", None),
+            preset=getattr(args, "preset", None),
         )
     elif args.cmd == "task":
         if args.task_cmd == "new":
@@ -659,6 +767,7 @@ def main() -> None:
                 args.project_id,
                 args.task_id,
                 agents=getattr(args, "selected_agents", None),
+                preset=getattr(args, "preset", None),
             )
         elif args.task_cmd == "run-web":
             task_run_web(
@@ -666,6 +775,7 @@ def main() -> None:
                 args.task_id,
                 backend=getattr(args, "ui_backend", None),
                 agents=getattr(args, "selected_agents", None),
+                preset=getattr(args, "preset", None),
             )
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
@@ -677,15 +787,17 @@ def main() -> None:
         elif args.task_cmd == "start":
             task_id = task_new(args.project_id)
             selected = getattr(args, "selected_agents", None)
+            preset = getattr(args, "preset", None)
             if args.web:
                 task_run_web(
                     args.project_id,
                     task_id,
                     backend=getattr(args, "backend", None),
                     agents=selected,
+                    preset=preset,
                 )
             else:
-                task_run_cli(args.project_id, task_id, agents=selected)
+                task_run_cli(args.project_id, task_id, agents=selected, preset=preset)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
         else:

@@ -49,6 +49,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 timeout=3600,
                 follow=True,
                 agents=None,
+                preset=None,
             )
 
     def test_run_claude_no_follow_flag(self) -> None:
@@ -124,6 +125,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 "myproject",
                 "1",
                 agents=["debugger"],
+                preset=None,
             )
 
     def test_task_run_web_with_agent_selection(self) -> None:
@@ -141,4 +143,5 @@ class RunClaudeCliTests(unittest.TestCase):
                 "1",
                 backend=None,
                 agents=["reviewer"],
+                preset=None,
             )

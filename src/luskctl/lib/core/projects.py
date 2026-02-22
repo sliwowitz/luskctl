@@ -1,15 +1,19 @@
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml  # pip install pyyaml
 
+from .._util.config_stack import ConfigScope, ConfigStack
 from .config import (
     build_root,
+    bundled_presets_dir,
     config_root,
     get_global_default_agent,
-    get_global_human_email,
-    get_global_human_name,
+    get_global_section,
+    global_presets_dir,
     state_root,
     user_projects_root,
 )
@@ -29,6 +33,18 @@ def _get_global_git_config(key: str) -> str | None:
         return None
     except (FileNotFoundError, subprocess.SubprocessError):
         return None
+
+
+def _git_global_identity() -> dict[str, str]:
+    """Return human_name/human_email from global git config as a dict."""
+    result: dict[str, str] = {}
+    name = _get_global_git_config("user.name")
+    if name:
+        result["human_name"] = name
+    email = _get_global_git_config("user.email")
+    if email:
+        result["human_email"] = email
+    return result
 
 
 # ---------- Project model ----------
@@ -75,6 +91,91 @@ class Project:
     # Agent configuration dict (from project.yml agent: section)
     agent_config: dict = field(default_factory=dict)
 
+    @property
+    def presets_dir(self) -> Path:
+        """Directory for preset config files for this project."""
+        return self.root / "presets"
+
+
+@dataclass
+class PresetInfo:
+    """Metadata about a discovered preset."""
+
+    name: str
+    source: str  # "project" | "global" | "bundled"
+    path: Path
+
+
+def find_preset_path(project: Project, preset_name: str) -> Path | None:
+    """Return the path of a preset file, or ``None`` if not found.
+
+    Search order: project presets → global presets → bundled presets.
+    """
+    for search_dir in (project.presets_dir, global_presets_dir(), bundled_presets_dir()):
+        for ext in (".yml", ".yaml"):
+            path = search_dir / f"{preset_name}{ext}"
+            if path.is_file():
+                return path
+    return None
+
+
+def list_presets(project_id: str) -> list[PresetInfo]:
+    """Return sorted preset info for a project.
+
+    Search tiers (higher priority overwrites lower):
+    bundled (shipped with luskctl) → global (user-wide) → project.
+    """
+    project = load_project(project_id)
+
+    seen: dict[str, PresetInfo] = {}
+    # Bundled first (lowest priority)
+    bdir = bundled_presets_dir()
+    if bdir.is_dir():
+        for p in bdir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="bundled", path=p)
+    # Global overwrites bundled
+    gdir = global_presets_dir()
+    if gdir.is_dir():
+        for p in gdir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="global", path=p)
+    # Project overwrites global
+    presets_dir = project.presets_dir
+    if presets_dir.is_dir():
+        for p in presets_dir.iterdir():
+            if p.is_file() and p.suffix in (".yml", ".yaml"):
+                seen[p.stem] = PresetInfo(name=p.stem, source="project", path=p)
+    return sorted(seen.values(), key=lambda info: info.name)
+
+
+def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path]:
+    """Load a preset file and return ``(data, path)``.
+
+    Search order: project → global → bundled.
+    Raises SystemExit if the preset is not found.
+    """
+    project = load_project(project_id)
+    path = find_preset_path(project, preset_name)
+    if path is None:
+        available = list_presets(project_id)
+        names = ", ".join(info.name for info in available)
+        hint = f"  Available: {names}" if available else "  No presets found."
+        raise SystemExit(f"Preset '{preset_name}' not found.\n{hint}")
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
+    # Resolve subagent file: paths relative to the preset file's directory
+    preset_dir = path.parent
+    for sa in data.get("subagents", []) or []:
+        if isinstance(sa, dict) and "file" in sa:
+            file_path = Path(str(sa["file"])).expanduser()
+            if not file_path.is_absolute():
+                file_path = preset_dir / file_path
+            sa["file"] = str(file_path.resolve())
+    return data, path
+
 
 def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
     """Return the SSH key filename that should be used for this project.
@@ -91,6 +192,63 @@ def effective_ssh_key_name(project: Project, key_type: str = "ed25519") -> str:
         return project.ssh_key_name
     algo = "ed25519" if key_type == "ed25519" else "rsa"
     return f"id_{algo}_{project.id}"
+
+
+def _validate_project_id(project_id: str) -> None:
+    """Ensure a project ID is safe for use as a directory name.
+
+    Raises SystemExit if the ID is empty, contains path separators or traversal
+    sequences, or uses characters outside ``[a-zA-Z0-9_-]``.
+    """
+    if not project_id:
+        raise SystemExit("Project ID must not be empty")
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", project_id):
+        raise SystemExit(
+            f"Invalid project ID '{project_id}': "
+            "must start with a letter or digit, followed by letters, digits, hyphens, "
+            "or underscores"
+        )
+
+
+def derive_project(source_id: str, new_id: str) -> Path:
+    """Create a new project config derived from an existing one.
+
+    Copies the source ``project.yml``, preserving ``git``, ``ssh``, and ``gate``
+    sections while resetting ``project.id`` and clearing the ``agent:`` section
+    for customization.  Returns the new project root directory.
+
+    Raises SystemExit if the source project is not found or the target already exists.
+    """
+    _validate_project_id(new_id)
+    source = load_project(source_id)
+    projects_root = user_projects_root().resolve()
+    target_root = (projects_root / new_id).resolve()
+
+    # Guard against directory traversal (belt-and-suspenders with the regex above)
+    if not target_root.is_relative_to(projects_root):
+        raise SystemExit(f"Invalid project ID '{new_id}': path escapes projects directory")
+
+    if target_root.exists():
+        raise SystemExit(f"Project '{new_id}' already exists at {target_root}")
+
+    # Read and re-serialise via safe_load/safe_dump (comments are not preserved)
+    source_cfg = yaml.safe_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
+
+    # Update project ID
+    if "project" not in source_cfg:
+        source_cfg["project"] = {}
+    source_cfg["project"]["id"] = new_id
+
+    # Clear agent section for customization
+    source_cfg.pop("agent", None)
+
+    target_root.mkdir(parents=True, exist_ok=True)
+    (target_root / "project.yml").write_text(
+        yaml.safe_dump(source_cfg, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    return target_root
 
 
 def _find_project_root(project_id: str) -> Path:
@@ -184,23 +342,16 @@ def load_project(project_id: str) -> Project:
     # When true, passes the upstream URL to the container as "external" remote
     expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
 
-    # Optional human credentials for git committer (while AI is the author)
-    # Precedence: 1) project.yml, 2) global luskctl config, 3) global git config, 4) defaults
-    human_name = git_cfg.get("human_name")
-    if not human_name:
-        human_name = get_global_human_name()
-    if not human_name:
-        human_name = _get_global_git_config("user.name")
-    if not human_name:
-        human_name = "Nobody"
+    # Human credentials for git committer (while AI is the author)
+    # Resolved via ConfigStack: git-global → luskctl-global → project.yml
+    identity_stack = ConfigStack()
+    identity_stack.push(ConfigScope("git-global", None, _git_global_identity()))
+    identity_stack.push(ConfigScope("luskctl-global", None, get_global_section("git")))
+    identity_stack.push(ConfigScope("project", cfg_path, git_cfg))
+    identity = identity_stack.resolve()
 
-    human_email = git_cfg.get("human_email")
-    if not human_email:
-        human_email = get_global_human_email()
-    if not human_email:
-        human_email = _get_global_git_config("user.email")
-    if not human_email:
-        human_email = "nobody@localhost"
+    human_name = identity.get("human_name") or "Nobody"
+    human_email = identity.get("human_email") or "nobody@localhost"
 
     # Upstream polling configuration
     polling_cfg = gate_cfg.get("upstream_polling", {}) or {}

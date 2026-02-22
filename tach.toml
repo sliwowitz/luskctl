@@ -37,6 +37,7 @@ exclude = ["pydevd_pycharm", "pydevd"]
 path = "luskctl.cli"
 layer = "presentation"
 depends_on = [
+    "luskctl.lib.containers.agent_config",
     "luskctl.lib.containers.task_runners",
     "luskctl.lib.containers.tasks",
     "luskctl.lib.core.config",
@@ -87,6 +88,12 @@ path = "luskctl.lib.containers.agents"
 layer = "services"
 depends_on = ["luskctl.lib.core.projects", "luskctl.lib._util.fs"]
 
+# Agent config resolution (layered merging across scopes)
+[[modules]]
+path = "luskctl.lib.containers.agent_config"
+layer = "services"
+depends_on = ["luskctl.lib._util.config_stack", "luskctl.lib.core.config", "luskctl.lib.core.projects"]
+
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
 path = "luskctl.lib.containers.autopilot"
@@ -112,6 +119,7 @@ depends_on = [
 path = "luskctl.lib.containers.task_runners"
 layer = "services"
 depends_on = [
+    "luskctl.lib.containers.agent_config",
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.environment",
     "luskctl.lib.containers.ports",
@@ -239,7 +247,7 @@ depends_on = ["luskctl.lib.core.paths"]
 [[modules]]
 path = "luskctl.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.lib.core.config"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib._util.config_stack"]
 
 # Image naming conventions
 [[modules]]
@@ -304,13 +312,25 @@ layer = "core"
 depends_on = []
 utility = true
 
+# Generic layered config resolution
+[[modules]]
+path = "luskctl.lib._util.config_stack"
+layer = "core"
+depends_on = []
+utility = true
+
 # ── Interfaces ──────────────────────────────────────────────────────
 
 [[interfaces]]
 expose = [
     "Project",
+    "PresetInfo",
+    "find_preset_path",
     "list_projects",
     "load_project",
+    "load_preset",
+    "list_presets",
+    "derive_project",
     "effective_ssh_key_name",
 ]
 from = ["luskctl.lib.core.projects"]
@@ -342,6 +362,10 @@ from = ["luskctl.lib.containers.task_runners"]
 [[interfaces]]
 expose = ["parse_md_agent", "prepare_agent_config_dir"]
 from = ["luskctl.lib.containers.agents"]
+
+[[interfaces]]
+expose = ["build_agent_config_stack", "resolve_agent_config"]
+from = ["luskctl.lib.containers.agent_config"]
 
 [[interfaces]]
 expose = [
@@ -388,6 +412,8 @@ expose = [
     "state_root",
     "build_root",
     "user_projects_root",
+    "global_presets_dir",
+    "bundled_presets_dir",
     "get_envs_base_dir",
     "get_ui_base_port",
     "get_tui_default_tmux",
@@ -397,6 +423,8 @@ expose = [
     "global_config_path",
     "global_config_search_paths",
     "load_global_config",
+    "get_global_section",
+    "get_global_agent_config",
     "get_prefix",
 ]
 from = ["luskctl.lib.core.config"]
@@ -459,6 +487,11 @@ expose = [
     "is_task_image_old",
 ]
 from = ["luskctl.lib.facade"]
+
+# Config stack utility interface
+[[interfaces]]
+expose = ["deep_merge", "ConfigScope", "ConfigStack", "load_yaml_scope", "load_json_scope"]
+from = ["luskctl.lib._util.config_stack"]
 
 # Filesystem utility interface
 [[interfaces]]
