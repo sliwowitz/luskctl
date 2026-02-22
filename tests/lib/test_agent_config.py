@@ -16,16 +16,19 @@ def _env(
     state_root: Path,
     global_config: Path | None = None,
     xdg_config_home: Path | None = None,
-) -> dict:
-    """Build env dict for test isolation."""
-    env = {
+) -> dict[str, str]:
+    """Build env dict for test isolation.
+
+    Always sets XDG_CONFIG_HOME to prevent leaking the host value
+    (which would let real user presets pollute test results).
+    """
+    env: dict[str, str] = {
         "LUSKCTL_CONFIG_DIR": str(config_root),
         "LUSKCTL_STATE_DIR": str(state_root),
+        "XDG_CONFIG_HOME": str(xdg_config_home or config_root.parent / "xdg"),
     }
     if global_config:
         env["LUSKCTL_CONFIG_FILE"] = str(global_config)
-    if xdg_config_home:
-        env["XDG_CONFIG_HOME"] = str(xdg_config_home)
     return env
 
 

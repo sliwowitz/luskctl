@@ -3,6 +3,7 @@ import sys
 from collections.abc import Callable
 from importlib import resources as _pkg_resources
 from pathlib import Path
+from typing import Any
 
 import yaml  # pip install pyyaml
 
@@ -91,14 +92,14 @@ def global_config_path() -> Path:
 # ---------- Global config (cached) ----------
 
 
-def load_global_config() -> dict:
+def load_global_config() -> dict[str, Any]:
     cfg_path = global_config_path()
     if not cfg_path.is_file():
         return {}
     return yaml.safe_load(cfg_path.read_text()) or {}
 
 
-def get_global_section(key: str) -> dict:
+def get_global_section(key: str) -> dict[str, Any]:
     """Return a top-level section from the global config, defaulting to ``{}``.
 
     If the value under *key* is not a dict (e.g. the user wrote ``git: "oops"``),
@@ -247,6 +248,6 @@ def get_tui_default_tmux() -> bool:
     return bool(get_global_section("tui").get("default_tmux", False))
 
 
-def get_global_agent_config() -> dict:
+def get_global_agent_config() -> dict[str, Any]:
     """Return the ``agent:`` section from the global config, or ``{}``."""
     return get_global_section("agent")
