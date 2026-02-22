@@ -2,6 +2,7 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml  # pip install pyyaml
 
@@ -114,7 +115,7 @@ def list_presets(project_id: str) -> list[str]:
     )
 
 
-def load_preset(project_id: str, preset_name: str) -> dict:
+def load_preset(project_id: str, preset_name: str) -> dict[str, Any]:
     """Load a preset file and return its contents as a dict.
 
     Looks for ``<presets_dir>/<preset_name>.yml`` (or ``.yaml``).
@@ -166,7 +167,7 @@ def _validate_project_id(project_id: str) -> None:
     """
     if not project_id:
         raise SystemExit("Project ID must not be empty")
-    if not re.fullmatch(r"[a-zA-Z0-9_-]+", project_id):
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", project_id):
         raise SystemExit(
             f"Invalid project ID '{project_id}': "
             "only letters, digits, hyphens, and underscores are allowed"

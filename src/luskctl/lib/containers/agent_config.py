@@ -41,6 +41,8 @@ def build_agent_config_stack(
         from luskctl.lib.core.projects import find_preset_path, load_preset
 
         preset_data = load_preset(project_id, preset)
+        # Skip empty presets – they contribute nothing to the merge and would
+        # only add noise to provenance output from ``config show``.
         if preset_data:
             stack.push(ConfigScope("preset", find_preset_path(project, preset), preset_data))
 
