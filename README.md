@@ -75,15 +75,21 @@ luskctl run-claude myproj "Fix the authentication bug"
 
 # With model override and timeout
 luskctl run-claude myproj "Add tests" --model opus --timeout 3600
-
-# Select a non-default sub-agent defined in project.yml
-luskctl run-claude myproj "Debug the crash" --agent debugger
 ```
 
-Sub-agents are defined in `project.yml` under `agent.subagents` — each gets a
-`default: true/false` flag. Global agents and MCPs are managed natively by Claude
-(`~/.claude/agents/`, `~/.claude/settings.json`). See the
-[Usage Guide](docs/USAGE.md#headless-claude-runs-autopilot) for full details.
+### Presets
+
+Three presets work out of the box — no config needed:
+
+```bash
+luskctl run-claude myproj "Fix the typo" --preset solo          # single fast agent
+luskctl run-claude myproj "Review auth module" --preset review   # read-only analysis
+luskctl run-claude myproj "Add pagination" --preset team         # multi-agent team
+```
+
+Create your own in `~/.config/luskctl/presets/` (shared across projects) or
+per-project in `<project>/presets/`. See the
+[Presets Guide](docs/USAGE.md#presets) for details.
 
 ### Common Commands
 

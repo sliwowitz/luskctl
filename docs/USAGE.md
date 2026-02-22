@@ -9,6 +9,7 @@ A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman.
 - [Global Configuration](#global-configuration)
 - [From Zero to First Run](#from-zero-to-first-run)
 - [Headless Claude Runs (Autopilot)](#headless-claude-runs-autopilot)
+- [Presets](#presets)
 - [GPU Passthrough](#gpu-passthrough)
 - [Tips](#tips)
 - [FAQ](#faq)
@@ -423,6 +424,113 @@ Run `luskctl config` to see the actual paths on your system.
 | codex | (uses OpenAI from codex config) | - |
 | claude | `LUSKUI_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | `LUSKUI_CLAUDE_MODEL` |
 | mistral | `LUSKUI_MISTRAL_API_KEY` or `MISTRAL_API_KEY` | `LUSKUI_MISTRAL_MODEL` |
+
+---
+
+## Presets
+
+Presets are reusable agent configurations you apply with `--preset <name>`.
+Three are bundled and work immediately — no setup needed.
+
+### Bundled Presets
+
+| Preset | What it does | When to use |
+|--------|-------------|-------------|
+| `solo` | Single Sonnet agent, 25 turns | Quick fixes, small features |
+| `review` | Read-only Opus reviewer | Code review, architecture analysis |
+| `team` | Multi-agent team (architect + engineers + testers) | Larger features, refactors |
+
+```bash
+# Quick fix — single fast agent
+luskctl run-claude myproj "Fix the typo in login.py" --preset solo
+
+# Code review — read-only analysis
+luskctl run-claude myproj "Review the auth module for security issues" --preset review
+
+# Full dev team — architect plans, engineers implement, testers verify
+luskctl run-claude myproj "Add pagination to the /users endpoint" --preset team
+
+# Team preset with an on-demand agent enabled
+luskctl run-claude myproj "Update the CLI help text" --preset team --agent cli-engineer
+```
+
+Presets work with all task modes:
+
+```bash
+luskctl task start myproj --preset review
+luskctl task run-cli myproj 1 --preset team
+luskctl task run-web myproj 1 --preset solo
+```
+
+### See What's Available
+
+```bash
+# List all presets (bundled + global + project)
+luskctl presets list myproj
+
+# Show what a preset resolves to
+luskctl config-show myproj --preset team
+```
+
+### Customize: Global Presets
+
+To tweak a bundled preset or create your own, put a YAML file in the
+global presets directory. It's shared across all projects.
+
+```bash
+# Create the directory (first time only)
+mkdir -p ~/.config/luskctl/presets
+
+# Copy a bundled preset and customize it
+luskctl config | grep "Bundled presets"   # find the path
+cp <bundled-path>/solo.yml ~/.config/luskctl/presets/solo.yml
+# Edit to taste — your version now shadows the bundled one
+```
+
+Or create one from scratch:
+
+```bash
+cat > ~/.config/luskctl/presets/quick-review.yml << 'EOF'
+model: sonnet
+max_turns: 10
+subagents:
+  - name: reviewer
+    description: Fast code review
+    tools: [Read, Grep, Glob]
+    model: sonnet
+    default: true
+    system_prompt: |
+      Review the code for bugs and suggest fixes. Be concise.
+EOF
+```
+
+Now use it anywhere: `luskctl run-claude anyproject "Review PR #42" --preset quick-review`
+
+### Preset Search Order
+
+When you use `--preset fast`, luskctl searches:
+
+1. **Project** — `<project>/presets/fast.yml` (per-project override)
+2. **Global** — `~/.config/luskctl/presets/fast.yml` (shared across projects)
+3. **Bundled** — shipped with luskctl (always available)
+
+First match wins. This means a global preset shadows a bundled one with the
+same name, and a project preset shadows both.
+
+### Task Teams
+
+Run multiple tasks in the same project, each with a different preset:
+
+```bash
+# Task 1: architect reviews the codebase
+luskctl task start myproj --preset review
+# Task 2: team implements the feature
+luskctl task start myproj --preset team
+# Task 3: solo agent writes docs
+luskctl task start myproj --preset solo
+```
+
+Each task remembers its preset — `luskctl task restart` reuses it automatically.
 
 ---
 
