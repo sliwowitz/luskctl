@@ -19,6 +19,10 @@ for path in sorted(src.rglob("*.py")):
     if parts[-1] == "__main__":
         continue
 
+    # Skip non-importable files (e.g. standalone scripts in resources/)
+    if "resources" in parts:
+        continue
+
     # Skip __init__ files but include them in navigation
     if parts[-1] == "__init__":
         parts = parts[:-1]
