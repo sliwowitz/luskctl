@@ -36,16 +36,17 @@ if _HAS_TEXTUAL:
     from textual.widgets import Footer, Header
     from textual.worker import Worker, WorkerState
 
-    from ..lib.containers.project_state import get_project_state, is_task_image_old
     from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import get_tui_default_tmux
     from ..lib.core.projects import Project as CodexProject, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
     from ..lib.core.version import get_version_info as _get_version_info
-    from ..lib.security.git_gate import (
+    from ..lib.facade import (
         GateStalenessInfo,
         compare_gate_vs_upstream,
+        get_project_state,
+        is_task_image_old,
     )
     from .actions import ActionsMixin
     from .clipboard import get_clipboard_helper_status
@@ -441,7 +442,9 @@ if _HAS_TEXTUAL:
         ) -> tuple[str, CodexProject | None, dict | None, GateStalenessInfo | None, str | None]:
             try:
                 project = load_project(project_id)
-                state = get_project_state(project_id)
+                from ..lib.facade import get_gate_last_commit
+
+                state = get_project_state(project_id, gate_commit_provider=get_gate_last_commit)
                 staleness = None
                 if state.get("gate") and project.upstream_url:
                     try:

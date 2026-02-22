@@ -11,8 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from .._util.fs import ensure_dir
 from ..core.projects import Project
-from .environment import _ensure_dir
 
 # TODO: future — support global agent definitions in luskctl-config.yml (agent.subagents).
 # When implemented, global subagents would be merged with per-project subagents before
@@ -175,7 +175,7 @@ def _generate_claude_wrapper(
     return "\n".join(lines) + "\n"
 
 
-def _prepare_agent_config_dir(
+def prepare_agent_config_dir(
     project: Project,
     task_id: str,
     subagents: list[dict],
@@ -194,7 +194,7 @@ def _prepare_agent_config_dir(
     """
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
-    _ensure_dir(agent_config_dir)
+    ensure_dir(agent_config_dir)
     # Build agents JSON (may be empty dict "{}")
     has_agents = False
     if subagents:

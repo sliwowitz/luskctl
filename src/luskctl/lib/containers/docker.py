@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
+from .._util.fs import ensure_dir
 from ..core.config import build_root
 from ..core.images import (
     agent_cli_image,
@@ -19,10 +20,6 @@ from ..core.images import (
 from ..core.projects import effective_ssh_key_name, load_project
 
 # ---------- Dockerfile gen & build ----------
-
-
-def _ensure_dir(d: Path) -> None:
-    d.mkdir(parents=True, exist_ok=True)
 
 
 def _copy_package_tree(package: str, rel_path: str, dest: Path) -> None:
@@ -205,7 +202,7 @@ def dockerfiles_match_templates(project_id: str) -> bool:
 def generate_dockerfiles(project_id: str) -> None:
     project = load_project(project_id)
     out_dir = build_root() / project.id
-    _ensure_dir(out_dir)
+    ensure_dir(out_dir)
 
     rendered = _render_dockerfiles(project)
     for name, content in rendered.items():

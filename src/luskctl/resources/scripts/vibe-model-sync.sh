@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Find the Python script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_SCRIPT="${SCRIPT_DIR}/../../lib/mistral_model_sync.py"
+PYTHON_SCRIPT="${SCRIPT_DIR}/mistral-model-sync.py"
 
 # Check if the Python script exists
 if [[ ! -f "${PYTHON_SCRIPT}" ]]; then

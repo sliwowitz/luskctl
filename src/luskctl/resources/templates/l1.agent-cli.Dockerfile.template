@@ -31,7 +31,8 @@ RUN chmod +x /usr/local/bin/setup-codex-auth.sh
 # Copy blablador wrapper (OpenCode-based)
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/vibe-model-sync.sh /usr/local/bin/vibe-model-sync
-RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync
+COPY scripts/mistral-model-sync.py /usr/local/bin/mistral-model-sync.py
+RUN chmod +x /usr/local/bin/blablador /usr/local/bin/vibe-model-sync /usr/local/bin/mistral-model-sync.py
 
 # Configure shell aliases and PATH for agent CLIs
 RUN set -eux; \

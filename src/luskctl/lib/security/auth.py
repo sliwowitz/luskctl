@@ -9,7 +9,7 @@ check podman, load project, ensure host dir, cleanup old container, run.
 import shutil
 import subprocess
 
-from .._util.fs import _ensure_dir_writable
+from .._util.fs import ensure_dir_writable
 from .._util.podman import _podman_userns_args
 from ..core.config import get_envs_base_dir
 from ..core.images import project_cli_image
@@ -68,7 +68,7 @@ def _run_auth_container(
 
     envs_base = get_envs_base_dir()
     host_dir = envs_base / host_dir_name
-    _ensure_dir_writable(host_dir, host_dir_label)
+    ensure_dir_writable(host_dir, host_dir_label)
 
     container_name = f"{project.id}-{container_suffix}"
     _cleanup_existing_container(container_name)

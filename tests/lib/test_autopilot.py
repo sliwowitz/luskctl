@@ -18,7 +18,7 @@ from luskctl.lib.containers.agents import (
     parse_md_agent,
 )
 from luskctl.lib.containers.runtime import _get_container_exit_code, _stream_until_exit
-from luskctl.lib.containers.tasks import task_run_headless
+from luskctl.lib.containers.task_runners import task_run_headless
 from luskctl.lib.core.projects import load_project
 from test_utils import mock_git_config, write_project
 
@@ -314,7 +314,7 @@ class StreamUntilExitTests(unittest.TestCase):
     def test_stream_until_exit_calls_stream_and_exit_code(self) -> None:
         with (
             unittest.mock.patch(
-                "luskctl.lib.containers.runtime._stream_initial_logs", return_value=False
+                "luskctl.lib.containers.runtime.stream_initial_logs", return_value=False
             ) as mock_stream,
             unittest.mock.patch(
                 "luskctl.lib.containers.runtime._get_container_exit_code", return_value=0
@@ -364,11 +364,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -402,11 +404,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -436,11 +440,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -492,11 +498,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -546,11 +554,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -584,11 +594,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -637,11 +649,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -670,11 +684,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -705,9 +721,11 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit"
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit"
                     ) as stream_mock,
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
@@ -740,11 +758,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -792,11 +812,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
             ):
                 with (
                     mock_git_config(),
-                    unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks._wait_for_exit", return_value=0
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.tasks._print_run_summary"),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()

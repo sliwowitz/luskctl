@@ -5,7 +5,7 @@ import subprocess
 from importlib import resources
 from pathlib import Path
 
-from .._util.fs import _ensure_dir_writable
+from .._util.fs import ensure_dir_writable
 from .._util.template_utils import render_template
 from ..core.config import get_envs_base_dir
 from ..core.projects import effective_ssh_key_name, load_project
@@ -39,7 +39,7 @@ def init_project_ssh(
 
     target_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
     target_dir = Path(target_dir).expanduser().resolve()
-    _ensure_dir_writable(target_dir, "SSH host dir")
+    ensure_dir_writable(target_dir, "SSH host dir")
 
     # If caller did not supply an explicit key_name, derive it from project
     # configuration using the shared helper so ssh-init, containers and git

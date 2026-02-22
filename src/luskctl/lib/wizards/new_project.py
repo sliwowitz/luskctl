@@ -10,7 +10,7 @@ from pathlib import Path
 
 from luskctl.ui_utils.editor import open_in_editor
 
-from .._util.fs import _ensure_dir_writable
+from .._util.fs import ensure_dir_writable
 from .._util.template_utils import render_template
 from ..core.config import user_projects_root
 
@@ -178,7 +178,7 @@ def generate_config(values: dict) -> Path:
         )
 
     project_dir = user_projects_root() / values["project_id"]
-    _ensure_dir_writable(project_dir, "Project")
+    ensure_dir_writable(project_dir, "Project")
 
     config_path = project_dir / "project.yml"
 

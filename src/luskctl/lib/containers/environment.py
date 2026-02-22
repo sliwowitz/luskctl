@@ -8,7 +8,7 @@ task container.
 import os
 from pathlib import Path
 
-from .._util.fs import _ensure_dir_writable
+from .._util.fs import ensure_dir_writable
 from ..core.config import get_envs_base_dir
 from ..core.projects import Project
 
@@ -27,10 +27,6 @@ WEB_ENV_PASSTHROUGH_KEYS = (
 # ---------- Helpers ----------
 
 
-def _ensure_dir(d: Path) -> None:
-    d.mkdir(parents=True, exist_ok=True)
-
-
 def _normalize_web_backend(backend: str | None) -> str | None:
     if backend is None:
         return None
@@ -40,7 +36,7 @@ def _normalize_web_backend(backend: str | None) -> str | None:
     return backend.lower()
 
 
-def _apply_web_env_overrides(
+def apply_web_env_overrides(
     env: dict,
     backend: str | None,
     project_default_agent: str | None = None,
@@ -108,7 +104,7 @@ def _shared_config_dirs(envs_base: Path) -> dict[str, Path]:
         "opencode_state": "OpenCode state",
     }
     for key, path in dirs.items():
-        _ensure_dir_writable(path, labels[key])
+        ensure_dir_writable(path, labels[key])
     return dirs
 
 
@@ -150,7 +146,7 @@ def _security_mode_env_and_volumes(
         if project.expose_external_remote and project.upstream_url:
             env["EXTERNAL_REMOTE_URL"] = project.upstream_url
         if project.ssh_mount_in_gatekeeping and ssh_host_dir.is_dir():
-            _ensure_dir_writable(ssh_host_dir, "SSH config")
+            ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:z")
     else:
         if gate_repo.exists():
@@ -161,7 +157,7 @@ def _security_mode_env_and_volumes(
             env["CODE_REPO"] = project.upstream_url
             env["GIT_BRANCH"] = project.default_branch or "main"
         if project.ssh_mount_in_online and ssh_host_dir.is_dir():
-            _ensure_dir_writable(ssh_host_dir, "SSH config")
+            ensure_dir_writable(ssh_host_dir, "SSH config")
             volumes.append(f"{ssh_host_dir}:/home/dev/.ssh:z")
 
     return env, volumes
@@ -170,7 +166,7 @@ def _security_mode_env_and_volumes(
 # ---------- Main builder ----------
 
 
-def _build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
+def build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, list[str]]:
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
