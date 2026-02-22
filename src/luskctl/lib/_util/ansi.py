@@ -13,10 +13,15 @@ import sys
 def supports_color() -> bool:
     """Check if stdout supports color output.
 
-    Follows the NO_COLOR standard (https://no-color.org/).
+    Follows the NO_COLOR (https://no-color.org/) and FORCE_COLOR conventions.
+    NO_COLOR always wins. FORCE_COLOR (when set and not ``"0"``) forces color
+    on even when stdout is not a TTY. Otherwise falls back to ``isatty()``.
     """
     if "NO_COLOR" in os.environ:
         return False
+    force = os.environ.get("FORCE_COLOR")
+    if force is not None and force != "0":
+        return True
     return sys.stdout.isatty()
 
 

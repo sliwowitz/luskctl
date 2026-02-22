@@ -406,11 +406,12 @@ def task_run_headless(
     # truth for these flags; see #180.
     cname = container_name(project.id, "run", task_id)
 
-    # Agents flag: load from agents.json if it was written
+    # Agents flag: inject via env var to avoid brittle command substitution
     agents_flag = ""
     agents_json_path = agent_config_dir / "agents.json"
     if agents_json_path.exists():
-        agents_flag = ' --agents "$(cat /home/dev/.luskctl/agents.json)"'
+        env["LUSKCTL_AGENTS_JSON"] = agents_json_path.read_text(encoding="utf-8").strip()
+        agents_flag = ' --agents "$LUSKCTL_AGENTS_JSON"'
 
     # Git identity env vars (same as the wrapper function provides)
     human_name = shlex.quote(project.human_name or "Nobody")
