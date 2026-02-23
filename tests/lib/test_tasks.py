@@ -88,7 +88,10 @@ class TaskTests(unittest.TestCase):
 
             meta_text = meta_path.read_text(encoding="utf-8")
             self.assertEqual(parse_meta_value(meta_text, "task_id"), "1")
-            workspace = Path(parse_meta_value(meta_text, "workspace") or "")
+            workspace_value = parse_meta_value(meta_text, "workspace")
+            self.assertIsNotNone(workspace_value)
+            self.assertNotEqual(workspace_value, "")
+            workspace = Path(workspace_value)  # type: ignore[arg-type]
             self.assertTrue(workspace.is_dir())
 
             # Verify second task returns incremented ID

@@ -27,7 +27,7 @@ class MockProject:
         upstream_polling_interval_minutes: int = 5,
         auto_sync_enabled: bool = False,
         auto_sync_branches: list[str] | None = None,
-    ):
+    ) -> None:
         self.id = project_id
         self.security_class = security_class
         self.upstream_polling_enabled = upstream_polling_enabled

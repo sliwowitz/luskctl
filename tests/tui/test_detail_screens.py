@@ -4,8 +4,7 @@ import asyncio
 from unittest import TestCase, main, mock
 
 from rich.text import Text
-
-from tui.tui_test_helpers import import_app, import_screens, import_widgets, make_key_event
+from tui_test_helpers import import_app, import_screens, import_widgets, make_key_event
 
 
 class RenderHelpersTests(TestCase):

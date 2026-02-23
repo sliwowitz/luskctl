@@ -1,8 +1,9 @@
 import unittest
 import unittest.mock
+from collections.abc import Callable
 
 
-def _patch_init_steps(func):
+def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     """Apply project-init step mocks to a test method.
 
     Mock args are injected as: mock_ssh, mock_gen, mock_build, mock_gate.
