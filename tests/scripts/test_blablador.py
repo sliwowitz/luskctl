@@ -10,7 +10,6 @@ import ast
 import importlib.machinery
 import importlib.util
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -19,7 +18,7 @@ from pathlib import Path
 
 from luskctl.lib.containers.docker import generate_dockerfiles
 from luskctl.lib.core.config import build_root
-from test_utils import write_project
+from test_utils import make_mock_http_response, project_env
 
 
 def get_blablador_script_path() -> Path:
@@ -87,7 +86,7 @@ class BlabladorScriptTests(unittest.TestCase):
         """Test _fetch_models with OpenAI-compatible 'data' array response."""
         blablador = load_blablador_module()
 
-        mock_response_data = json.dumps(
+        mock_response = make_mock_http_response(
             {
                 "data": [
                     {"id": "model-1", "object": "model"},
@@ -95,12 +94,7 @@ class BlabladorScriptTests(unittest.TestCase):
                     {"id": "model-3", "object": "model"},
                 ]
             }
-        ).encode("utf-8")
-
-        mock_response = unittest.mock.Mock()
-        mock_response.read.return_value = mock_response_data
-        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
-        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+        )
 
         with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
@@ -113,14 +107,9 @@ class BlabladorScriptTests(unittest.TestCase):
         """Test _fetch_models with alternative 'models' array response format."""
         blablador = load_blablador_module()
 
-        mock_response_data = json.dumps(
+        mock_response = make_mock_http_response(
             {"models": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]}
-        ).encode("utf-8")
-
-        mock_response = unittest.mock.Mock()
-        mock_response.read.return_value = mock_response_data
-        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
-        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+        )
 
         with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
@@ -133,7 +122,7 @@ class BlabladorScriptTests(unittest.TestCase):
         """Test that _fetch_models deduplicates and sorts model IDs."""
         blablador = load_blablador_module()
 
-        mock_response_data = json.dumps(
+        mock_response = make_mock_http_response(
             {
                 "data": [
                     {"id": "zebra-model"},
@@ -142,12 +131,7 @@ class BlabladorScriptTests(unittest.TestCase):
                     {"id": "beta-model"},
                 ]
             }
-        ).encode("utf-8")
-
-        mock_response = unittest.mock.Mock()
-        mock_response.read.return_value = mock_response_data
-        mock_response.__enter__ = unittest.mock.Mock(return_value=mock_response)
-        mock_response.__exit__ = unittest.mock.Mock(return_value=False)
+        )
 
         with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
             models = blablador._fetch_models(
@@ -208,193 +192,103 @@ class BlabladorDockerfileTests(unittest.TestCase):
 
     def test_l1_cli_has_blablador_alias(self) -> None:
         """Verify that the L1 CLI Dockerfile includes the blablador alias."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
-            config_root.mkdir(parents=True, exist_ok=True)
+        yaml_text = (
+            "project:\n"
+            "  id: proj_blablador_test\n"
+            "git:\n"
+            "  upstream_url: https://example.com/repo.git\n"
+            "  default_branch: main\n"
+        )
+        with project_env(yaml_text, project_id="proj_blablador_test") as _env:
+            generate_dockerfiles("proj_blablador_test")
+            out_dir = build_root() / "proj_blablador_test"
+            l1_cli = out_dir / "L1.cli.Dockerfile"
 
-            project_id = "proj_blablador_test"
-            write_project(
-                config_root,
-                project_id,
-                f"""\
-project:
-  id: {project_id}
-git:
-  upstream_url: https://example.com/repo.git
-  default_branch: main
-""",
-            )
+            content = l1_cli.read_text(encoding="utf-8")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                generate_dockerfiles(project_id)
-                out_dir = build_root() / project_id
-                l1_cli = out_dir / "L1.cli.Dockerfile"
-
-                content = l1_cli.read_text(encoding="utf-8")
-
-                # Verify blablador alias exists
-                self.assertIn("alias blablador=", content)
+            # Verify blablador alias exists
+            self.assertIn("alias blablador=", content)
 
     def test_l1_cli_blablador_alias_has_git_author(self) -> None:
         """Verify the blablador alias sets GIT_AUTHOR_NAME."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
-            config_root.mkdir(parents=True, exist_ok=True)
+        yaml_text = (
+            "project:\n"
+            "  id: proj_blablador_git_test\n"
+            "git:\n"
+            "  upstream_url: https://example.com/repo.git\n"
+            "  default_branch: main\n"
+        )
+        with project_env(yaml_text, project_id="proj_blablador_git_test") as _env:
+            generate_dockerfiles("proj_blablador_git_test")
+            out_dir = build_root() / "proj_blablador_git_test"
+            l1_cli = out_dir / "L1.cli.Dockerfile"
 
-            project_id = "proj_blablador_git_test"
-            write_project(
-                config_root,
-                project_id,
-                f"""\
-project:
-  id: {project_id}
-git:
-  upstream_url: https://example.com/repo.git
-  default_branch: main
-""",
-            )
+            content = l1_cli.read_text(encoding="utf-8")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                generate_dockerfiles(project_id)
-                out_dir = build_root() / project_id
-                l1_cli = out_dir / "L1.cli.Dockerfile"
-
-                content = l1_cli.read_text(encoding="utf-8")
-
-                # Verify blablador alias has git author configuration
-                self.assertIn("GIT_AUTHOR_NAME=Blablador", content)
-                self.assertIn("GIT_AUTHOR_EMAIL=blablador@helmholtz.de", content)
+            # Verify blablador alias has git author configuration
+            self.assertIn("GIT_AUTHOR_NAME=Blablador", content)
+            self.assertIn("GIT_AUTHOR_EMAIL=blablador@helmholtz.de", content)
 
     def test_l1_cli_blablador_in_agents_list(self) -> None:
         """Verify blablador appears in the available agents list."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
-            config_root.mkdir(parents=True, exist_ok=True)
+        yaml_text = (
+            "project:\n"
+            "  id: proj_blablador_list_test\n"
+            "git:\n"
+            "  upstream_url: https://example.com/repo.git\n"
+            "  default_branch: main\n"
+        )
+        with project_env(yaml_text, project_id="proj_blablador_list_test") as _env:
+            generate_dockerfiles("proj_blablador_list_test")
+            out_dir = build_root() / "proj_blablador_list_test"
+            l1_cli = out_dir / "L1.cli.Dockerfile"
 
-            project_id = "proj_blablador_list_test"
-            write_project(
-                config_root,
-                project_id,
-                f"""\
-project:
-  id: {project_id}
-git:
-  upstream_url: https://example.com/repo.git
-  default_branch: main
-""",
-            )
+            content = l1_cli.read_text(encoding="utf-8")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                generate_dockerfiles(project_id)
-                out_dir = build_root() / project_id
-                l1_cli = out_dir / "L1.cli.Dockerfile"
-
-                content = l1_cli.read_text(encoding="utf-8")
-
-                # Verify blablador is listed with description
-                self.assertIn("blablador", content)
-                self.assertIn("Helmholtz Blablador", content)
+            # Verify blablador is listed with description
+            self.assertIn("blablador", content)
+            self.assertIn("Helmholtz Blablador", content)
 
     def test_l1_cli_opencode_installed(self) -> None:
         """Verify that OpenCode CLI is installed in the L1 CLI image."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
-            config_root.mkdir(parents=True, exist_ok=True)
+        yaml_text = (
+            "project:\n"
+            "  id: proj_opencode_test\n"
+            "git:\n"
+            "  upstream_url: https://example.com/repo.git\n"
+            "  default_branch: main\n"
+        )
+        with project_env(yaml_text, project_id="proj_opencode_test") as _env:
+            generate_dockerfiles("proj_opencode_test")
+            out_dir = build_root() / "proj_opencode_test"
+            l1_cli = out_dir / "L1.cli.Dockerfile"
 
-            project_id = "proj_opencode_test"
-            write_project(
-                config_root,
-                project_id,
-                f"""\
-project:
-  id: {project_id}
-git:
-  upstream_url: https://example.com/repo.git
-  default_branch: main
-""",
-            )
+            content = l1_cli.read_text(encoding="utf-8")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                generate_dockerfiles(project_id)
-                out_dir = build_root() / project_id
-                l1_cli = out_dir / "L1.cli.Dockerfile"
-
-                content = l1_cli.read_text(encoding="utf-8")
-
-                # Verify OpenCode installation (runs as dev user)
-                self.assertIn("opencode.ai/install", content)
+            # Verify OpenCode installation (runs as dev user)
+            self.assertIn("opencode.ai/install", content)
 
     def test_l1_cli_blablador_script_copied(self) -> None:
         """Verify the blablador wrapper script is copied to the image."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
-            config_root.mkdir(parents=True, exist_ok=True)
+        yaml_text = (
+            "project:\n"
+            "  id: proj_script_copy_test\n"
+            "git:\n"
+            "  upstream_url: https://example.com/repo.git\n"
+            "  default_branch: main\n"
+        )
+        with project_env(yaml_text, project_id="proj_script_copy_test") as _env:
+            generate_dockerfiles("proj_script_copy_test")
+            out_dir = build_root() / "proj_script_copy_test"
 
-            project_id = "proj_script_copy_test"
-            write_project(
-                config_root,
-                project_id,
-                f"""\
-project:
-  id: {project_id}
-git:
-  upstream_url: https://example.com/repo.git
-  default_branch: main
-""",
+            # Verify scripts directory exists and blablador is there
+            scripts_dir = out_dir / "scripts"
+            self.assertTrue(scripts_dir.is_dir())
+
+            blablador_script = scripts_dir / "blablador"
+            self.assertTrue(
+                blablador_script.is_file(), f"blablador script not found in {scripts_dir}"
             )
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "LUSKCTL_CONFIG_DIR": str(config_root),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                },
-            ):
-                generate_dockerfiles(project_id)
-                out_dir = build_root() / project_id
-
-                # Verify scripts directory exists and blablador is there
-                scripts_dir = out_dir / "scripts"
-                self.assertTrue(scripts_dir.is_dir())
-
-                blablador_script = scripts_dir / "blablador"
-                self.assertTrue(
-                    blablador_script.is_file(), f"blablador script not found in {scripts_dir}"
-                )
 
 
 class BlabladorPersistentConfigTests(unittest.TestCase):
