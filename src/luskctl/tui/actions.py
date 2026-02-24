@@ -116,6 +116,11 @@ class ActionsMixin:
             return default
         return choice.lower()
 
+    def _focus_task_after_creation(self, project_id: str, task_id: str) -> None:
+        """Persist selection so the newly created task is focused after refresh."""
+        self._last_selected_tasks[project_id] = task_id
+        self._save_selection_state()
+
     # ---------- Worker helpers ----------
 
     def _queue_task_delete(self, project_id: str, task_id: str) -> None:
@@ -265,9 +270,11 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
+        pid = self.current_project_id
         with self.suspend():
             try:
-                task_new(self.current_project_id)
+                task_id = task_new(pid)
+                self._focus_task_after_creation(pid, task_id)
             except SystemExit as e:
                 print(f"Error: {e}")
             input("\n[Press Enter to return to LuskTUI] ")
@@ -319,6 +326,7 @@ class ActionsMixin:
         with self.suspend():
             try:
                 task_id = task_new(pid)
+                self._focus_task_after_creation(pid, task_id)
                 print(f"\nRunning CLI for {pid}/{task_id}...\n")
                 task_run_cli(pid, task_id)
             except SystemExit as e:
@@ -335,6 +343,7 @@ class ActionsMixin:
         with self.suspend():
             try:
                 task_id = task_new(pid)
+                self._focus_task_after_creation(pid, task_id)
                 backend = self._prompt_ui_backend()
                 print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
                 task_run_web(pid, task_id, backend=backend)

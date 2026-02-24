@@ -600,6 +600,7 @@ if _HAS_TEXTUAL:
                 if error:
                     self.notify(f"Autopilot error: {error}")
                 elif task_id:
+                    self._focus_task_after_creation(project_id, task_id)
                     self.notify(f"Autopilot task {task_id} started for {project_id}")
                     self._start_autopilot_watcher(project_id, task_id)
                 if project_id == self.current_project_id:
