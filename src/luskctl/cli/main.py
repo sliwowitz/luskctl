@@ -42,6 +42,7 @@ from ..lib.facade import (
     codex_auth,
     generate_dockerfiles,
     init_project_ssh,
+    maybe_pause_for_ssh_key_registration,
     mistral_auth,
     sync_project_gate,
 )
@@ -119,6 +120,7 @@ def _cmd_project_init(project_id: str) -> None:
     """Full project setup: ssh-init, generate, build, gate-sync."""
     print("==> Initializing SSH...")
     init_project_ssh(project_id)
+    maybe_pause_for_ssh_key_registration(project_id)
 
     print("==> Generating Dockerfiles...")
     generate_dockerfiles(project_id)

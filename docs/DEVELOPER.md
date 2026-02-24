@@ -156,10 +156,16 @@ Tests are written using `unittest` and run with `pytest`.
 make test      # Run full test suite with coverage
 ```
 
-To run both (equivalent to CI):
+**Check module boundaries** if you changed cross-module imports:
 
 ```bash
-make check     # Runs lint + test
+make tach      # Verify tach.toml boundary rules
+```
+
+To run all checks (equivalent to CI):
+
+```bash
+make check     # Runs lint + test + tach
 ```
 
 ### Available Make Targets
@@ -169,7 +175,8 @@ make check     # Runs lint + test
 | `make lint` | Check linting and formatting | Before every commit |
 | `make format` | Auto-fix lint issues and format | When lint fails |
 | `make test` | Run tests with coverage | Before pushing |
-| `make check` | Run lint + test | Before opening a PR |
+| `make tach` | Check module boundary rules | After changing imports |
+| `make check` | Run lint + test + tach | Before opening a PR |
 | `make docs` | Serve documentation locally | When editing docs |
 | `make install-dev` | Install all dependencies | Initial setup |
 | `make clean` | Remove build artifacts | When needed |

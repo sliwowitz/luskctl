@@ -11,6 +11,7 @@
 - **Container Runtime**: Podman
 - **Testing**: pytest with coverage
 - **Linting/Formatting**: ruff
+- **Module Boundaries**: tach (enforced in CI via `tach.toml`)
 - **Documentation**: MkDocs with Material theme
 - **TUI Framework**: Textual
 
@@ -32,7 +33,8 @@ make format    # Auto-fix lint issues if lint fails
 **Before pushing:**
 ```bash
 make test      # Run full test suite with coverage
-make check     # Run both lint and test (equivalent to CI)
+make tach      # Check module boundary rules (tach.toml)
+make check     # Run lint + test + tach (equivalent to CI)
 ```
 
 **When `pyproject.toml` changes** (added/removed/changed dependencies):
@@ -65,8 +67,9 @@ make clean        # Remove build artifacts
 2. Run `make lint` frequently during development
 3. Add/update tests in `tests/` directory
 4. Run `make test` to verify changes
-5. Update documentation in `docs/` if needed
-6. Run `make check` before pushing
+5. If you added or changed cross-module imports, run `make tach` to verify module boundary rules
+6. Update documentation in `docs/` if needed
+7. Run `make check` before pushing
 
 ## Key Guidelines
 
@@ -76,10 +79,19 @@ make clean        # Remove build artifacts
 - **Existing Tests**: Never remove or modify unrelated tests
 - **Dependencies**: Use Poetry for dependency management; avoid adding unnecessary dependencies
 
+## Module Boundaries (tach)
+
+The project uses [tach](https://github.com/gauge-sh/tach) to enforce module boundary rules defined in `tach.toml`. Each module declares its allowed dependencies and public interface. When adding new cross-module imports:
+
+- If importing from an existing dependency, ensure the symbol is in that module's `[[interfaces]]` `expose` list
+- If adding a new dependency between modules, add it to the `depends_on` list and update `[[interfaces]]` as needed
+- Run `make tach` (or `tach check`) to verify; CI will reject boundary violations
+
 ## Important Files
 
 - `docs/DEVELOPER.md`: Detailed architecture and implementation guide
 - `docs/USAGE.md`: Complete user documentation
 - `Makefile`: Build and test automation
 - `pyproject.toml`: Project configuration and dependencies
+- `tach.toml`: Module boundary rules (enforced in CI)
 

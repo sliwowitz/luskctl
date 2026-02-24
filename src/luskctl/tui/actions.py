@@ -37,6 +37,7 @@ from ..lib.facade import (
     codex_auth,
     generate_dockerfiles,
     init_project_ssh,
+    maybe_pause_for_ssh_key_registration,
     mistral_auth,
     sync_project_gate,
 )
@@ -223,6 +224,8 @@ class ActionsMixin:
                 print(f"=== Full Setup for {pid} ===\n")
                 print("Step 1/4: Initializing SSH...")
                 init_project_ssh(pid)
+                maybe_pause_for_ssh_key_registration(pid)
+
                 print("\nStep 2/4: Generating Dockerfiles...")
                 generate_dockerfiles(pid)
                 print("\nStep 3/4: Building images...")

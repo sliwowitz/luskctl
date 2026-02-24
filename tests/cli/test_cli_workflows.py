@@ -6,9 +6,10 @@ from collections.abc import Callable
 def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     """Apply project-init step mocks to a test method.
 
-    Mock args are injected as: mock_ssh, mock_gen, mock_build, mock_gate.
+    Mock args are injected as: mock_ssh, mock_pause, mock_gen, mock_build, mock_gate.
     """
     func = unittest.mock.patch("luskctl.cli.main.init_project_ssh")(func)
+    func = unittest.mock.patch("luskctl.cli.main.maybe_pause_for_ssh_key_registration")(func)
     func = unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")(func)
     func = unittest.mock.patch("luskctl.cli.main.build_images")(func)
     func = unittest.mock.patch("luskctl.cli.main.sync_project_gate")(func)
@@ -20,7 +21,7 @@ class ProjectInitTests(unittest.TestCase):
 
     @_patch_init_steps
     def test_cmd_project_init_calls_four_steps(
-        self, mock_ssh, mock_gen, mock_build, mock_gate
+        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
     ) -> None:
         mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
 
@@ -29,16 +30,18 @@ class ProjectInitTests(unittest.TestCase):
         _cmd_project_init("myproj")
 
         mock_ssh.assert_called_once_with("myproj")
+        mock_pause.assert_called_once_with("myproj")
         mock_gen.assert_called_once_with("myproj")
         mock_build.assert_called_once_with("myproj")
         mock_gate.assert_called_once_with("myproj")
 
     @_patch_init_steps
     def test_cmd_project_init_calls_in_order(
-        self, mock_ssh, mock_gen, mock_build, mock_gate
+        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
     ) -> None:
         call_order: list[str] = []
         mock_ssh.side_effect = lambda *a, **kw: call_order.append("ssh")
+        mock_pause.side_effect = lambda *a, **kw: call_order.append("pause")
         mock_gen.side_effect = lambda *a, **kw: call_order.append("generate")
         mock_build.side_effect = lambda *a, **kw: call_order.append("build")
         mock_gate.side_effect = lambda *a, **kw: (
@@ -50,11 +53,11 @@ class ProjectInitTests(unittest.TestCase):
 
         _cmd_project_init("proj1")
 
-        self.assertEqual(call_order, ["ssh", "generate", "build", "gate"])
+        self.assertEqual(call_order, ["ssh", "pause", "generate", "build", "gate"])
 
     @_patch_init_steps
     def test_cmd_project_init_gate_failure_raises(
-        self, mock_ssh, mock_gen, mock_build, mock_gate
+        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
     ) -> None:
         mock_gate.return_value = {"success": False, "errors": ["no upstream_url"]}
 
@@ -63,6 +66,51 @@ class ProjectInitTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             _cmd_project_init("badproj")
         self.assertIn("Gate sync failed", str(ctx.exception))
+
+
+class SshPauseTests(unittest.TestCase):
+    """Tests for the SSH key registration pause in maybe_pause_for_ssh_key_registration."""
+
+    @unittest.mock.patch("luskctl.lib.facade.load_project")
+    @unittest.mock.patch("builtins.input", return_value="")
+    def test_pauses_for_ssh_upstream(self, mock_input, mock_load) -> None:
+        from luskctl.lib.facade import maybe_pause_for_ssh_key_registration
+
+        for upstream in ("git@github.com:org/repo.git", "ssh://github.com/org/repo.git"):
+            mock_input.reset_mock()
+            mock_load.return_value = unittest.mock.Mock(upstream_url=upstream)
+
+            maybe_pause_for_ssh_key_registration("sshproj")
+
+            mock_input.assert_called_once_with("Press Enter once the key is registered... ")
+
+    @unittest.mock.patch("luskctl.lib.facade.load_project")
+    @unittest.mock.patch("builtins.input", return_value="")
+    def test_no_pause_for_https_upstream(self, mock_input, mock_load) -> None:
+        from luskctl.lib.facade import maybe_pause_for_ssh_key_registration
+
+        mock_load.return_value = unittest.mock.Mock(upstream_url="https://github.com/org/repo.git")
+
+        maybe_pause_for_ssh_key_registration("httpsproj")
+
+        mock_input.assert_not_called()
+
+    @_patch_init_steps
+    def test_project_init_continues_after_pause(
+        self, mock_ssh, mock_pause, mock_gen, mock_build, mock_gate
+    ) -> None:
+        """Verify generate/build/gate-sync all proceed after the pause step."""
+        mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
+
+        from luskctl.cli.main import _cmd_project_init
+
+        _cmd_project_init("sshproj")
+
+        mock_ssh.assert_called_once_with("sshproj")
+        mock_pause.assert_called_once_with("sshproj")
+        mock_gen.assert_called_once_with("sshproj")
+        mock_build.assert_called_once_with("sshproj")
+        mock_gate.assert_called_once_with("sshproj")
 
 
 class TaskStartTests(unittest.TestCase):
