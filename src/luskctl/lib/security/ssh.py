@@ -170,19 +170,6 @@ def init_project_ssh(
     except Exception:
         # Reading the public key is best-effort.
         pass
-    # When ssh.key_name is omitted in project.yml, we still derive a stable
-    # default filename (id_<algo>_<project_id>) via effective_ssh_key_name.
-    # Containers receive only this bare filename via SSH_KEY_NAME and mount
-    # the host ssh_host_dir at /home/dev/.ssh, so path handling remains
-    # host-side while the filename is consistent everywhere.
-    if not project.ssh_key_name:
-        print(
-            "Note: project.yml does not define ssh.key_name; using a derived default key filename."
-        )
-        print(
-            f"      To pin the SSH key filename explicitly, add to {project.root / 'project.yml'}:\n        ssh:\n          key_name: {key_name}"
-        )
-
     return {
         "dir": str(target_dir),
         "private_key": str(priv_path),
