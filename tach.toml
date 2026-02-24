@@ -72,6 +72,7 @@ depends_on = [
     "luskctl.lib.containers.docker",
     "luskctl.lib.containers.environment",
     "luskctl.lib.containers.project_state",
+    "luskctl.lib.core.projects",
     "luskctl.lib.security.auth",
     "luskctl.lib.security.git_gate",
     "luskctl.lib.security.ssh",
@@ -485,6 +486,7 @@ expose = [
     "find_projects_sharing_gate",
     "get_project_state",
     "is_task_image_old",
+    "maybe_pause_for_ssh_key_registration",
 ]
 from = ["luskctl.lib.facade"]
 

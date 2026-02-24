@@ -1,4 +1,4 @@
-.PHONY: lint format test check install install-dev clean
+.PHONY: lint format test tach check install install-dev clean
 
 # Run linter and format checker (fast, run before commits)
 lint:
@@ -14,8 +14,12 @@ format:
 test:
 	poetry run pytest --cov=luskctl --cov-report=term-missing
 
+# Check module boundary rules (tach.toml)
+tach:
+	tach check
+
 # Run all checks (equivalent to CI)
-check: lint test
+check: lint test tach
 
 # Install runtime dependencies only
 install:

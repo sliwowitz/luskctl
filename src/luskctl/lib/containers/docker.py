@@ -19,6 +19,31 @@ from ..core.images import (
 )
 from ..core.projects import effective_ssh_key_name, load_project
 
+# ---------- helpers ----------
+
+
+def _check_podman_available() -> None:
+    """Raise SystemExit if podman is not on PATH."""
+    if shutil.which("podman") is None:
+        raise SystemExit("podman not found; please install podman")
+
+
+def _image_exists(image: str) -> bool:
+    """Check if a container image exists locally.
+
+    Assumes podman is available (call ``_check_podman_available`` first).
+    """
+    try:
+        subprocess.run(
+            ["podman", "image", "exists", image],
+            check=True,
+            capture_output=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 # ---------- Dockerfile gen & build ----------
 
 
@@ -240,6 +265,8 @@ def build_images(
     """
     import time
 
+    _check_podman_available()
+
     project = load_project(project_id)
     docker_cfg = _load_docker_config(project.root)
     stage_dir = build_root() / project.id
@@ -291,8 +318,18 @@ def build_images(
 
     cmds = []
 
-    # Build L0 and L1 layers when --agents or --full-rebuild
-    if rebuild_agents or full_rebuild:
+    # Auto-detect missing base layers and build them if needed
+    need_base_layers = rebuild_agents or full_rebuild
+    if not need_base_layers:
+        if not _image_exists(l0_image):
+            print(f"L0 image {l0_image} not found locally, will build all layers (L0+L1+L2).")
+            need_base_layers = True
+        elif not _image_exists(l1_cli_image) or not _image_exists(l1_ui_image):
+            print("L1 image(s) not found locally, will build all layers (L0+L1+L2).")
+            need_base_layers = True
+
+    # Build L0 and L1 layers when needed
+    if need_base_layers:
         cmds.append(_build_cmd(l0, base_image, l0_image, pull=full_rebuild))
         cmds.append(
             _build_cmd(

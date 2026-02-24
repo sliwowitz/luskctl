@@ -116,7 +116,10 @@ git:
                 result.returncode = 0
                 return result
 
-            with unittest.mock.patch("subprocess.run", side_effect=mock_run):
+            with (
+                unittest.mock.patch("subprocess.run", side_effect=mock_run),
+                unittest.mock.patch("luskctl.lib.containers.docker._check_podman_available"),
+            ):
                 # Test default (L2 only)
                 build_commands.clear()
                 build_images(project_id)
