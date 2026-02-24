@@ -1,6 +1,7 @@
 """Tests for TUI detail screens (Phase 2) and rendering helpers."""
 
 import asyncio
+import contextlib
 from unittest import TestCase, main, mock
 
 from rich.text import Text
@@ -558,6 +559,94 @@ class ActionDispatchTests(TestCase):
         coro = AppClass._handle_task_action(instance, "follow_logs")
         asyncio.run(coro)
         instance._action_follow_logs.assert_called_once()
+
+
+class ActionSelectionTests(TestCase):
+    """Tests for task selection after task creation flows."""
+
+    def test_task_start_cli_selects_created_task(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._save_selection_state = mock.Mock()
+        instance.refresh_tasks = mock.AsyncMock()
+        fake_task_new = mock.Mock(return_value="42")
+        fake_task_run_cli = mock.Mock()
+        action_globals = AppClass._action_task_start_cli.__globals__
+
+        with (
+            mock.patch.dict(
+                action_globals,
+                {"task_new": fake_task_new, "task_run_cli": fake_task_run_cli},
+            ),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass._action_task_start_cli(instance))
+
+        self.assertEqual(instance._last_selected_tasks.get("proj1"), "42")
+        fake_task_new.assert_called_once_with("proj1")
+        fake_task_run_cli.assert_called_once_with("proj1", "42")
+        instance._save_selection_state.assert_called_once()
+        instance.refresh_tasks.assert_awaited_once()
+
+    def test_task_start_web_selects_created_task(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._save_selection_state = mock.Mock()
+        instance.refresh_tasks = mock.AsyncMock()
+        instance._prompt_ui_backend = mock.Mock(return_value="codex")
+        fake_task_new = mock.Mock(return_value="99")
+        fake_task_run_web = mock.Mock()
+        action_globals = AppClass._action_task_start_web.__globals__
+
+        with (
+            mock.patch.dict(
+                action_globals,
+                {"task_new": fake_task_new, "task_run_web": fake_task_run_web},
+            ),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass._action_task_start_web(instance))
+
+        self.assertEqual(instance._last_selected_tasks.get("proj1"), "99")
+        fake_task_new.assert_called_once_with("proj1")
+        fake_task_run_web.assert_called_once_with("proj1", "99", backend="codex")
+        instance._save_selection_state.assert_called_once()
+        instance.refresh_tasks.assert_awaited_once()
+
+    def test_autopilot_launch_selects_created_task(self) -> None:
+        app_mod, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance.notify = mock.Mock()
+        instance._save_selection_state = mock.Mock()
+        instance._start_autopilot_watcher = mock.Mock()
+        instance.refresh_tasks = mock.AsyncMock()
+
+        worker = mock.Mock()
+        worker.group = "autopilot-launch"
+        worker.result = ("proj1", "123", None)
+        event = mock.Mock()
+        event.worker = worker
+        event.state = app_mod.WorkerState.SUCCESS
+
+        asyncio.run(AppClass.handle_worker_state_changed(instance, event))
+
+        self.assertEqual(instance._last_selected_tasks.get("proj1"), "123")
+        instance._save_selection_state.assert_called_once()
+        instance._start_autopilot_watcher.assert_called_once_with("proj1", "123")
+        instance.refresh_tasks.assert_awaited_once()
 
 
 class ProjectScreenNoneStateTests(TestCase):
