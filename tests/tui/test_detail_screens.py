@@ -564,6 +564,56 @@ class ActionDispatchTests(TestCase):
 class ActionSelectionTests(TestCase):
     """Tests for task selection after task creation flows."""
 
+    def test_action_new_task_selects_created_task(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._save_selection_state = mock.Mock()
+        instance.refresh_tasks = mock.AsyncMock()
+        fake_task_new = mock.Mock(return_value="7")
+        action_globals = AppClass.action_new_task.__globals__
+
+        with (
+            mock.patch.dict(action_globals, {"task_new": fake_task_new}),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass.action_new_task(instance))
+
+        self.assertEqual(instance._last_selected_tasks.get("proj1"), "7")
+        fake_task_new.assert_called_once_with("proj1")
+        instance._save_selection_state.assert_called_once()
+        instance.refresh_tasks.assert_awaited_once()
+
+    def test_action_new_task_calls_focus_helper(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._save_selection_state = mock.Mock()
+        instance.refresh_tasks = mock.AsyncMock()
+        fake_task_new = mock.Mock(return_value="8")
+        action_globals = AppClass.action_new_task.__globals__
+        original_focus = instance._focus_task_after_creation
+        instance._focus_task_after_creation = mock.Mock(wraps=original_focus)
+
+        with (
+            mock.patch.dict(action_globals, {"task_new": fake_task_new}),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass.action_new_task(instance))
+
+        fake_task_new.assert_called_once_with("proj1")
+        instance._focus_task_after_creation.assert_called_once_with("proj1", "8")
+        instance._save_selection_state.assert_called_once()
+        instance.refresh_tasks.assert_awaited_once()
+
     def test_task_start_cli_selects_created_task(self) -> None:
         _, AppClass = import_app()
 
