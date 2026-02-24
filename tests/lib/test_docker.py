@@ -93,8 +93,37 @@ git:
             self.assertIn("pipx install mistral-vibe", content)
             self.assertIn("pipx inject mistral-vibe mistralai", content)
 
-    def test_build_images_rebuild_agents_parameter(self) -> None:
-        """Test that build_images respects the rebuild_agents parameter."""
+    def _run_build(
+        self,
+        project_id: str,
+        *,
+        image_exists: bool = True,
+        **build_kwargs: object,
+    ) -> list[list[str]]:
+        """Run build_images with mocked subprocess and return captured build commands."""
+        build_commands: list[list[str]] = []
+
+        def mock_run(cmd: list[str], **kwargs: object) -> unittest.mock.Mock:
+            if isinstance(cmd, list) and "podman" in cmd and "build" in cmd:
+                build_commands.append(cmd)
+            result = unittest.mock.Mock()
+            result.returncode = 0
+            return result
+
+        with (
+            unittest.mock.patch("subprocess.run", side_effect=mock_run),
+            unittest.mock.patch("luskctl.lib.containers.docker._check_podman_available"),
+            unittest.mock.patch(
+                "luskctl.lib.containers.docker._image_exists",
+                return_value=image_exists,
+            ),
+        ):
+            build_images(project_id, **build_kwargs)
+
+        return build_commands
+
+    def test_build_images_l2_only_when_base_exists(self) -> None:
+        """Default build with existing L0/L1 should only build L2."""
         project_id = "proj_build_test"
         yaml = f"""\
 project:
@@ -105,9 +134,93 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             generate_dockerfiles(project_id)
+            cmds = self._run_build(project_id, image_exists=True)
 
-            # Mock subprocess.run to capture build commands
-            build_commands = []
+            self.assertEqual(len(cmds), 2)
+            for cmd in cmds:
+                self.assertIn("L2.Dockerfile", " ".join(cmd))
+
+    def test_build_images_auto_detects_missing_base(self) -> None:
+        """Default build without existing L0/L1 should auto-build all layers."""
+        project_id = "proj_build_auto"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+            cmds = self._run_build(project_id, image_exists=False)
+
+            # Should build all 5 images: L0, L1-cli, L1-ui, L2-cli, L2-ui
+            self.assertEqual(len(cmds), 5)
+            self.assertIn("L0.Dockerfile", " ".join(cmds[0]))
+            self.assertIn("L1.cli.Dockerfile", " ".join(cmds[1]))
+            self.assertIn("L1.ui.Dockerfile", " ".join(cmds[2]))
+            self.assertIn("L2.Dockerfile", " ".join(cmds[3]))
+            self.assertIn("L2.Dockerfile", " ".join(cmds[4]))
+
+    def test_build_images_rebuild_agents(self) -> None:
+        """rebuild_agents=True should build all layers regardless of existence."""
+        project_id = "proj_build_agents"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+            cmds = self._run_build(project_id, image_exists=True, rebuild_agents=True)
+
+            self.assertEqual(len(cmds), 5)
+            self.assertIn("L0.Dockerfile", " ".join(cmds[0]))
+            self.assertIn("L1.cli.Dockerfile", " ".join(cmds[1]))
+            self.assertIn("AGENT_CACHE_BUST", " ".join(cmds[1]))
+            self.assertIn("L1.ui.Dockerfile", " ".join(cmds[2]))
+            self.assertIn("L2.Dockerfile", " ".join(cmds[3]))
+            self.assertIn("L2.Dockerfile", " ".join(cmds[4]))
+
+    def test_build_images_full_rebuild(self) -> None:
+        """full_rebuild=True should build all layers with --no-cache."""
+        project_id = "proj_build_full"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+            cmds = self._run_build(project_id, image_exists=True, full_rebuild=True)
+
+            self.assertEqual(len(cmds), 5)
+            # L0 should have --no-cache and --pull=always
+            l0_cmd = " ".join(cmds[0])
+            self.assertIn("--no-cache", l0_cmd)
+            self.assertIn("--pull=always", l0_cmd)
+            # All other commands should have --no-cache
+            for cmd in cmds[1:]:
+                self.assertIn("--no-cache", " ".join(cmd))
+
+    def test_build_images_auto_detect_l1_missing_only(self) -> None:
+        """When L0 exists but L1 is missing, should build all layers."""
+        project_id = "proj_build_l1miss"
+        yaml = f"""\
+project:
+  id: {project_id}
+git:
+  upstream_url: https://example.com/repo.git
+  default_branch: main
+"""
+        with project_env(yaml, project_id=project_id):
+            generate_dockerfiles(project_id)
+
+            build_commands: list[list[str]] = []
 
             def mock_run(cmd: list[str], **kwargs: object) -> unittest.mock.Mock:
                 if isinstance(cmd, list) and "podman" in cmd and "build" in cmd:
@@ -116,46 +229,19 @@ git:
                 result.returncode = 0
                 return result
 
+            def l0_exists_only(image: str) -> bool:
+                # L0 exists, but L1 images do not
+                return "l0:" in image
+
             with (
                 unittest.mock.patch("subprocess.run", side_effect=mock_run),
                 unittest.mock.patch("luskctl.lib.containers.docker._check_podman_available"),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.docker._image_exists",
+                    side_effect=l0_exists_only,
+                ),
             ):
-                # Test default (L2 only)
-                build_commands.clear()
                 build_images(project_id)
 
-                # Should only build L2 images (2 commands: l2-cli and l2-ui)
-                self.assertEqual(len(build_commands), 2)
-                for cmd in build_commands:
-                    self.assertIn("L2.Dockerfile", " ".join(cmd))
-
-                # Test rebuild_agents=True
-                build_commands.clear()
-                build_images(project_id, rebuild_agents=True)
-
-                # Should build all images (5 commands: L0, L1-cli, L1-ui, L2-cli, L2-ui)
-                self.assertEqual(len(build_commands), 5)
-                # First command should be L0
-                self.assertIn("L0.Dockerfile", " ".join(build_commands[0]))
-                # Second should be L1-cli with AGENT_CACHE_BUST
-                self.assertIn("L1.cli.Dockerfile", " ".join(build_commands[1]))
-                self.assertIn("AGENT_CACHE_BUST", " ".join(build_commands[1]))
-                # Third should be L1-ui
-                self.assertIn("L1.ui.Dockerfile", " ".join(build_commands[2]))
-                # Fourth and fifth should be L2
-                self.assertIn("L2.Dockerfile", " ".join(build_commands[3]))
-                self.assertIn("L2.Dockerfile", " ".join(build_commands[4]))
-
-                # Test full_rebuild=True
-                build_commands.clear()
-                build_images(project_id, full_rebuild=True)
-
-                # Should build all images with --no-cache
-                self.assertEqual(len(build_commands), 5)
-                # L0 should have --no-cache and --pull=always
-                l0_cmd = " ".join(build_commands[0])
-                self.assertIn("--no-cache", l0_cmd)
-                self.assertIn("--pull=always", l0_cmd)
-                # All other commands should have --no-cache
-                for cmd in build_commands[1:]:
-                    self.assertIn("--no-cache", " ".join(cmd))
+            # Should build all 5 images since L1 is missing
+            self.assertEqual(len(build_commands), 5)
