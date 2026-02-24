@@ -3,6 +3,7 @@ import unittest.mock
 
 from luskctl.lib.containers.docker import build_images, generate_dockerfiles
 from luskctl.lib.core.config import build_root
+from luskctl.lib.core.images import base_dev_image
 from test_utils import project_env
 
 
@@ -229,9 +230,11 @@ git:
                 result.returncode = 0
                 return result
 
+            l0_image = base_dev_image("ubuntu:24.04")
+
             def l0_exists_only(image: str) -> bool:
                 # L0 exists, but L1 images do not
-                return "l0:" in image
+                return image == l0_image
 
             with (
                 unittest.mock.patch("subprocess.run", side_effect=mock_run),
