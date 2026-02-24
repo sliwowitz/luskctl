@@ -28,7 +28,8 @@ from ..lib.containers.tasks import (
     task_delete,
     task_new,
 )
-from ..lib.core.projects import load_project
+from ..lib.core.config import get_envs_base_dir
+from ..lib.core.projects import effective_ssh_key_name, load_project
 from ..lib.facade import (
     WEB_BACKENDS,
     blablador_auth,
@@ -121,6 +122,41 @@ class ActionsMixin:
         """Persist selection so the newly created task is focused after refresh."""
         self._last_selected_tasks[project_id] = task_id
         self._save_selection_state()
+
+    def _print_sync_gate_ssh_help(self, project_id: str) -> None:
+        """Print SSH-specific troubleshooting details for gate sync failures."""
+        try:
+            project = load_project(project_id)
+        except Exception:
+            return
+
+        upstream = project.upstream_url or ""
+        if not (upstream.startswith("git@") or upstream.startswith("ssh://")):
+            return
+
+        ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+        key_name = effective_ssh_key_name(project, key_type="ed25519")
+        pub_key_path = ssh_dir / f"{key_name}.pub"
+
+        print("\nHint: this project uses an SSH upstream.")
+        print(
+            "Gate sync failures are often caused by a missing SSH key registration on the remote."
+        )
+        print(f"Public key path: {pub_key_path}")
+
+        if pub_key_path.is_file():
+            try:
+                pub_key_text = pub_key_path.read_text(encoding="utf-8", errors="ignore").strip()
+            except Exception:
+                pub_key_text = ""
+            if pub_key_text:
+                print("Public key:")
+                print(f"  {pub_key_text}")
+            else:
+                print("Public key file exists but is empty.")
+        else:
+            print(f"Public key file not found at {pub_key_path}.")
+            print(f"Run 'luskctl ssh-init {project_id}' to generate it.")
 
     # ---------- Worker helpers ----------
 
@@ -599,18 +635,34 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
 
-        try:
-            self.notify("Syncing gate...")
+        project_id = self.current_project_id
+        sync_ok = False
+        with self.suspend():
+            try:
+                print(f"Syncing gate for {project_id}...")
+                result = sync_project_gate(project_id)
+                if result["success"]:
+                    sync_ok = True
+                    if result["created"]:
+                        print("Gate created and synced from upstream.")
+                    else:
+                        print("Gate synced from upstream.")
+                else:
+                    print(f"Gate sync failed: {', '.join(result['errors'])}")
+                    self._print_sync_gate_ssh_help(project_id)
+            except SystemExit as e:
+                print(f"Gate sync failed: {e}")
+                self._print_sync_gate_ssh_help(project_id)
+            except Exception as e:
+                print(f"Gate operation error: {e}")
+                self._print_sync_gate_ssh_help(project_id)
+            input("\n[Press Enter to return to LuskTUI] ")
 
-            # Run sync in background worker
-            self.run_worker(
-                self._sync_gate_worker(self.current_project_id),
-                name="gate_sync",
-                exclusive=True,
-            )
-
-        except Exception as e:
-            self.notify(f"Sync error: {e}")
+        if sync_ok:
+            self.notify("Gate synced from upstream")
+        else:
+            self.notify("Gate sync failed. See terminal output.")
+        self._refresh_project_state()
 
     async def _sync_gate_worker(self, project_id: str) -> None:
         """Background worker to sync gate (init if needed)."""

@@ -699,6 +699,58 @@ class ActionSelectionTests(TestCase):
         instance.refresh_tasks.assert_awaited_once()
 
 
+class GateSyncActionTests(TestCase):
+    """Tests for gate sync action behavior in suspended terminal mode."""
+
+    def test_action_sync_gate_handles_system_exit_without_exiting_tui(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._print_sync_gate_ssh_help = mock.Mock()
+        instance._refresh_project_state = mock.Mock()
+        fake_sync_project_gate = mock.Mock(side_effect=SystemExit("auth failed"))
+        action_globals = AppClass._action_sync_gate.__globals__
+
+        with (
+            mock.patch.dict(action_globals, {"sync_project_gate": fake_sync_project_gate}),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass._action_sync_gate(instance))
+
+        fake_sync_project_gate.assert_called_once_with("proj1")
+        instance._print_sync_gate_ssh_help.assert_called_once_with("proj1")
+        instance.notify.assert_called_once_with("Gate sync failed. See terminal output.")
+        instance._refresh_project_state.assert_called_once()
+
+    def test_action_sync_gate_success_notifies_and_refreshes(self) -> None:
+        _, AppClass = import_app()
+
+        instance = AppClass()
+        instance.current_project_id = "proj1"
+        instance.notify = mock.Mock()
+        instance.suspend = mock.Mock(return_value=contextlib.nullcontext())
+        instance._print_sync_gate_ssh_help = mock.Mock()
+        instance._refresh_project_state = mock.Mock()
+        fake_sync_project_gate = mock.Mock(
+            return_value={"success": True, "created": False, "errors": []}
+        )
+        action_globals = AppClass._action_sync_gate.__globals__
+
+        with (
+            mock.patch.dict(action_globals, {"sync_project_gate": fake_sync_project_gate}),
+            mock.patch("builtins.input", return_value=""),
+        ):
+            asyncio.run(AppClass._action_sync_gate(instance))
+
+        fake_sync_project_gate.assert_called_once_with("proj1")
+        instance._print_sync_gate_ssh_help.assert_not_called()
+        instance.notify.assert_called_once_with("Gate synced from upstream")
+        instance._refresh_project_state.assert_called_once()
+
+
 class ProjectScreenNoneStateTests(TestCase):
     """Tests that ProjectDetailsScreen handles None state correctly."""
 
