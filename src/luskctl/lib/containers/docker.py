@@ -33,15 +33,11 @@ def _image_exists(image: str) -> bool:
 
     Assumes podman is available (call ``_check_podman_available`` first).
     """
-    try:
-        subprocess.run(
-            ["podman", "image", "exists", image],
-            check=True,
-            capture_output=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    result = subprocess.run(
+        ["podman", "image", "exists", image],
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 # ---------- Dockerfile gen & build ----------
