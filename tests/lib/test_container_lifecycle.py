@@ -133,7 +133,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             self.assertEqual(meta["status"], "running")
 
     def test_task_restart_already_running(self) -> None:
-        """task_restart does nothing if container is already running."""
+        """task_restart stops then starts a running container."""
         project_id = "proj_restart2"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             task_new(project_id)
@@ -145,26 +145,37 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
-            # Mock container is already running
+            cname = f"{project_id}-cli-1"
+
+            # Mock container is running, then running again after restart
             with (
                 mock_git_config(),
                 unittest.mock.patch(
                     "luskctl.lib.containers.task_runners.get_container_state",
-                    return_value="running",
+                    side_effect=["running", "running"],
                 ),
                 unittest.mock.patch(
                     "luskctl.lib.containers.task_runners.subprocess.run"
                 ) as run_mock,
             ):
+                run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 output = StringIO()
                 with redirect_stdout(output):
                     task_restart(project_id, "1")
 
-                    # Verify no podman command was called
-                    run_mock.assert_not_called()
+                # Verify podman stop then start were called
+                self.assertEqual(run_mock.call_count, 2)
+                stop_args = run_mock.call_args_list[0][0][0]
+                start_args = run_mock.call_args_list[1][0][0]
+                self.assertEqual(stop_args, ["podman", "stop", cname])
+                self.assertEqual(start_args, ["podman", "start", cname])
 
-                    # Verify message indicates already running
-                    self.assertIn("already running", output.getvalue())
+                # Verify message indicates restarted
+                self.assertIn("Restarted", output.getvalue())
+
+            # Verify metadata status is 'running'
+            meta = yaml.safe_load(meta_path.read_text())
+            self.assertEqual(meta["status"], "running")
 
     def test_task_status_shows_mismatch(self) -> None:
         """task_status detects metadata vs container state mismatch."""
