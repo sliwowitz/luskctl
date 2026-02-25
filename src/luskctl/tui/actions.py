@@ -517,7 +517,7 @@ class ActionsMixin:
             await self.refresh_tasks()
 
     async def _action_restart_task(self) -> None:
-        """Restart a stopped task container."""
+        """Restart a task container (stops it first if running)."""
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return

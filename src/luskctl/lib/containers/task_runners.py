@@ -547,8 +547,9 @@ def task_run_headless(
 
 
 def task_restart(project_id: str, task_id: str, backend: str | None = None) -> None:
-    """Restart a stopped task or re-run if the container is gone.
+    """Restart a task container.
 
+    If the container is running, stops it first and then starts it again.
     If the container exists in stopped/exited state, uses ``podman start``.
     If the container doesn't exist, delegates to task_run_cli or task_run_web.
 
@@ -570,12 +571,21 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
     container_state = get_container_state(cname)
 
     if container_state == "running":
-        color_enabled = _supports_color()
-        print(f"Task {task_id} is already running: {_green(cname, color_enabled)}")
-        return
+        # Container is running - stop it first, then start it again
+        try:
+            subprocess.run(
+                ["podman", "stop", cname],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError:
+            raise SystemExit("podman not found; please install podman")
+        except subprocess.CalledProcessError as e:
+            raise SystemExit(f"Failed to stop container: {e}")
 
     if container_state is not None:
-        # Container exists but is stopped/exited - restart it
+        # Container exists (stopped/exited, or just stopped above) - start it
         try:
             subprocess.run(
                 ["podman", "start", cname],
