@@ -5,7 +5,10 @@ variables and volume mounts that ``podman run`` needs when launching a
 task container.
 """
 
+from __future__ import annotations
+
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from .._util.fs import ensure_dir_writable
@@ -83,48 +86,53 @@ def apply_web_env_overrides(
 # ---------- Shared config directories ----------
 
 
-def _shared_config_dirs(envs_base: Path) -> dict[str, Path]:
-    """Ensure shared config directories exist and return name→path mapping."""
-    dirs = {
-        "codex": envs_base / "_codex-config",
-        "claude": envs_base / "_claude-config",
-        "vibe": envs_base / "_vibe-config",
-        "blablador": envs_base / "_blablador-config",
-        "opencode_config": envs_base / "_opencode-config",
-        "opencode_data": envs_base / "_opencode-data",
-        "opencode_state": envs_base / "_opencode-state",
-        "gh": envs_base / "_gh-config",
-        "glab": envs_base / "_glab-config",
-    }
-    labels = {
-        "codex": "Codex config",
-        "claude": "Claude config",
-        "vibe": "Vibe config",
-        "blablador": "Blablador config",
-        "opencode_config": "OpenCode config",
-        "opencode_data": "OpenCode data",
-        "opencode_state": "OpenCode state",
-        "gh": "GitHub CLI config",
-        "glab": "GitLab CLI config",
-    }
-    for key, path in dirs.items():
-        ensure_dir_writable(path, labels[key])
+@dataclass(frozen=True)
+class SharedMount:
+    """Describes a shared config directory mounted into every task container."""
+
+    key: str
+    """Lookup key (e.g. ``"codex"``)."""
+
+    host_dir_suffix: str
+    """Directory name under ``get_envs_base_dir()`` (e.g. ``"_codex-config"``)."""
+
+    label: str
+    """Human-readable label for writable-check messages (e.g. ``"Codex config"``)."""
+
+    container_path: str
+    """Mount point inside the container (e.g. ``"/home/dev/.codex"``)."""
+
+
+SHARED_MOUNTS: list[SharedMount] = [
+    SharedMount("codex", "_codex-config", "Codex config", "/home/dev/.codex"),
+    SharedMount("claude", "_claude-config", "Claude config", "/home/dev/.claude"),
+    SharedMount("vibe", "_vibe-config", "Vibe config", "/home/dev/.vibe"),
+    SharedMount("blablador", "_blablador-config", "Blablador config", "/home/dev/.blablador"),
+    SharedMount(
+        "opencode_config", "_opencode-config", "OpenCode config", "/home/dev/.config/opencode"
+    ),
+    SharedMount(
+        "opencode_data", "_opencode-data", "OpenCode data", "/home/dev/.local/share/opencode"
+    ),
+    SharedMount("opencode_state", "_opencode-state", "OpenCode state", "/home/dev/.local/state"),
+    SharedMount("gh", "_gh-config", "GitHub CLI config", "/home/dev/.config/gh"),
+    SharedMount("glab", "_glab-config", "GitLab CLI config", "/home/dev/.config/glab-cli"),
+]
+
+
+def _ensure_shared_dirs(envs_base: Path) -> dict[str, Path]:
+    """Ensure shared config directories exist and return key→host_path mapping."""
+    dirs = {}
+    for m in SHARED_MOUNTS:
+        path = envs_base / m.host_dir_suffix
+        ensure_dir_writable(path, m.label)
+        dirs[m.key] = path
     return dirs
 
 
-def _shared_volume_mounts(config_dirs: dict[str, Path]) -> list[str]:
-    """Return volume mount strings for shared config directories."""
-    return [
-        f"{config_dirs['codex']}:/home/dev/.codex:z",
-        f"{config_dirs['claude']}:/home/dev/.claude:z",
-        f"{config_dirs['vibe']}:/home/dev/.vibe:z",
-        f"{config_dirs['blablador']}:/home/dev/.blablador:z",
-        f"{config_dirs['opencode_config']}:/home/dev/.config/opencode:z",
-        f"{config_dirs['opencode_data']}:/home/dev/.local/share/opencode:z",
-        f"{config_dirs['opencode_state']}:/home/dev/.local/state:z",
-        f"{config_dirs['gh']}:/home/dev/.config/gh:z",
-        f"{config_dirs['glab']}:/home/dev/.config/glab-cli:z",
-    ]
+def _shared_volume_mounts(host_dirs: dict[str, Path]) -> list[str]:
+    """Return volume mount strings for all shared config directories."""
+    return [f"{host_dirs[m.key]}:{m.container_path}:z" for m in SHARED_MOUNTS]
 
 
 def _security_mode_env_and_volumes(
@@ -176,8 +184,7 @@ def build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, li
     """Compose environment and volume mounts for a task container.
 
     - Mount per-task workspace subdir to /workspace (host-explorable).
-    - Mount shared codex config dir to /home/dev/.codex (read-write).
-    - Mount shared Claude config dir to /home/dev/.claude (read-write).
+    - Mount all shared config dirs from ``SHARED_MOUNTS`` (read-write).
     - Optionally mount per-project SSH config dir to /home/dev/.ssh (read-write).
     - Provide REPO_ROOT and git info for the init script.
     """
@@ -186,7 +193,7 @@ def build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, li
     repo_dir.mkdir(parents=True, exist_ok=True)
 
     envs_base = get_envs_base_dir()
-    config_dirs = _shared_config_dirs(envs_base)
+    config_dirs = _ensure_shared_dirs(envs_base)
     ssh_host_dir = project.ssh_host_dir or (envs_base / f"_ssh-config-{project.id}")
 
     env = {
