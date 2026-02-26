@@ -37,6 +37,8 @@ from ..lib.facade import (
     claude_auth,
     codex_auth,
     generate_dockerfiles,
+    gh_auth,
+    glab_auth,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
     mistral_auth,
@@ -291,6 +293,8 @@ class ActionsMixin:
             "claude": claude_auth,
             "mistral": mistral_auth,
             "blablador": blablador_auth,
+            "gh": gh_auth,
+            "glab": glab_auth,
         }
         func = auth_funcs.get(agent)
         if not func:

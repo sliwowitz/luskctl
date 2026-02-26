@@ -204,6 +204,8 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         _modal_binding("2", "auth_claude", "Claude"),
         _modal_binding("3", "auth_mistral", "Mistral"),
         _modal_binding("4", "auth_blablador", "Blablador"),
+        _modal_binding("5", "auth_gh", "GitHub CLI"),
+        _modal_binding("6", "auth_glab", "GitLab CLI"),
     ]
 
     CSS = """
@@ -234,6 +236,8 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
                 Option("\\[2] Claude", id="auth_claude"),
                 Option("\\[3] Mistral", id="auth_mistral"),
                 Option("\\[4] Blablador", id="auth_blablador"),
+                Option("\\[5] GitHub CLI", id="auth_gh"),
+                Option("\\[6] GitLab CLI", id="auth_glab"),
                 id="auth-actions-list",
             )
         dialog.border_title = "Authenticate Agents"
@@ -263,6 +267,12 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
     def action_auth_blablador(self) -> None:
         self.dismiss("auth_blablador")
+
+    def action_auth_gh(self) -> None:
+        self.dismiss("auth_gh")
+
+    def action_auth_glab(self) -> None:
+        self.dismiss("auth_glab")
 
 
 # ---------------------------------------------------------------------------

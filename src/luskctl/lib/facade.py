@@ -12,7 +12,7 @@ from .containers.docker import build_images, generate_dockerfiles
 from .containers.environment import WEB_BACKENDS
 from .containers.project_state import get_project_state, is_task_image_old
 from .core.projects import load_project
-from .security.auth import blablador_auth, claude_auth, codex_auth, mistral_auth
+from .security.auth import blablador_auth, claude_auth, codex_auth, gh_auth, glab_auth, mistral_auth
 from .security.git_gate import (
     GateStalenessInfo,
     compare_gate_vs_upstream,
@@ -56,6 +56,8 @@ __all__ = [
     "claude_auth",
     "mistral_auth",
     "blablador_auth",
+    "gh_auth",
+    "glab_auth",
     # Git gate
     "compare_gate_vs_upstream",
     "sync_gate_branches",

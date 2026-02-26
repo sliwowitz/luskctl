@@ -374,6 +374,8 @@ expose = [
     "claude_auth",
     "mistral_auth",
     "blablador_auth",
+    "gh_auth",
+    "glab_auth",
 ]
 from = ["luskctl.lib.security.auth"]
 
@@ -479,6 +481,8 @@ expose = [
     "claude_auth",
     "mistral_auth",
     "blablador_auth",
+    "gh_auth",
+    "glab_auth",
     "compare_gate_vs_upstream",
     "sync_gate_branches",
     "get_gate_last_commit",

@@ -41,6 +41,8 @@ from ..lib.facade import (
     claude_auth,
     codex_auth,
     generate_dockerfiles,
+    gh_auth,
+    glab_auth,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
     mistral_auth,
@@ -480,6 +482,28 @@ def main() -> None:
     except Exception:
         pass
 
+    # auth-gh
+    p_auth_gh = sub.add_parser(
+        "auth-gh",
+        help="Authenticate GitHub CLI (gh) inside an L2 CLI container",
+    )
+    _a = p_auth_gh.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    # auth-glab
+    p_auth_glab = sub.add_parser(
+        "auth-glab",
+        help="Authenticate GitLab CLI (glab) inside an L2 CLI container",
+    )
+    _a = p_auth_glab.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
     # login (top-level shortcut)
     p_login = sub.add_parser("login", help="Open interactive shell in a running task container")
     _a = p_login.add_argument("project_id")
@@ -723,6 +747,10 @@ def main() -> None:
         claude_auth(args.project_id)
     elif args.cmd == "auth-blablador":
         blablador_auth(args.project_id)
+    elif args.cmd == "auth-gh":
+        gh_auth(args.project_id)
+    elif args.cmd == "auth-glab":
+        glab_auth(args.project_id)
     elif args.cmd == "config":
         _print_config()
     elif args.cmd == "config-show":

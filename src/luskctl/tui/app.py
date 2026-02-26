@@ -703,6 +703,10 @@ if _HAS_TEXTUAL:
                 await self._action_auth("mistral")
             elif action == "auth_blablador":
                 await self._action_auth("blablador")
+            elif action == "auth_gh":
+                await self._action_auth("gh")
+            elif action == "auth_glab":
+                await self._action_auth("glab")
 
         async def _handle_task_action(self, action: str) -> None:
             """Handle task actions."""

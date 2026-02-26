@@ -1,9 +1,10 @@
 """Authentication workflows for AI coding agents.
 
-Each public function (codex_auth, claude_auth, mistral_auth, blablador_auth)
-sets up credentials for a specific agent inside a temporary L2 CLI container.
-The shared helper ``_run_auth_container`` handles the common lifecycle:
-check podman, load project, ensure host dir, cleanup old container, run.
+Each public function (codex_auth, claude_auth, mistral_auth, blablador_auth,
+gh_auth, glab_auth) sets up credentials for a specific agent inside a
+temporary L2 CLI container.  The shared helper ``_run_auth_container``
+handles the common lifecycle: check podman, load project, ensure host dir,
+cleanup old container, run.
 """
 
 import shutil
@@ -263,6 +264,65 @@ def blablador_auth(project_id: str) -> None:
             "",
             "You will be prompted to enter your Blablador API key.",
             "Get your API key at: https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens",
+            "",
+        ],
+    )
+
+
+# ---------- GitHub CLI authentication ----------
+
+
+def gh_auth(project_id: str) -> None:
+    """Run ``gh auth login`` inside the L2 CLI container.
+
+    This command:
+    - Spins up a temporary L2 CLI container for the project
+    - Mounts the shared GitHub CLI config directory (~/.config/gh)
+    - Runs ``gh auth login`` interactively (device flow or paste a token)
+    - The authentication persists in the shared config folder
+    """
+    _run_auth_container(
+        project_id=project_id,
+        container_suffix="auth-gh",
+        host_dir_name="_gh-config",
+        host_dir_label="GitHub CLI config",
+        container_mount="/home/dev/.config/gh",
+        command=["gh", "auth", "login"],
+        banner_lines=[
+            f"Authenticating GitHub CLI for project: {project_id}",
+            "",
+            "You will be guided through GitHub authentication.",
+            "Recommended: choose 'Login with a web browser' or paste a token.",
+            "",
+        ],
+    )
+
+
+# ---------- GitLab CLI authentication ----------
+
+
+def glab_auth(project_id: str) -> None:
+    """Run ``glab auth login`` inside the L2 CLI container.
+
+    This command:
+    - Spins up a temporary L2 CLI container for the project
+    - Mounts the shared GitLab CLI config directory (~/.config/glab-cli)
+    - Runs ``glab auth login`` interactively
+    - The authentication persists in the shared config folder
+    """
+    _run_auth_container(
+        project_id=project_id,
+        container_suffix="auth-glab",
+        host_dir_name="_glab-config",
+        host_dir_label="GitLab CLI config",
+        container_mount="/home/dev/.config/glab-cli",
+        command=["glab", "auth", "login"],
+        banner_lines=[
+            f"Authenticating GitLab CLI for project: {project_id}",
+            "",
+            "You will be guided through GitLab authentication.",
+            "You will need a GitLab personal access token.",
+            "Create one at: https://gitlab.com/-/user_settings/personal_access_tokens",
             "",
         ],
     )
