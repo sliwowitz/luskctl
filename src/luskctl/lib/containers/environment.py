@@ -103,7 +103,7 @@ class SharedMount:
     """Mount point inside the container (e.g. ``"/home/dev/.codex"``)."""
 
 
-SHARED_MOUNTS: list[SharedMount] = [
+SHARED_MOUNTS: tuple[SharedMount, ...] = (
     SharedMount("codex", "_codex-config", "Codex config", "/home/dev/.codex"),
     SharedMount("claude", "_claude-config", "Claude config", "/home/dev/.claude"),
     SharedMount("vibe", "_vibe-config", "Vibe config", "/home/dev/.vibe"),
@@ -117,7 +117,7 @@ SHARED_MOUNTS: list[SharedMount] = [
     SharedMount("opencode_state", "_opencode-state", "OpenCode state", "/home/dev/.local/state"),
     SharedMount("gh", "_gh-config", "GitHub CLI config", "/home/dev/.config/gh"),
     SharedMount("glab", "_glab-config", "GitLab CLI config", "/home/dev/.config/glab-cli"),
-]
+)
 
 
 def _ensure_shared_dirs(envs_base: Path) -> dict[str, Path]:
