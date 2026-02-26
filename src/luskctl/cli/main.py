@@ -35,17 +35,13 @@ from ..lib.core.config import (
 from ..lib.core.projects import derive_project, list_presets, list_projects
 from ..lib.core.version import format_version_string, get_version_info
 from ..lib.facade import (
+    AUTH_PROVIDERS,
     WEB_BACKENDS,
-    blablador_auth,
+    authenticate,
     build_images,
-    claude_auth,
-    codex_auth,
     generate_dockerfiles,
-    gh_auth,
-    glab_auth,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
-    mistral_auth,
     sync_project_gate,
 )
 from ..lib.wizards.new_project import run_wizard
@@ -438,67 +434,16 @@ def main() -> None:
         pass
     p_derive.add_argument("new_id", help="New project ID")
 
-    # auth-codex
-    p_auth_codex = sub.add_parser(
-        "auth-codex",
-        help="Authenticate Codex CLI by running 'codex login' inside an L2 CLI container with port forwarding",
+    # auth <provider> <project_id>
+    provider_names = list(AUTH_PROVIDERS)
+    providers_help = ", ".join(f"{p.name} ({p.label})" for p in AUTH_PROVIDERS.values())
+    p_auth = sub.add_parser(
+        "auth",
+        help="Authenticate an agent/tool for a project",
+        description=f"Available providers: {providers_help}",
     )
-    _a = p_auth_codex.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-    # auth-mistral
-    p_auth_mistral = sub.add_parser(
-        "auth-mistral",
-        help="Set up Mistral API key for Vibe CLI inside an L2 CLI container",
-    )
-    _a = p_auth_mistral.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-    # auth-claude
-    p_auth_claude = sub.add_parser(
-        "auth-claude",
-        help="Set up Claude API key for CLI inside an L2 CLI container",
-    )
-    _a = p_auth_claude.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-    # auth-blablador
-    p_auth_blablador = sub.add_parser(
-        "auth-blablador",
-        help="Set up Blablador API key for OpenCode inside an L2 CLI container",
-    )
-    _a = p_auth_blablador.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-    # auth-gh
-    p_auth_gh = sub.add_parser(
-        "auth-gh",
-        help="Authenticate GitHub CLI (gh) inside an L2 CLI container",
-    )
-    _a = p_auth_gh.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-    # auth-glab
-    p_auth_glab = sub.add_parser(
-        "auth-glab",
-        help="Authenticate GitLab CLI (glab) inside an L2 CLI container",
-    )
-    _a = p_auth_glab.add_argument("project_id")
+    p_auth.add_argument("provider", choices=provider_names, metavar="provider")
+    _a = p_auth.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except Exception:
@@ -739,18 +684,8 @@ def main() -> None:
         print("  Tip: global presets are shared across projects (see luskctl config)")
     elif args.cmd == "project-wizard":
         run_wizard(init_fn=_cmd_project_init)
-    elif args.cmd == "auth-codex":
-        codex_auth(args.project_id)
-    elif args.cmd == "auth-mistral":
-        mistral_auth(args.project_id)
-    elif args.cmd == "auth-claude":
-        claude_auth(args.project_id)
-    elif args.cmd == "auth-blablador":
-        blablador_auth(args.project_id)
-    elif args.cmd == "auth-gh":
-        gh_auth(args.project_id)
-    elif args.cmd == "auth-glab":
-        glab_auth(args.project_id)
+    elif args.cmd == "auth":
+        authenticate(args.project_id, args.provider)
     elif args.cmd == "config":
         _print_config()
     elif args.cmd == "config-show":
