@@ -571,55 +571,5 @@ class TaskDetailsScreen(screen.Screen[str | None]):
                 self.dismiss("follow_logs")
                 event.stop()
 
-    # Action methods for programmatic access
     def action_dismiss(self) -> None:
         self.dismiss(None)
-
-    def action_task_start_cli(self) -> None:
-        self.dismiss("task_start_cli")
-
-    def action_task_start_web(self) -> None:
-        self.dismiss("task_start_web")
-
-    def action_task_start_autopilot(self) -> None:
-        self.dismiss("task_start_autopilot")
-
-    def action_new(self) -> None:
-        self.dismiss("new")
-
-    def action_delete(self) -> None:
-        if self._has_tasks:
-            self.dismiss("delete")
-
-    def action_cli(self) -> None:
-        if self._has_tasks:
-            self.dismiss("cli")
-
-    def action_web(self) -> None:
-        if self._has_tasks:
-            self.dismiss("web")
-
-    def action_restart(self) -> None:
-        if self._has_tasks:
-            self.dismiss("restart")
-
-    def action_login(self) -> None:
-        """Dismiss the screen with a ``'login'`` result to trigger container login.
-
-        Only fires when the current project has tasks (``self._has_tasks``).
-        The parent ``LuskTUI`` handles the actual login dispatch.
-        """
-        if self._has_tasks:
-            self.dismiss("login")
-
-    def action_follow_logs(self) -> None:
-        if self._has_tasks:
-            self.dismiss("follow_logs")
-
-    def action_diff_head(self) -> None:
-        if self._has_tasks:
-            self.dismiss("diff_head")
-
-    def action_diff_prev(self) -> None:
-        if self._has_tasks:
-            self.dismiss("diff_prev")

@@ -60,6 +60,36 @@ if _HAS_TEXTUAL:
         TaskMeta,
     )
 
+    # -- Dispatch tables mapping action IDs to handler method names ----------
+    # These are the single source of truth for action routing.  Both
+    # _handle_project_action and _handle_task_action do a dict lookup here
+    # instead of maintaining long if/elif chains.
+
+    PROJECT_ACTION_HANDLERS: dict[str, str] = {
+        "project_init": "_action_project_init",
+        "generate": "action_generate_dockerfiles",
+        "build": "action_build_images",
+        "build_agents": "_action_build_agents",
+        "build_full": "_action_build_full",
+        "init_ssh": "action_init_ssh",
+        "sync_gate": "_action_sync_gate",
+    }
+
+    TASK_ACTION_HANDLERS: dict[str, str] = {
+        "task_start_cli": "_action_task_start_cli",
+        "task_start_web": "_action_task_start_web",
+        "task_start_autopilot": "_action_task_start_autopilot",
+        "new": "action_new_task",
+        "cli": "action_run_cli",
+        "web": "_action_run_web",
+        "delete": "action_delete_task",
+        "restart": "_action_restart_task",
+        "diff_head": "action_copy_diff_head",
+        "diff_prev": "action_copy_diff_prev",
+        "login": "_action_login",
+        "follow_logs": "_action_follow_logs",
+    }
+
     class LuskTUI(PollingMixin, ActionsMixin, App):
         """Redesigned TUI frontend for luskctl core modules."""
 
@@ -681,49 +711,18 @@ if _HAS_TEXTUAL:
 
         async def _handle_project_action(self, action: str) -> None:
             """Handle project actions."""
-            if action == "project_init":
-                await self._action_project_init()
-            elif action == "generate":
-                await self.action_generate_dockerfiles()
-            elif action == "build":
-                await self.action_build_images()
-            elif action == "build_agents":
-                await self._action_build_agents()
-            elif action == "build_full":
-                await self._action_build_full()
-            elif action == "init_ssh":
-                await self.action_init_ssh()
-            elif action == "sync_gate":
-                await self._action_sync_gate()
-            elif action.startswith("auth_"):
+            if action.startswith("auth_"):
                 await self._action_auth(action[5:])
+                return
+            handler = PROJECT_ACTION_HANDLERS.get(action)
+            if handler:
+                await getattr(self, handler)()
 
         async def _handle_task_action(self, action: str) -> None:
             """Handle task actions."""
-            if action == "task_start_cli":
-                await self._action_task_start_cli()
-            elif action == "task_start_web":
-                await self._action_task_start_web()
-            elif action == "task_start_autopilot":
-                await self._action_task_start_autopilot()
-            elif action == "new":
-                await self.action_new_task()
-            elif action == "cli":
-                await self.action_run_cli()
-            elif action == "web":
-                await self._action_run_web()
-            elif action == "delete":
-                await self.action_delete_task()
-            elif action == "restart":
-                await self._action_restart_task()
-            elif action == "diff_head":
-                await self.action_copy_diff_head()
-            elif action == "diff_prev":
-                await self.action_copy_diff_prev()
-            elif action == "login":
-                await self._action_login()
-            elif action == "follow_logs":
-                await self._action_follow_logs()
+            handler = TASK_ACTION_HANDLERS.get(action)
+            if handler:
+                await getattr(self, handler)()
 
     def _launch_in_tmux() -> None:
         """Launch the TUI inside a managed tmux session.

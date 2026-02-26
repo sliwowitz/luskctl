@@ -407,84 +407,27 @@ class ActionDispatchTests(TestCase):
                 asyncio.run(coro)
                 instance._action_auth.assert_called_once_with(provider)
 
-    def test_task_action_dispatch_task_start_cli(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_task_action(instance, "task_start_cli")
-        asyncio.run(coro)
-
-        instance._action_task_start_cli.assert_called_once()
-
-    def test_task_action_dispatch_task_start_web(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_task_action(instance, "task_start_web")
-        asyncio.run(coro)
-
-        instance._action_task_start_web.assert_called_once()
-
-    def test_task_action_dispatch_restart(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_task_action(instance, "restart")
-        asyncio.run(coro)
-
-        instance._action_restart_task.assert_called_once()
-
-    def test_task_action_dispatch_diff_head(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_task_action(instance, "diff_head")
-        asyncio.run(coro)
-
-        instance.action_copy_diff_head.assert_called_once()
-
-    def test_task_action_dispatch_diff_prev(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_task_action(instance, "diff_prev")
-        asyncio.run(coro)
-
-        instance.action_copy_diff_prev.assert_called_once()
-
-    def test_task_action_dispatch_existing_actions(self) -> None:
-        """Verify existing actions (new, cli, web, delete) still route correctly."""
+    def test_task_action_dispatch_all(self) -> None:
+        """Every entry in TASK_ACTION_HANDLERS routes to its handler."""
         app_mod, AppClass = import_app()
 
-        for action, method in [
-            ("new", "action_new_task"),
-            ("cli", "action_run_cli"),
-            ("web", "_action_run_web"),
-            ("delete", "action_delete_task"),
-        ]:
+        for action, handler in app_mod.TASK_ACTION_HANDLERS.items():
             with self.subTest(action=action):
                 instance = mock.Mock(spec=AppClass)
                 coro = AppClass._handle_task_action(instance, action)
                 asyncio.run(coro)
-                getattr(instance, method).assert_called_once()
+                getattr(instance, handler).assert_called_once()
 
-    def test_project_action_dispatch_existing_actions(self) -> None:
-        """Verify existing project actions still route correctly."""
+    def test_project_action_dispatch_all(self) -> None:
+        """Every entry in PROJECT_ACTION_HANDLERS routes to its handler."""
         app_mod, AppClass = import_app()
 
-        for action, method in [
-            ("generate", "action_generate_dockerfiles"),
-            ("build", "action_build_images"),
-            ("build_agents", "_action_build_agents"),
-            ("build_full", "_action_build_full"),
-            ("init_ssh", "action_init_ssh"),
-            ("sync_gate", "_action_sync_gate"),
-        ]:
+        for action, handler in app_mod.PROJECT_ACTION_HANDLERS.items():
             with self.subTest(action=action):
                 instance = mock.Mock(spec=AppClass)
                 coro = AppClass._handle_project_action(instance, action)
                 asyncio.run(coro)
-                getattr(instance, method).assert_called_once()
+                getattr(instance, handler).assert_called_once()
 
     def test_action_run_cli_from_main(self) -> None:
         app_mod, AppClass = import_app()
@@ -518,20 +461,6 @@ class ActionDispatchTests(TestCase):
         app_mod, AppClass = import_app()
         instance = mock.Mock(spec=AppClass)
         coro = AppClass.action_follow_logs_from_main(instance)
-        asyncio.run(coro)
-        instance._action_follow_logs.assert_called_once()
-
-    def test_task_action_dispatch_autopilot(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        coro = AppClass._handle_task_action(instance, "task_start_autopilot")
-        asyncio.run(coro)
-        instance._action_task_start_autopilot.assert_called_once()
-
-    def test_task_action_dispatch_follow_logs(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        coro = AppClass._handle_task_action(instance, "follow_logs")
         asyncio.run(coro)
         instance._action_follow_logs.assert_called_once()
 
