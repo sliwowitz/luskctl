@@ -439,7 +439,13 @@ from = ["luskctl.lib.core.images"]
 # Service module interfaces
 
 [[interfaces]]
-expose = ["WEB_BACKENDS", "build_task_env_and_volumes", "apply_web_env_overrides"]
+expose = [
+    "WEB_BACKENDS",
+    "SHARED_MOUNTS",
+    "SharedMount",
+    "build_task_env_and_volumes",
+    "apply_web_env_overrides",
+]
 from = ["luskctl.lib.containers.environment"]
 
 [[interfaces]]
