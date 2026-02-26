@@ -93,6 +93,8 @@ def _shared_config_dirs(envs_base: Path) -> dict[str, Path]:
         "opencode_config": envs_base / "_opencode-config",
         "opencode_data": envs_base / "_opencode-data",
         "opencode_state": envs_base / "_opencode-state",
+        "gh": envs_base / "_gh-config",
+        "glab": envs_base / "_glab-config",
     }
     labels = {
         "codex": "Codex config",
@@ -102,6 +104,8 @@ def _shared_config_dirs(envs_base: Path) -> dict[str, Path]:
         "opencode_config": "OpenCode config",
         "opencode_data": "OpenCode data",
         "opencode_state": "OpenCode state",
+        "gh": "GitHub CLI config",
+        "glab": "GitLab CLI config",
     }
     for key, path in dirs.items():
         ensure_dir_writable(path, labels[key])
@@ -118,6 +122,8 @@ def _shared_volume_mounts(config_dirs: dict[str, Path]) -> list[str]:
         f"{config_dirs['opencode_config']}:/home/dev/.config/opencode:z",
         f"{config_dirs['opencode_data']}:/home/dev/.local/share/opencode:z",
         f"{config_dirs['opencode_state']}:/home/dev/.local/state:z",
+        f"{config_dirs['gh']}:/home/dev/.config/gh:z",
+        f"{config_dirs['glab']}:/home/dev/.config/glab-cli:z",
     ]
 
 

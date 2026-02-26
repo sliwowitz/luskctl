@@ -432,6 +432,24 @@ class ActionDispatchTests(TestCase):
 
         instance._action_auth.assert_called_once_with("blablador")
 
+    def test_project_action_dispatch_auth_gh(self) -> None:
+        app_mod, AppClass = import_app()
+        instance = mock.Mock(spec=AppClass)
+
+        coro = AppClass._handle_project_action(instance, "auth_gh")
+        asyncio.run(coro)
+
+        instance._action_auth.assert_called_once_with("gh")
+
+    def test_project_action_dispatch_auth_glab(self) -> None:
+        app_mod, AppClass = import_app()
+        instance = mock.Mock(spec=AppClass)
+
+        coro = AppClass._handle_project_action(instance, "auth_glab")
+        asyncio.run(coro)
+
+        instance._action_auth.assert_called_once_with("glab")
+
     def test_task_action_dispatch_task_start_cli(self) -> None:
         app_mod, AppClass = import_app()
         instance = mock.Mock(spec=AppClass)
