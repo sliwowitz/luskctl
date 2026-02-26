@@ -1,14 +1,18 @@
 """Authentication workflows for AI coding agents.
 
-Each public function (codex_auth, claude_auth, mistral_auth, blablador_auth,
-gh_auth, glab_auth) sets up credentials for a specific agent inside a
-temporary L2 CLI container.  The shared helper ``_run_auth_container``
-handles the common lifecycle: check podman, load project, ensure host dir,
-cleanup old container, run.
+Provides a data-driven registry of auth providers (``AUTH_PROVIDERS``) and a
+single entry point ``authenticate(project_id, provider)`` that runs the
+appropriate flow inside a temporary L2 CLI container.
+
+The shared helper ``_run_auth_container`` handles the common lifecycle:
+check podman, load project, ensure host dir, cleanup old container, run.
 """
+
+from __future__ import annotations
 
 import shutil
 import subprocess
+from dataclasses import dataclass, field
 
 from .._util.fs import ensure_dir_writable
 from .._util.podman import _podman_userns_args
@@ -16,7 +20,180 @@ from ..core.config import get_envs_base_dir
 from ..core.images import project_cli_image
 from ..core.projects import load_project
 
-# ---------- Shared helper ----------
+# ---------------------------------------------------------------------------
+# Provider descriptor
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AuthProvider:
+    """Describes how to authenticate one tool/agent."""
+
+    name: str
+    """Short key used in CLI and TUI dispatch (e.g. ``"codex"``)."""
+
+    label: str
+    """Human-readable display name (e.g. ``"Codex"``)."""
+
+    host_dir_name: str
+    """Directory name under ``get_envs_base_dir()`` (e.g. ``"_codex-config"``)."""
+
+    container_mount: str
+    """Mount point inside the container (e.g. ``"/home/dev/.codex"``)."""
+
+    command: list[str]
+    """Command to execute inside the container."""
+
+    banner_hint: str
+    """Provider-specific help text shown before the container runs."""
+
+    extra_run_args: tuple[str, ...] = field(default_factory=tuple)
+    """Additional ``podman run`` arguments (e.g. port forwarding)."""
+
+
+# ---------------------------------------------------------------------------
+# Helper for API-key-style providers
+# ---------------------------------------------------------------------------
+
+
+def _api_key_command(
+    label: str,
+    key_url: str,
+    env_var: str,
+    config_path: str,
+    printf_template: str,
+    tool_name: str,
+) -> list[str]:
+    """Build a bash command that prompts for an API key and writes it to a config file.
+
+    Args:
+        label: Human name shown in the prompt (e.g. "Claude").
+        key_url: URL where the user can obtain the key.
+        env_var: Name shown in the ``read -p`` prompt (e.g. "ANTHROPIC_API_KEY").
+        config_path: Destination inside the container (e.g. "~/.claude/config.json").
+        printf_template: ``printf`` format string (e.g. ``'{\"api_key\": \"%s\"}'``).
+        tool_name: Name shown in the success message (e.g. "claude").
+    """
+    config_dir = config_path.rsplit("/", 1)[0]
+    parts = [
+        f"echo 'Enter your {label} API key (get one at {key_url}):'",
+        f"read -r -p '{env_var}=' api_key",
+        f"mkdir -p {config_dir}",
+        f"printf '{printf_template}\\n' \"$api_key\" > {config_path}",
+        "echo",
+        f"echo 'API key saved to {config_path}'",
+        f"echo 'You can now use {tool_name} in task containers.'",
+    ]
+    return ["bash", "-c", " && ".join(parts)]
+
+
+# ---------------------------------------------------------------------------
+# Provider registry
+# ---------------------------------------------------------------------------
+
+AUTH_PROVIDERS: dict[str, AuthProvider] = {}
+"""All known auth providers, keyed by name."""
+
+_ALL_PROVIDERS: list[AuthProvider] = [
+    AuthProvider(
+        name="codex",
+        label="Codex",
+        host_dir_name="_codex-config",
+        container_mount="/home/dev/.codex",
+        command=["setup-codex-auth.sh"],
+        banner_hint=(
+            "This will set up port forwarding (using socat) and open a browser "
+            "for authentication.\n"
+            "After completing authentication, press Ctrl+C to stop the container."
+        ),
+        extra_run_args=("-p", "127.0.0.1:1455:1455"),
+    ),
+    AuthProvider(
+        name="claude",
+        label="Claude",
+        host_dir_name="_claude-config",
+        container_mount="/home/dev/.claude",
+        command=_api_key_command(
+            label="Claude",
+            key_url="https://console.anthropic.com/settings/keys",
+            env_var="ANTHROPIC_API_KEY",
+            config_path="~/.claude/config.json",
+            printf_template='{"api_key": "%s"}',
+            tool_name="claude",
+        ),
+        banner_hint=(
+            "You will be prompted to enter your Claude API key.\n"
+            "Get your API key at: https://console.anthropic.com/settings/keys"
+        ),
+    ),
+    AuthProvider(
+        name="mistral",
+        label="Mistral Vibe",
+        host_dir_name="_vibe-config",
+        container_mount="/home/dev/.vibe",
+        command=_api_key_command(
+            label="Mistral",
+            key_url="https://console.mistral.ai/api-keys",
+            env_var="MISTRAL_API_KEY",
+            config_path="~/.vibe/.env",
+            printf_template="MISTRAL_API_KEY=%s",
+            tool_name="vibe",
+        ),
+        banner_hint=(
+            "You will be prompted to enter your Mistral API key.\n"
+            "Get your API key at: https://console.mistral.ai/api-keys"
+        ),
+    ),
+    AuthProvider(
+        name="blablador",
+        label="Blablador",
+        host_dir_name="_blablador-config",
+        container_mount="/home/dev/.blablador",
+        command=_api_key_command(
+            label="Blablador",
+            key_url="https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens",
+            env_var="BLABLADOR_API_KEY",
+            config_path="~/.blablador/config.json",
+            printf_template='{"api_key": "%s"}',
+            tool_name="blablador",
+        ),
+        banner_hint=(
+            "You will be prompted to enter your Blablador API key.\n"
+            "Get your API key at: "
+            "https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens"
+        ),
+    ),
+    AuthProvider(
+        name="gh",
+        label="GitHub CLI",
+        host_dir_name="_gh-config",
+        container_mount="/home/dev/.config/gh",
+        command=["gh", "auth", "login"],
+        banner_hint=(
+            "You will be guided through GitHub authentication.\n"
+            "Recommended: choose 'Login with a web browser' or paste a token."
+        ),
+    ),
+    AuthProvider(
+        name="glab",
+        label="GitLab CLI",
+        host_dir_name="_glab-config",
+        container_mount="/home/dev/.config/glab-cli",
+        command=["glab", "auth", "login"],
+        banner_hint=(
+            "You will be guided through GitLab authentication.\n"
+            "You will need a GitLab personal access token.\n"
+            "Create one at: https://gitlab.com/-/user_settings/personal_access_tokens"
+        ),
+    ),
+]
+
+AUTH_PROVIDERS.update({p.name: p for p in _ALL_PROVIDERS})
+
+
+# ---------------------------------------------------------------------------
+# Shared container lifecycle
+# ---------------------------------------------------------------------------
 
 
 def _check_podman() -> None:
@@ -41,37 +218,17 @@ def _cleanup_existing_container(container_name: str) -> None:
         )
 
 
-def _run_auth_container(
-    project_id: str,
-    container_suffix: str,
-    host_dir_name: str,
-    host_dir_label: str,
-    container_mount: str,
-    command: list[str],
-    banner_lines: list[str],
-    extra_run_args: list[str] | None = None,
-) -> None:
-    """Run an auth container with the common lifecycle.
-
-    Args:
-        project_id: The project to authenticate against.
-        container_suffix: Suffix for the container name (e.g. "auth-codex").
-        host_dir_name: Name of the host directory under envs_base (e.g. "_codex-config").
-        host_dir_label: Human label for dir writable check (e.g. "Codex config").
-        container_mount: Mount point inside the container (e.g. "/home/dev/.codex").
-        command: Command to run inside the container.
-        banner_lines: Lines to print before running the container.
-        extra_run_args: Additional podman run arguments (e.g. port forwarding).
-    """
+def _run_auth_container(project_id: str, provider: AuthProvider) -> None:
+    """Run an auth container for the given provider."""
     _check_podman()
 
     project = load_project(project_id)
 
     envs_base = get_envs_base_dir()
-    host_dir = envs_base / host_dir_name
-    ensure_dir_writable(host_dir, host_dir_label)
+    host_dir = envs_base / provider.host_dir_name
+    ensure_dir_writable(host_dir, f"{provider.label} config")
 
-    container_name = f"{project.id}-{container_suffix}"
+    container_name = f"{project.id}-auth-{provider.name}"
     _cleanup_existing_container(container_name)
 
     cmd = [
@@ -80,20 +237,23 @@ def _run_auth_container(
         "--rm",
         "-it",
         "-v",
-        f"{host_dir}:{container_mount}:Z",
+        f"{host_dir}:{provider.container_mount}:Z",
         "--name",
         container_name,
     ]
-    # Insert userns args after the initial flags, then extra args after those
     userns = _podman_userns_args()
     cmd[3:3] = userns
-    if extra_run_args:
-        cmd[3 + len(userns) : 3 + len(userns)] = extra_run_args
+    if provider.extra_run_args:
+        cmd[3 + len(userns) : 3 + len(userns)] = list(provider.extra_run_args)
     cmd.append(project_cli_image(project.id))
-    cmd.extend(command)
+    cmd.extend(provider.command)
 
-    for line in banner_lines:
+    # Banner
+    print(f"Authenticating {provider.label} for project: {project_id}")
+    print()
+    for line in provider.banner_hint.splitlines():
         print(line)
+    print()
     print("$", " ".join(map(str, cmd)))
     print()
 
@@ -114,215 +274,18 @@ def _run_auth_container(
         )
 
 
-# ---------- Codex authentication ----------
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
-def codex_auth(project_id: str) -> None:
-    """Run codex login inside the L2 CLI container to authenticate the Codex CLI.
+def authenticate(project_id: str, provider: str) -> None:
+    """Run the auth flow for *provider* against *project_id*.
 
-    This command:
-    - Spins up a temporary L2 CLI container for the project (L2 has the codex CLI)
-    - Mounts the shared codex config directory (/home/dev/.codex)
-    - Forwards port 1455 from the container to localhost for OAuth callback
-    - Sets up socat port forwarding for port 1455 (required for rootless podman)
-    - Runs `codex login` interactively
-    - The authentication persists in the shared .codex folder
-
-    The user can press Ctrl+C to stop the container after authentication is complete.
+    Raises ``SystemExit`` if the provider name is unknown.
     """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-codex",
-        host_dir_name="_codex-config",
-        host_dir_label="Codex config",
-        container_mount="/home/dev/.codex",
-        command=["setup-codex-auth.sh"],
-        banner_lines=[
-            f"Authenticating Codex for project: {project_id}",
-            "",
-            "This will set up port forwarding (using socat) and open a browser for authentication.",
-            "After completing authentication, press Ctrl+C to stop the container.",
-            "",
-        ],
-        extra_run_args=["-p", "127.0.0.1:1455:1455"],
-    )
-
-
-# ---------- Claude authentication ----------
-
-
-def claude_auth(project_id: str) -> None:
-    """Set up Claude API key for CLI inside the L2 CLI container.
-
-    This command:
-    - Spins up a temporary L2 CLI container for the project (L2 has the claude CLI)
-    - Mounts the shared claude config directory (/home/dev/.claude)
-    - Runs an interactive shell where the user can enter their Claude API key
-    - The API key persists in the shared .claude folder
-
-    Claude stores the API key in ~/.claude/config.json or similar configuration.
-    """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-claude",
-        host_dir_name="_claude-config",
-        host_dir_label="Claude config",
-        container_mount="/home/dev/.claude",
-        command=[
-            "bash",
-            "-c",
-            "echo 'Enter your Claude API key (get one at https://console.anthropic.com/settings/keys):' && "
-            "read -r -p 'ANTHROPIC_API_KEY=' api_key && "
-            "mkdir -p ~/.claude && "
-            'printf \'{"api_key": "%s"}\\n\' "$api_key" > ~/.claude/config.json && '
-            "echo && echo 'API key saved to ~/.claude/config.json' && "
-            "echo 'You can now use claude in task containers.'",
-        ],
-        banner_lines=[
-            f"Authenticating Claude for project: {project_id}",
-            "",
-            "You will be prompted to enter your Claude API key.",
-            "Get your API key at: https://console.anthropic.com/settings/keys",
-            "",
-        ],
-    )
-
-
-# ---------- Mistral Vibe authentication ----------
-
-
-def mistral_auth(project_id: str) -> None:
-    """Set up Mistral API key for Vibe CLI inside the L2 CLI container.
-
-    This command:
-    - Spins up a temporary L2 CLI container for the project (L2 has mistral-vibe)
-    - Mounts the shared vibe config directory (/home/dev/.vibe)
-    - Runs an interactive shell where the user can run `vibe` to trigger
-      the API key prompt, or manually create ~/.vibe/.env
-    - The API key persists in the shared .vibe folder
-
-    Mistral Vibe stores the API key in ~/.vibe/.env as MISTRAL_API_KEY=<key>.
-    """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-mistral",
-        host_dir_name="_vibe-config",
-        host_dir_label="Vibe config",
-        container_mount="/home/dev/.vibe",
-        command=[
-            "bash",
-            "-c",
-            "echo 'Enter your Mistral API key (get one at https://console.mistral.ai/api-keys):' && "
-            "read -r -p 'MISTRAL_API_KEY=' api_key && "
-            "mkdir -p ~/.vibe && "
-            "printf 'MISTRAL_API_KEY=%s\\n' \"$api_key\" > ~/.vibe/.env && "
-            "echo && echo 'API key saved to ~/.vibe/.env' && "
-            "echo 'You can now use vibe in task containers.'",
-        ],
-        banner_lines=[
-            f"Authenticating Mistral Vibe for project: {project_id}",
-            "",
-            "You will be prompted to enter your Mistral API key.",
-            "Get your API key at: https://console.mistral.ai/api-keys",
-            "",
-        ],
-    )
-
-
-# ---------- Blablador authentication ----------
-
-
-def blablador_auth(project_id: str) -> None:
-    """Set up Blablador API key for OpenCode inside the L2 CLI container.
-
-    This command:
-    - Spins up a temporary L2 CLI container for the project (L2 has OpenCode + blablador wrapper)
-    - Mounts the shared blablador config directory (/home/dev/.blablador)
-    - Runs an interactive shell where the user can enter their Blablador API key
-    - The API key persists in the shared .blablador folder
-
-    Blablador stores the API key in ~/.blablador/config.json as {"api_key": "<key>"}.
-    """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-blablador",
-        host_dir_name="_blablador-config",
-        host_dir_label="Blablador config",
-        container_mount="/home/dev/.blablador",
-        command=[
-            "bash",
-            "-c",
-            "echo 'Enter your Blablador API key (get one at https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens):' && "
-            "read -r -p 'BLABLADOR_API_KEY=' api_key && "
-            "mkdir -p ~/.blablador && "
-            'printf \'{"api_key": "%s"}\\n\' "$api_key" > ~/.blablador/config.json && '
-            "echo && echo 'API key saved to ~/.blablador/config.json' && "
-            "echo 'You can now use blablador in task containers.'",
-        ],
-        banner_lines=[
-            f"Authenticating Blablador for project: {project_id}",
-            "",
-            "You will be prompted to enter your Blablador API key.",
-            "Get your API key at: https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens",
-            "",
-        ],
-    )
-
-
-# ---------- GitHub CLI authentication ----------
-
-
-def gh_auth(project_id: str) -> None:
-    """Run ``gh auth login`` inside the L2 CLI container.
-
-    This command:
-    - Spins up a temporary L2 CLI container for the project
-    - Mounts the shared GitHub CLI config directory (~/.config/gh)
-    - Runs ``gh auth login`` interactively (device flow or paste a token)
-    - The authentication persists in the shared config folder
-    """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-gh",
-        host_dir_name="_gh-config",
-        host_dir_label="GitHub CLI config",
-        container_mount="/home/dev/.config/gh",
-        command=["gh", "auth", "login"],
-        banner_lines=[
-            f"Authenticating GitHub CLI for project: {project_id}",
-            "",
-            "You will be guided through GitHub authentication.",
-            "Recommended: choose 'Login with a web browser' or paste a token.",
-            "",
-        ],
-    )
-
-
-# ---------- GitLab CLI authentication ----------
-
-
-def glab_auth(project_id: str) -> None:
-    """Run ``glab auth login`` inside the L2 CLI container.
-
-    This command:
-    - Spins up a temporary L2 CLI container for the project
-    - Mounts the shared GitLab CLI config directory (~/.config/glab-cli)
-    - Runs ``glab auth login`` interactively
-    - The authentication persists in the shared config folder
-    """
-    _run_auth_container(
-        project_id=project_id,
-        container_suffix="auth-glab",
-        host_dir_name="_glab-config",
-        host_dir_label="GitLab CLI config",
-        container_mount="/home/dev/.config/glab-cli",
-        command=["glab", "auth", "login"],
-        banner_lines=[
-            f"Authenticating GitLab CLI for project: {project_id}",
-            "",
-            "You will be guided through GitLab authentication.",
-            "You will need a GitLab personal access token.",
-            "Create one at: https://gitlab.com/-/user_settings/personal_access_tokens",
-            "",
-        ],
-    )
+    info = AUTH_PROVIDERS.get(provider)
+    if not info:
+        available = ", ".join(AUTH_PROVIDERS)
+        raise SystemExit(f"Unknown auth provider: {provider}. Available: {available}")
+    _run_auth_container(project_id, info)

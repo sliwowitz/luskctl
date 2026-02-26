@@ -369,14 +369,7 @@ expose = ["build_agent_config_stack", "resolve_agent_config"]
 from = ["luskctl.lib.containers.agent_config"]
 
 [[interfaces]]
-expose = [
-    "codex_auth",
-    "claude_auth",
-    "mistral_auth",
-    "blablador_auth",
-    "gh_auth",
-    "glab_auth",
-]
+expose = ["AUTH_PROVIDERS", "AuthProvider", "authenticate"]
 from = ["luskctl.lib.security.auth"]
 
 [[interfaces]]
@@ -477,12 +470,9 @@ expose = [
     "WEB_BACKENDS",
     "init_project_ssh",
     "sync_project_gate",
-    "codex_auth",
-    "claude_auth",
-    "mistral_auth",
-    "blablador_auth",
-    "gh_auth",
-    "glab_auth",
+    "AUTH_PROVIDERS",
+    "AuthProvider",
+    "authenticate",
     "compare_gate_vs_upstream",
     "sync_gate_branches",
     "get_gate_last_commit",

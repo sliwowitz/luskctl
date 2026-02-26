@@ -32,16 +32,11 @@ from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
 from ..lib.facade import (
     WEB_BACKENDS,
-    blablador_auth,
+    authenticate,
     build_images,
-    claude_auth,
-    codex_auth,
     generate_dockerfiles,
-    gh_auth,
-    glab_auth,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
-    mistral_auth,
     sync_project_gate,
 )
 from .clipboard import copy_to_clipboard_detailed
@@ -283,29 +278,18 @@ class ActionsMixin:
 
     # ---------- Authentication actions ----------
 
-    async def _action_auth(self, agent: str) -> None:
-        """Run auth flow for the given agent."""
+    async def _action_auth(self, provider: str) -> None:
+        """Run auth flow for the given provider."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        auth_funcs = {
-            "codex": codex_auth,
-            "claude": claude_auth,
-            "mistral": mistral_auth,
-            "blablador": blablador_auth,
-            "gh": gh_auth,
-            "glab": glab_auth,
-        }
-        func = auth_funcs.get(agent)
-        if not func:
-            return
         with self.suspend():
             try:
-                func(self.current_project_id)
+                authenticate(self.current_project_id, provider)
             except SystemExit as e:
                 print(f"Error: {e}")
             input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Auth completed for {agent}")
+        self.notify(f"Auth completed for {provider}")
 
     # ---------- Task lifecycle actions ----------
 

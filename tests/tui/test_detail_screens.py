@@ -396,59 +396,16 @@ class ActionDispatchTests(TestCase):
 
         instance._action_project_init.assert_called_once()
 
-    def test_project_action_dispatch_auth_codex(self) -> None:
+    def test_project_action_dispatch_auth_providers(self) -> None:
+        """Auth dispatch extracts the provider name from the action string."""
         app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
 
-        coro = AppClass._handle_project_action(instance, "auth_codex")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("codex")
-
-    def test_project_action_dispatch_auth_claude(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_project_action(instance, "auth_claude")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("claude")
-
-    def test_project_action_dispatch_auth_mistral(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_project_action(instance, "auth_mistral")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("mistral")
-
-    def test_project_action_dispatch_auth_blablador(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_project_action(instance, "auth_blablador")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("blablador")
-
-    def test_project_action_dispatch_auth_gh(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_project_action(instance, "auth_gh")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("gh")
-
-    def test_project_action_dispatch_auth_glab(self) -> None:
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-
-        coro = AppClass._handle_project_action(instance, "auth_glab")
-        asyncio.run(coro)
-
-        instance._action_auth.assert_called_once_with("glab")
+        for provider in ("codex", "claude", "mistral", "blablador", "gh", "glab"):
+            with self.subTest(provider=provider):
+                instance = mock.Mock(spec=AppClass)
+                coro = AppClass._handle_project_action(instance, f"auth_{provider}")
+                asyncio.run(coro)
+                instance._action_auth.assert_called_once_with(provider)
 
     def test_task_action_dispatch_task_start_cli(self) -> None:
         app_mod, AppClass = import_app()

@@ -195,17 +195,15 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
 
 class AuthActionsScreen(screen.ModalScreen[str | None]):
-    """Small modal for selecting which agent to authenticate."""
+    """Small modal for selecting which agent to authenticate.
+
+    Options are built dynamically from ``AUTH_PROVIDERS``.
+    Number keys (1-9) act as shortcuts for the corresponding list entry.
+    """
 
     BINDINGS = [
         _modal_binding("escape", "dismiss", "Cancel"),
         _modal_binding("q", "dismiss", "Cancel"),
-        _modal_binding("1", "auth_codex", "Codex"),
-        _modal_binding("2", "auth_claude", "Claude"),
-        _modal_binding("3", "auth_mistral", "Mistral"),
-        _modal_binding("4", "auth_blablador", "Blablador"),
-        _modal_binding("5", "auth_gh", "GitHub CLI"),
-        _modal_binding("6", "auth_glab", "GitLab CLI"),
     ]
 
     CSS = """
@@ -230,16 +228,14 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
     """
 
     def compose(self) -> ComposeResult:
+        from ..lib.facade import AUTH_PROVIDERS
+
+        options = [
+            Option(f"\\[{i}] {p.label}", id=f"auth_{p.name}")
+            for i, p in enumerate(AUTH_PROVIDERS.values(), 1)
+        ]
         with Vertical(id="auth-dialog") as dialog:
-            yield OptionList(
-                Option("\\[1] Codex", id="auth_codex"),
-                Option("\\[2] Claude", id="auth_claude"),
-                Option("\\[3] Mistral", id="auth_mistral"),
-                Option("\\[4] Blablador", id="auth_blablador"),
-                Option("\\[5] GitHub CLI", id="auth_gh"),
-                Option("\\[6] GitLab CLI", id="auth_glab"),
-                id="auth-actions-list",
-            )
+            yield OptionList(*options, id="auth-actions-list")
         dialog.border_title = "Authenticate Agents"
         dialog.border_subtitle = "Esc to close"
 
@@ -248,31 +244,22 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         actions.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        option_id = event.option_id
-        if option_id:
-            self.dismiss(option_id)
+        if event.option_id:
+            self.dismiss(event.option_id)
 
-    # Action methods invoked by BINDINGS
+    def on_key(self, event) -> None:
+        """Handle number-key shortcuts (1-9) to select a provider."""
+        from ..lib.facade import AUTH_PROVIDERS
+
+        if event.character and event.character.isdigit():
+            idx = int(event.character) - 1
+            providers = list(AUTH_PROVIDERS.values())
+            if 0 <= idx < len(providers):
+                self.dismiss(f"auth_{providers[idx].name}")
+                event.stop()
+
     def action_dismiss(self) -> None:
         self.dismiss(None)
-
-    def action_auth_codex(self) -> None:
-        self.dismiss("auth_codex")
-
-    def action_auth_claude(self) -> None:
-        self.dismiss("auth_claude")
-
-    def action_auth_mistral(self) -> None:
-        self.dismiss("auth_mistral")
-
-    def action_auth_blablador(self) -> None:
-        self.dismiss("auth_blablador")
-
-    def action_auth_gh(self) -> None:
-        self.dismiss("auth_gh")
-
-    def action_auth_glab(self) -> None:
-        self.dismiss("auth_glab")
 
 
 # ---------------------------------------------------------------------------

@@ -695,18 +695,8 @@ if _HAS_TEXTUAL:
                 await self.action_init_ssh()
             elif action == "sync_gate":
                 await self._action_sync_gate()
-            elif action == "auth_codex":
-                await self._action_auth("codex")
-            elif action == "auth_claude":
-                await self._action_auth("claude")
-            elif action == "auth_mistral":
-                await self._action_auth("mistral")
-            elif action == "auth_blablador":
-                await self._action_auth("blablador")
-            elif action == "auth_gh":
-                await self._action_auth("gh")
-            elif action == "auth_glab":
-                await self._action_auth("glab")
+            elif action.startswith("auth_"):
+                await self._action_auth(action[5:])
 
         async def _handle_task_action(self, action: str) -> None:
             """Handle task actions."""
