@@ -12,6 +12,7 @@ The mixin accesses ``self`` attributes defined by ``LuskTUI.__init__``
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 
 from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import follow_container_logs_cmd, wait_for_container_exit
@@ -155,6 +156,62 @@ class ActionsMixin:
             print(f"Public key file not found at {pub_key_path}.")
             print(f"Run 'luskctl ssh-init {project_id}' to generate it.")
 
+    async def _run_suspended(
+        self,
+        fn: Callable[[], None],
+        *,
+        success_msg: str | None = None,
+        refresh: str | None = "project_state",
+    ) -> bool:
+        """Run *fn* in a suspended TUI session with standard error handling.
+
+        Suspends the TUI, runs *fn* inside a try/except SystemExit block,
+        waits for the user to press Enter, then optionally notifies and
+        refreshes.  Returns True if *fn* completed without error.
+        """
+        ok = False
+        with self.suspend():
+            try:
+                fn()
+                ok = True
+            except SystemExit as e:
+                print(f"Error: {e}")
+            input("\n[Press Enter to return to LuskTUI] ")
+        if ok and success_msg:
+            self.notify(success_msg)
+        if refresh == "project_state":
+            self._refresh_project_state()
+        elif refresh == "tasks":
+            await self.refresh_tasks()
+        return ok
+
+    async def _launch_terminal_session(
+        self,
+        cmd: list[str],
+        *,
+        title: str,
+        cname: str,
+        label: str = "Opened",
+    ) -> None:
+        """Launch *cmd* via tmux/terminal/web, falling back to a suspended TUI."""
+        method, port = launch_login(cmd, title=title)
+
+        if method == "tmux":
+            self.notify(f"{label} in tmux window: {cname}")
+        elif method == "terminal":
+            self.notify(f"{label} in new terminal: {cname}")
+        elif method == "web" and port is not None:
+            self.open_url(f"http://localhost:{port}")
+            self.notify(f"{label} in browser: {cname}")
+        else:
+            with self.suspend():
+                try:
+                    subprocess.run(cmd)
+                except Exception as e:
+                    print(f"Error: {e}")
+                input("\n[Press Enter to return to LuskTUI] ")
+            await self.refresh_tasks()
+
     # ---------- Worker helpers ----------
 
     def _queue_task_delete(self, project_id: str, task_id: str) -> None:
@@ -179,72 +236,55 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        with self.suspend():
-            try:
-                generate_dockerfiles(self.current_project_id)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Generated Dockerfiles for {self.current_project_id}")
-        self._refresh_project_state()
+        pid = self.current_project_id
+        await self._run_suspended(
+            lambda: generate_dockerfiles(pid),
+            success_msg=f"Generated Dockerfiles for {pid}",
+        )
 
     async def action_build_images(self) -> None:
         """Build only L2 project images (reuses existing L0/L1)."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        with self.suspend():
-            try:
-                build_images(self.current_project_id)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Built L2 project images for {self.current_project_id}")
-        self._refresh_project_state()
+        pid = self.current_project_id
+        await self._run_suspended(
+            lambda: build_images(pid),
+            success_msg=f"Built L2 project images for {pid}",
+        )
 
     async def action_init_ssh(self) -> None:
         """Initialize the per-project SSH directory and keypair."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-
-        with self.suspend():
-            try:
-                init_project_ssh(self.current_project_id)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-
-        self.notify(f"Initialized SSH dir for {self.current_project_id}")
-        self._refresh_project_state()
+        pid = self.current_project_id
+        await self._run_suspended(
+            lambda: init_project_ssh(pid),
+            success_msg=f"Initialized SSH dir for {pid}",
+        )
 
     async def _action_build_agents(self) -> None:
         """Build L0+L1+L2 with fresh agent installs."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        with self.suspend():
-            try:
-                build_images(self.current_project_id, rebuild_agents=True)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Built L0+L1+L2 with fresh agents for {self.current_project_id}")
-        self._refresh_project_state()
+        pid = self.current_project_id
+        await self._run_suspended(
+            lambda: build_images(pid, rebuild_agents=True),
+            success_msg=f"Built L0+L1+L2 with fresh agents for {pid}",
+        )
 
     async def _action_build_full(self) -> None:
         """Full rebuild with no cache."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        with self.suspend():
-            try:
-                build_images(self.current_project_id, full_rebuild=True)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Full rebuild (no cache) completed for {self.current_project_id}")
-        self._refresh_project_state()
+        pid = self.current_project_id
+        await self._run_suspended(
+            lambda: build_images(pid, full_rebuild=True),
+            success_msg=f"Full rebuild (no cache) completed for {pid}",
+        )
 
     async def _action_project_init(self) -> None:
         """Full project setup: ssh-init, generate, build, gate-sync."""
@@ -252,29 +292,25 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
-        with self.suspend():
-            try:
-                print(f"=== Full Setup for {pid} ===\n")
-                print("Step 1/4: Initializing SSH...")
-                init_project_ssh(pid)
-                maybe_pause_for_ssh_key_registration(pid)
 
-                print("\nStep 2/4: Generating Dockerfiles...")
-                generate_dockerfiles(pid)
-                print("\nStep 3/4: Building images...")
-                build_images(pid)
-                print("\nStep 4/4: Syncing git gate...")
-                res = sync_project_gate(pid)
-                if not res["success"]:
-                    print(f"\nGate sync failed: {', '.join(res['errors'])}")
-                else:
-                    print(f"\nGate ready at {res['path']}")
-                print("\n=== Full Setup complete! ===")
-            except SystemExit as e:
-                print(f"\nError during setup: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Full setup completed for {pid}")
-        self._refresh_project_state()
+        def work() -> None:
+            print(f"=== Full Setup for {pid} ===\n")
+            print("Step 1/4: Initializing SSH...")
+            init_project_ssh(pid)
+            maybe_pause_for_ssh_key_registration(pid)
+            print("\nStep 2/4: Generating Dockerfiles...")
+            generate_dockerfiles(pid)
+            print("\nStep 3/4: Building images...")
+            build_images(pid)
+            print("\nStep 4/4: Syncing git gate...")
+            res = sync_project_gate(pid)
+            if not res["success"]:
+                print(f"\nGate sync failed: {', '.join(res['errors'])}")
+            else:
+                print(f"\nGate ready at {res['path']}")
+            print("\n=== Full Setup complete! ===")
+
+        await self._run_suspended(work, success_msg=f"Full setup completed for {pid}")
 
     # ---------- Authentication actions ----------
 
@@ -283,16 +319,11 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
-        ok = False
-        with self.suspend():
-            try:
-                authenticate(self.current_project_id, provider)
-                ok = True
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        if ok:
-            self.notify(f"Auth completed for {provider}")
+        await self._run_suspended(
+            lambda: authenticate(self.current_project_id, provider),
+            success_msg=f"Auth completed for {provider}",
+            refresh=None,
+        )
 
     # ---------- Task lifecycle actions ----------
 
@@ -301,29 +332,25 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
-        with self.suspend():
-            try:
-                task_id = task_new(pid)
-                self._focus_task_after_creation(pid, task_id)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
-        self.notify("Task created.")
+
+        def work() -> None:
+            task_id = task_new(pid)
+            self._focus_task_after_creation(pid, task_id)
+
+        await self._run_suspended(work, success_msg="Task created.", refresh="tasks")
 
     async def action_run_cli(self) -> None:
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return
+        pid = self.current_project_id
         tid = self.current_task.task_id
-        with self.suspend():
-            try:
-                print(f"Running CLI for {self.current_project_id}/{tid}...\n")
-                task_run_cli(self.current_project_id, tid)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
+
+        def work() -> None:
+            print(f"Running CLI for {pid}/{tid}...\n")
+            task_run_cli(pid, tid)
+
+        await self._run_suspended(work, refresh="tasks")
 
     async def action_run_web(self) -> None:
         """Public action for running web UI (delegates to _action_run_web)."""
@@ -334,18 +361,15 @@ class ActionsMixin:
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return
+        pid = self.current_project_id
         tid = self.current_task.task_id
-        with self.suspend():
-            try:
-                backend = self._prompt_ui_backend()
-                print(
-                    f"Starting Web UI for {self.current_project_id}/{tid} (backend: {backend})...\n"
-                )
-                task_run_web(self.current_project_id, tid, backend=backend)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
+
+        def work() -> None:
+            backend = self._prompt_ui_backend()
+            print(f"Starting Web UI for {pid}/{tid} (backend: {backend})...\n")
+            task_run_web(pid, tid, backend=backend)
+
+        await self._run_suspended(work, refresh="tasks")
 
     async def _action_task_start_cli(self) -> None:
         """Create a new task and immediately run CLI agent."""
@@ -353,16 +377,14 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
-        with self.suspend():
-            try:
-                task_id = task_new(pid)
-                self._focus_task_after_creation(pid, task_id)
-                print(f"\nRunning CLI for {pid}/{task_id}...\n")
-                task_run_cli(pid, task_id)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
+
+        def work() -> None:
+            task_id = task_new(pid)
+            self._focus_task_after_creation(pid, task_id)
+            print(f"\nRunning CLI for {pid}/{task_id}...\n")
+            task_run_cli(pid, task_id)
+
+        await self._run_suspended(work, refresh="tasks")
 
     async def _action_task_start_web(self) -> None:
         """Create a new task and immediately run Web UI."""
@@ -370,17 +392,15 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
-        with self.suspend():
-            try:
-                task_id = task_new(pid)
-                self._focus_task_after_creation(pid, task_id)
-                backend = self._prompt_ui_backend()
-                print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
-                task_run_web(pid, task_id, backend=backend)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
+
+        def work() -> None:
+            task_id = task_new(pid)
+            self._focus_task_after_creation(pid, task_id)
+            backend = self._prompt_ui_backend()
+            print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
+            task_run_web(pid, task_id, backend=backend)
+
+        await self._run_suspended(work, refresh="tasks")
 
     async def _action_task_start_autopilot(self) -> None:
         """Create a new task and run Claude headlessly (autopilot)."""
@@ -486,26 +506,9 @@ class ActionsMixin:
         tid = self.current_task.task_id
         cname = container_name(pid, "run", tid)
         cmd = follow_container_logs_cmd(cname)
-        title = f"logs:{cname}"
-
-        method, port = launch_login(cmd, title=title)
-
-        if method == "tmux":
-            self.notify(f"Logs opened in tmux window: {cname}")
-        elif method == "terminal":
-            self.notify(f"Logs opened in new terminal: {cname}")
-        elif method == "web" and port is not None:
-            self.open_url(f"http://localhost:{port}")
-            self.notify(f"Logs opened in browser tab: {cname}")
-        else:
-            # Fallback: suspend TUI
-            with self.suspend():
-                try:
-                    subprocess.run(cmd)
-                except Exception as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-            await self.refresh_tasks()
+        await self._launch_terminal_session(
+            cmd, title=f"logs:{cname}", cname=cname, label="Logs opened"
+        )
 
     async def _action_restart_task(self) -> None:
         """Restart a task container (stops it first if running)."""
@@ -514,13 +517,7 @@ class ActionsMixin:
             return
         pid = self.current_project_id
         tid = self.current_task.task_id
-        with self.suspend():
-            try:
-                task_restart(pid, tid)
-            except SystemExit as e:
-                print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
-        await self.refresh_tasks()
+        await self._run_suspended(lambda: task_restart(pid, tid), refresh="tasks")
 
     async def _action_login(self) -> None:
         """Log into the selected task's running container."""
@@ -537,26 +534,7 @@ class ActionsMixin:
 
         mode = self.current_task.mode or "cli"
         cname = container_name(pid, mode, tid)
-        title = f"login:{cname}"
-
-        method, port = launch_login(cmd, title=title)
-
-        if method == "tmux":
-            self.notify(f"Opened in tmux window: {cname}")
-        elif method == "terminal":
-            self.notify(f"Opened in new terminal: {cname}")
-        elif method == "web" and port is not None:
-            self.open_url(f"http://localhost:{port}")
-            self.notify(f"Opened terminal in browser tab: {cname}")
-        else:
-            # Fallback: suspend TUI
-            with self.suspend():
-                try:
-                    subprocess.run(cmd)
-                except Exception as e:
-                    print(f"Error: {e}")
-                input("\n[Press Enter to return to LuskTUI] ")
-            await self.refresh_tasks()
+        await self._launch_terminal_session(cmd, title=f"login:{cname}", cname=cname)
 
     # ---------- Task management actions ----------
 
