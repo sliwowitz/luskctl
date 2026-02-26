@@ -188,7 +188,10 @@ _ALL_PROVIDERS: list[AuthProvider] = [
     ),
 ]
 
-AUTH_PROVIDERS.update({p.name: p for p in _ALL_PROVIDERS})
+for _p in _ALL_PROVIDERS:
+    if _p.name in AUTH_PROVIDERS:
+        raise RuntimeError(f"Duplicate auth provider name: {_p.name!r}")
+    AUTH_PROVIDERS[_p.name] = _p
 
 
 # ---------------------------------------------------------------------------

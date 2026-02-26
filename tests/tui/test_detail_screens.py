@@ -398,9 +398,11 @@ class ActionDispatchTests(TestCase):
 
     def test_project_action_dispatch_auth_providers(self) -> None:
         """Auth dispatch extracts the provider name from the action string."""
+        from luskctl.lib.security.auth import AUTH_PROVIDERS
+
         app_mod, AppClass = import_app()
 
-        for provider in ("codex", "claude", "mistral", "blablador", "gh", "glab"):
+        for provider in AUTH_PROVIDERS:
             with self.subTest(provider=provider):
                 instance = mock.Mock(spec=AppClass)
                 coro = AppClass._handle_project_action(instance, f"auth_{provider}")

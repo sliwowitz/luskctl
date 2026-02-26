@@ -283,13 +283,16 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
+        ok = False
         with self.suspend():
             try:
                 authenticate(self.current_project_id, provider)
+                ok = True
             except SystemExit as e:
                 print(f"Error: {e}")
             input("\n[Press Enter to return to LuskTUI] ")
-        self.notify(f"Auth completed for {provider}")
+        if ok:
+            self.notify(f"Auth completed for {provider}")
 
     # ---------- Task lifecycle actions ----------
 

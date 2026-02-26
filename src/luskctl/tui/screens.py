@@ -247,7 +247,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         if event.option_id:
             self.dismiss(event.option_id)
 
-    def on_key(self, event) -> None:
+    def on_key(self, event: events.Key) -> None:
         """Handle number-key shortcuts (1-9) to select a provider."""
         from ..lib.facade import AUTH_PROVIDERS
 
