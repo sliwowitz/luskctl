@@ -14,7 +14,7 @@ Readiness is determined from log output. The container initialization script emi
 
 The host follows logs and detaches when either of these markers appears, or after 60 seconds timeout.
 
-**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/luskctl/lib/tasks.py` (`task_run_cli` and `_stream_initial_logs`).
+**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/luskctl/lib/containers/task_runners.py` (`task_run_cli`) and `src/luskctl/lib/containers/runtime.py` (`stream_initial_logs`).
 
 ### UI Mode (task run-ui)
 
@@ -25,8 +25,8 @@ Readiness is determined by log markers, not port probing. The host follows conta
 This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/luskui-entry.sh` which runs the pre-installed CodexUI distribution (downloaded into the L1 UI image at build time) and only fetches it at runtime if it is missing.
 
 **If the UI server changes its startup behavior or output format**, you may need to adjust:
-- The readiness markers in `src/luskctl/lib/tasks.py` (`_ui_ready` function)
-- The exposed/internal port and host port mapping in `src/luskctl/lib/tasks.py` (`task_run_ui`)
+- The readiness markers in `src/luskctl/lib/containers/runtime.py` (`stream_initial_logs`)
+- The exposed/internal port and host port mapping in `src/luskctl/lib/containers/task_runners.py` (`task_run_web`)
 
 ### Timeout Behavior
 
@@ -38,7 +38,8 @@ This approach avoids false positives from port binding before actual server read
 
 | File | Purpose |
 |------|---------|
-| `src/luskctl/lib/tasks.py` | Host-side logic: `task_run_cli`, `task_run_ui`, `_stream_initial_logs`, `_ui_ready` |
+| `src/luskctl/lib/containers/task_runners.py` | Host-side logic: `task_run_cli`, `task_run_web`, `task_run_headless` |
+| `src/luskctl/lib/containers/runtime.py` | Container state, log streaming: `stream_initial_logs`, `wait_for_exit` |
 | `src/luskctl/resources/scripts/init-ssh-and-repo.sh` | CLI init marker, SSH setup, repo sync |
 | `src/luskctl/resources/scripts/luskui-entry.sh` | UI entry script (runs the UI server) |
 
@@ -74,6 +75,11 @@ When a task container starts, luskctl mounts:
 | `/home/dev/.claude` | `<envs_base>/_claude-config` | Claude Code credentials |
 | `/home/dev/.vibe` | `<envs_base>/_vibe-config` | Mistral Vibe credentials |
 | `/home/dev/.blablador` | `<envs_base>/_blablador-config` | Blablador credentials |
+| `/home/dev/.config/opencode` | `<envs_base>/_opencode-config` | OpenCode config |
+| `/home/dev/.local/share/opencode` | `<envs_base>/_opencode-data` | OpenCode data |
+| `/home/dev/.local/state` | `<envs_base>/_opencode-state` | OpenCode state |
+| `/home/dev/.config/gh` | `<envs_base>/_gh-config` | GitHub CLI config |
+| `/home/dev/.config/glab-cli` | `<envs_base>/_glab-config` | GitLab CLI config |
 | `/home/dev/.ssh` (optional) | `<envs_base>/_ssh-config-<project>` | SSH keys/config |
 
 See [SHARED_DIRS.md](SHARED_DIRS.md) for detailed documentation.
