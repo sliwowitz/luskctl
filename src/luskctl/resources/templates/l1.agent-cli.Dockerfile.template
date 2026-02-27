@@ -26,7 +26,8 @@ RUN set -eux; \
 
 # Install GitHub CLI (gh) from official APT repository
 RUN set -eux; \
-    wget -nv -O /tmp/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg; \
+    curl -sSL -o /tmp/githubcli-archive-keyring.gpg \
+      "https://cli.github.com/packages/githubcli-archive-keyring.gpg"; \
     install -o root -g root -m 644 /tmp/githubcli-archive-keyring.gpg /etc/apt/keyrings/githubcli-archive-keyring.gpg; \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list; \
     apt-get update; \
