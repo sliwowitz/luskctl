@@ -16,6 +16,7 @@ from ..lib.containers.tasks import (
     task_delete,
     task_list,
     task_login,
+    task_logs,
     task_new,
     task_status,
     task_stop,
@@ -25,6 +26,7 @@ from ..lib.core.config import (
     bundled_presets_dir as _bundled_presets_dir,
     config_root as _config_root,
     get_envs_base_dir as _get_envs_base_dir,
+    get_logs_partial_streaming as _get_logs_partial_streaming,
     get_ui_base_port as _get_ui_base_port,
     global_config_path as _global_config_path,
     global_config_search_paths as _global_config_search_paths,
@@ -646,6 +648,36 @@ def main() -> None:
     except AttributeError:
         pass
 
+    t_logs = tsub.add_parser("logs", help="View formatted container logs for a task")
+    _a = t_logs.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    _a = t_logs.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    t_logs.add_argument("-f", "--follow", action="store_true", help="Follow live output")
+    t_logs.add_argument(
+        "--raw", action="store_true", help="Show raw podman output (bypass formatting)"
+    )
+    t_logs.add_argument("--tail", type=int, default=None, help="Show only the last N lines")
+    stream_group = t_logs.add_mutually_exclusive_group()
+    stream_group.add_argument(
+        "--stream",
+        action="store_true",
+        default=None,
+        help="Enable partial streaming (typewriter effect, default)",
+    )
+    stream_group.add_argument(
+        "--no-stream",
+        action="store_true",
+        default=None,
+        help="Disable partial streaming (show coalesced messages only)",
+    )
+
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
@@ -773,6 +805,22 @@ def main() -> None:
                 task_run_cli(args.project_id, task_id, agents=selected, preset=preset)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
+        elif args.task_cmd == "logs":
+            # Resolve streaming: CLI flag → config → default (True)
+            if getattr(args, "no_stream", None):
+                stream = False
+            elif getattr(args, "stream", None):
+                stream = True
+            else:
+                stream = _get_logs_partial_streaming()
+            task_logs(
+                args.project_id,
+                args.task_id,
+                follow=getattr(args, "follow", False),
+                raw=getattr(args, "raw", False),
+                tail=getattr(args, "tail", None),
+                streaming=stream,
+            )
         else:
             parser.error("Unknown task subcommand")
     else:

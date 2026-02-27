@@ -101,12 +101,19 @@ path = "luskctl.lib.containers.autopilot"
 layer = "services"
 depends_on = ["luskctl.lib.containers.tasks"]
 
+# Agent log formatters (Claude stream-json, plain text)
+[[modules]]
+path = "luskctl.lib.containers.log_format"
+layer = "services"
+depends_on = ["luskctl.lib._util.ansi"]
+
 # Task metadata, lifecycle, and queries
 [[modules]]
 path = "luskctl.lib.containers.tasks"
 layer = "services"
 depends_on = [
     "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.log_format",
     "luskctl.lib.containers.runtime",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
@@ -347,6 +354,7 @@ expose = [
     "task_delete",
     "task_login",
     "task_list",
+    "task_logs",
     "task_status",
     "get_tasks",
     "get_login_command",
@@ -411,6 +419,7 @@ expose = [
     "global_presets_dir",
     "bundled_presets_dir",
     "get_envs_base_dir",
+    "get_logs_partial_streaming",
     "get_ui_base_port",
     "get_tui_default_tmux",
     "get_global_human_name",
@@ -460,6 +469,10 @@ expose = [
     "wait_for_exit",
 ]
 from = ["luskctl.lib.containers.runtime"]
+
+[[interfaces]]
+expose = ["auto_detect_formatter", "ClaudeStreamJsonFormatter", "PlainTextFormatter"]
+from = ["luskctl.lib.containers.log_format"]
 
 [[interfaces]]
 expose = ["wait_for_container_exit", "follow_container_logs_cmd"]

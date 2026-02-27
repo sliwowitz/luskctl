@@ -248,6 +248,17 @@ def get_tui_default_tmux() -> bool:
     return bool(get_global_section("tui").get("default_tmux", False))
 
 
+def get_logs_partial_streaming() -> bool:
+    """Return whether partial streaming is enabled for log viewing (default True).
+
+    Global config (config.yml)::
+
+        logs:
+          partial_streaming: false  # disable typewriter effect
+    """
+    return bool(get_global_section("logs").get("partial_streaming", True))
+
+
 def get_global_agent_config() -> dict[str, Any]:
     """Return the ``agent:`` section from the global config, or ``{}``."""
     return get_global_section("agent")
