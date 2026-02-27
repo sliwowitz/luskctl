@@ -16,10 +16,10 @@ __all__ = [
 
 # Version information - single source of truth using importlib.metadata
 try:
-    from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
 
     __version__ = version("luskctl")
-except Exception:
+except PackageNotFoundError:
     # Fallback for development mode when package is not installed
     try:
         import tomllib
@@ -32,5 +32,5 @@ except Exception:
                 __version__ = pyproject_data["tool"]["poetry"]["version"]
         else:
             __version__ = "unknown"
-    except Exception:
+    except (FileNotFoundError, KeyError, tomllib.TOMLDecodeError):
         __version__ = "unknown"
