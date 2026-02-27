@@ -136,7 +136,7 @@ def _resolve_path(
             val = section.get(config_key[1])
             if val:
                 return Path(val).expanduser().resolve()
-        except Exception:
+        except (OSError, KeyError, TypeError):
             pass
 
     return default().resolve()

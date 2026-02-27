@@ -90,7 +90,7 @@ def _load_docker_config(project_root: Path) -> dict:
     try:
         cfg = yaml.safe_load((project_root / "project.yml").read_text()) or {}
         return cfg.get("docker", {}) or {}
-    except Exception:
+    except (OSError, yaml.YAMLError):
         return {}
 
 
@@ -152,7 +152,7 @@ def _render_dockerfiles(project) -> dict[str, str]:
             try:
                 if us_path.is_file():
                     user_snippet = us_path.read_text()
-            except Exception:
+            except OSError:
                 user_snippet = ""
 
     # SSH_KEY_NAME inside containers should mirror the filename that ssh-init
@@ -232,15 +232,14 @@ def generate_dockerfiles(project_id: str) -> None:
     # Stage auxiliary scripts into build context so Dockerfile COPY works.
     try:
         _stage_scripts_into(out_dir / "scripts")
-    except Exception:
-        # Non-fatal: some templates may not need scripts
-        pass
+    except OSError as e:
+        print(f"Warning: could not stage build scripts: {e}")
 
     # Stage tmux config for container login sessions.
     try:
         _stage_tmux_config_into(out_dir / "tmux")
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"Warning: could not stage tmux config: {e}")
 
     print(f"Generated Dockerfiles in {out_dir}")
 

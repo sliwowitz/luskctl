@@ -55,7 +55,7 @@ from ..ui_utils.terminal import (
 # Optional: bash completion via argcomplete
 try:
     import argcomplete  # type: ignore
-except Exception:  # pragma: no cover - optional dep
+except ImportError:  # pragma: no cover - optional dep
     argcomplete = None  # type: ignore
 
 
@@ -155,8 +155,8 @@ def _print_config() -> None:
     # Envs base dir
     try:
         print(f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}")
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"- Envs base dir (for mounts): error: {e}")
 
     uproj = _user_projects_root()
     sproj = _config_root()
@@ -180,8 +180,8 @@ def _print_config() -> None:
         bpresets_names = sorted(
             p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
         )
-    except Exception:
-        pass
+    except OSError:
+        pass  # Directory may not exist in some installations
     print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
     if bpresets_names:
         for n in bpresets_names:
@@ -204,7 +204,7 @@ def _print_config() -> None:
     tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
     try:
         names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
-    except Exception:
+    except OSError:
         names = []
     print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
     if names:
@@ -215,7 +215,7 @@ def _print_config() -> None:
     scr_pkg = resources.files("luskctl") / "resources" / "scripts"
     try:
         scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
-    except Exception:
+    except OSError:
         scr_names = []
     print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
     if scr_names:
@@ -318,7 +318,7 @@ def main() -> None:
     _a = p_config_show.add_argument("project_id", help="Project ID")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_config_show.add_argument("--preset", help="Apply a preset before showing resolved config")
 
@@ -329,7 +329,7 @@ def main() -> None:
     _a = p_presets_list.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     # generate
@@ -337,7 +337,7 @@ def main() -> None:
     _a = p_gen.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     # build
@@ -345,7 +345,7 @@ def main() -> None:
     _a = p_build.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_build.add_argument(
         "--agents",
@@ -370,7 +370,7 @@ def main() -> None:
     _a = p_ssh.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_ssh.add_argument(
         "--key-type",
@@ -396,7 +396,7 @@ def main() -> None:
     _a = p_gate.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_gate.add_argument(
         "--force-reinit",
@@ -413,7 +413,7 @@ def main() -> None:
     _a = p_pinit.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     # project-wizard
@@ -430,7 +430,7 @@ def main() -> None:
     _a = p_derive.add_argument("source_id", help="Source project ID to derive from")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_derive.add_argument("new_id", help="New project ID")
 
@@ -446,7 +446,7 @@ def main() -> None:
     _a = p_auth.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     # login (top-level shortcut)
@@ -454,12 +454,12 @@ def main() -> None:
     _a = p_login.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     _a = p_login.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     # run-claude (headless autopilot)
@@ -469,7 +469,7 @@ def main() -> None:
     _a = p_run_claude.add_argument("project_id", help="Project ID")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     p_run_claude.add_argument("prompt", help="Task prompt for Claude")
     p_run_claude.add_argument(
@@ -502,26 +502,26 @@ def main() -> None:
     _a = t_new.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     t_list = tsub.add_parser("list", help="List tasks")
     _a = t_list.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     t_run_cli = tsub.add_parser("run-cli", help="Run task in CLI (codex agent) mode")
     _a = t_run_cli.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     _a = t_run_cli.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     t_run_cli.add_argument(
         "--agent",
@@ -536,12 +536,12 @@ def main() -> None:
     _a = t_run_ui.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     _a = t_run_ui.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     known_backends = ", ".join(WEB_BACKENDS)
     t_run_ui.add_argument(
@@ -562,37 +562,37 @@ def main() -> None:
     _a = t_delete.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
     _a = t_delete.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
+    except AttributeError:
         pass
 
     t_stop = tsub.add_parser("stop", help="Gracefully stop a running task container")
     _a = t_stop.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
     _a = t_stop.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
 
     t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
     _a = t_restart.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
     _a = t_restart.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
     t_restart.add_argument(
         "--backend",
         choices=["gradio", "streamlit"],
@@ -606,8 +606,8 @@ def main() -> None:
     _a = t_start.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
     t_start.add_argument(
         "--web",
         action="store_true",
@@ -630,19 +630,19 @@ def main() -> None:
     _a = t_status.add_argument("project_id")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
     _a = t_status.add_argument("task_id")
     try:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except Exception:
-        pass  # argcomplete not available or completer attribute not supported
+    except AttributeError:
+        pass
 
     # Enable bash completion if argcomplete is present and activated
     if argcomplete is not None:  # pragma: no cover - shell integration
         try:
             argcomplete.autocomplete(parser)  # type: ignore[attr-defined]
-        except Exception:
+        except (TypeError, AttributeError):
             pass
 
     args = parser.parse_args()
