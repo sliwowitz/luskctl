@@ -438,6 +438,8 @@ def task_logs(
     if follow:
         cmd.append("-f")
     if tail is not None:
+        if tail < 0:
+            raise SystemExit("--tail must be >= 0")
         cmd.extend(["--tail", str(tail)])
     cmd.append(cname)
 
@@ -455,7 +457,7 @@ def task_logs(
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
@@ -504,12 +506,24 @@ def task_logs(
                 formatter.feed_line(line)
     finally:
         signal.signal(signal.SIGINT, original_sigint)
+        # Check for stderr from podman before terminating
+        stderr_output = b""
+        try:
+            stderr_output = proc.stderr.read() or b""
+        except (OSError, ValueError):
+            pass
         proc.terminate()
         try:
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             proc.kill()
         formatter.finish()
+
+    # Report podman errors if process failed and wasn't interrupted
+    if not interrupted and proc.returncode and proc.returncode != 0:
+        stderr_text = stderr_output.decode("utf-8", errors="replace").strip()
+        if stderr_text:
+            print(f"Warning: podman logs exited with code {proc.returncode}: {stderr_text}")
 
     if interrupted:
         print()

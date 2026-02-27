@@ -10,7 +10,7 @@ import yaml
 
 from luskctl.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
 from luskctl.lib.containers.task_runners import task_run_cli, task_run_web
-from luskctl.lib.containers.tasks import get_workspace_git_diff, task_delete, task_new
+from luskctl.lib.containers.tasks import get_workspace_git_diff, task_delete, task_logs, task_new
 from luskctl.lib.core.projects import load_project
 from luskctl.tui.clipboard import (
     copy_to_clipboard,
@@ -838,3 +838,193 @@ class TaskTests(unittest.TestCase):
             # Verify gatekeeping mode settings are still correct
             self.assertEqual(env["CODE_REPO"], "file:///git-gate/gate.git")
             _assert_volume_mount(volumes, f"{ctx.gate_dir}:/git-gate/gate.git", ":z")
+
+
+class TaskLogsTests(unittest.TestCase):
+    """Tests for task_logs() function."""
+
+    def _setup_task_with_mode(self, project_id, mode="run"):
+        """Create a task and set its mode in metadata."""
+        task_id = task_new(project_id)
+        # Manually update metadata to set mode (normally done by task runners)
+        from luskctl.lib.core.config import state_root
+
+        meta_dir = state_root() / "projects" / project_id / "tasks"
+        meta_path = meta_dir / f"{task_id}.yml"
+        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta["mode"] = mode
+        meta["status"] = "running"
+        meta_path.write_text(yaml.safe_dump(meta))
+        return task_id
+
+    def test_unknown_task_raises(self) -> None:
+        """task_logs raises SystemExit for non-existent task."""
+        with project_env(
+            "project:\n  id: proj_logs1\n",
+            project_id="proj_logs1",
+        ):
+            with mock_git_config():
+                with self.assertRaises(SystemExit) as cm:
+                    task_logs("proj_logs1", "999")
+                self.assertIn("Unknown task", str(cm.exception))
+
+    def test_no_mode_raises(self) -> None:
+        """task_logs raises SystemExit when task has no mode set."""
+        with project_env(
+            "project:\n  id: proj_logs2\n",
+            project_id="proj_logs2",
+        ):
+            with mock_git_config():
+                task_id = task_new("proj_logs2")
+                with self.assertRaises(SystemExit) as cm:
+                    task_logs("proj_logs2", task_id)
+                self.assertIn("never been run", str(cm.exception))
+
+    def test_container_not_found_raises(self) -> None:
+        """task_logs raises SystemExit when container doesn't exist."""
+        with project_env(
+            "project:\n  id: proj_logs3\n",
+            project_id="proj_logs3",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs3", "run")
+                with unittest.mock.patch(
+                    "luskctl.lib.containers.tasks.get_container_state", return_value=None
+                ):
+                    with self.assertRaises(SystemExit) as cm:
+                        task_logs("proj_logs3", task_id)
+                    self.assertIn("does not exist", str(cm.exception))
+
+    def test_negative_tail_raises(self) -> None:
+        """task_logs raises SystemExit for negative tail value."""
+        with project_env(
+            "project:\n  id: proj_logs4\n",
+            project_id="proj_logs4",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs4", "run")
+                with unittest.mock.patch(
+                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                ):
+                    with self.assertRaises(SystemExit) as cm:
+                        task_logs("proj_logs4", task_id, tail=-1)
+                    self.assertIn("--tail must be >= 0", str(cm.exception))
+
+    def test_raw_mode_exec(self) -> None:
+        """task_logs in raw mode calls os.execvp."""
+        with project_env(
+            "project:\n  id: proj_logs5\n",
+            project_id="proj_logs5",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs5", "cli")
+                # os.execvp replaces the process, so mock it to raise SystemExit
+                # to prevent fall-through to the formatted mode code path.
+                captured_args = []
+
+                def fake_execvp(file, args):
+                    captured_args.append((file, args))
+                    raise SystemExit(0)
+
+                with (
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.os.execvp", side_effect=fake_execvp
+                    ),
+                ):
+                    with self.assertRaises(SystemExit):
+                        task_logs("proj_logs5", task_id, raw=True)
+                    self.assertEqual(len(captured_args), 1)
+                    self.assertEqual(captured_args[0][0], "podman")
+                    self.assertIn("logs", captured_args[0][1])
+
+    def test_raw_mode_podman_not_found(self) -> None:
+        """task_logs in raw mode raises SystemExit if podman not found."""
+        with project_env(
+            "project:\n  id: proj_logs6\n",
+            project_id="proj_logs6",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs6", "cli")
+                with (
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.os.execvp",
+                        side_effect=FileNotFoundError("podman"),
+                    ),
+                ):
+                    with self.assertRaises(SystemExit) as cm:
+                        task_logs("proj_logs6", task_id, raw=True)
+                    self.assertIn("podman not found", str(cm.exception))
+
+    def test_formatted_mode_feeds_formatter(self) -> None:
+        """task_logs in formatted mode pipes lines through formatter."""
+        with project_env(
+            "project:\n  id: proj_logs7\n",
+            project_id="proj_logs7",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs7", "run")
+
+                # Create a mock process that returns some data then exits
+                mock_proc = unittest.mock.Mock()
+                mock_proc.stdout = unittest.mock.Mock()
+                # First poll returns None (running), then 0 (exited)
+                mock_proc.poll = unittest.mock.Mock(side_effect=[None, 0])
+                # read1 returns data, then read returns remaining
+                mock_proc.stdout.read1 = unittest.mock.Mock(return_value=b'{"type":"system"}\n')
+                mock_proc.stdout.read = unittest.mock.Mock(return_value=b"")
+                mock_proc.stdout.fileno = unittest.mock.Mock(return_value=3)
+                mock_proc.stderr = unittest.mock.Mock()
+                mock_proc.stderr.read = unittest.mock.Mock(return_value=b"")
+                mock_proc.returncode = 0
+                mock_proc.wait = unittest.mock.Mock()
+                mock_proc.terminate = unittest.mock.Mock()
+
+                mock_formatter = unittest.mock.Mock()
+
+                with (
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.subprocess.Popen", return_value=mock_proc
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.log_format.auto_detect_formatter",
+                        return_value=mock_formatter,
+                    ),
+                    unittest.mock.patch("select.select") as mock_select,
+                ):
+                    mock_select.return_value = ([mock_proc.stdout], [], [])
+                    buf = StringIO()
+                    with redirect_stdout(buf):
+                        task_logs("proj_logs7", task_id)
+
+                    mock_formatter.feed_line.assert_called()
+                    mock_formatter.finish.assert_called_once()
+
+    def test_formatted_mode_podman_not_found(self) -> None:
+        """task_logs in formatted mode raises SystemExit if podman not found."""
+        with project_env(
+            "project:\n  id: proj_logs8\n",
+            project_id="proj_logs8",
+        ):
+            with mock_git_config():
+                task_id = self._setup_task_with_mode("proj_logs8", "run")
+                with (
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.tasks.subprocess.Popen",
+                        side_effect=FileNotFoundError("podman"),
+                    ),
+                ):
+                    with self.assertRaises(SystemExit) as cm:
+                        task_logs("proj_logs8", task_id)
+                    self.assertIn("podman not found", str(cm.exception))

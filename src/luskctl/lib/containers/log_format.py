@@ -99,14 +99,14 @@ class ClaudeStreamJsonFormatter:
     # -- line processing --
 
     def feed_line(self, line: str) -> None:
-        stripped = line.strip()
-        if not stripped:
+        if not line.strip():
             return
+        stripped = line.strip()
         try:
             data = json.loads(stripped)
         except (json.JSONDecodeError, ValueError):
-            # Not JSON — print as plain text
-            print(stripped, flush=True)
+            # Not JSON — print as plain text, preserving leading whitespace
+            print(line.rstrip("\r\n"), flush=True)
             return
 
         msg_type = data.get("type", "")
