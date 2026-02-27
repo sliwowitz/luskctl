@@ -76,14 +76,76 @@ class ContainerLifecycleTests(unittest.TestCase):
                 with redirect_stdout(StringIO()):
                     task_stop(project_id, "1")
 
-                # Verify podman stop was called
+                # Verify podman stop was called with default 10s timeout
                 run_mock.assert_called()
                 call_args = run_mock.call_args[0][0]
                 self.assertEqual(call_args[:2], ["podman", "stop"])
+                self.assertIn("--time", call_args)
+                self.assertEqual(call_args[call_args.index("--time") + 1], "10")
 
             # Verify metadata status is now 'stopped'
             meta = yaml.safe_load(meta_path.read_text())
             self.assertEqual(meta["status"], "stopped")
+
+    def test_task_stop_custom_timeout_from_config(self) -> None:
+        """task_stop uses shutdown_timeout from project config."""
+        project_id = "proj_stop_cfg"
+        cfg = f"project:\n  id: {project_id}\nrun:\n  shutdown_timeout: 30\n"
+        with project_env(cfg, project_id=project_id) as ctx:
+            task_new(project_id)
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta_path = meta_dir / "1.yml"
+
+            meta = yaml.safe_load(meta_path.read_text())
+            meta["status"] = "running"
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml.safe_dump(meta))
+
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                ),
+                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+            ):
+                run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                with redirect_stdout(StringIO()):
+                    task_stop(project_id, "1")
+
+                call_args = run_mock.call_args[0][0]
+                self.assertEqual(
+                    call_args, ["podman", "stop", "--time", "30", f"{project_id}-cli-1"]
+                )
+
+    def test_task_stop_cli_timeout_overrides_config(self) -> None:
+        """Explicit timeout kwarg overrides project config."""
+        project_id = "proj_stop_ovr"
+        cfg = f"project:\n  id: {project_id}\nrun:\n  shutdown_timeout: 30\n"
+        with project_env(cfg, project_id=project_id) as ctx:
+            task_new(project_id)
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta_path = meta_dir / "1.yml"
+
+            meta = yaml.safe_load(meta_path.read_text())
+            meta["status"] = "running"
+            meta["mode"] = "cli"
+            meta_path.write_text(yaml.safe_dump(meta))
+
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                ),
+                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+            ):
+                run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
+                with redirect_stdout(StringIO()):
+                    task_stop(project_id, "1", timeout=60)
+
+                call_args = run_mock.call_args[0][0]
+                self.assertEqual(
+                    call_args, ["podman", "stop", "--time", "60", f"{project_id}-cli-1"]
+                )
 
     def test_task_stop_nonexistent_fails(self) -> None:
         """task_stop raises SystemExit if task doesn't exist."""
@@ -167,7 +229,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 self.assertEqual(run_mock.call_count, 2)
                 stop_args = run_mock.call_args_list[0][0][0]
                 start_args = run_mock.call_args_list[1][0][0]
-                self.assertEqual(stop_args, ["podman", "stop", cname])
+                self.assertEqual(stop_args, ["podman", "stop", "--time", "10", cname])
                 self.assertEqual(start_args, ["podman", "start", cname])
 
                 # Verify message indicates restarted

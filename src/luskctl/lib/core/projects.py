@@ -90,6 +90,9 @@ class Project:
     default_agent: str | None = None
     # Agent configuration dict (from project.yml agent: section)
     agent_config: dict = field(default_factory=dict)
+    # Seconds to wait before SIGKILL when stopping a container (podman stop --time).
+    # Default 10 matches podman's built-in default.
+    shutdown_timeout: int = 10
 
     @property
     def presets_dir(self) -> Path:
@@ -369,6 +372,10 @@ def load_project(project_id: str) -> Project:
     if not default_agent:
         default_agent = get_global_default_agent()
 
+    # Run section (GPU, shutdown timeout, etc.)
+    run_cfg = cfg.get("run", {}) or {}
+    shutdown_timeout = int(run_cfg.get("shutdown_timeout", 10))
+
     # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
     # Resolve subagent file: paths relative to project root
@@ -402,5 +409,6 @@ def load_project(project_id: str) -> Project:
         auto_sync_branches=auto_sync_branches,
         default_agent=default_agent,
         agent_config=agent_cfg,
+        shutdown_timeout=shutdown_timeout,
     )
     return p

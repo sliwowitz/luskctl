@@ -574,7 +574,7 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
         # Container is running - stop it first, then start it again
         try:
             subprocess.run(
-                ["podman", "stop", cname],
+                ["podman", "stop", "--time", str(project.shutdown_timeout), cname],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
