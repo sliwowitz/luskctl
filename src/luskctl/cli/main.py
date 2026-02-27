@@ -180,8 +180,10 @@ def _print_config() -> None:
         bpresets_names = sorted(
             p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
         )
-    except OSError:
+    except FileNotFoundError:
         pass  # Directory may not exist in some installations
+    except OSError as e:
+        print(f"  Warning: could not list bundled presets: {e}")
     print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
     if bpresets_names:
         for n in bpresets_names:
@@ -204,8 +206,11 @@ def _print_config() -> None:
     tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
     try:
         names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
-    except OSError:
+    except FileNotFoundError:
         names = []
+    except OSError as e:
+        names = []
+        print(f"  Warning: could not list templates: {e}")
     print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
     if names:
         for n in sorted(names):
@@ -215,8 +220,11 @@ def _print_config() -> None:
     scr_pkg = resources.files("luskctl") / "resources" / "scripts"
     try:
         scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
-    except OSError:
+    except FileNotFoundError:
         scr_names = []
+    except OSError as e:
+        scr_names = []
+        print(f"  Warning: could not list scripts: {e}")
     print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
     if scr_names:
         for n in sorted(scr_names):
