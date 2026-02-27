@@ -15,7 +15,7 @@ import sys
 from collections.abc import Callable
 
 from ..lib.containers.agents import parse_md_agent
-from ..lib.containers.autopilot import follow_container_logs_cmd, wait_for_container_exit
+from ..lib.containers.autopilot import wait_for_container_exit
 from ..lib.containers.runtime import container_name
 from ..lib.containers.task_runners import (
     task_restart,
@@ -506,20 +506,37 @@ class ActionsMixin:
         return project_id, task_id, exit_code, error
 
     async def _action_follow_logs(self) -> None:
-        """Follow logs for an autopilot task."""
+        """View logs for a task in the integrated log viewer."""
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return
-        if self.current_task.mode != "run":
-            self.notify("Follow logs is only available for autopilot tasks.")
+        task = self.current_task
+        if not task.mode:
+            self.notify("Task has no mode set (never started).")
             return
 
         pid = self.current_project_id
-        tid = self.current_task.task_id
-        cname = container_name(pid, "run", tid)
-        cmd = follow_container_logs_cmd(cname)
-        await self._launch_terminal_session(
-            cmd, title=f"logs:{cname}", cname=cname, label="Logs opened"
+        tid = task.task_id
+        cname = container_name(pid, task.mode, tid)
+
+        from ..lib.containers.runtime import get_container_state
+
+        state = get_container_state(cname)
+        if state is None:
+            self.notify(f"No container found for task {tid}.")
+            return
+        follow = state == "running"
+
+        from .log_viewer import LogViewerScreen
+
+        await self.push_screen(
+            LogViewerScreen(
+                project_id=pid,
+                task_id=tid,
+                mode=task.mode,
+                container_name=cname,
+                follow=follow,
+            )
         )
 
     async def _action_restart_task(self) -> None:

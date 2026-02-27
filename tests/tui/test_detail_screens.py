@@ -364,7 +364,7 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.on_key(event)
         screen.dismiss.assert_called_once_with("follow_logs")
 
-    def test_lowercase_f_ignored_for_non_autopilot_task(self) -> None:
+    def test_lowercase_f_works_for_non_autopilot_task(self) -> None:
         screens, widgets = import_screens()
         task = widgets.TaskMeta(
             task_id="t1", status="running", mode="cli", workspace="/w", web_port=None
@@ -373,7 +373,7 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.dismiss = mock.Mock()
         event = make_key_event("f")
         screen.on_key(event)
-        screen.dismiss.assert_not_called()
+        screen.dismiss.assert_called_once_with("follow_logs")
 
     def test_lowercase_f_blocked_without_tasks(self) -> None:
         screens, _ = import_screens()
