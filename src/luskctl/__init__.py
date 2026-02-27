@@ -32,5 +32,5 @@ except PackageNotFoundError:
                 __version__ = pyproject_data["tool"]["poetry"]["version"]
         else:
             __version__ = "unknown"
-    except (FileNotFoundError, KeyError):
+    except (FileNotFoundError, KeyError, tomllib.TOMLDecodeError):
         __version__ = "unknown"
