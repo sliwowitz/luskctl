@@ -338,13 +338,16 @@ def task_login(project_id: str, task_id: str) -> None:
         )
 
 
-def task_stop(project_id: str, task_id: str) -> None:
+def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> None:
     """Gracefully stop a running task container.
 
-    Uses `podman stop` (with default 10s timeout) instead of force-removing.
+    Uses ``podman stop --time <N>`` to give the container *timeout* seconds
+    before SIGKILL.  When *timeout* is ``None`` the project's
+    ``run.shutdown_timeout`` setting is used (default 10 s).
     Updates task metadata status to 'stopped'.
     """
     project = load_project(project_id)
+    effective_timeout = timeout if timeout is not None else project.shutdown_timeout
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
@@ -365,7 +368,7 @@ def task_stop(project_id: str, task_id: str) -> None:
 
     try:
         subprocess.run(
-            ["podman", "stop", cname],
+            ["podman", "stop", "--time", str(effective_timeout), cname],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

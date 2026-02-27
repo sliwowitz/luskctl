@@ -589,6 +589,12 @@ def main() -> None:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except AttributeError:
         pass
+    t_stop.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help="Seconds before SIGKILL (overrides project run.shutdown_timeout, default 10)",
+    )
 
     t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
     _a = t_restart.add_argument("project_id")
@@ -753,7 +759,7 @@ def main() -> None:
         elif args.task_cmd == "delete":
             task_delete(args.project_id, args.task_id)
         elif args.task_cmd == "stop":
-            task_stop(args.project_id, args.task_id)
+            task_stop(args.project_id, args.task_id, timeout=getattr(args, "timeout", None))
         elif args.task_cmd == "restart":
             backend = getattr(args, "backend", None)
             task_restart(args.project_id, args.task_id, backend=backend)
