@@ -10,7 +10,13 @@ import yaml
 
 from luskctl.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
 from luskctl.lib.containers.task_runners import task_run_cli, task_run_web
-from luskctl.lib.containers.tasks import get_workspace_git_diff, task_delete, task_logs, task_new
+from luskctl.lib.containers.tasks import (
+    get_workspace_git_diff,
+    task_delete,
+    task_list,
+    task_logs,
+    task_new,
+)
 from luskctl.lib.core.projects import load_project
 from luskctl.tui.clipboard import (
     copy_to_clipboard,
@@ -127,6 +133,157 @@ class TaskTests(unittest.TestCase):
             # Verify marker content explains its purpose
             marker_content = marker_path.read_text(encoding="utf-8")
             self.assertIn("reset to the latest remote HEAD", marker_content)
+
+    def test_task_list_no_filters(self) -> None:
+        """task_list with no filters prints all tasks."""
+        project_id = "proj_list"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            task_new(project_id)
+            task_new(project_id)
+
+            # Patch metadata to give tasks different states
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
+            meta1["status"] = "running"
+            meta1["mode"] = "cli"
+            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
+
+            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
+            meta2["status"] = "stopped"
+            meta2["mode"] = "web"
+            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id)
+            output = buf.getvalue()
+            self.assertIn("1: running", output)
+            self.assertIn("2: stopped", output)
+
+    def test_task_list_filter_by_status(self) -> None:
+        """task_list --status filters tasks by their status field."""
+        project_id = "proj_filt_status"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            task_new(project_id)
+            task_new(project_id)
+
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
+            meta1["status"] = "running"
+            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
+
+            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
+            meta2["status"] = "stopped"
+            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, status="running")
+            output = buf.getvalue()
+            self.assertIn("1: running", output)
+            self.assertNotIn("2:", output)
+
+    def test_task_list_filter_by_mode(self) -> None:
+        """task_list --mode filters tasks by their mode field."""
+        project_id = "proj_filt_mode"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            task_new(project_id)
+            task_new(project_id)
+
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
+            meta1["mode"] = "cli"
+            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
+
+            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
+            meta2["mode"] = "web"
+            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, mode="web")
+            output = buf.getvalue()
+            self.assertNotIn("1:", output)
+            self.assertIn("2:", output)
+
+    def test_task_list_filter_by_agent(self) -> None:
+        """task_list --agent filters tasks by their preset field."""
+        project_id = "proj_filt_agent"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            task_new(project_id)
+            task_new(project_id)
+
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
+            meta1["preset"] = "claude"
+            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
+
+            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
+            meta2["preset"] = "codex"
+            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, agent="claude")
+            output = buf.getvalue()
+            self.assertIn("1:", output)
+            self.assertNotIn("2:", output)
+
+    def test_task_list_combined_filters(self) -> None:
+        """task_list with multiple filters applies all of them (AND logic)."""
+        project_id = "proj_filt_combo"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ) as ctx:
+            task_new(project_id)
+            task_new(project_id)
+            task_new(project_id)
+
+            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+            for tid, status, mode in [
+                ("1", "running", "cli"),
+                ("2", "running", "web"),
+                ("3", "stopped", "cli"),
+            ]:
+                meta = yaml.safe_load((meta_dir / f"{tid}.yml").read_text())
+                meta["status"] = status
+                meta["mode"] = mode
+                (meta_dir / f"{tid}.yml").write_text(yaml.safe_dump(meta))
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, status="running", mode="cli")
+            output = buf.getvalue()
+            self.assertIn("1:", output)
+            self.assertNotIn("2:", output)
+            self.assertNotIn("3:", output)
+
+    def test_task_list_no_match(self) -> None:
+        """task_list prints 'No tasks found' when filters match nothing."""
+        project_id = "proj_filt_none"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            task_new(project_id)
+
+            buf = StringIO()
+            with redirect_stdout(buf):
+                task_list(project_id, status="running")
+            self.assertIn("No tasks found", buf.getvalue())
 
     def test_build_task_env_gatekeeping(self) -> None:
         project_id = "proj9"
