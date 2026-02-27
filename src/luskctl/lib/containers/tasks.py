@@ -23,6 +23,7 @@ from .._util.fs import ensure_dir
 from .._util.logging_utils import _log_debug
 from ..core.config import state_root
 from ..core.projects import Project, load_project
+from .log_format import auto_detect_formatter
 from .runtime import (
     container_name,
     get_container_state,
@@ -406,8 +407,6 @@ def task_logs(
     """
     import select
     import signal
-
-    from .log_format import auto_detect_formatter
 
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)

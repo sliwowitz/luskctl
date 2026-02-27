@@ -995,7 +995,7 @@ class TaskLogsTests(unittest.TestCase):
                         "luskctl.lib.containers.tasks.subprocess.Popen", return_value=mock_proc
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.log_format.auto_detect_formatter",
+                        "luskctl.lib.containers.tasks.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                     unittest.mock.patch("select.select") as mock_select,
