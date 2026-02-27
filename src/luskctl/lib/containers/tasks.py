@@ -181,23 +181,36 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[dict]:
     return tasks
 
 
-def task_list(project_id: str) -> None:
+def task_list(
+    project_id: str,
+    *,
+    status: str | None = None,
+    mode: str | None = None,
+    agent: str | None = None,
+) -> None:
+    """List tasks for a project, optionally filtered by status, mode, or agent preset."""
     tasks = get_tasks(project_id)
+    if status:
+        tasks = [t for t in tasks if t.get("status") == status]
+    if mode:
+        tasks = [t for t in tasks if t.get("mode") == mode]
+    if agent:
+        tasks = [t for t in tasks if t.get("preset") == agent]
     if not tasks:
         print("No tasks found")
         return
     for t in tasks:
         tid = t.get("task_id", "?")
-        status = t.get("status", "unknown")
-        mode = t.get("mode")
+        t_status = t.get("status", "unknown")
+        t_mode = t.get("mode")
         port = t.get("web_port")
         extra = []
-        if mode:
-            extra.append(f"mode={mode}")
+        if t_mode:
+            extra.append(f"mode={t_mode}")
         if port:
             extra.append(f"port={port}")
         extra_s = f" [{'; '.join(extra)}]" if extra else ""
-        print(f"- {tid}: {status}{extra_s}")
+        print(f"- {tid}: {t_status}{extra_s}")
 
 
 def _check_mode(meta: dict, expected: str) -> None:

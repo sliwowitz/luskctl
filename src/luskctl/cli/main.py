@@ -521,6 +521,21 @@ def main() -> None:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except AttributeError:
         pass
+    t_list.add_argument(
+        "--status",
+        dest="filter_status",
+        help="Filter by task status (e.g. running, stopped, created)",
+    )
+    t_list.add_argument(
+        "--mode",
+        dest="filter_mode",
+        help="Filter by task mode (e.g. cli, web, run)",
+    )
+    t_list.add_argument(
+        "--agent",
+        dest="filter_agent",
+        help="Filter by agent preset name",
+    )
 
     t_run_cli = tsub.add_parser("run-cli", help="Run task in CLI (codex agent) mode")
     _a = t_run_cli.add_argument("project_id")
@@ -772,7 +787,12 @@ def main() -> None:
         if args.task_cmd == "new":
             task_new(args.project_id)
         elif args.task_cmd == "list":
-            task_list(args.project_id)
+            task_list(
+                args.project_id,
+                status=getattr(args, "filter_status", None),
+                mode=getattr(args, "filter_mode", None),
+                agent=getattr(args, "filter_agent", None),
+            )
         elif args.task_cmd == "run-cli":
             task_run_cli(
                 args.project_id,
