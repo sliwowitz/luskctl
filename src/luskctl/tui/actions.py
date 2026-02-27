@@ -165,9 +165,10 @@ class ActionsMixin:
     ) -> bool:
         """Run *fn* in a suspended TUI session with standard error handling.
 
-        Suspends the TUI, runs *fn* inside a try/except SystemExit block,
-        waits for the user to press Enter, then optionally notifies and
-        refreshes.  Returns True if *fn* completed without error.
+        Suspends the TUI, runs *fn*, waits for the user to press Enter,
+        then optionally notifies and refreshes.  Returns True if *fn*
+        completed without error.  The resume prompt is shown in a finally
+        block so the user always gets back to the TUI.
         """
         ok = False
         with self.suspend():
@@ -176,7 +177,10 @@ class ActionsMixin:
                 ok = True
             except SystemExit as e:
                 print(f"Error: {e}")
-            input("\n[Press Enter to return to LuskTUI] ")
+            except Exception as e:
+                print(f"Error: {e}")
+            finally:
+                input("\n[Press Enter to return to LuskTUI] ")
         if ok and success_msg:
             self.notify(success_msg)
         if refresh == "project_state":
@@ -293,7 +297,10 @@ class ActionsMixin:
             return
         pid = self.current_project_id
 
+        gate_ok = False
+
         def work() -> None:
+            nonlocal gate_ok
             print(f"=== Full Setup for {pid} ===\n")
             print("Step 1/4: Initializing SSH...")
             init_project_ssh(pid)
@@ -305,12 +312,17 @@ class ActionsMixin:
             print("\nStep 4/4: Syncing git gate...")
             res = sync_project_gate(pid)
             if not res["success"]:
-                print(f"\nGate sync failed: {', '.join(res['errors'])}")
+                print(f"\nGate sync warnings: {', '.join(res['errors'])}")
             else:
                 print(f"\nGate ready at {res['path']}")
+                gate_ok = True
             print("\n=== Full Setup complete! ===")
 
-        await self._run_suspended(work, success_msg=f"Full setup completed for {pid}")
+        ok = await self._run_suspended(work, refresh="project_state")
+        if ok and gate_ok:
+            self.notify(f"Full setup completed for {pid}")
+        elif ok:
+            self.notify(f"Setup done for {pid} (gate sync had errors)", severity="warning")
 
     # ---------- Authentication actions ----------
 
