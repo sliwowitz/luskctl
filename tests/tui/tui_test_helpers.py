@@ -154,6 +154,16 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
         def __class_getitem__(cls, item: type) -> type:
             return cls
 
+    class RichLog:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.auto_scroll = kwargs.get("auto_scroll", True)
+
+        def write(self, content: Any) -> None:
+            pass
+
+        def clear(self) -> None:
+            pass
+
     widgets_mod.Button = Button
     widgets_mod.Footer = Footer
     widgets_mod.Header = Header
@@ -163,6 +173,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     widgets_mod.OptionList = OptionList
     widgets_mod.TextArea = TextArea
     widgets_mod.SelectionList = SelectionList
+    widgets_mod.RichLog = RichLog
 
     option_list_mod = types.ModuleType("textual.widgets.option_list")
 
@@ -220,13 +231,11 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     }
 
 
-def import_fresh(
-    stubs: dict[str, types.ModuleType] | None = None,
-) -> tuple[types.ModuleType, types.ModuleType, types.ModuleType]:
-    """Clear luskctl.tui modules and reimport with stubs.
-
-    Returns (screens, widgets, app) module tuple.
-    """
+def _import_with_stubs(
+    stubs: dict[str, types.ModuleType] | None,
+    *module_names: str,
+) -> list[types.ModuleType]:
+    """Clear luskctl.tui modules and import the given modules with Textual stubs."""
     if stubs is None:
         stubs = build_textual_stubs()
     real_find_spec = importlib.util.find_spec
@@ -241,10 +250,20 @@ def import_fresh(
             for mod_name in list(sys.modules):
                 if mod_name.startswith("luskctl.tui"):
                     sys.modules.pop(mod_name, None)
-            screens = importlib.import_module("luskctl.tui.screens")
-            widgets = importlib.import_module("luskctl.tui.widgets")
-            app = importlib.import_module("luskctl.tui.app")
-            return screens, widgets, app
+            return [importlib.import_module(name) for name in module_names]
+
+
+def import_fresh(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> tuple[types.ModuleType, types.ModuleType, types.ModuleType]:
+    """Clear luskctl.tui modules and reimport with stubs.
+
+    Returns (screens, widgets, app) module tuple.
+    """
+    screens, widgets, app = _import_with_stubs(
+        stubs, "luskctl.tui.screens", "luskctl.tui.widgets", "luskctl.tui.app"
+    )
+    return screens, widgets, app
 
 
 def import_screens(
@@ -269,6 +288,13 @@ def import_app(
     """Import app module with stubs and return (app_mod, AppClass)."""
     _, _, app_mod = import_fresh(stubs)
     return app_mod, app_mod.LuskTUI
+
+
+def import_log_viewer(
+    stubs: dict[str, types.ModuleType] | None = None,
+) -> types.ModuleType:
+    """Import log_viewer module with stubs."""
+    return _import_with_stubs(stubs, "luskctl.tui.log_viewer")[0]
 
 
 def make_key_event(key_str: str) -> mock.Mock:

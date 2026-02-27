@@ -495,8 +495,8 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         ]
         if self._has_tasks:
             options.append(Option("\\[l]ogin to container", id="login"))
-            if self._task_meta and self._task_meta.mode == "run":
-                options.append(Option("\\[f]ollow logs", id="follow_logs"))
+            if self._task_meta and self._task_meta.mode:
+                options.append(Option("view \\[f]ormatted logs", id="follow_logs"))
             options.append(None)
             options.append(Option("run \\[c]li agent", id="cli"))
             options.append(Option("run \\[w]eb UI", id="web"))
@@ -565,9 +565,9 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             event.stop()
             return
 
-        # 'f' (follow logs) — only available for autopilot tasks
+        # 'f' (view formatted logs) — available for all modes with containers
         if key == "f":
-            if self._has_tasks and self._task_meta and self._task_meta.mode == "run":
+            if self._has_tasks and self._task_meta and self._task_meta.mode:
                 self.dismiss("follow_logs")
                 event.stop()
 
