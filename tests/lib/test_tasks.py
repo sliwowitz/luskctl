@@ -134,6 +134,15 @@ class TaskTests(unittest.TestCase):
             marker_content = marker_path.read_text(encoding="utf-8")
             self.assertIn("reset to the latest remote HEAD", marker_content)
 
+    @staticmethod
+    def _patch_task_meta(ctx, project_id: str, tid: str, **updates) -> None:
+        """Load a task's YAML metadata, apply updates, and write it back."""
+        meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
+        meta_path = meta_dir / f"{tid}.yml"
+        meta = yaml.safe_load(meta_path.read_text())
+        meta.update(updates)
+        meta_path.write_text(yaml.safe_dump(meta))
+
     def test_task_list_no_filters(self) -> None:
         """task_list with no filters prints all tasks."""
         project_id = "proj_list"
@@ -144,17 +153,8 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            # Patch metadata to give tasks different states
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
-            meta1["status"] = "running"
-            meta1["mode"] = "cli"
-            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
-
-            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
-            meta2["status"] = "stopped"
-            meta2["mode"] = "web"
-            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+            self._patch_task_meta(ctx, project_id, "1", status="running", mode="cli")
+            self._patch_task_meta(ctx, project_id, "2", status="stopped", mode="web")
 
             buf = StringIO()
             with redirect_stdout(buf):
@@ -173,14 +173,8 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
-            meta1["status"] = "running"
-            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
-
-            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
-            meta2["status"] = "stopped"
-            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+            self._patch_task_meta(ctx, project_id, "1", status="running")
+            self._patch_task_meta(ctx, project_id, "2", status="stopped")
 
             buf = StringIO()
             with redirect_stdout(buf):
@@ -199,14 +193,8 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
-            meta1["mode"] = "cli"
-            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
-
-            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
-            meta2["mode"] = "web"
-            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+            self._patch_task_meta(ctx, project_id, "1", mode="cli")
+            self._patch_task_meta(ctx, project_id, "2", mode="web")
 
             buf = StringIO()
             with redirect_stdout(buf):
@@ -225,14 +213,8 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta1 = yaml.safe_load((meta_dir / "1.yml").read_text())
-            meta1["preset"] = "claude"
-            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta1))
-
-            meta2 = yaml.safe_load((meta_dir / "2.yml").read_text())
-            meta2["preset"] = "codex"
-            (meta_dir / "2.yml").write_text(yaml.safe_dump(meta2))
+            self._patch_task_meta(ctx, project_id, "1", preset="claude")
+            self._patch_task_meta(ctx, project_id, "2", preset="codex")
 
             buf = StringIO()
             with redirect_stdout(buf):
@@ -252,16 +234,12 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
             for tid, status, mode in [
                 ("1", "running", "cli"),
                 ("2", "running", "web"),
                 ("3", "stopped", "cli"),
             ]:
-                meta = yaml.safe_load((meta_dir / f"{tid}.yml").read_text())
-                meta["status"] = status
-                meta["mode"] = mode
-                (meta_dir / f"{tid}.yml").write_text(yaml.safe_dump(meta))
+                self._patch_task_meta(ctx, project_id, tid, status=status, mode=mode)
 
             buf = StringIO()
             with redirect_stdout(buf):
