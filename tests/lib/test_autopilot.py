@@ -1198,3 +1198,48 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     meta = yaml.safe_load(meta_path.read_text())
                     self.assertEqual(meta["status"], "completed")
                     self.assertEqual(meta["exit_code"], 0)
+
+    def test_followup_no_follow_mode(self) -> None:
+        """Follow-up with follow=False prints detached info and skips wait."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_meta2")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        side_effect=["exited", "running"],
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit"
+                    ) as wait_mock,
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_followup_headless("proj_meta2", task_id, "continue", follow=False)
+
+                    # wait_for_exit should NOT be called in no-follow mode
+                    wait_mock.assert_not_called()
+
+                    output = buffer.getvalue()
+                    self.assertIn("detached", output.lower())
+
+                    meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
+                    meta = yaml.safe_load(meta_path.read_text())
+                    self.assertEqual(meta["status"], "running")
