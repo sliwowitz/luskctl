@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install tach
-        run: pip install tach
+        run: pip install -r .github/requirements-ci.txt
 
       - name: Check module boundaries
         run: tach check
@@ -49,7 +49,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install docstr-coverage
-        run: pip install docstr-coverage
+        run: pip install -r .github/requirements-ci.txt
 
       - name: Check docstring coverage
         run: docstr-coverage src/luskctl/ --fail-under=95
