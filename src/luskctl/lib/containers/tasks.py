@@ -87,7 +87,7 @@ def effective_status(task: "TaskMeta") -> str:
     - ``container_state`` (str | None): live podman state, or None
     - ``mode`` (str | None): task mode (cli/web/run/None)
     - ``exit_code`` (int | None): process exit code, or None
-    - ``deleting`` (bool): ephemeral TUI-only flag
+    - ``deleting`` (bool): persisted to YAML before deletion starts
 
     Returns one of: ``"deleting"``, ``"running"``, ``"stopped"``,
     ``"completed"``, ``"failed"``, ``"created"``, ``"not found"``.
@@ -305,6 +305,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     web_port=meta.get("web_port"),
                     backend=meta.get("backend"),
                     exit_code=meta.get("exit_code"),
+                    deleting=bool(meta.get("deleting")),
                     preset=meta.get("preset"),
                 )
             )
@@ -417,6 +418,17 @@ def load_task_meta(
     if expected_mode is not None:
         _check_mode(meta, expected_mode)
     return meta, meta_path
+
+
+def mark_task_deleting(project_id: str, task_id: str) -> None:
+    """Persist ``deleting: true`` to the task's YAML metadata file."""
+    meta_dir = _tasks_meta_dir(project_id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        return
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    meta["deleting"] = True
+    meta_path.write_text(yaml.safe_dump(meta))
 
 
 def task_delete(project_id: str, task_id: str) -> None:
@@ -754,6 +766,7 @@ def task_status(project_id: str, task_id: str) -> None:
         web_port=web_port,
         backend=meta.get("backend"),
         exit_code=exit_code,
+        deleting=bool(meta.get("deleting")),
         container_state=cs,
     )
     status = effective_status(task)

@@ -27,6 +27,7 @@ from ..lib.containers.task_runners import (
 from ..lib.containers.tasks import (
     get_login_command,
     get_workspace_git_diff,
+    mark_task_deleting,
     task_delete,
     task_new,
 )
@@ -645,6 +646,7 @@ class ActionsMixin:
         task_list.mark_deleting(tid)
         self._update_task_details()
 
+        mark_task_deleting(self.current_project_id, tid)
         self._queue_task_delete(self.current_project_id, tid)
 
     async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:

@@ -278,18 +278,11 @@ class TaskList(ListView):
 
     def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
         """Populate the list from ``TaskMeta`` instances."""
-        # Preserve container_state and deleting flag from existing tasks
+        # Preserve container_state from existing tasks (polling-only, not in YAML)
         existing_states: dict[str, str | None] = {}
-        existing_deleting: set[str] = set()
         if self.project_id == project_id:
             for task in self.tasks:
                 existing_states[task.task_id] = task.container_state
-                if task.deleting:
-                    existing_deleting.add(task.task_id)
-
-        # Clean up deleting IDs for tasks that no longer exist
-        current_ids = {tm.task_id for tm in tasks_meta}
-        existing_deleting &= current_ids
 
         self.project_id = project_id
         self.tasks = []
@@ -297,9 +290,7 @@ class TaskList(ListView):
         self.clear()
 
         for tm in tasks_meta:
-            # Restore transient state from previous generation
-            if tm.task_id in existing_deleting:
-                tm.deleting = True
+            # Restore transient container_state from previous generation
             if tm.task_id in existing_states:
                 tm.container_state = existing_states[tm.task_id]
             self.tasks.append(tm)

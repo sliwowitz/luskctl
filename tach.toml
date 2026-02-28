@@ -360,6 +360,7 @@ expose = [
     "get_all_task_states",
     "get_login_command",
     "get_workspace_git_diff",
+    "mark_task_deleting",
     "update_task_exit_code",
     "load_task_meta",
     "effective_status",
