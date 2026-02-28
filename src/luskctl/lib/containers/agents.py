@@ -259,7 +259,7 @@ def _write_session_hook(settings_path: Path) -> None:
                 hooks_obj["SessionStart"] = session_hooks_obj
                 changed = True
 
-            session_hooks: list = session_hooks_obj
+            session_hooks: list[object] = session_hooks_obj
 
             # Idempotent across equivalent forms: skip append if an existing SessionStart
             # command already writes session_id to claude-session.txt.

@@ -368,7 +368,10 @@ class WriteSessionHookTests(unittest.TestCase):
         """Recovers if hooks shape is invalid and still writes SessionStart hook."""
         with tempfile.TemporaryDirectory() as td:
             settings_path = Path(td) / "settings.json"
-            settings_path.write_text('{"hooks": "invalid", "permissions": {"allow": ["Read"]}}')
+            settings_path.write_text(
+                '{"hooks": "invalid", "permissions": {"allow": ["Read"]}}',
+                encoding="utf-8",
+            )
 
             _write_session_hook(settings_path)
 
