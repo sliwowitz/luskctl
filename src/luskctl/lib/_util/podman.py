@@ -1,3 +1,5 @@
+"""Podman user-namespace helpers for rootless operation."""
+
 import os
 
 

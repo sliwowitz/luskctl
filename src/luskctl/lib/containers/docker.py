@@ -1,3 +1,5 @@
+"""Dockerfile generation, image building, and build-context hashing."""
+
 import hashlib
 import shutil
 import subprocess
@@ -51,6 +53,7 @@ def _copy_package_tree(package: str, rel_path: str, dest: Path) -> None:
     root = resources.files(package) / rel_path
 
     def _recurse(src, dst: Path) -> None:
+        """Recursively copy a Traversable tree to a filesystem directory."""
         dst.mkdir(parents=True, exist_ok=True)
         for child in src.iterdir():
             out = dst / child.name
@@ -87,6 +90,7 @@ def _stage_tmux_config_into(dest: Path) -> None:
 
 
 def _load_docker_config(project_root: Path) -> dict:
+    """Load the ``docker:`` section from *project_root*/project.yml."""
     try:
         cfg = yaml.safe_load((project_root / "project.yml").read_text()) or {}
         return cfg.get("docker", {}) or {}
@@ -95,9 +99,11 @@ def _load_docker_config(project_root: Path) -> dict:
 
 
 def _hash_traversable_tree(root) -> str:
+    """Compute a SHA-256 digest over all files in a Traversable tree."""
     hasher = hashlib.sha256()
 
     def _walk(node, prefix: str) -> None:
+        """Walk a Traversable tree and feed file contents into the hasher."""
         for child in sorted(node.iterdir(), key=lambda item: item.name):
             rel = f"{prefix}{child.name}"
             if child.is_dir():
@@ -114,17 +120,20 @@ def _hash_traversable_tree(root) -> str:
 
 @lru_cache(maxsize=1)
 def _scripts_hash() -> str:
+    """Return a cached SHA-256 hash of the bundled helper scripts."""
     scripts_root = resources.files("luskctl") / "resources" / "scripts"
     return _hash_traversable_tree(scripts_root)
 
 
 @lru_cache(maxsize=1)
 def _tmux_config_hash() -> str:
+    """Return a cached SHA-256 hash of the bundled tmux configuration."""
     tmux_root = resources.files("luskctl") / "resources" / "tmux"
     return _hash_traversable_tree(tmux_root)
 
 
 def _render_dockerfiles(project) -> dict[str, str]:
+    """Render all Dockerfile templates for *project* and return name→content mapping."""
     # Load templates from package resources (luskctl/resources/templates). Use
     # importlib.resources Traversable API so it works from wheels/zip too.
     tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
@@ -188,6 +197,7 @@ def _render_dockerfiles(project) -> dict[str, str]:
 
 
 def build_context_hash(project_id: str) -> str:
+    """Compute a SHA-256 digest of the full build context for *project_id*."""
     project = load_project(project_id)
     rendered = _render_dockerfiles(project)
     docker_cfg = _load_docker_config(project.root)
@@ -208,6 +218,7 @@ def build_context_hash(project_id: str) -> str:
 
 
 def dockerfiles_match_templates(project_id: str) -> bool:
+    """Return True if generated Dockerfiles match current templates."""
     project = load_project(project_id)
     out_dir = build_root() / project.id
     rendered = _render_dockerfiles(project)
@@ -221,6 +232,7 @@ def dockerfiles_match_templates(project_id: str) -> bool:
 
 
 def generate_dockerfiles(project_id: str) -> None:
+    """Render and write Dockerfiles and auxiliary scripts for *project_id*."""
     project = load_project(project_id)
     out_dir = build_root() / project.id
     ensure_dir(out_dir)
@@ -297,6 +309,7 @@ def build_images(
         labels: dict[str, str] | None = None,
         pull: bool = False,
     ) -> list[str]:
+        """Assemble the podman build command list for a single image stage."""
         cmd = ["podman", "build", "-f", str(dockerfile)]
         cmd += ["--build-arg", f"BASE_IMAGE={base_image_arg}"]
         for k, v in (build_args or {}).items():

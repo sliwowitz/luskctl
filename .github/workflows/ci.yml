@@ -38,6 +38,22 @@ jobs:
       - name: Check module boundaries
         run: tach check
 
+  docstring-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install docstr-coverage
+        run: pip install docstr-coverage
+
+      - name: Check docstring coverage
+        run: docstr-coverage src/luskctl/ --fail-under=95
+
   test:
     runs-on: ubuntu-latest
     steps:

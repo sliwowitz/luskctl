@@ -152,6 +152,7 @@ def get_project_state(
 
 
 def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str | None]:
+    """Return (created_datetime, label_value) for a podman image *tag*."""
     try:
         result = subprocess.run(
             [
@@ -178,6 +179,7 @@ def _get_image_metadata(tag: str, label_key: str) -> tuple[datetime | None, str 
 
 
 def _parse_podman_created(value: str) -> datetime | None:
+    """Parse a podman ``Created`` timestamp string into a datetime."""
     if not isinstance(value, str):
         return None
     value = value.strip()

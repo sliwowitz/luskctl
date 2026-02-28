@@ -1,3 +1,5 @@
+"""Platform-aware path resolution for config, state, and runtime directories."""
+
 import getpass
 import os
 from pathlib import Path
@@ -15,6 +17,7 @@ APP_NAME = "luskctl"
 
 
 def _is_root() -> bool:
+    """Return True if the current process is running as root."""
     try:
         return os.geteuid() == 0  # type: ignore[attr-defined]
     except AttributeError:

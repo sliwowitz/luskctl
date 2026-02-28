@@ -91,6 +91,7 @@ class ActionsMixin:
         return result
 
     def _prompt_ui_backend(self) -> str:
+        """Prompt the user to select a web UI backend and return the choice."""
         backends = list(WEB_BACKENDS)
         # Check DEFAULT_AGENT first, fall back to LUSKUI_BACKEND
         default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
@@ -219,6 +220,7 @@ class ActionsMixin:
     # ---------- Worker helpers ----------
 
     def _queue_task_delete(self, project_id: str, task_id: str) -> None:
+        """Schedule a background worker to delete a task."""
         self.run_worker(
             lambda: self._delete_task(project_id, task_id),
             name=f"task-delete:{project_id}:{task_id}",
@@ -228,6 +230,7 @@ class ActionsMixin:
         )
 
     def _delete_task(self, project_id: str, task_id: str) -> tuple[str, str, str | None]:
+        """Delete a task and return ``(project_id, task_id, error_or_None)``."""
         try:
             task_delete(project_id, task_id)
             return project_id, task_id, None
@@ -237,6 +240,7 @@ class ActionsMixin:
     # ---------- Project infrastructure actions ----------
 
     async def action_generate_dockerfiles(self) -> None:
+        """Generate Dockerfiles for the current project."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
@@ -300,6 +304,7 @@ class ActionsMixin:
         gate_ok = False
 
         def work() -> None:
+            """Run all four setup steps sequentially."""
             nonlocal gate_ok
             print(f"=== Full Setup for {pid} ===\n")
             print("Step 1/4: Initializing SSH...")
@@ -340,18 +345,21 @@ class ActionsMixin:
     # ---------- Task lifecycle actions ----------
 
     async def action_new_task(self) -> None:
+        """Create a new task for the current project."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
 
         def work() -> None:
+            """Create the task and update focus state."""
             task_id = task_new(pid)
             self._focus_task_after_creation(pid, task_id)
 
         await self._run_suspended(work, success_msg="Task created.", refresh="tasks")
 
     async def action_run_cli(self) -> None:
+        """Run the CLI agent for the currently selected task."""
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return
@@ -359,6 +367,7 @@ class ActionsMixin:
         tid = self.current_task.task_id
 
         def work() -> None:
+            """Launch the CLI container for this task."""
             print(f"Running CLI for {pid}/{tid}...\n")
             task_run_cli(pid, tid)
 
@@ -377,6 +386,7 @@ class ActionsMixin:
         tid = self.current_task.task_id
 
         def work() -> None:
+            """Prompt for backend and launch the web container."""
             backend = self._prompt_ui_backend()
             print(f"Starting Web UI for {pid}/{tid} (backend: {backend})...\n")
             task_run_web(pid, tid, backend=backend)
@@ -391,6 +401,7 @@ class ActionsMixin:
         pid = self.current_project_id
 
         def work() -> None:
+            """Create a new task and immediately launch CLI mode."""
             task_id = task_new(pid)
             self._focus_task_after_creation(pid, task_id)
             print(f"\nRunning CLI for {pid}/{task_id}...\n")
@@ -406,6 +417,7 @@ class ActionsMixin:
         pid = self.current_project_id
 
         def work() -> None:
+            """Create a new task and immediately launch web mode."""
             task_id = task_new(pid)
             self._focus_task_after_creation(pid, task_id)
             backend = self._prompt_ui_backend()
@@ -568,6 +580,7 @@ class ActionsMixin:
     # ---------- Task management actions ----------
 
     async def action_delete_task(self) -> None:
+        """Delete the currently selected task and its containers."""
         if not self.current_project_id or not self.current_task:
             self.notify("No task selected.")
             return

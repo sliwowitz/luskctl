@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Reusable Textual widgets for the luskctl TUI."""
 
 import inspect
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from ..lib.facade import GateStalenessInfo
 
 @dataclass
 class TaskMeta:
+    """Lightweight metadata snapshot for a single task."""
+
     task_id: str
     status: str
     mode: str | None
@@ -32,6 +35,7 @@ class ProjectListItem(ListItem):
     """List item that carries project metadata."""
 
     def __init__(self, project_id: str, label: str, generation: int) -> None:
+        """Create a project list item with its ID and display label."""
         super().__init__(Static(label, markup=False))
         self.project_id = project_id
         self.generation = generation
@@ -41,6 +45,7 @@ class TaskListItem(ListItem):
     """List item that carries task metadata."""
 
     def __init__(self, project_id: str, task: TaskMeta, label: str, generation: int) -> None:
+        """Create a task list item with its metadata and display label."""
         super().__init__(Static(label, markup=False))
         self.project_id = project_id
         self.task_meta = task
@@ -86,6 +91,7 @@ def draw_emoji(emoji: str, width: int = 2) -> str:
 
 
 def _get_css_variables(widget: Static) -> dict[str, str]:
+    """Extract CSS theme variables from a widget's parent app."""
     if widget.app is None:
         return {}
     try:
@@ -106,11 +112,15 @@ class ProjectList(ListView):
     ]
 
     class ProjectSelected(Message):
+        """Posted when a project is highlighted in the list."""
+
         def __init__(self, project_id: str) -> None:
+            """Create the message with the selected project's ID."""
             super().__init__()
             self.project_id = project_id
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the project list with empty state."""
         super().__init__(**kwargs)
         self.projects: list[CodexProject] = []
         self._generation = 0
@@ -144,6 +154,7 @@ class ProjectList(ListView):
         self._post_selected_project(event.item)
 
     def _post_selected_project(self, item: ListItem | None = None) -> None:
+        """Emit a ProjectSelected message for the given or currently highlighted item."""
         if item is None:
             item = self.highlighted_child
         if not isinstance(item, ProjectListItem):
@@ -159,6 +170,7 @@ class ProjectActions(Static):
     """Single-row action bar for project + task actions."""
 
     def compose(self) -> ComposeResult:
+        """Yield two rows of action buttons for project and task operations."""
         # Short labels so they comfortably fit in 80 columns.  We arrange
         # the buttons in two horizontal rows so they don't form a single
         # over-wide line in the right-hand pane on narrower terminals.
@@ -210,6 +222,7 @@ class ProjectActions(Static):
             )  # delete current task (d)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:  # type: ignore[override]
+        """Route button presses to the corresponding App action method."""
         btn_id = event.button.id
         app = self.app
         if not app or not btn_id:
@@ -257,18 +270,23 @@ class TaskList(ListView):
     ]
 
     class TaskSelected(Message):
+        """Posted when a task is highlighted in the list."""
+
         def __init__(self, project_id: str, task: TaskMeta) -> None:
+            """Create the message with the owning project ID and task metadata."""
             super().__init__()
             self.project_id = project_id
             self.task = task
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the task list with empty state."""
         super().__init__(**kwargs)
         self.project_id: str | None = None
         self.tasks: list[TaskMeta] = []
         self._generation = 0
 
     def _format_task_label(self, task: TaskMeta) -> str:
+        """Build a human-readable label string for a task list entry."""
         task_emoji = ""
         if task.status == "deleting":
             task_emoji = "🗑️"
@@ -358,6 +376,7 @@ class TaskList(ListView):
             self.append(TaskListItem(project_id, tm, label, self._generation))
 
     def mark_deleting(self, task_id: str) -> bool:
+        """Mark a task as 'deleting' in the list and refresh its label."""
         # Create a new TaskMeta instance with updated status instead of mutating
         # the existing shared instance in place.
         new_meta: TaskMeta | None = None
@@ -411,6 +430,7 @@ class TaskList(ListView):
         self._post_selected_task(event.item)
 
     def _post_selected_task(self, item: ListItem | None = None) -> None:
+        """Emit a TaskSelected message for the given or currently highlighted item."""
         if self.project_id is None:
             return
         if item is None:
@@ -567,6 +587,7 @@ def render_project_details(
     }
 
     def _status_text(value: str) -> Text:
+        """Return a styled Rich Text for a status value like 'yes', 'no', or 'old'."""
         style = status_styles.get(value, Style(color=error_color))
         return Text(value, style=style)
 
@@ -667,10 +688,12 @@ class TaskDetails(Static):
     """Panel showing details for the currently selected task."""
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the task details panel."""
         super().__init__(**kwargs)
         self.current_project_id: str | None = None
 
     def compose(self) -> ComposeResult:
+        """Yield the inner Static widget used for rendered task content."""
         yield Static(id="task-details-content")
 
     def set_task(
@@ -679,6 +702,7 @@ class TaskDetails(Static):
         empty_message: str | None = None,
         image_old: bool | None = None,
     ) -> None:
+        """Render and display details for the given task (or clear if None)."""
         content = self.query_one("#task-details-content", Static)
         if task is None:
             self.current_project_id = None
@@ -694,9 +718,11 @@ class ProjectState(Static):
     """Panel showing detailed information about the active project."""
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the project state panel."""
         super().__init__(**kwargs)
 
     def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
+        """Show a loading placeholder while project state is being fetched."""
         self.update(render_project_loading(project, task_count))
 
     def set_state(
@@ -706,6 +732,7 @@ class ProjectState(Static):
         task_count: int | None = None,
         staleness: GateStalenessInfo | None = None,
     ) -> None:
+        """Display fully loaded project details including infrastructure status."""
         self.update(
             render_project_details(project, state, task_count, staleness, _get_css_variables(self))
         )
@@ -721,6 +748,7 @@ class StatusBar(Static):
     """
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the status bar with an empty message."""
         super().__init__(**kwargs)
         # Initialize with an empty message; the App will populate this.
         self.message: str = ""
@@ -738,4 +766,5 @@ class StatusBar(Static):
         self._update_content()
 
     def _update_content(self) -> None:
+        """Re-render the status bar text from the current message."""
         self.update(Text(self.message or ""))

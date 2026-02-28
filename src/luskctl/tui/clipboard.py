@@ -1,3 +1,5 @@
+"""System clipboard integration for the TUI."""
+
 import os
 import shutil
 import subprocess
@@ -7,12 +9,16 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ClipboardHelperStatus:
+    """Result of probing the system for available clipboard helpers."""
+
     available: tuple[str, ...]
     hint: str | None = None
 
 
 @dataclass(frozen=True)
 class ClipboardCopyResult:
+    """Outcome of a clipboard copy attempt."""
+
     ok: bool
     method: str | None = None
     error: str | None = None
@@ -20,6 +26,7 @@ class ClipboardCopyResult:
 
 
 def _clipboard_install_hint() -> str:
+    """Return a platform-specific hint for installing a clipboard helper."""
     if sys.platform == "darwin":
         return ""
 
@@ -37,6 +44,7 @@ def _clipboard_install_hint() -> str:
 
 
 def _clipboard_candidates() -> list[tuple[str, list[str]]]:
+    """Return an ordered list of (name, command) clipboard helper candidates."""
     candidates: list[tuple[str, list[str]]] = []
 
     if sys.platform == "darwin":

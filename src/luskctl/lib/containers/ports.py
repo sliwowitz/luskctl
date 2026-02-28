@@ -12,6 +12,7 @@ from ..core.config import get_ui_base_port, state_root
 
 
 def _is_port_free(port: int) -> bool:
+    """Return True if *port* can be bound on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind(("127.0.0.1", port))
@@ -21,6 +22,7 @@ def _is_port_free(port: int) -> bool:
 
 
 def _collect_all_web_ports() -> set[int]:
+    """Scan all task metadata files and return the set of assigned web ports."""
     # Scan all task metas for any project
     root = state_root() / "projects"
     ports: set[int] = set()

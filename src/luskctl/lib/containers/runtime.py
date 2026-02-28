@@ -150,6 +150,7 @@ def stream_initial_logs(
     proc_holder: list[subprocess.Popen | None] = [None]
 
     def stream_logs() -> None:
+        """Follow container logs in a thread, setting *holder[0]* on ready."""
         try:
             proc = subprocess.Popen(
                 ["podman", "logs", "-f", container_name],
