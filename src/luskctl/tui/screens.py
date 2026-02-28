@@ -87,7 +87,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         _modal_binding("r", "build_agents", "Rebuild with agents"),
         _modal_binding("f", "build_full", "Full rebuild no cache"),
         _modal_binding("s", "init_ssh", "Init SSH"),
-        _modal_binding("a", "auth", "Authenticate agents"),
+        _modal_binding("a", "auth", "Authenticate"),
     ]
 
     CSS = (
@@ -134,7 +134,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             Option("\\[f]ull rebuild no cache", id="build_full"),
             Option("initialize \\[s]sh", id="init_ssh"),
             None,
-            Option("\\[a]uthenticate agents...", id="auth"),
+            Option("\\[a]uthenticate...", id="auth"),
             id="actions-list",
         )
 
@@ -202,7 +202,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self.dismiss("init_ssh")
 
     def action_auth(self) -> None:
-        """Open the agent authentication modal."""
+        """Open the authenticate agents and tools modal."""
         self._open_auth_modal()
 
 
@@ -212,7 +212,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
 
 class AuthActionsScreen(screen.ModalScreen[str | None]):
-    """Small modal for selecting which agent to authenticate.
+    """Small modal for authenticating agents and tools.
 
     Options are built dynamically from ``AUTH_PROVIDERS``.
     Number keys (1-9) act as shortcuts for the corresponding list entry.
@@ -254,7 +254,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         ]
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(*options, id="auth-actions-list")
-        dialog.border_title = "Authenticate Agents"
+        dialog.border_title = "Authenticate agents and tools"
         dialog.border_subtitle = "Esc to close"
 
     def on_mount(self) -> None:
