@@ -453,38 +453,14 @@ def task_run_headless(
         claude_flags += f" --max-turns {int(max_turns)}"
 
     # Build podman command (DETACHED)
-    # NOTE (#180): The headless command passes --dangerously-skip-permissions,
-    # --add-dir /, --agents, and git env vars directly instead of relying on
-    # the claude() bash wrapper function from luskctl-claude.sh.  This is
-    # because `timeout` is an external command that exec's `claude` from
-    # PATH — it bypasses bash functions entirely.  The wrapper is still used
-    # for interactive sessions where the user types `claude` at the prompt.
-    # Ideally the wrapper and headless paths should share a single source of
-    # truth for these flags; see #180.
+    # The claude() wrapper from luskctl-claude.sh handles --dangerously-skip-permissions,
+    # --add-dir /, --agents, git env vars, and (via --luskctl-timeout) the timeout.
+    # Only per-run flags (model, max_turns, prompt) are passed here.
     cname = container_name(project.id, "run", task_id)
 
-    # Agents flag: inject via env var to avoid brittle command substitution
-    agents_flag = ""
-    agents_json_path = agent_config_dir / "agents.json"
-    if agents_json_path.exists():
-        env["LUSKCTL_AGENTS_JSON"] = agents_json_path.read_text(encoding="utf-8").strip()
-        agents_flag = ' --agents "$LUSKCTL_AGENTS_JSON"'
-
-    # Git identity env vars (same as the wrapper function provides)
-    human_name = shlex.quote(project.human_name or "Nobody")
-    human_email = shlex.quote(project.human_email or "nobody@localhost")
-    git_env = (
-        f"GIT_AUTHOR_NAME=Claude"
-        f" GIT_AUTHOR_EMAIL=noreply@anthropic.com"
-        f" GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}}"
-        f" GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}}"
-    )
-
     headless_cmd = (
-        f"init-ssh-and-repo.sh && {git_env}"
-        f" timeout {effective_timeout}"
-        f' claude --dangerously-skip-permissions --add-dir "/"'
-        f"{agents_flag}"
+        f"init-ssh-and-repo.sh &&"
+        f" claude --luskctl-timeout {effective_timeout}"
         f" -p "
         '"$(cat /home/dev/.luskctl/prompt.txt)"'
         f"{claude_flags} --output-format stream-json --verbose"

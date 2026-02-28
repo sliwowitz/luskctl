@@ -285,6 +285,21 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertNotIn("--append-system-prompt", wrapper)
         self.assertNotIn("--max-turns", wrapper)
 
+    def test_wrapper_timeout_support(self) -> None:
+        """Wrapper parses --luskctl-timeout and wraps claude with timeout."""
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper(has_agents=False, project=project)
+        # Wrapper should contain timeout flag parsing
+        self.assertIn("--luskctl-timeout", wrapper)
+        self.assertIn("_timeout", wrapper)
+        # Wrapper should use timeout command when _timeout is set
+        self.assertIn('timeout "$_timeout" command claude', wrapper)
+        # Wrapper should still have the non-timeout path
+        self.assertIn('command claude "${_args[@]}" "$@"', wrapper)
+        # Both paths should have git env vars
+        self.assertEqual(wrapper.count("GIT_AUTHOR_NAME=Claude"), 2)
+        self.assertEqual(wrapper.count("GIT_AUTHOR_EMAIL=noreply@anthropic.com"), 2)
+
 
 class StreamUntilExitTests(unittest.TestCase):
     """Tests for _stream_until_exit and _get_container_exit_code."""
@@ -617,8 +632,10 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     bash_cmd = cmd[-1]
                     self.assertIn("--model opus", bash_cmd)
                     self.assertIn("--max-turns 100", bash_cmd)
+                    # Timeout is delegated to the wrapper via --luskctl-timeout
+                    self.assertIn("--luskctl-timeout", bash_cmd)
 
-                    # But NOT in the wrapper
+                    # But per-run flags are NOT in the wrapper
                     wrapper = (
                         state_dir
                         / "tasks"
@@ -630,6 +647,8 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     content = wrapper.read_text()
                     self.assertNotIn("--model", content)
                     self.assertNotIn("--max-turns", content)
+                    # Wrapper DOES have timeout support
+                    self.assertIn("--luskctl-timeout", content)
 
     def test_headless_container_name_uses_run_prefix(self) -> None:
         """task_run_headless names the container <project>-run-<task_id>."""
@@ -741,7 +760,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("proj_nf-run-1", output)
 
     def test_headless_uses_claude_function_in_command(self) -> None:
-        """task_run_headless podman command passes flags directly to claude."""
+        """task_run_headless uses claude wrapper via --luskctl-timeout."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_cmd")
@@ -775,14 +794,13 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     bash_cmd = cmd[-1]
                     self.assertIn("init-ssh-and-repo.sh", bash_cmd)
                     self.assertNotIn("start-claude.sh", bash_cmd)
-                    self.assertIn("timeout", bash_cmd)
+                    self.assertIn("--luskctl-timeout", bash_cmd)
                     self.assertIn("--output-format stream-json", bash_cmd)
-                    # Flags passed directly (not via wrapper) so timeout
-                    # doesn't bypass them
-                    self.assertIn("--dangerously-skip-permissions", bash_cmd)
-                    self.assertIn('--add-dir "/"', bash_cmd)
-                    self.assertIn("GIT_AUTHOR_NAME=Claude", bash_cmd)
                     self.assertIn("-p", bash_cmd)
+                    # Flags are now in the wrapper, not duplicated in the command
+                    self.assertNotIn("--dangerously-skip-permissions", bash_cmd)
+                    self.assertNotIn('--add-dir "/"', bash_cmd)
+                    self.assertNotIn("GIT_AUTHOR_NAME=Claude", bash_cmd)
 
     def test_headless_with_config_file_subagents(self) -> None:
         """task_run_headless reads subagents from YAML config file."""
