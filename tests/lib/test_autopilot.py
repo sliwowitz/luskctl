@@ -15,6 +15,7 @@ import yaml
 from luskctl.lib.containers.agents import (
     _generate_claude_wrapper,
     _subagents_to_json,
+    _write_session_hook,
     parse_md_agent,
 )
 from luskctl.lib.containers.runtime import _get_container_exit_code, _stream_until_exit
@@ -300,6 +301,54 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertEqual(wrapper.count("GIT_AUTHOR_NAME=Claude"), 2)
         self.assertEqual(wrapper.count("GIT_AUTHOR_EMAIL=noreply@anthropic.com"), 2)
 
+    def test_wrapper_resume_from_session_file(self) -> None:
+        """Wrapper adds --resume from claude-session.txt when it exists."""
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper(has_agents=False, project=project)
+        self.assertIn("claude-session.txt", wrapper)
+        self.assertIn("--resume", wrapper)
+
+
+class WriteSessionHookTests(unittest.TestCase):
+    """Tests for _write_session_hook."""
+
+    def test_creates_settings_with_hook(self) -> None:
+        """Creates settings.json with a SessionStart hook."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            _write_session_hook(settings_path)
+            self.assertTrue(settings_path.is_file())
+            data = json.loads(settings_path.read_text())
+            self.assertIn("hooks", data)
+            self.assertIn("SessionStart", data["hooks"])
+            hooks = data["hooks"]["SessionStart"]
+            self.assertEqual(len(hooks), 1)
+            command = hooks[0]["hooks"][0]["command"]
+            self.assertIn("session_id", command)
+            self.assertIn("claude-session.txt", command)
+
+    def test_merges_with_existing_settings(self) -> None:
+        """Merges hook into existing settings.json without clobbering."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            settings_path.write_text('{"permissions": {"allow": ["Read"]}}', encoding="utf-8")
+            _write_session_hook(settings_path)
+            data = json.loads(settings_path.read_text())
+            # Original settings preserved
+            self.assertEqual(data["permissions"], {"allow": ["Read"]})
+            # Hook added
+            self.assertIn("SessionStart", data["hooks"])
+
+    def test_idempotent_hook_write(self) -> None:
+        """Calling _write_session_hook twice doesn't create duplicate hooks."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            _write_session_hook(settings_path)
+            _write_session_hook(settings_path)
+            data = json.loads(settings_path.read_text())
+            hooks = data["hooks"]["SessionStart"]
+            self.assertEqual(len(hooks), 1)
+
 
 class StreamUntilExitTests(unittest.TestCase):
     """Tests for _stream_until_exit and _get_container_exit_code."""
@@ -481,6 +530,50 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     content = wrapper.read_text()
                     self.assertIn("claude()", content)
                     self.assertIn("--dangerously-skip-permissions", content)
+
+    def test_headless_writes_session_hook_settings(self) -> None:
+        """task_run_headless writes .claude/settings.json with SessionStart hook."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(base, "proj_hook")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                    ),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_run_headless("proj_hook", "test")
+
+                    settings = (
+                        state_dir
+                        / "tasks"
+                        / "proj_hook"
+                        / "1"
+                        / "workspace"
+                        / ".claude"
+                        / "settings.json"
+                    )
+                    self.assertTrue(settings.is_file())
+                    data = json.loads(settings.read_text())
+                    self.assertIn("SessionStart", data["hooks"])
 
     def test_headless_with_default_subagents(self) -> None:
         """task_run_headless includes default subagents in agents.json."""
