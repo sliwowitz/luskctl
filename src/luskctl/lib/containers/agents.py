@@ -176,6 +176,10 @@ def _generate_claude_wrapper(
         lines.append("    [ -f /home/dev/.luskctl/agents.json ] && \\")
         lines.append('        _args+=(--agents "$(cat /home/dev/.luskctl/agents.json)")')
 
+    # Resume previous session if session file exists (written by SessionStart hook)
+    lines.append("    [ -f /home/dev/.luskctl/claude-session.txt ] && \\")
+    lines.append('        _args+=(--resume "$(cat /home/dev/.luskctl/claude-session.txt)")')
+
     # Git env vars and exec — with optional timeout
     lines.append('    if [ -n "$_timeout" ]; then')
     lines.append("        GIT_AUTHOR_NAME=Claude \\")
@@ -195,6 +199,37 @@ def _generate_claude_wrapper(
     return "\n".join(lines) + "\n"
 
 
+def _write_session_hook(settings_path: Path) -> None:
+    """Write a Claude project settings file with a SessionStart hook.
+
+    The hook captures the session ID to ``/home/dev/.luskctl/claude-session.txt``
+    on every session start.  The wrapper reads this file to add ``--resume`` on
+    subsequent invocations, enabling session continuity across container restarts.
+
+    If the settings file already exists, the hook config is merged into it
+    (preserving any existing settings).
+    """
+    hook_command = (
+        "python3 -c \"import json,sys; print(json.load(sys.stdin)['session_id'])\""
+        " > /home/dev/.luskctl/claude-session.txt"
+    )
+    hook_entry = {"hooks": [{"type": "command", "command": hook_command}]}
+
+    if settings_path.is_file():
+        try:
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+    else:
+        existing = {}
+
+    hooks = existing.setdefault("hooks", {})
+    session_hooks = hooks.setdefault("SessionStart", [])
+    session_hooks.append(hook_entry)
+
+    settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+
+
 def prepare_agent_config_dir(
     project: Project,
     task_id: str,
@@ -209,6 +244,7 @@ def prepare_agent_config_dir(
     - luskctl-claude.sh (always) — wrapper function with git env vars
     - agents.json (if sub-agents produce non-empty dict after filtering)
     - prompt.txt (if prompt given, headless only)
+    - <workspace>/.claude/settings.json — SessionStart hook to capture session ID
 
     Returns the agent_config_dir path.
     """
@@ -227,6 +263,14 @@ def prepare_agent_config_dir(
     # Always write the claude wrapper function
     wrapper = _generate_claude_wrapper(has_agents, project, skip_permissions)
     (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
+
+    # Write SessionStart hook to capture session ID for resume (#239).
+    # The hook writes the session ID to /home/dev/.luskctl/claude-session.txt
+    # (the per-task agent-config volume), readable from the host after exit.
+    # The wrapper reads this file to add --resume on subsequent invocations.
+    workspace_claude_dir = task_dir / "workspace" / ".claude"
+    ensure_dir(workspace_claude_dir)
+    _write_session_hook(workspace_claude_dir / "settings.json")
 
     # Prompt (headless only)
     if prompt is not None:
