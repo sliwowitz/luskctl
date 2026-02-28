@@ -2,7 +2,6 @@
 """Reusable Textual widgets for the luskctl TUI."""
 
 import inspect
-from dataclasses import dataclass
 from typing import Any
 
 from rich.cells import cell_len
@@ -13,22 +12,14 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, ListItem, ListView, Static
 
+from ..lib.containers.tasks import (
+    MODE_DISPLAY,
+    STATUS_DISPLAY,
+    TaskMeta,
+    mode_emoji,
+)
 from ..lib.core.projects import Project as CodexProject
 from ..lib.facade import GateStalenessInfo
-
-
-@dataclass
-class TaskMeta:
-    """Lightweight metadata snapshot for a single task."""
-
-    task_id: str
-    status: str
-    mode: str | None
-    workspace: str
-    web_port: int | None
-    backend: str | None = None
-    container_state: str | None = None  # Actual podman container state
-    exit_code: int | None = None  # Exit code for headless/autopilot tasks
 
 
 class ProjectListItem(ListItem):
@@ -58,23 +49,6 @@ def get_backend_name(task: TaskMeta) -> str | None:
     Returns the backend name from the task's backend field, or None if not set.
     """
     return task.backend
-
-
-def get_backend_emoji(task: TaskMeta) -> str:
-    """Get the emoji for a task's backend.
-
-    Returns the appropriate emoji based on the task's backend field.
-    """
-    backend = get_backend_name(task)
-
-    # Return emoji based on backend
-    emoji_map = {
-        "mistral": "🏰",  # Castle emoji for Mistral
-        "claude": "✴️",  # Eight-point star emoji for Claude
-        "codex": "🌸",  # Blossom emoji for Codex
-        "copilot": "🤖",  # Robot emoji for GitHub Copilot
-    }
-    return emoji_map.get(backend, "🕸️")  # Spider web emoji for unknown
 
 
 def draw_emoji(emoji: str, width: int = 2) -> str:
@@ -287,89 +261,47 @@ class TaskList(ListView):
 
     def _format_task_label(self, task: TaskMeta) -> str:
         """Build a human-readable label string for a task list entry."""
-        task_emoji = ""
-        if task.status == "deleting":
-            task_emoji = "🗑️"
-        elif task.status == "stopped":
-            task_emoji = "⏸️"  # Pause emoji for stopped
-        elif task.mode == "cli":
-            task_emoji = "⌨️"  # Keyboard emoji for CLI
-        elif task.mode == "web":
-            task_emoji = get_backend_emoji(task)
-        elif task.mode == "run":
-            task_emoji = "🚀"  # Rocket emoji for autopilot
-        elif task.status == "created":
-            task_emoji = "🦗"
+        m_emoji = draw_emoji(mode_emoji(task))
+        s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
+        s_emoji = draw_emoji(s_info.emoji)
 
-        status_display = task.status
         extra_parts: list[str] = []
-
-        # Determine effective status based on metadata and container state
-        # Prioritize actual container state over metadata
-        if task.container_state is not None:
-            # Use actual container state if we have it
-            if task.container_state == "running":
-                status_display = "running"
-                # Clear task_emoji if it was set to pause emoji from metadata status
-                # Running tasks should use their mode-based emoji (CLI/web backend)
-                if task.status == "stopped":
-                    task_emoji = ""
-                # Add port for running web tasks
-                if task.web_port:
-                    extra_parts.append(f"port={task.web_port}")
-            elif task.container_state in ("exited", "stopped"):
-                status_display = "stopped"
-                task_emoji = "⏸️"
-            else:
-                status_display = task.container_state
-        elif task.status == "stopped":
-            status_display = "stopped"
-        elif task.status == "created" and task.web_port:
-            status_display = "running"
+        if task.web_port:
             extra_parts.append(f"port={task.web_port}")
-        elif task.status == "created" and task.mode == "cli":
-            status_display = "running"
-
-        # Only add port if not already added
-        if task.web_port and not any(part.startswith("port=") for part in extra_parts):
-            extra_parts.append(f"port={task.web_port}")
-
         extra_str = "; ".join(extra_parts)
 
-        emoji_display = draw_emoji(task_emoji)
-        label = f"{task.task_id} {emoji_display} [{status_display}"
+        label = f"{task.task_id} {m_emoji}{s_emoji}[{s_info.label}"
         if extra_str:
             label += f"; {extra_str}"
         label += "]"
         return label
 
-    def set_tasks(self, project_id: str, tasks_meta: list[dict[str, Any]]) -> None:
-        """Populate the list from raw metadata dicts."""
-        # Preserve container_state from existing tasks
+    def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
+        """Populate the list from ``TaskMeta`` instances."""
+        # Preserve container_state and deleting flag from existing tasks
         existing_states: dict[str, str | None] = {}
+        existing_deleting: set[str] = set()
         if self.project_id == project_id:
             for task in self.tasks:
                 existing_states[task.task_id] = task.container_state
+                if task.deleting:
+                    existing_deleting.add(task.task_id)
+
+        # Clean up deleting IDs for tasks that no longer exist
+        current_ids = {tm.task_id for tm in tasks_meta}
+        existing_deleting &= current_ids
 
         self.project_id = project_id
         self.tasks = []
         self._generation += 1
         self.clear()
 
-        for meta in tasks_meta:
-            task_id = meta.get("task_id", "")
-            tm = TaskMeta(
-                task_id=task_id,
-                status=meta.get("status", "unknown"),
-                mode=meta.get("mode"),
-                workspace=meta.get("workspace", ""),
-                web_port=meta.get("web_port"),
-                backend=meta.get("backend"),
-                exit_code=meta.get("exit_code"),
-            )
-            # Restore container_state if available
-            if task_id in existing_states:
-                tm.container_state = existing_states[task_id]
+        for tm in tasks_meta:
+            # Restore transient state from previous generation
+            if tm.task_id in existing_deleting:
+                tm.deleting = True
+            if tm.task_id in existing_states:
+                tm.container_state = existing_states[tm.task_id]
             self.tasks.append(tm)
 
             label = self._format_task_label(tm)
@@ -377,47 +309,20 @@ class TaskList(ListView):
 
     def mark_deleting(self, task_id: str) -> bool:
         """Mark a task as 'deleting' in the list and refresh its label."""
-        # Create a new TaskMeta instance with updated status instead of mutating
-        # the existing shared instance in place.
-        new_meta: TaskMeta | None = None
-
-        # First, update the entry in the internal tasks list if present.
-        for index, tm in enumerate(self.tasks):
-            if tm.task_id == task_id:
-                new_meta = TaskMeta(
-                    task_id=tm.task_id,
-                    status="deleting",
-                    mode=tm.mode,
-                    workspace=tm.workspace,
-                    web_port=tm.web_port,
-                    backend=tm.backend,
-                )
-                self.tasks[index] = new_meta
-                break
-
         found = False
 
-        # Then, update any visible list items for this task to point at the new
-        # TaskMeta instance and refresh their labels.
+        # Set the deleting flag on the task in the internal list.
+        for tm in self.tasks:
+            if tm.task_id == task_id:
+                tm.deleting = True
+                break
+
+        # Update any visible list items for this task and refresh their labels.
         for item in self.query(TaskListItem):
             if item.task_meta.task_id != task_id:
                 continue
-
-            # If we didn't find the task in self.tasks for some reason, fall back
-            # to cloning from the item's TaskMeta.
-            if new_meta is None:
-                tm = item.task_meta
-                new_meta = TaskMeta(
-                    task_id=tm.task_id,
-                    status="deleting",
-                    mode=tm.mode,
-                    workspace=tm.workspace,
-                    web_port=tm.web_port,
-                    backend=tm.backend,
-                )
-
-            item.task_meta = new_meta
-            label = self._format_task_label(new_meta)
+            item.task_meta.deleting = True
+            label = self._format_task_label(item.task_meta)
             item.query_one(Static).update(label)
             found = True
 
@@ -461,53 +366,19 @@ def render_task_details(
     accent_style = Style(color=variables.get("primary", "cyan"))
     warning_style = Style(color=variables.get("warning", "yellow"))
 
-    task_emoji = ""
-    mode_display = task.mode or "unset"
-    if task.status == "deleting":
-        task_emoji = "🗑️ "
-        mode_display = "Deleting"
-    elif task.mode == "cli":
-        task_emoji = "⌨️ "
-        mode_display = "CLI"
-    elif task.mode == "web":
-        emoji = get_backend_emoji(task)
-        task_emoji = f"{emoji} "
-    elif task.mode == "run":
-        task_emoji = "🚀 "
-        mode_display = "Autopilot"
-    elif task.status == "created":
-        task_emoji = "🦗 "
-        mode_display = "Not assigned (choose CLI or Web mode)"
+    m_emoji = mode_emoji(task)
+    m_info = MODE_DISPLAY.get(task.mode, MODE_DISPLAY[None])
+    mode_display = m_info.label or "Not assigned (choose CLI or Web mode)"
 
-    status_display = task.status
-    container_mismatch = False
-    if task.container_state is not None:
-        if task.container_state == "running":
-            status_display = "running"
-        elif task.container_state in ("exited", "stopped"):
-            status_display = "stopped"
-        else:
-            status_display = task.container_state
-        metadata_expects_running = task.status in ("running", "created") and task.mode is not None
-        if metadata_expects_running and task.container_state != "running":
-            container_mismatch = True
-    elif task.status == "created" and (task.web_port or task.mode == "cli"):
-        status_display = "running"
+    s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
 
     lines = [
         Text(f"Task ID:   {task.task_id}"),
-        Text(f"Status:    {status_display}"),
-        Text(f"Type:      {task_emoji}{mode_display}"),
+        Text(f"Status:    {s_info.emoji} {s_info.label}"),
+        Text(f"Type:      {m_emoji} {mode_display}"),
         Text(f"Workspace: {task.workspace}"),
     ]
-    if container_mismatch:
-        lines.append(
-            Text.assemble(
-                "Container: ",
-                Text(f"{task.container_state} (not running!)", style=warning_style),
-            )
-        )
-    if status_display == "running" and image_old:
+    if task.status == "running" and image_old:
         lines.append(Text.assemble("Image:     ", Text("old", style=warning_style)))
     if task.web_port:
         lines.append(
@@ -517,22 +388,22 @@ def render_task_details(
             )
         )
     if task.mode == "cli" and project_id:
-        container_name = f"{project_id}-cli-{task.task_id}"
+        cname = f"{project_id}-cli-{task.task_id}"
         lines.append(
             Text.assemble(
                 "Log in:    ",
-                Text(f"podman exec -it {container_name} bash", style=accent_style),
+                Text(f"podman exec -it {cname} bash", style=accent_style),
             )
         )
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))
         if project_id:
-            container_name = f"{project_id}-run-{task.task_id}"
+            cname = f"{project_id}-run-{task.task_id}"
             lines.append(
                 Text.assemble(
                     "Logs:      ",
-                    Text(f"podman logs -f {container_name}", style=accent_style),
+                    Text(f"podman logs -f {cname}", style=accent_style),
                 )
             )
 

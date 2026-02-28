@@ -81,7 +81,7 @@ def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover 
     if not project_id:
         return []
     try:
-        tids = [str(t.get("task_id", "")) for t in _get_tasks(project_id) if t.get("task_id")]
+        tids = [t.task_id for t in _get_tasks(project_id) if t.task_id]
     except Exception:
         return []
     if prefix:

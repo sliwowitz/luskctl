@@ -153,18 +153,23 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            self._patch_task_meta(ctx, project_id, "1", status="running", mode="cli")
-            self._patch_task_meta(ctx, project_id, "2", status="stopped", mode="web")
+            self._patch_task_meta(ctx, project_id, "1", mode="cli")
+            self._patch_task_meta(ctx, project_id, "2", mode="web")
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id)
+            # Mock container states: task 1 running, task 2 exited (→ stopped)
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"1": "running", "2": "exited"},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id)
             output = buf.getvalue()
             self.assertIn("1: running", output)
             self.assertIn("2: stopped", output)
 
     def test_task_list_filter_by_status(self) -> None:
-        """task_list --status filters tasks by their status field."""
+        """task_list --status filters tasks by effective status."""
         project_id = "proj_filt_status"
         with project_env(
             f"project:\n  id: {project_id}\n",
@@ -173,12 +178,17 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            self._patch_task_meta(ctx, project_id, "1", status="running")
-            self._patch_task_meta(ctx, project_id, "2", status="stopped")
+            self._patch_task_meta(ctx, project_id, "1", mode="cli")
+            self._patch_task_meta(ctx, project_id, "2", mode="cli")
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id, status="running")
+            # Mock: task 1 running, task 2 exited (→ stopped)
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"1": "running", "2": "exited"},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id, status="running")
             output = buf.getvalue()
             self.assertIn("1: running", output)
             self.assertNotIn("2:", output)
@@ -196,9 +206,13 @@ class TaskTests(unittest.TestCase):
             self._patch_task_meta(ctx, project_id, "1", mode="cli")
             self._patch_task_meta(ctx, project_id, "2", mode="web")
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id, mode="web")
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"2": None},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id, mode="web")
             output = buf.getvalue()
             self.assertNotIn("1:", output)
             self.assertIn("2:", output)
@@ -216,9 +230,13 @@ class TaskTests(unittest.TestCase):
             self._patch_task_meta(ctx, project_id, "1", preset="claude")
             self._patch_task_meta(ctx, project_id, "2", preset="codex")
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id, agent="claude")
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"1": None, "2": None},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id, agent="claude")
             output = buf.getvalue()
             self.assertIn("1:", output)
             self.assertNotIn("2:", output)
@@ -234,16 +252,22 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             task_new(project_id)
 
-            for tid, status, mode in [
-                ("1", "running", "cli"),
-                ("2", "running", "web"),
-                ("3", "stopped", "cli"),
+            for tid, mode in [
+                ("1", "cli"),
+                ("2", "web"),
+                ("3", "cli"),
             ]:
-                self._patch_task_meta(ctx, project_id, tid, status=status, mode=mode)
+                self._patch_task_meta(ctx, project_id, tid, mode=mode)
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id, status="running", mode="cli")
+            # Mock: tasks 1,2 running, task 3 exited (→ stopped)
+            # mode filter narrows to cli first, then status=running keeps only task 1
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"1": "running", "3": "exited"},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id, status="running", mode="cli")
             output = buf.getvalue()
             self.assertIn("1:", output)
             self.assertNotIn("2:", output)
@@ -258,9 +282,14 @@ class TaskTests(unittest.TestCase):
         ):
             task_new(project_id)
 
-            buf = StringIO()
-            with redirect_stdout(buf):
-                task_list(project_id, status="running")
+            # New task has no mode → effective status is "created", not "running"
+            with unittest.mock.patch(
+                "luskctl.lib.containers.tasks.get_all_task_states",
+                return_value={"1": None},
+            ):
+                buf = StringIO()
+                with redirect_stdout(buf):
+                    task_list(project_id, status="running")
             self.assertIn("No tasks found", buf.getvalue())
 
     def test_build_task_env_gatekeeping(self) -> None:
@@ -542,7 +571,6 @@ class TaskTests(unittest.TestCase):
             # Simulate task was previously run
             meta = yaml.safe_load(meta_path.read_text())
             meta["mode"] = "cli"
-            meta["status"] = "stopped"
             meta_path.write_text(yaml.safe_dump(meta))
 
             with (
@@ -565,9 +593,8 @@ class TaskTests(unittest.TestCase):
                 call_args = run_mock.call_args[0][0]
                 self.assertEqual(call_args[:2], ["podman", "start"])
 
-                # Verify metadata status is now 'running'
+                # Verify metadata mode is preserved
                 meta = yaml.safe_load(meta_path.read_text())
-                self.assertEqual(meta["status"], "running")
                 self.assertEqual(meta["mode"], "cli")
 
     def test_task_run_web_already_running(self) -> None:
@@ -627,7 +654,6 @@ class TaskTests(unittest.TestCase):
             meta = yaml.safe_load(meta_path.read_text())
             meta["mode"] = "web"
             meta["web_port"] = 7860
-            meta["status"] = "stopped"
             meta_path.write_text(yaml.safe_dump(meta))
 
             with (
@@ -649,10 +675,6 @@ class TaskTests(unittest.TestCase):
                 run_mock.assert_called_once()
                 call_args = run_mock.call_args[0][0]
                 self.assertEqual(call_args[:2], ["podman", "start"])
-
-                # Verify metadata status is now 'running'
-                meta = yaml.safe_load(meta_path.read_text())
-                self.assertEqual(meta["status"], "running")
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
@@ -988,7 +1010,6 @@ class TaskLogsTests(unittest.TestCase):
         meta_path = meta_dir / f"{task_id}.yml"
         meta = yaml.safe_load(meta_path.read_text()) or {}
         meta["mode"] = mode
-        meta["status"] = "running"
         meta_path.write_text(yaml.safe_dump(meta))
         return task_id
 

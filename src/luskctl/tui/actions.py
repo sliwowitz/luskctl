@@ -526,7 +526,7 @@ class ActionsMixin:
             self.notify("No task selected.")
             return
         task = self.current_task
-        if task.mode != "run" or task.status not in ("completed", "failed"):
+        if task.mode != "run" or task.exit_code is None:
             self.notify("Follow-up is only available for completed/failed autopilot tasks.")
             return
 
@@ -633,14 +633,14 @@ class ActionsMixin:
             return
 
         tid = self.current_task.task_id
-        if self.current_task.status == "deleting":
+        if self.current_task.deleting:
             self.notify(f"Task {tid} is already deleting.")
             return
 
         self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
         self.notify(f"Deleting task {tid}...")
 
-        self.current_task.status = "deleting"
+        self.current_task.deleting = True
         task_list = self.query_one("#task-list", TaskList)
         task_list.mark_deleting(tid)
         self._update_task_details()

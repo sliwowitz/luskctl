@@ -86,13 +86,10 @@ def task_run_cli(
                 raise SystemExit(f"Failed to start container: {e}")
             post_state = get_container_state(cname)
             if post_state != "running":
-                meta["status"] = "exited"
-                meta_path.write_text(yaml.safe_dump(meta))
                 raise SystemExit(
                     f"Container {cname} failed to start (state: {post_state}). "
                     f"Check logs with: podman logs {cname}"
                 )
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
             print("Container started.")
@@ -153,15 +150,11 @@ def task_run_cli(
     # Verify the container is still alive after log streaming
     post_state = get_container_state(cname)
     if post_state != "running":
-        meta["status"] = "failed"
-        meta_path.write_text(yaml.safe_dump(meta))
         raise SystemExit(
             f"Container {cname} exited unexpectedly (state: {post_state}). "
             f"Check logs with: podman logs {cname}"
         )
 
-    # Mark task as started (not completed) for CLI mode
-    meta["status"] = "running"
     meta["mode"] = "cli"
     if preset:
         meta["preset"] = preset
@@ -262,14 +255,10 @@ def task_run_web(
                 raise SystemExit(f"Failed to start container: {e}")
             post_state = get_container_state(cname)
             if post_state != "running":
-                meta["status"] = "exited"
-                meta_path.write_text(yaml.safe_dump(meta))
                 raise SystemExit(
                     f"Container {cname} failed to start (state: {post_state}). "
                     f"Check logs with: podman logs {cname}"
                 )
-            meta["status"] = "running"
-            meta_path.write_text(yaml.safe_dump(meta))
             print("Container started.")
             print(f"Web UI: {_blue(url, color_enabled)}")
             return
@@ -336,9 +325,6 @@ def task_run_web(
     running = is_container_running(cname)
 
     if ready and running:
-        if meta.get("status") != "running":
-            meta["status"] = "running"
-            meta_path.write_text(yaml.safe_dump(meta))
         color_enabled = _supports_color()
         print("\n\n>> luskctl: ")
         print("Web UI container is up")
@@ -493,7 +479,6 @@ def task_run_headless(
 
     # Update task metadata
     meta, meta_path = load_task_meta(project.id, task_id)
-    meta["status"] = "running"
     meta["mode"] = "run"
     if preset:
         meta["preset"] = preset
@@ -544,28 +529,23 @@ def task_followup_headless(
     meta, meta_path = load_task_meta(project.id, task_id)
 
     mode = meta.get("mode")
-    status = meta.get("status")
     if mode != "run":
         raise SystemExit(
             f"Task {task_id} is not a headless task (mode={mode!r}). "
             f"Follow-up is only supported for autopilot (mode='run') tasks."
         )
-    if status not in ("completed", "failed"):
-        raise SystemExit(
-            f"Task {task_id} is not in a follow-up-able state (status={status!r}). "
-            f"Only completed or failed tasks can receive follow-ups."
-        )
 
     cname = container_name(project.id, "run", task_id)
     container_state = get_container_state(cname)
-    if container_state is None:
-        raise SystemExit(
-            f"Container {cname} not found. Cannot follow up — the container may have been removed."
-        )
     if container_state == "running":
         raise SystemExit(
             f"Container {cname} is still running. "
             f"Wait for it to finish or stop it before sending a follow-up."
+        )
+    if container_state is None and meta.get("exit_code") is None:
+        raise SystemExit(
+            f"Container {cname} not found and task has no exit code. "
+            f"Cannot follow up — the container may have been removed."
         )
 
     # Update prompt.txt with the new follow-up prompt (after all validation)
@@ -586,17 +566,16 @@ def task_followup_headless(
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Failed to start container: {e}")
 
-    # Verify the container actually started before updating metadata
+    # Verify the container actually started
     post_state = get_container_state(cname)
     if post_state != "running":
-        meta["status"] = "failed"
-        meta_path.write_text(yaml.safe_dump(meta))
         raise SystemExit(
             f"Container {cname} failed to start for follow-up (state: {post_state}). "
             f"Check logs with: podman logs {cname}"
         )
 
-    meta["status"] = "running"
+    # Clear previous exit_code so effective_status shows "running" until new exit
+    meta["exit_code"] = None
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
@@ -675,15 +654,10 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
 
         post_state = get_container_state(cname)
         if post_state != "running":
-            meta["status"] = "exited"
-            meta_path.write_text(yaml.safe_dump(meta))
             raise SystemExit(
                 f"Container {cname} failed to start (state: {post_state}). "
                 f"Check logs with: podman logs {cname}"
             )
-
-        meta["status"] = "running"
-        meta_path.write_text(yaml.safe_dump(meta))
 
         color_enabled = _supports_color()
         print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")

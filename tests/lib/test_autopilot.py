@@ -812,7 +812,6 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     meta_path = state_dir / "projects" / "proj_meta" / "tasks" / "1.yml"
                     meta = yaml.safe_load(meta_path.read_text())
                     self.assertEqual(meta["mode"], "run")
-                    self.assertEqual(meta["status"], "completed")
                     self.assertEqual(meta["exit_code"], 0)
 
     def test_headless_no_follow_mode(self) -> None:
@@ -1095,7 +1094,6 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     meta_path = state_dir / "projects" / "proj_mode" / "tasks" / f"{task_id}.yml"
                     meta = yaml.safe_load(meta_path.read_text())
                     meta["mode"] = "cli"
-                    meta["status"] = "completed"
                     meta_path.write_text(yaml.safe_dump(meta))
 
                     with self.assertRaises(SystemExit) as ctx:
@@ -1125,12 +1123,18 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     meta_path = state_dir / "projects" / "proj_run" / "tasks" / f"{task_id}.yml"
                     meta = yaml.safe_load(meta_path.read_text())
                     meta["mode"] = "run"
-                    meta["status"] = "running"
                     meta_path.write_text(yaml.safe_dump(meta))
 
-                    with self.assertRaises(SystemExit) as ctx:
+                    # Container is running → follow-up should be rejected
+                    with (
+                        unittest.mock.patch(
+                            "luskctl.lib.containers.task_runners.get_container_state",
+                            return_value="running",
+                        ),
+                        self.assertRaises(SystemExit) as ctx,
+                    ):
                         task_followup_headless("proj_run", task_id, "test")
-                    self.assertIn("not in a follow-up-able state", str(ctx.exception))
+                    self.assertIn("still running", str(ctx.exception))
 
     def test_followup_rejects_running_container(self) -> None:
         """Follow-up rejects when container is still running (stale metadata)."""
@@ -1196,7 +1200,6 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
 
                     meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
                     meta = yaml.safe_load(meta_path.read_text())
-                    self.assertEqual(meta["status"], "completed")
                     self.assertEqual(meta["exit_code"], 0)
 
     def test_followup_no_follow_mode(self) -> None:
@@ -1242,7 +1245,8 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
 
                     meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
                     meta = yaml.safe_load(meta_path.read_text())
-                    self.assertEqual(meta["status"], "running")
+                    # exit_code should be cleared for the new run
+                    self.assertIsNone(meta["exit_code"])
 
     def test_followup_container_not_found(self) -> None:
         """Follow-up raises SystemExit with 'not found' when container has been removed."""
@@ -1272,7 +1276,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     self.assertIn("not found", str(ctx.exception))
 
     def test_followup_start_fails(self) -> None:
-        """Follow-up sets status to 'failed' and raises SystemExit when container remains exited after start."""
+        """Follow-up raises SystemExit when container remains exited after start."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_startfail")
@@ -1302,9 +1306,3 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     with self.assertRaises(SystemExit) as ctx:
                         task_followup_headless("proj_startfail", task_id, "test")
                     self.assertIn("failed to start", str(ctx.exception))
-
-                    meta_path = (
-                        state_dir / "projects" / "proj_startfail" / "tasks" / f"{task_id}.yml"
-                    )
-                    meta = yaml.safe_load(meta_path.read_text())
-                    self.assertEqual(meta["status"], "failed")

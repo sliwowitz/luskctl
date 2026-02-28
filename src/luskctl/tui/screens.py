@@ -537,7 +537,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             if (
                 self._task_meta
                 and self._task_meta.mode == "run"
-                and self._task_meta.status in ("completed", "failed")
+                and self._task_meta.exit_code is not None
             ):
                 options.append(Option("follow \\[u]p with new prompt", id="followup"))
             options.append(None)

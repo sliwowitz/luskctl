@@ -442,7 +442,7 @@ if _HAS_TEXTUAL:
                 details.set_task(None)
                 return
             details.set_task(self.current_task)
-            if self.current_task.status != "deleting":
+            if not self.current_task.deleting:
                 self._queue_task_image_status(self.current_project_id, self.current_task)
 
         # ---------- Status / notifications ----------
@@ -502,7 +502,7 @@ if _HAS_TEXTUAL:
             """Schedule a background check for whether the task's image is outdated."""
             if not project_id or task is None:
                 return
-            if task.status == "deleting":
+            if task.deleting:
                 return
 
             task_id = task.task_id
@@ -554,11 +554,7 @@ if _HAS_TEXTUAL:
 
             # Immediately check container state when task is selected
             if self.current_task and self.current_task.mode:
-                self._queue_container_state_check(
-                    message.project_id,
-                    self.current_task.task_id,
-                    self.current_task.mode,
-                )
+                self._queue_container_state_check(message.project_id)
 
         @on(Worker.StateChanged)
         async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
@@ -608,18 +604,23 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, task_id, container_state = result
+                project_id, states = result
                 if project_id != self.current_project_id:
                     return
-                if not self.current_task or self.current_task.task_id != task_id:
-                    return
-                # Update current_task with container state and refresh display
-                self.current_task.container_state = container_state
-                details = self.query_one("#task-details", TaskDetails)
-                details.set_task(self.current_task)
-                # Also refresh the task list to update status display
+                # Update container_state on all TaskMeta instances
                 task_list = self.query_one("#task-list", TaskList)
-                task_list.refresh()
+                changed = False
+                for tm in task_list.tasks:
+                    new_state = states.get(tm.task_id)
+                    if tm.container_state != new_state:
+                        tm.container_state = new_state
+                        changed = True
+                if changed:
+                    # Refresh task list labels and details panel
+                    task_list.refresh()
+                    if self.current_task:
+                        details = self.query_one("#task-details", TaskDetails)
+                        details.set_task(self.current_task)
                 return
 
             if worker.group == "task-delete":

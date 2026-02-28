@@ -93,40 +93,39 @@ class PollingMixin:
             self._container_status_timer = None
 
     def _poll_container_status(self) -> None:
-        """Check container status for the current task."""
-        if not self.current_project_id or not self.current_task or not self.current_task.mode:
+        """Check container status for all visible tasks via a single batch query."""
+        if not self.current_project_id:
             return
-        self._queue_container_state_check(
-            self.current_project_id,
-            self.current_task.task_id,
-            self.current_task.mode,
-        )
+        self._queue_container_state_check(self.current_project_id)
 
-    def _queue_container_state_check(self, project_id: str, task_id: str, mode: str) -> None:
-        """Queue a background check for a task's container state."""
+    def _queue_container_state_check(
+        self, project_id: str, task_id: str | None = None, mode: str | None = None
+    ) -> None:
+        """Queue a background batch check for all task container states."""
         self.run_worker(
-            self._load_container_state_worker(project_id, task_id, mode),
-            name=f"container-state:{project_id}:{task_id}",
+            self._load_container_state_worker(project_id),
+            name=f"container-state:{project_id}",
             group="container-state",
             exclusive=True,
         )
 
     async def _load_container_state_worker(
-        self, project_id: str, task_id: str, mode: str
-    ) -> tuple[str, str, str | None]:
-        """Background worker to check container state."""
+        self, project_id: str
+    ) -> tuple[str, dict[str, str | None]]:
+        """Background worker to batch-query all container states for a project."""
         import asyncio
 
-        from ..lib.containers.runtime import get_task_container_state
+        from ..lib.containers.tasks import get_all_task_states, get_tasks
 
         try:
-            state = await asyncio.get_event_loop().run_in_executor(
-                None, get_task_container_state, project_id, task_id, mode
+            tasks = await asyncio.get_event_loop().run_in_executor(None, get_tasks, project_id)
+            states = await asyncio.get_event_loop().run_in_executor(
+                None, get_all_task_states, project_id, tasks
             )
-            return (project_id, task_id, state)
+            return (project_id, states)
         except Exception as e:
-            self._log_debug(f"container state check error: {e}")
-            return (project_id, task_id, None)
+            self._log_debug(f"container state batch check error: {e}")
+            return (project_id, {})
 
     def _poll_upstream(self) -> None:
         """Check upstream for changes and update staleness info.
