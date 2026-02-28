@@ -331,7 +331,7 @@ class WriteSessionHookTests(unittest.TestCase):
         """Merges hook into existing settings.json without clobbering."""
         with tempfile.TemporaryDirectory() as td:
             settings_path = Path(td) / "settings.json"
-            settings_path.write_text('{"permissions": {"allow": ["Read"]}}')
+            settings_path.write_text('{"permissions": {"allow": ["Read"]}}', encoding="utf-8")
             _write_session_hook(settings_path)
             data = json.loads(settings_path.read_text())
             # Original settings preserved
