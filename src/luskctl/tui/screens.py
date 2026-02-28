@@ -202,7 +202,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self.dismiss("init_ssh")
 
     def action_auth(self) -> None:
-        """Open the authentication modal."""
+        """Open the authenticate agents and tools modal."""
         self._open_auth_modal()
 
 
@@ -212,7 +212,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
 
 class AuthActionsScreen(screen.ModalScreen[str | None]):
-    """Small modal for selecting an authentication provider.
+    """Small modal for authenticating agents and tools.
 
     Options are built dynamically from ``AUTH_PROVIDERS``.
     Number keys (1-9) act as shortcuts for the corresponding list entry.
@@ -254,7 +254,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         ]
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(*options, id="auth-actions-list")
-        dialog.border_title = "Authenticate"
+        dialog.border_title = "Authenticate agents and tools"
         dialog.border_subtitle = "Esc to close"
 
     def on_mount(self) -> None:
