@@ -623,6 +623,8 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
     cname = container_name(project.id, mode, task_id)
     container_state = get_container_state(cname)
 
+    print(f"Restarting task {project_id}/{task_id} ({mode})...")
+
     if container_state == "running":
         # Container is running - stop it first, then start it again
         try:
