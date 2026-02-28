@@ -68,6 +68,14 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     # No .git directory - perform initial clone
     # Remove marker first so the directory is empty for git clone
     rm -f "${NEW_TASK_MARKER}" 2>/dev/null || true
+
+    # Fresh-task invariant: workspace must be empty before first clone.
+    if [[ -n "$(find "${REPO_ROOT}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)" ]]; then
+      echo ">> ERROR: ${REPO_ROOT} is not empty before initial clone" >&2
+      find "${REPO_ROOT}" -mindepth 1 -maxdepth 1 -printf '   - %f\n' >&2 || true
+      exit 128
+    fi
+
     SRC_REPO="${CLONE_FROM:-${CODE_REPO}}"
     TARGET_BRANCH="${GIT_BRANCH:-main}"
 
@@ -75,11 +83,21 @@ if [[ -n "${REPO_ROOT:-}" && -n "${CODE_REPO:-}" ]]; then
     CLONE_OK=false
     if [[ -n "${GIT_BRANCH:-}" ]]; then
       echo ">> initial clone from ${SRC_REPO} (branch: ${TARGET_BRANCH})"
-      if git clone --recurse-submodules -b "${TARGET_BRANCH}" "${SRC_REPO}" "${REPO_ROOT}" 2>/dev/null; then
+      CLONE_ERR_FILE="$(mktemp)"
+      if git clone --recurse-submodules -b "${TARGET_BRANCH}" "${SRC_REPO}" "${REPO_ROOT}" 2>"${CLONE_ERR_FILE}"; then
         CLONE_OK=true
       else
-        echo ">> branch ${TARGET_BRANCH} not found, cloning default branch"
+        CLONE_RC=$?
+        if grep -Eiq "Remote branch .* not found|couldn't find remote ref" "${CLONE_ERR_FILE}"; then
+          echo ">> branch ${TARGET_BRANCH} not found, cloning default branch"
+        else
+          cat "${CLONE_ERR_FILE}" >&2
+          echo ">> ERROR: initial clone failed; aborting without fallback" >&2
+          rm -f "${CLONE_ERR_FILE}" 2>/dev/null || true
+          exit "${CLONE_RC}"
+        fi
       fi
+      rm -f "${CLONE_ERR_FILE}" 2>/dev/null || true
     fi
 
     # Fallback: clone without -b (uses remote's default HEAD)

@@ -6,12 +6,15 @@ sets up git identity and CLI flags inside task containers.
 """
 
 import json
+import os
 import shlex
+import tempfile
 from pathlib import Path
 
 import yaml
 
-from .._util.fs import ensure_dir
+from .._util.fs import ensure_dir, ensure_dir_writable
+from ..core.config import get_envs_base_dir
 from ..core.projects import Project
 
 # TODO: future — support global agent definitions in luskctl-config.yml (agent.subagents).
@@ -202,34 +205,105 @@ def _generate_claude_wrapper(
 def _write_session_hook(settings_path: Path) -> None:
     """Write a Claude project settings file with a SessionStart hook.
 
+    ``settings_path`` currently points at the shared Claude config mount
+    (``<envs>/_claude-config/settings.json``), so this function must be
+    idempotent across many task launches/projects.
+
     The hook captures the session ID to ``/home/dev/.luskctl/claude-session.txt``
-    on every session start.  The wrapper reads this file to add ``--resume`` on
-    subsequent invocations, enabling session continuity across container restarts.
+    on every session start.  That path is in the per-task ``agent-config`` mount,
+    so session IDs remain task-local even though the hook definition is shared.
+    The wrapper reads this file to add ``--resume`` on subsequent invocations,
+    enabling session continuity across container restarts.
 
     If the settings file already exists, the hook config is merged into it
     (preserving any existing settings).
+
+    Updates are serialized with an inter-process file lock and persisted via
+    atomic replace to avoid clobbering concurrent task launches.
     """
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - fcntl is unavailable on some platforms.
+        fcntl = None  # type: ignore[assignment]
+
     hook_command = (
         "python3 -c \"import json,sys; print(json.load(sys.stdin)['session_id'])\""
         " > /home/dev/.luskctl/claude-session.txt"
     )
     hook_entry = {"hooks": [{"type": "command", "command": hook_command}]}
-
-    if settings_path.is_file():
+    lock_path = settings_path.with_suffix(settings_path.suffix + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         try:
-            existing = json.loads(settings_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            existing = {}
-    else:
-        existing = {}
+            if settings_path.is_file():
+                try:
+                    loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+                    existing = loaded if isinstance(loaded, dict) else {}
+                except (json.JSONDecodeError, OSError):
+                    existing = {}
+            else:
+                existing = {}
 
-    hooks = existing.setdefault("hooks", {})
-    session_hooks = hooks.setdefault("SessionStart", [])
-    # Idempotent: skip if our hook is already present
-    if hook_entry not in session_hooks:
-        session_hooks.append(hook_entry)
+            changed = False
 
-    settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+            hooks_obj = existing.get("hooks")
+            if hooks_obj is None or not isinstance(hooks_obj, dict):
+                hooks_obj = {}
+                existing["hooks"] = hooks_obj
+                changed = True
+
+            session_hooks_obj = hooks_obj.get("SessionStart")
+            if session_hooks_obj is None or not isinstance(session_hooks_obj, list):
+                session_hooks_obj = []
+                hooks_obj["SessionStart"] = session_hooks_obj
+                changed = True
+
+            session_hooks: list[object] = session_hooks_obj
+
+            # Idempotent across equivalent forms: skip append if an existing SessionStart
+            # command already writes session_id to claude-session.txt.
+            hook_present = False
+            for item in session_hooks:
+                if item == hook_entry:
+                    hook_present = True
+                    break
+                if not isinstance(item, dict):
+                    continue
+                nested = item.get("hooks")
+                if not isinstance(nested, list):
+                    continue
+                for nested_item in nested:
+                    if not isinstance(nested_item, dict):
+                        continue
+                    if nested_item.get("command") == hook_command:
+                        hook_present = True
+                        break
+                if hook_present:
+                    break
+
+            if not hook_present:
+                session_hooks.append(hook_entry)
+                changed = True
+
+            if changed:
+                tmp_path: Path | None = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        "w",
+                        encoding="utf-8",
+                        dir=settings_path.parent,
+                        delete=False,
+                    ) as tmp_file:
+                        tmp_file.write(json.dumps(existing, indent=2) + "\n")
+                        tmp_path = Path(tmp_file.name)
+                    os.replace(tmp_path, settings_path)
+                finally:
+                    if tmp_path is not None and tmp_path.exists():
+                        tmp_path.unlink()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def prepare_agent_config_dir(
@@ -246,7 +320,7 @@ def prepare_agent_config_dir(
     - luskctl-claude.sh (always) — wrapper function with git env vars
     - agents.json (if sub-agents produce non-empty dict after filtering)
     - prompt.txt (if prompt given, headless only)
-    - <workspace>/.claude/settings.json — SessionStart hook to capture session ID
+    - <envs>/_claude-config/settings.json — SessionStart hook to capture session ID
 
     Returns the agent_config_dir path.
     """
@@ -266,13 +340,16 @@ def prepare_agent_config_dir(
     wrapper = _generate_claude_wrapper(has_agents, project, skip_permissions)
     (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
 
-    # Write SessionStart hook to capture session ID for resume (#239).
-    # The hook writes the session ID to /home/dev/.luskctl/claude-session.txt
-    # (the per-task agent-config volume), readable from the host after exit.
-    # The wrapper reads this file to add --resume on subsequent invocations.
-    workspace_claude_dir = task_dir / "workspace" / ".claude"
-    ensure_dir(workspace_claude_dir)
-    _write_session_hook(workspace_claude_dir / "settings.json")
+    # Write SessionStart hook to the shared Claude config mount
+    # (/home/dev/.claude inside containers). For now this is global across
+    # projects/tasks, while the emitted session ID file remains per-task under
+    # /home/dev/.luskctl/claude-session.txt.
+    #
+    # This keeps /workspace clean for init clone while preserving task-local
+    # resume behavior.
+    shared_claude_dir = get_envs_base_dir() / "_claude-config"
+    ensure_dir_writable(shared_claude_dir, "_claude-config")
+    _write_session_hook(shared_claude_dir / "settings.json")
 
     # Prompt (headless only)
     if prompt is not None:

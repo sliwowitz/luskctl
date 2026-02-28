@@ -478,6 +478,44 @@ class TaskTests(unittest.TestCase):
             self.assertIn(expected_enter, output)
             self.assertIn(expected_stop, output)
 
+    def test_task_run_cli_does_not_add_files_before_clone(self) -> None:
+        """Interactive CLI startup must not add files to workspace before init clone."""
+        project_id = "proj_cli_clean_workspace"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ) as ctx:
+            task_new(project_id)
+            workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace"
+            self.assertEqual(
+                sorted(p.name for p in workspace_dir.iterdir()),
+                [".new-task-marker"],
+            )
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    return_value=True,
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.get_container_state",
+                    side_effect=[None, "running"],
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.subprocess.run"
+                ) as run_mock,
+            ):
+                run_mock.return_value = subprocess.CompletedProcess([], 0)
+                task_run_cli(project_id, "1")
+
+            self.assertEqual(
+                sorted(p.name for p in workspace_dir.iterdir()),
+                [".new-task-marker"],
+            )
+            self.assertTrue((ctx.envs_dir / "_claude-config" / "settings.json").is_file())
+
     def test_task_run_web_colors_url_and_stop_when_tty(self) -> None:
         project_id = "proj_web_color"
         with project_env(
@@ -527,6 +565,52 @@ class TaskTests(unittest.TestCase):
             self.assertIn(expected_url, output)
             self.assertIn(expected_logs, output)
             self.assertIn(expected_stop, output)
+
+    def test_task_run_web_does_not_add_files_before_clone(self) -> None:
+        """Interactive web startup must not add files to workspace before init clone."""
+        project_id = "proj_web_clean_workspace"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+            with_config_file=True,
+            clear_env=True,
+        ) as ctx:
+            task_new(project_id)
+            workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace"
+            self.assertEqual(
+                sorted(p.name for p in workspace_dir.iterdir()),
+                [".new-task-marker"],
+            )
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    return_value=True,
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.get_container_state",
+                    return_value=None,
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.is_container_running",
+                    return_value=True,
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.assign_web_port",
+                    return_value=7788,
+                ),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.subprocess.run"
+                ) as run_mock,
+            ):
+                run_mock.return_value = subprocess.CompletedProcess([], 0)
+                task_run_web(project_id, "1")
+
+            self.assertEqual(
+                sorted(p.name for p in workspace_dir.iterdir()),
+                [".new-task-marker"],
+            )
+            self.assertTrue((ctx.envs_dir / "_claude-config" / "settings.json").is_file())
 
     def test_task_run_cli_already_running(self) -> None:
         """task_run_cli prints message and exits when container is already running."""

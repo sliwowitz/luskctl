@@ -279,6 +279,59 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             current_branch = get_current_branch(workspace_path)
             self.assertEqual(current_branch, "main")
 
+    def test_initial_clone_fails_if_workspace_not_empty(self) -> None:
+        """Initial clone should fail fast when workspace is pre-populated."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            gate_path = base / "gate.git"
+            workspace_path = base / "workspace"
+            workspace_path.mkdir()
+            (workspace_path / "stray.txt").write_text("unexpected")
+
+            create_bare_repo_with_branches(gate_path, default_branch="master", other_branches=[])
+
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "master",
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
+
+            self.assertNotEqual(result.returncode, 0, "Script should fail on non-empty workspace")
+            combined = f"{result.stdout}\n{result.stderr}"
+            self.assertIn("is not empty before initial clone", combined)
+            self.assertNotIn("branch master not found", combined)
+
+    def test_initial_clone_removes_marker_and_succeeds(self) -> None:
+        """Initial clone should remove the new-task marker using normal init flow."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            gate_path = base / "gate.git"
+            workspace_path = base / "workspace"
+            workspace_path.mkdir()
+            marker_path = workspace_path / ".new-task-marker"
+            marker_path.write_text("marker")
+
+            create_bare_repo_with_branches(gate_path, default_branch="master", other_branches=[])
+
+            result = run_init_script(
+                self.init_script,
+                base,
+                {
+                    "CODE_REPO": f"file://{gate_path}",
+                    "GIT_BRANCH": "master",
+                    "REPO_ROOT": str(workspace_path),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, f"Script failed: {result.stderr}")
+            self.assertFalse(marker_path.exists(), "Marker should be removed by init script")
+            # Clone should succeed and workspace should become a git checkout.
+            self.assertTrue((workspace_path / ".git").exists())
+
     def test_initial_clone_defaults_to_main_if_git_branch_unset(self) -> None:
         """Test that GIT_BRANCH defaults to 'main' when not set."""
         with tempfile.TemporaryDirectory() as td:
