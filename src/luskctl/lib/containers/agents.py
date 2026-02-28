@@ -177,7 +177,7 @@ def _generate_claude_wrapper(
         lines.append('        _args+=(--agents "$(cat /home/dev/.luskctl/agents.json)")')
 
     # Resume previous session if session file exists (written by SessionStart hook)
-    lines.append("    [ -f /home/dev/.luskctl/claude-session.txt ] && \\")
+    lines.append("    [ -s /home/dev/.luskctl/claude-session.txt ] && \\")
     lines.append('        _args+=(--resume "$(cat /home/dev/.luskctl/claude-session.txt)")')
 
     # Git env vars and exec — with optional timeout
