@@ -49,8 +49,8 @@ class ContainerLifecycleTests(unittest.TestCase):
             state = get_container_state("test-container")
             self.assertIsNone(state)
 
-    def test_task_stop_updates_metadata(self) -> None:
-        """task_stop changes metadata status to 'stopped'."""
+    def test_task_stop_calls_podman_stop(self) -> None:
+        """task_stop calls podman stop with correct timeout."""
         project_id = "proj_stop"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             # Create a task and simulate it's running
@@ -60,7 +60,6 @@ class ContainerLifecycleTests(unittest.TestCase):
 
             # Update metadata to simulate a running CLI task
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
@@ -83,10 +82,6 @@ class ContainerLifecycleTests(unittest.TestCase):
                 self.assertIn("--time", call_args)
                 self.assertEqual(call_args[call_args.index("--time") + 1], "10")
 
-            # Verify metadata status is now 'stopped'
-            meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["status"], "stopped")
-
     def test_task_stop_custom_timeout_from_config(self) -> None:
         """task_stop uses shutdown_timeout from project config."""
         project_id = "proj_stop_cfg"
@@ -97,7 +92,6 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta_path = meta_dir / "1.yml"
 
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
@@ -127,7 +121,6 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta_path = meta_dir / "1.yml"
 
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
@@ -166,7 +159,6 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta_path = meta_dir / "1.yml"
 
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "stopped"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
@@ -190,10 +182,6 @@ class ContainerLifecycleTests(unittest.TestCase):
                 call_args = run_mock.call_args[0][0]
                 self.assertEqual(call_args[:2], ["podman", "start"])
 
-            # Verify metadata status is now 'running'
-            meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["status"], "running")
-
     def test_task_restart_already_running(self) -> None:
         """task_restart stops then starts a running container."""
         project_id = "proj_restart2"
@@ -203,7 +191,6 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta_path = meta_dir / "1.yml"
 
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
@@ -235,12 +222,8 @@ class ContainerLifecycleTests(unittest.TestCase):
                 # Verify message indicates restarted
                 self.assertIn("Restarted", output.getvalue())
 
-            # Verify metadata status is 'running'
-            meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["status"], "running")
-
-    def test_task_status_shows_mismatch(self) -> None:
-        """task_status detects metadata vs container state mismatch."""
+    def test_task_status_shows_live_state(self) -> None:
+        """task_status uses live container state for effective status."""
         project_id = "proj_status"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             task_new(project_id)
@@ -248,11 +231,10 @@ class ContainerLifecycleTests(unittest.TestCase):
             meta_path = meta_dir / "1.yml"
 
             meta = yaml.safe_load(meta_path.read_text())
-            meta["status"] = "running"
             meta["mode"] = "cli"
             meta_path.write_text(yaml.safe_dump(meta))
 
-            # Mock container is not running (mismatch)
+            # Container is exited → effective status should be "stopped"
             with (
                 mock_git_config(),
                 unittest.mock.patch(
@@ -265,7 +247,7 @@ class ContainerLifecycleTests(unittest.TestCase):
 
                 output_str = output.getvalue()
                 self.assertIn("exited", output_str)
-                self.assertIn("Warning", output_str)
+                self.assertIn("stopped", output_str)
 
     def test_get_task_container_state_no_mode(self) -> None:
         """get_task_container_state returns None if mode is not set."""

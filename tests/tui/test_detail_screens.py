@@ -46,10 +46,10 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="42",
             mode="cli",
-            status="running",
             workspace="/tmp/ws",
             web_port=None,
             backend="codex",
+            container_state="running",
         )
 
         result = widgets.render_task_details(task, project_id="proj1")
@@ -93,9 +93,9 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="5",
             mode="run",
-            status="running",
             workspace="/tmp/ws",
             web_port=None,
+            container_state="running",
         )
         result = widgets.render_task_details(task, project_id="proj1")
         self.assertIsInstance(result, Text)
@@ -108,7 +108,6 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="5",
             mode="run",
-            status="completed",
             workspace="/tmp/ws",
             web_port=None,
             exit_code=0,
@@ -122,9 +121,9 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="3",
             mode="run",
-            status="running",
             workspace="/tmp/ws",
             web_port=None,
+            container_state="running",
         )
         task_list = widgets.TaskList()
         label = task_list._format_task_label(task)
@@ -135,7 +134,6 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="1",
             mode="run",
-            status="completed",
             workspace="/tmp/ws",
             web_port=None,
             exit_code=1,
@@ -147,7 +145,6 @@ class RenderHelpersTests(TestCase):
         task = widgets.TaskMeta(
             task_id="1",
             mode="cli",
-            status="running",
             workspace="/tmp/ws",
             web_port=None,
         )
@@ -181,10 +178,10 @@ class ScreenConstructionTests(TestCase):
         task = widgets.TaskMeta(
             task_id="7",
             mode="cli",
-            status="running",
             workspace="/tmp/ws",
             web_port=None,
             backend="codex",
+            container_state="running",
         )
 
         screen = screens.TaskDetailsScreen(
@@ -356,7 +353,7 @@ class TaskScreenKeyBindingTests(TestCase):
     def test_lowercase_f_works_with_autopilot_task(self) -> None:
         screens, widgets = import_screens()
         task = widgets.TaskMeta(
-            task_id="t1", status="running", mode="run", workspace="/w", web_port=None
+            task_id="t1", mode="run", workspace="/w", web_port=None, container_state="running"
         )
         screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
         screen.dismiss = mock.Mock()
@@ -367,7 +364,7 @@ class TaskScreenKeyBindingTests(TestCase):
     def test_lowercase_f_works_for_non_autopilot_task(self) -> None:
         screens, widgets = import_screens()
         task = widgets.TaskMeta(
-            task_id="t1", status="running", mode="cli", workspace="/w", web_port=None
+            task_id="t1", mode="cli", workspace="/w", web_port=None, container_state="running"
         )
         screen = screens.TaskDetailsScreen(task=task, has_tasks=True, project_id="p")
         screen.dismiss = mock.Mock()

@@ -9,6 +9,7 @@ management.
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml  # pip install pyyaml
@@ -27,8 +28,132 @@ from .log_format import auto_detect_formatter
 from .runtime import (
     container_name,
     get_container_state,
+    get_project_container_states,
     stop_task_containers,
 )
+
+# ---------- Status & mode display infrastructure ----------
+
+
+@dataclass(frozen=True)
+class StatusInfo:
+    """Display attributes for a task effective status."""
+
+    label: str
+    emoji: str
+    color: str
+
+
+@dataclass(frozen=True)
+class ModeInfo:
+    """Display attributes for a task mode."""
+
+    emoji: str
+    label: str
+
+
+STATUS_DISPLAY: dict[str, StatusInfo] = {
+    "running": StatusInfo(label="running", emoji="▶️", color="green"),
+    "stopped": StatusInfo(label="stopped", emoji="⏸️", color="yellow"),
+    "completed": StatusInfo(label="completed", emoji="✅", color="green"),
+    "failed": StatusInfo(label="failed", emoji="❌", color="red"),
+    "created": StatusInfo(label="created", emoji="🆕", color="yellow"),
+    "not found": StatusInfo(label="not found", emoji="❓", color="yellow"),
+    "deleting": StatusInfo(label="deleting", emoji="🗑️", color="yellow"),
+}
+
+MODE_DISPLAY: dict[str | None, ModeInfo] = {
+    "cli": ModeInfo(emoji="⌨️", label="CLI"),
+    "web": ModeInfo(emoji="🕸️", label="Web"),
+    "run": ModeInfo(emoji="🚀", label="Autopilot"),
+    None: ModeInfo(emoji="🦗", label=""),
+}
+
+WEB_BACKEND_EMOJI: dict[str, str] = {
+    "claude": "✴️",
+    "codex": "🌸",
+    "mistral": "🏰",
+    "copilot": "🤖",
+}
+
+_WEB_BACKEND_DEFAULT_EMOJI = "🕸️"
+
+
+def effective_status(task: "TaskMeta") -> str:
+    """Compute the display status from task metadata + live container state.
+
+    Reads the following fields from a ``TaskMeta`` instance:
+
+    - ``container_state`` (str | None): live podman state, or None
+    - ``mode`` (str | None): task mode (cli/web/run/None)
+    - ``exit_code`` (int | None): process exit code, or None
+    - ``deleting`` (bool): persisted to YAML before deletion starts
+
+    Returns one of: ``"deleting"``, ``"running"``, ``"stopped"``,
+    ``"completed"``, ``"failed"``, ``"created"``, ``"not found"``.
+    """
+    if task.deleting:
+        return "deleting"
+
+    cs = task.container_state
+    mode = task.mode
+    exit_code = task.exit_code
+
+    if cs == "running":
+        return "running"
+
+    if cs is not None:
+        # Container exists but is not running
+        if exit_code is not None and exit_code == 0:
+            return "completed"
+        if exit_code is not None and exit_code != 0:
+            return "failed"
+        return "stopped"
+
+    # No container found
+    if mode is None:
+        return "created"
+    if exit_code is not None and exit_code == 0:
+        return "completed"
+    if exit_code is not None and exit_code != 0:
+        return "failed"
+    return "not found"
+
+
+def mode_emoji(task: "TaskMeta") -> str:
+    """Return the mode emoji for a task, resolving web backends.
+
+    For ``mode="web"``, the emoji is looked up from ``WEB_BACKEND_EMOJI``
+    using the task's ``backend`` field.  Other modes use ``MODE_DISPLAY``.
+    """
+    mode = task.mode
+    if mode == "web":
+        backend = task.backend
+        if isinstance(backend, str):
+            return WEB_BACKEND_EMOJI.get(backend, _WEB_BACKEND_DEFAULT_EMOJI)
+        return _WEB_BACKEND_DEFAULT_EMOJI
+    info = MODE_DISPLAY.get(mode if isinstance(mode, str) else None)
+    return info.emoji if info else MODE_DISPLAY[None].emoji
+
+
+@dataclass
+class TaskMeta:
+    """Lightweight metadata snapshot for a single task."""
+
+    task_id: str
+    mode: str | None
+    workspace: str
+    web_port: int | None
+    backend: str | None = None
+    container_state: str | None = None
+    exit_code: int | None = None
+    deleting: bool = False
+    preset: str | None = None
+
+    @property
+    def status(self) -> str:
+        """Compute effective status from live container state + metadata."""
+        return effective_status(self)
 
 
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
@@ -97,11 +222,7 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
     if not meta_path.is_file():
         return
     meta = yaml.safe_load(meta_path.read_text()) or {}
-    if exit_code is not None:
-        meta["exit_code"] = exit_code
-        meta["status"] = "completed" if exit_code == 0 else "failed"
-    else:
-        meta["status"] = "failed"
+    meta["exit_code"] = exit_code
     meta_path.write_text(yaml.safe_dump(meta))
 
 
@@ -158,7 +279,6 @@ def task_new(project_id: str) -> str:
 
     meta = {
         "task_id": next_id,
-        "status": "created",
         "mode": None,
         "workspace": str(ws),
         "web_port": None,
@@ -168,19 +288,63 @@ def task_new(project_id: str) -> str:
     return next_id
 
 
-def get_tasks(project_id: str, reverse: bool = False) -> list[dict]:
-    """Return all task metadata dicts for *project_id*, sorted by task ID."""
+def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
+    """Return all task metadata for *project_id*, sorted by task ID."""
     meta_dir = _tasks_meta_dir(project_id)
-    tasks: list[dict] = []
+    tasks: list[TaskMeta] = []
     if not meta_dir.is_dir():
         return tasks
     for f in meta_dir.glob("*.yml"):
         try:
-            tasks.append(yaml.safe_load(f.read_text()) or {})
+            meta = yaml.safe_load(f.read_text()) or {}
+            tasks.append(
+                TaskMeta(
+                    task_id=str(meta.get("task_id", "")),
+                    mode=meta.get("mode"),
+                    workspace=meta.get("workspace", ""),
+                    web_port=meta.get("web_port"),
+                    backend=meta.get("backend"),
+                    exit_code=meta.get("exit_code"),
+                    deleting=bool(meta.get("deleting")),
+                    preset=meta.get("preset"),
+                )
+            )
         except Exception:
             continue
-    tasks.sort(key=lambda d: int(d.get("task_id", 0)), reverse=reverse)
+
+    def _sort_key(t: TaskMeta) -> tuple[bool, int, str]:
+        """Sort numeric IDs first (ascending), then non-numeric lexically."""
+        try:
+            return (False, int(t.task_id), t.task_id)
+        except (ValueError, TypeError):
+            return (True, 0, t.task_id or "")
+
+    tasks.sort(key=_sort_key, reverse=reverse)
     return tasks
+
+
+def get_all_task_states(
+    project_id: str,
+    tasks: list[TaskMeta],
+) -> dict[str, str | None]:
+    """Map each task to its live container state via a single batch query.
+
+    Args:
+        project_id: The project whose containers to query.
+        tasks: List of ``TaskMeta`` instances (must have ``task_id`` and ``mode``).
+
+    Returns:
+        ``{task_id: container_state_or_None}`` dict.
+    """
+    container_states = get_project_container_states(project_id)
+    result: dict[str, str | None] = {}
+    for t in tasks:
+        if t.mode:
+            cname = container_name(project_id, t.mode, str(t.task_id))
+            result[str(t.task_id)] = container_states.get(cname)
+        else:
+            result[str(t.task_id)] = None
+    return result
 
 
 def task_list(
@@ -190,29 +354,45 @@ def task_list(
     mode: str | None = None,
     agent: str | None = None,
 ) -> None:
-    """List tasks for a project, optionally filtered by status, mode, or agent preset."""
+    """List tasks for a project, optionally filtered by status, mode, or agent preset.
+
+    Status is computed live from podman container state + task metadata
+    (never from the legacy ``status`` YAML field).
+    """
     tasks = get_tasks(project_id)
-    if status:
-        tasks = [t for t in tasks if t.get("status") == status]
+
+    # Pre-filter by mode/agent before the podman query to reduce work
     if mode:
-        tasks = [t for t in tasks if t.get("mode") == mode]
+        tasks = [t for t in tasks if t.mode == mode]
     if agent:
-        tasks = [t for t in tasks if t.get("preset") == agent]
+        tasks = [t for t in tasks if t.preset == agent]
+
     if not tasks:
         print("No tasks found")
         return
+
+    # Batch-query podman for all container states in one call
+    live_states = get_all_task_states(project_id, tasks)
     for t in tasks:
-        tid = t.get("task_id", "?")
-        t_status = t.get("status", "unknown")
-        t_mode = t.get("mode")
-        port = t.get("web_port")
+        t.container_state = live_states.get(t.task_id)
+
+    # Filter by effective status (computed live)
+    if status:
+        tasks = [t for t in tasks if effective_status(t) == status]
+
+    if not tasks:
+        print("No tasks found")
+        return
+
+    for t in tasks:
+        t_status = effective_status(t)
         extra = []
-        if t_mode:
-            extra.append(f"mode={t_mode}")
-        if port:
-            extra.append(f"port={port}")
+        if t.mode:
+            extra.append(f"mode={t.mode}")
+        if t.web_port:
+            extra.append(f"port={t.web_port}")
         extra_s = f" [{'; '.join(extra)}]" if extra else ""
-        print(f"- {tid}: {t_status}{extra_s}")
+        print(f"- {t.task_id}: {t_status}{extra_s}")
 
 
 def _check_mode(meta: dict, expected: str) -> None:
@@ -238,6 +418,20 @@ def load_task_meta(
     if expected_mode is not None:
         _check_mode(meta, expected_mode)
     return meta, meta_path
+
+
+def mark_task_deleting(project_id: str, task_id: str) -> None:
+    """Persist ``deleting: true`` to the task's YAML metadata file."""
+    try:
+        meta_dir = _tasks_meta_dir(project_id)
+        meta_path = meta_dir / f"{task_id}.yml"
+        if not meta_path.is_file():
+            return
+        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta["deleting"] = True
+        meta_path.write_text(yaml.safe_dump(meta))
+    except Exception as e:
+        _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
 
 def task_delete(project_id: str, task_id: str) -> None:
@@ -395,9 +589,6 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Failed to stop container: {e}")
 
-    meta["status"] = "stopped"
-    meta_path.write_text(yaml.safe_dump(meta))
-
     color_enabled = _supports_color()
     print(f"Stopped task {task_id}: {_green(cname, color_enabled)}")
     print(f"Restart with: luskctl task restart {project_id} {task_id}")
@@ -549,7 +740,7 @@ def task_logs(
 
 
 def task_status(project_id: str, task_id: str) -> None:
-    """Show actual container state vs metadata state for a task."""
+    """Show live task status with container state diagnostics."""
     project = load_project(project_id)
     meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -558,38 +749,47 @@ def task_status(project_id: str, task_id: str) -> None:
     meta = yaml.safe_load(meta_path.read_text()) or {}
 
     mode = meta.get("mode")
-    metadata_status = meta.get("status", "unknown")
     web_port = meta.get("web_port")
+    exit_code = meta.get("exit_code")
 
     color_enabled = _supports_color()
 
-    # Get actual container state if mode is set
-    container_state = None
+    # Query live container state
     cname = None
+    cs = None
     if mode:
         cname = container_name(project.id, mode, task_id)
-        container_state = get_container_state(cname)
+        cs = get_container_state(cname)
 
-    # Determine if there's a mismatch
-    # Metadata "running" or "created" with mode should have a running container
-    expected_running = metadata_status in ("running", "created") and mode is not None
-    actual_running = container_state == "running"
-    mismatch = expected_running and not actual_running
+    # Build TaskMeta for effective_status / mode_emoji computation
+    task = TaskMeta(
+        task_id=task_id,
+        mode=mode,
+        workspace=meta.get("workspace", ""),
+        web_port=web_port,
+        backend=meta.get("backend"),
+        exit_code=exit_code,
+        deleting=bool(meta.get("deleting")),
+        container_state=cs,
+    )
+    status = effective_status(task)
+    info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
+
+    status_color = {"green": _green, "yellow": _yellow, "red": _red}.get(info.color, _yellow)
+    m_emoji = mode_emoji(task)
+    mode_info = MODE_DISPLAY.get(mode, MODE_DISPLAY[None])
 
     print(f"Task {task_id}:")
-    print(f"  Metadata status: {metadata_status}")
-    print(f"  Mode:            {mode or 'not set'}")
+    print(f"  Status:          {info.emoji} {status_color(info.label, color_enabled)}")
+    print(f"  Mode:            {m_emoji} {mode_info.label or 'not set'}")
     if cname:
         print(f"  Container:       {cname}")
-    if container_state:
-        state_color = _green if container_state == "running" else _yellow
-        print(f"  Container state: {state_color(container_state, color_enabled)}")
-    else:
+    if cs:
+        state_color = _green if cs == "running" else _yellow
+        print(f"  Container state: {state_color(cs, color_enabled)}")
+    elif mode:
         print(f"  Container state: {_red('not found', color_enabled)}")
+    if exit_code is not None:
+        print(f"  Exit code:       {exit_code}")
     if web_port:
         print(f"  Web port:        {web_port}")
-    if mismatch:
-        print(
-            f"\n  {_yellow('Warning:', color_enabled)} Metadata says running but container is not!"
-        )
-        print(f"  Run 'luskctl task restart {project_id} {task_id}' to fix.")

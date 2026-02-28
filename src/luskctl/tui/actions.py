@@ -25,8 +25,10 @@ from ..lib.containers.task_runners import (
     task_run_web,
 )
 from ..lib.containers.tasks import (
+    effective_status,
     get_login_command,
     get_workspace_git_diff,
+    mark_task_deleting,
     task_delete,
     task_new,
 )
@@ -526,7 +528,7 @@ class ActionsMixin:
             self.notify("No task selected.")
             return
         task = self.current_task
-        if task.mode != "run" or task.status not in ("completed", "failed"):
+        if task.mode != "run" or effective_status(task) not in {"completed", "failed"}:
             self.notify("Follow-up is only available for completed/failed autopilot tasks.")
             return
 
@@ -633,18 +635,19 @@ class ActionsMixin:
             return
 
         tid = self.current_task.task_id
-        if self.current_task.status == "deleting":
+        if self.current_task.deleting:
             self.notify(f"Task {tid} is already deleting.")
             return
 
         self._log_debug(f"delete: start project_id={self.current_project_id} task_id={tid}")
         self.notify(f"Deleting task {tid}...")
 
-        self.current_task.status = "deleting"
+        self.current_task.deleting = True
         task_list = self.query_one("#task-list", TaskList)
         task_list.mark_deleting(tid)
         self._update_task_details()
 
+        mark_task_deleting(self.current_project_id, tid)
         self._queue_task_delete(self.current_project_id, tid)
 
     async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:

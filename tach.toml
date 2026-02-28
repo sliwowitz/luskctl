@@ -357,10 +357,20 @@ expose = [
     "task_logs",
     "task_status",
     "get_tasks",
+    "get_all_task_states",
     "get_login_command",
     "get_workspace_git_diff",
+    "mark_task_deleting",
     "update_task_exit_code",
     "load_task_meta",
+    "effective_status",
+    "mode_emoji",
+    "TaskMeta",
+    "StatusInfo",
+    "ModeInfo",
+    "STATUS_DISPLAY",
+    "MODE_DISPLAY",
+    "WEB_BACKEND_EMOJI",
 ]
 from = ["luskctl.lib.containers.tasks"]
 
@@ -467,6 +477,7 @@ expose = [
     "stop_task_containers",
     "stream_initial_logs",
     "wait_for_exit",
+    "get_project_container_states",
 ]
 from = ["luskctl.lib.containers.runtime"]
 

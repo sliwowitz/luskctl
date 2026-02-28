@@ -16,6 +16,39 @@ def container_name(project_id: str, mode: str, task_id: str) -> str:
     return f"{project_id}-{mode}-{task_id}"
 
 
+def get_project_container_states(project_id: str) -> dict[str, str]:
+    """Return ``{container_name: state}`` for all containers matching *project_id*.
+
+    Uses a single ``podman ps -a`` call with a name filter instead of
+    per-container ``podman inspect`` calls.  Returns an empty dict when
+    podman is unavailable.
+    """
+    try:
+        out = subprocess.check_output(
+            [
+                "podman",
+                "ps",
+                "-a",
+                "--filter",
+                f"name=^{project_id}-",
+                "--format",
+                "{{.Names}} {{.State}}",
+                "--no-trunc",
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {}
+
+    result: dict[str, str] = {}
+    for line in out.strip().splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            result[parts[0]] = parts[1].lower()
+    return result
+
+
 def get_container_state(container_name: str) -> str | None:
     """Return container state: 'running', 'exited', 'paused', etc., or None if not found.
 
