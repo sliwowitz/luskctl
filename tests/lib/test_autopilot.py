@@ -295,7 +295,7 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertIn("--luskctl-timeout", wrapper)
         self.assertIn("_timeout", wrapper)
         # Wrapper should use timeout command when _timeout is set
-        self.assertIn('timeout "$_timeout" command claude', wrapper)
+        self.assertIn('timeout "$_timeout" claude', wrapper)
         # Wrapper should still have the non-timeout path
         self.assertIn('command claude "${_args[@]}" "$@"', wrapper)
         # Both paths should have git env vars
