@@ -1243,3 +1243,68 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
                     meta = yaml.safe_load(meta_path.read_text())
                     self.assertEqual(meta["status"], "running")
+
+    def test_followup_container_not_found(self) -> None:
+        """Follow-up raises SystemExit with 'not found' when container has been removed."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_notfound")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        return_value=None,
+                    ),
+                ):
+                    with self.assertRaises(SystemExit) as ctx:
+                        task_followup_headless("proj_notfound", task_id, "test")
+                    self.assertIn("not found", str(ctx.exception))
+
+    def test_followup_start_fails(self) -> None:
+        """Follow-up sets status to 'failed' and raises SystemExit with 'failed to start'
+        when the container remains exited after podman start."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_startfail")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        side_effect=["exited", "exited"],
+                    ),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    with self.assertRaises(SystemExit) as ctx:
+                        task_followup_headless("proj_startfail", task_id, "test")
+                    self.assertIn("failed to start", str(ctx.exception))
+
+                    meta_path = (
+                        state_dir / "projects" / "proj_startfail" / "tasks" / f"{task_id}.yml"
+                    )
+                    meta = yaml.safe_load(meta_path.read_text())
+                    self.assertEqual(meta["status"], "failed")
