@@ -634,6 +634,26 @@ def main() -> None:
         help="Backend to use when re-running a web task (default: use saved backend)",
     )
 
+    t_followup = tsub.add_parser(
+        "followup", help="Follow up on a completed/failed headless task with a new prompt"
+    )
+    _a = t_followup.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    _a = t_followup.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for Claude")
+    t_followup.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="Detach after starting (don't stream output)",
+    )
+
     t_start = tsub.add_parser(
         "start",
         help="Create a new task and immediately run it (default: CLI mode)",
@@ -819,6 +839,15 @@ def main() -> None:
         elif args.task_cmd == "restart":
             backend = getattr(args, "backend", None)
             task_restart(args.project_id, args.task_id, backend=backend)
+        elif args.task_cmd == "followup":
+            from ..lib.containers.task_runners import task_followup_headless
+
+            task_followup_headless(
+                args.project_id,
+                args.task_id,
+                args.prompt,
+                follow=not getattr(args, "no_follow", False),
+            )
         elif args.task_cmd == "start":
             task_id = task_new(args.project_id)
             selected = getattr(args, "selected_agents", None)

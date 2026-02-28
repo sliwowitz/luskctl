@@ -86,6 +86,7 @@ if _HAS_TEXTUAL:
         "web": "_action_run_web",
         "delete": "action_delete_task",
         "restart": "_action_restart_task",
+        "followup": "_action_task_followup",
         "diff_head": "action_copy_diff_head",
         "diff_prev": "action_copy_diff_prev",
         "login": "_action_login",
@@ -661,6 +662,20 @@ if _HAS_TEXTUAL:
                     self.notify(f"Autopilot task {task_id} completed successfully")
                 else:
                     self.notify(f"Autopilot task {task_id} failed (exit {exit_code})")
+                if project_id == self.current_project_id:
+                    await self.refresh_tasks()
+                return
+
+            if worker.group == "followup-launch":
+                result = worker.result
+                if not result:
+                    return
+                project_id, task_id, error = result
+                if error:
+                    self.notify(f"Follow-up error: {error}")
+                else:
+                    self.notify(f"Follow-up started for task {task_id}")
+                    self._start_autopilot_watcher(project_id, task_id)
                 if project_id == self.current_project_id:
                     await self.refresh_tasks()
                 return
