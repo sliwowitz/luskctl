@@ -542,10 +542,9 @@ def task_followup_headless(
             f"Container {cname} is still running. "
             f"Wait for it to finish or stop it before sending a follow-up."
         )
-    if container_state is None and meta.get("exit_code") is None:
+    if container_state is None:
         raise SystemExit(
-            f"Container {cname} not found and task has no exit code. "
-            f"Cannot follow up — the container may have been removed."
+            f"Container {cname} not found. Cannot follow up — the container may have been removed."
         )
 
     # Update prompt.txt with the new follow-up prompt (after all validation)
