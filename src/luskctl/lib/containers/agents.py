@@ -234,21 +234,13 @@ def _write_session_hook(settings_path: Path) -> None:
     changed = False
 
     hooks_obj = existing.get("hooks")
-    if hooks_obj is None:
-        hooks_obj = {}
-        existing["hooks"] = hooks_obj
-        changed = True
-    elif not isinstance(hooks_obj, dict):
+    if hooks_obj is None or not isinstance(hooks_obj, dict):
         hooks_obj = {}
         existing["hooks"] = hooks_obj
         changed = True
 
     session_hooks_obj = hooks_obj.get("SessionStart")
-    if session_hooks_obj is None:
-        session_hooks_obj = []
-        hooks_obj["SessionStart"] = session_hooks_obj
-        changed = True
-    elif not isinstance(session_hooks_obj, list):
+    if session_hooks_obj is None or not isinstance(session_hooks_obj, list):
         session_hooks_obj = []
         hooks_obj["SessionStart"] = session_hooks_obj
         changed = True
