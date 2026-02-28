@@ -561,8 +561,13 @@ def task_followup_headless(
         raise SystemExit(
             f"Container {cname} not found. Cannot follow up — the container may have been removed."
         )
+    if container_state == "running":
+        raise SystemExit(
+            f"Container {cname} is still running. "
+            f"Wait for it to finish or stop it before sending a follow-up."
+        )
 
-    # Update prompt.txt with the new follow-up prompt
+    # Update prompt.txt with the new follow-up prompt (after all validation)
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
     (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
@@ -579,6 +584,16 @@ def task_followup_headless(
         raise SystemExit("podman not found; please install podman")
     except subprocess.CalledProcessError as e:
         raise SystemExit(f"Failed to start container: {e}")
+
+    # Verify the container actually started before updating metadata
+    post_state = get_container_state(cname)
+    if post_state != "running":
+        meta["status"] = "failed"
+        meta_path.write_text(yaml.safe_dump(meta))
+        raise SystemExit(
+            f"Container {cname} failed to start for follow-up (state: {post_state}). "
+            f"Check logs with: podman logs {cname}"
+        )
 
     meta["status"] = "running"
     meta_path.write_text(yaml.safe_dump(meta))

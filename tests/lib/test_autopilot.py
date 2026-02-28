@@ -1015,7 +1015,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     ) as run_mock,
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
@@ -1055,7 +1055,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     ) as run_mock,
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
@@ -1132,6 +1132,33 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                         task_followup_headless("proj_run", task_id, "test")
                     self.assertIn("not in a follow-up-able state", str(ctx.exception))
 
+    def test_followup_rejects_running_container(self) -> None:
+        """Follow-up rejects when container is still running (stale metadata)."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_crun")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        return_value="running",
+                    ),
+                ):
+                    with self.assertRaises(SystemExit) as ctx:
+                        task_followup_headless("proj_crun", task_id, "test")
+                    self.assertIn("still running", str(ctx.exception))
+
     def test_followup_updates_metadata(self) -> None:
         """Follow-up updates task status to running then completed."""
         with tempfile.TemporaryDirectory() as td:
@@ -1155,7 +1182,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     ) as run_mock,
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
-                        return_value="exited",
+                        side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
