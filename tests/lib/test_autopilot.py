@@ -349,6 +349,32 @@ class WriteSessionHookTests(unittest.TestCase):
             hooks = data["hooks"]["SessionStart"]
             self.assertEqual(len(hooks), 1)
 
+    def test_does_not_rewrite_when_hook_already_present(self) -> None:
+        """If equivalent hook exists, keep existing file content unchanged."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            original = (
+                '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"python3 -c \\"import json,sys; '
+                "print(json.load(sys.stdin)['session_id'])\\\" > /home/dev/.luskctl/claude-session.txt\"}]}]}}"
+            )
+            settings_path.write_text(original, encoding="utf-8")
+
+            _write_session_hook(settings_path)
+
+            self.assertEqual(settings_path.read_text(encoding="utf-8"), original)
+
+    def test_handles_non_dict_hooks_shape(self) -> None:
+        """Recovers if hooks shape is invalid and still writes SessionStart hook."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            settings_path.write_text('{"hooks": "invalid", "permissions": {"allow": ["Read"]}}')
+
+            _write_session_hook(settings_path)
+
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["permissions"], {"allow": ["Read"]})
+            self.assertIn("SessionStart", data["hooks"])
+
 
 class StreamUntilExitTests(unittest.TestCase):
     """Tests for _stream_until_exit and _get_container_exit_code."""
@@ -532,7 +558,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("--dangerously-skip-permissions", content)
 
     def test_headless_writes_session_hook_settings(self) -> None:
-        """task_run_headless writes .claude/settings.json with SessionStart hook."""
+        """task_run_headless writes shared Claude settings with SessionStart hook."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_hook")
@@ -562,15 +588,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     with redirect_stdout(buffer):
                         task_run_headless("proj_hook", "test")
 
-                    settings = (
-                        state_dir
-                        / "tasks"
-                        / "proj_hook"
-                        / "1"
-                        / "workspace"
-                        / ".claude"
-                        / "settings.json"
-                    )
+                    settings = base / "envs" / "_claude-config" / "settings.json"
                     self.assertTrue(settings.is_file())
                     data = json.loads(settings.read_text())
                     self.assertIn("SessionStart", data["hooks"])
