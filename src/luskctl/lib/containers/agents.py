@@ -189,7 +189,7 @@ def _generate_claude_wrapper(
     lines.append("        GIT_AUTHOR_EMAIL=noreply@anthropic.com \\")
     lines.append(f"        GIT_COMMITTER_NAME=${{HUMAN_GIT_NAME:-{human_name}}} \\")
     lines.append(f"        GIT_COMMITTER_EMAIL=${{HUMAN_GIT_EMAIL:-{human_email}}} \\")
-    lines.append('        timeout "$_timeout" command claude "${_args[@]}" "$@"')
+    lines.append('        timeout "$_timeout" claude "${_args[@]}" "$@"')
     lines.append("    else")
     lines.append("        GIT_AUTHOR_NAME=Claude \\")
     lines.append("        GIT_AUTHOR_EMAIL=noreply@anthropic.com \\")
