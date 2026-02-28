@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 import unittest.mock
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -374,6 +375,19 @@ class WriteSessionHookTests(unittest.TestCase):
             data = json.loads(settings_path.read_text(encoding="utf-8"))
             self.assertEqual(data["permissions"], {"allow": ["Read"]})
             self.assertIn("SessionStart", data["hooks"])
+
+    def test_concurrent_writes_keep_single_valid_hook(self) -> None:
+        """Concurrent writes keep settings valid and avoid duplicate SessionStart entries."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(_write_session_hook, settings_path) for _ in range(48)]
+                for future in futures:
+                    future.result()
+
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            hooks = data["hooks"]["SessionStart"]
+            self.assertEqual(len(hooks), 1)
 
 
 class StreamUntilExitTests(unittest.TestCase):

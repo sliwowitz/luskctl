@@ -6,12 +6,14 @@ sets up git identity and CLI flags inside task containers.
 """
 
 import json
+import os
 import shlex
+import tempfile
 from pathlib import Path
 
 import yaml
 
-from .._util.fs import ensure_dir
+from .._util.fs import ensure_dir, ensure_dir_writable
 from ..core.config import get_envs_base_dir
 from ..core.projects import Project
 
@@ -215,65 +217,93 @@ def _write_session_hook(settings_path: Path) -> None:
 
     If the settings file already exists, the hook config is merged into it
     (preserving any existing settings).
+
+    Updates are serialized with an inter-process file lock and persisted via
+    atomic replace to avoid clobbering concurrent task launches.
     """
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - fcntl is unavailable on some platforms.
+        fcntl = None  # type: ignore[assignment]
+
     hook_command = (
         "python3 -c \"import json,sys; print(json.load(sys.stdin)['session_id'])\""
         " > /home/dev/.luskctl/claude-session.txt"
     )
     hook_entry = {"hooks": [{"type": "command", "command": hook_command}]}
-
-    if settings_path.is_file():
+    lock_path = settings_path.with_suffix(settings_path.suffix + ".lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         try:
-            loaded = json.loads(settings_path.read_text(encoding="utf-8"))
-            existing = loaded if isinstance(loaded, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            existing = {}
-    else:
-        existing = {}
+            if settings_path.is_file():
+                try:
+                    loaded = json.loads(settings_path.read_text(encoding="utf-8"))
+                    existing = loaded if isinstance(loaded, dict) else {}
+                except (json.JSONDecodeError, OSError):
+                    existing = {}
+            else:
+                existing = {}
 
-    changed = False
+            changed = False
 
-    hooks_obj = existing.get("hooks")
-    if hooks_obj is None or not isinstance(hooks_obj, dict):
-        hooks_obj = {}
-        existing["hooks"] = hooks_obj
-        changed = True
+            hooks_obj = existing.get("hooks")
+            if hooks_obj is None or not isinstance(hooks_obj, dict):
+                hooks_obj = {}
+                existing["hooks"] = hooks_obj
+                changed = True
 
-    session_hooks_obj = hooks_obj.get("SessionStart")
-    if session_hooks_obj is None or not isinstance(session_hooks_obj, list):
-        session_hooks_obj = []
-        hooks_obj["SessionStart"] = session_hooks_obj
-        changed = True
+            session_hooks_obj = hooks_obj.get("SessionStart")
+            if session_hooks_obj is None or not isinstance(session_hooks_obj, list):
+                session_hooks_obj = []
+                hooks_obj["SessionStart"] = session_hooks_obj
+                changed = True
 
-    session_hooks: list = session_hooks_obj
+            session_hooks: list = session_hooks_obj
 
-    # Idempotent across equivalent forms: skip append if an existing SessionStart
-    # command already writes session_id to claude-session.txt.
-    hook_present = False
-    for item in session_hooks:
-        if item == hook_entry:
-            hook_present = True
-            break
-        if not isinstance(item, dict):
-            continue
-        nested = item.get("hooks")
-        if not isinstance(nested, list):
-            continue
-        for nested_item in nested:
-            if not isinstance(nested_item, dict):
-                continue
-            if nested_item.get("command") == hook_command:
-                hook_present = True
-                break
-        if hook_present:
-            break
+            # Idempotent across equivalent forms: skip append if an existing SessionStart
+            # command already writes session_id to claude-session.txt.
+            hook_present = False
+            for item in session_hooks:
+                if item == hook_entry:
+                    hook_present = True
+                    break
+                if not isinstance(item, dict):
+                    continue
+                nested = item.get("hooks")
+                if not isinstance(nested, list):
+                    continue
+                for nested_item in nested:
+                    if not isinstance(nested_item, dict):
+                        continue
+                    if nested_item.get("command") == hook_command:
+                        hook_present = True
+                        break
+                if hook_present:
+                    break
 
-    if not hook_present:
-        session_hooks.append(hook_entry)
-        changed = True
+            if not hook_present:
+                session_hooks.append(hook_entry)
+                changed = True
 
-    if changed:
-        settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+            if changed:
+                tmp_path: Path | None = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        "w",
+                        encoding="utf-8",
+                        dir=settings_path.parent,
+                        delete=False,
+                    ) as tmp_file:
+                        tmp_file.write(json.dumps(existing, indent=2) + "\n")
+                        tmp_path = Path(tmp_file.name)
+                    os.replace(tmp_path, settings_path)
+                finally:
+                    if tmp_path is not None and tmp_path.exists():
+                        tmp_path.unlink()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def prepare_agent_config_dir(
@@ -318,7 +348,7 @@ def prepare_agent_config_dir(
     # This keeps /workspace clean for init clone while preserving task-local
     # resume behavior.
     shared_claude_dir = get_envs_base_dir() / "_claude-config"
-    ensure_dir(shared_claude_dir)
+    ensure_dir_writable(shared_claude_dir, "_claude-config")
     _write_session_hook(shared_claude_dir / "settings.json")
 
     # Prompt (headless only)
