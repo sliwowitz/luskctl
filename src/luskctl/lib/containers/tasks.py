@@ -57,7 +57,7 @@ STATUS_DISPLAY: dict[str, StatusInfo] = {
     "stopped": StatusInfo(label="stopped", emoji="⏸️", color="yellow"),
     "completed": StatusInfo(label="completed", emoji="✅", color="green"),
     "failed": StatusInfo(label="failed", emoji="❌", color="red"),
-    "created": StatusInfo(label="created", emoji="🆕", color="dim"),
+    "created": StatusInfo(label="created", emoji="🆕", color="yellow"),
     "not found": StatusInfo(label="not found", emoji="❓", color="yellow"),
     "deleting": StatusInfo(label="deleting", emoji="🗑️", color="yellow"),
 }
