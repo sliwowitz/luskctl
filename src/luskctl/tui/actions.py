@@ -25,6 +25,7 @@ from ..lib.containers.task_runners import (
     task_run_web,
 )
 from ..lib.containers.tasks import (
+    effective_status,
     get_login_command,
     get_workspace_git_diff,
     mark_task_deleting,
@@ -527,7 +528,7 @@ class ActionsMixin:
             self.notify("No task selected.")
             return
         task = self.current_task
-        if task.mode != "run" or task.exit_code is None:
+        if task.mode != "run" or effective_status(task) not in {"completed", "failed"}:
             self.notify("Follow-up is only available for completed/failed autopilot tasks.")
             return
 

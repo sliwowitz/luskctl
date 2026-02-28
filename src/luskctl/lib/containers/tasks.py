@@ -422,13 +422,16 @@ def load_task_meta(
 
 def mark_task_deleting(project_id: str, task_id: str) -> None:
     """Persist ``deleting: true`` to the task's YAML metadata file."""
-    meta_dir = _tasks_meta_dir(project_id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        return
-    meta = yaml.safe_load(meta_path.read_text()) or {}
-    meta["deleting"] = True
-    meta_path.write_text(yaml.safe_dump(meta))
+    try:
+        meta_dir = _tasks_meta_dir(project_id)
+        meta_path = meta_dir / f"{task_id}.yml"
+        if not meta_path.is_file():
+            return
+        meta = yaml.safe_load(meta_path.read_text()) or {}
+        meta["deleting"] = True
+        meta_path.write_text(yaml.safe_dump(meta))
+    except Exception as e:
+        _log_debug(f"mark_task_deleting: failed project_id={project_id} task_id={task_id}: {e}")
 
 
 def task_delete(project_id: str, task_id: str) -> None:
