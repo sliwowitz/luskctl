@@ -522,6 +522,89 @@ def task_run_headless(
     return task_id
 
 
+def task_followup_headless(
+    project_id: str,
+    task_id: str,
+    prompt: str,
+    follow: bool = True,
+) -> None:
+    """Send a follow-up prompt to a completed/failed headless task.
+
+    Updates prompt.txt in the existing agent-config directory and restarts
+    the stopped container via ``podman start``.  The claude wrapper
+    automatically resumes the previous session via ``--resume`` from
+    ``claude-session.txt`` (written by the SessionStart hook).
+
+    Per-run flags (model, max_turns, timeout) carry forward from the
+    original ``task_run_headless`` invocation since ``podman start``
+    re-executes the same container command.
+    """
+    project = load_project(project_id)
+    meta, meta_path = load_task_meta(project.id, task_id)
+
+    mode = meta.get("mode")
+    status = meta.get("status")
+    if mode != "run":
+        raise SystemExit(
+            f"Task {task_id} is not a headless task (mode={mode!r}). "
+            f"Follow-up is only supported for autopilot (mode='run') tasks."
+        )
+    if status not in ("completed", "failed"):
+        raise SystemExit(
+            f"Task {task_id} is not in a follow-up-able state (status={status!r}). "
+            f"Only completed or failed tasks can receive follow-ups."
+        )
+
+    cname = container_name(project.id, "run", task_id)
+    container_state = get_container_state(cname)
+    if container_state is None:
+        raise SystemExit(
+            f"Container {cname} not found. Cannot follow up — the container may have been removed."
+        )
+
+    # Update prompt.txt with the new follow-up prompt
+    task_dir = project.tasks_root / str(task_id)
+    agent_config_dir = task_dir / "agent-config"
+    (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+
+    # Restart the existing container (re-runs the original bash command,
+    # which reads prompt.txt and claude-session.txt from the volume)
+    try:
+        subprocess.run(
+            ["podman", "start", cname],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Failed to start container: {e}")
+
+    meta["status"] = "running"
+    meta_path.write_text(yaml.safe_dump(meta))
+
+    color_enabled = _supports_color()
+
+    if follow:
+        exit_code = wait_for_exit(cname)
+        _print_run_summary(task_dir / "workspace")
+
+        update_task_exit_code(project.id, task_id, exit_code)
+
+        if exit_code != 0:
+            print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
+    else:
+        log_command = f"podman logs -f {cname}"
+        stop_command = f"podman stop {cname}"
+        print(
+            f"\nFollow-up started (detached)."
+            f"\n- Task:  {task_id}"
+            f"\n- Name:  {_green(cname, color_enabled)}"
+            f"\n- Logs:  {_blue(log_command, color_enabled)}"
+            f"\n- Stop:  {_red(stop_command, color_enabled)}\n"
+        )
+
+
 def task_restart(project_id: str, task_id: str, backend: str | None = None) -> None:
     """Restart a task container.
 

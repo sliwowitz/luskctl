@@ -19,7 +19,7 @@ from luskctl.lib.containers.agents import (
     parse_md_agent,
 )
 from luskctl.lib.containers.runtime import _get_container_exit_code, _stream_until_exit
-from luskctl.lib.containers.task_runners import task_run_headless
+from luskctl.lib.containers.task_runners import task_followup_headless, task_run_headless
 from luskctl.lib.core.projects import load_project
 from test_utils import mock_git_config, write_project
 
@@ -948,3 +948,226 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     agents_data = json.loads(agents_file.read_text())
                     self.assertIn("extra-agent", agents_data)
                     self.assertEqual(agents_data["extra-agent"]["prompt"], "I am an extra agent")
+
+
+class TaskFollowupHeadlessTests(unittest.TestCase):
+    """Tests for task_followup_headless."""
+
+    def _make_project(self, base: Path, project_id: str) -> Path:
+        config_root = base / "config"
+        envs_dir = base / "envs"
+        config_root.mkdir(parents=True, exist_ok=True)
+        config_file = base / "config.yml"
+        config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+        write_project(config_root, project_id, f"project:\n  id: {project_id}\n")
+        return config_file
+
+    def _create_completed_task(self, base: Path, project_id: str) -> str:
+        """Create a task via task_run_headless and return the task_id."""
+        config_file = self._make_project(base, project_id)
+        state_dir = base / "state"
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                "LUSKCTL_STATE_DIR": str(state_dir),
+                "LUSKCTL_CONFIG_FILE": str(config_file),
+            },
+            clear=True,
+        ):
+            with (
+                mock_git_config(),
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.subprocess.run"
+                ) as run_mock,
+                unittest.mock.patch(
+                    "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                ),
+                unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+            ):
+                run_mock.return_value = subprocess.CompletedProcess([], 0)
+                buffer = StringIO()
+                with redirect_stdout(buffer):
+                    task_id = task_run_headless(project_id, "initial prompt")
+        return task_id
+
+    def test_followup_writes_new_prompt(self) -> None:
+        """Follow-up overwrites prompt.txt with the new prompt."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_fu")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        return_value="exited",
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                    ),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_followup_headless("proj_fu", task_id, "fix the remaining tests")
+
+                    prompt_file = (
+                        state_dir / "tasks" / "proj_fu" / "1" / "agent-config" / "prompt.txt"
+                    )
+                    self.assertEqual(prompt_file.read_text(), "fix the remaining tests")
+
+    def test_followup_uses_podman_start(self) -> None:
+        """Follow-up uses podman start, not podman run."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_start")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        return_value="exited",
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                    ),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_followup_headless("proj_start", task_id, "continue")
+
+                    cmd = run_mock.call_args[0][0]
+                    self.assertEqual(cmd[0], "podman")
+                    self.assertEqual(cmd[1], "start")
+
+    def test_followup_rejects_non_run_mode(self) -> None:
+        """Follow-up rejects tasks that aren't headless (mode != 'run')."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(base, "proj_mode")
+            state_dir = base / "state"
+
+            # Create a task manually with mode=cli
+            from luskctl.lib.containers.tasks import task_new
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with mock_git_config():
+                    task_id = task_new("proj_mode")
+                    meta_path = state_dir / "projects" / "proj_mode" / "tasks" / f"{task_id}.yml"
+                    meta = yaml.safe_load(meta_path.read_text())
+                    meta["mode"] = "cli"
+                    meta["status"] = "completed"
+                    meta_path.write_text(yaml.safe_dump(meta))
+
+                    with self.assertRaises(SystemExit) as ctx:
+                        task_followup_headless("proj_mode", task_id, "test")
+                    self.assertIn("not a headless task", str(ctx.exception))
+
+    def test_followup_rejects_running_task(self) -> None:
+        """Follow-up rejects tasks that are still running."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_file = self._make_project(base, "proj_run")
+            state_dir = base / "state"
+
+            from luskctl.lib.containers.tasks import task_new
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                },
+                clear=True,
+            ):
+                with mock_git_config():
+                    task_id = task_new("proj_run")
+                    meta_path = state_dir / "projects" / "proj_run" / "tasks" / f"{task_id}.yml"
+                    meta = yaml.safe_load(meta_path.read_text())
+                    meta["mode"] = "run"
+                    meta["status"] = "running"
+                    meta_path.write_text(yaml.safe_dump(meta))
+
+                    with self.assertRaises(SystemExit) as ctx:
+                        task_followup_headless("proj_run", task_id, "test")
+                    self.assertIn("not in a follow-up-able state", str(ctx.exception))
+
+    def test_followup_updates_metadata(self) -> None:
+        """Follow-up updates task status to running then completed."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            task_id = self._create_completed_task(base, "proj_meta2")
+            state_dir = base / "state"
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
+                    "LUSKCTL_STATE_DIR": str(state_dir),
+                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                },
+                clear=True,
+            ):
+                with (
+                    mock_git_config(),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.subprocess.run"
+                    ) as run_mock,
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.get_container_state",
+                        return_value="exited",
+                    ),
+                    unittest.mock.patch(
+                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                    ),
+                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                ):
+                    run_mock.return_value = subprocess.CompletedProcess([], 0)
+                    buffer = StringIO()
+                    with redirect_stdout(buffer):
+                        task_followup_headless("proj_meta2", task_id, "continue")
+
+                    meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
+                    meta = yaml.safe_load(meta_path.read_text())
+                    self.assertEqual(meta["status"], "completed")
+                    self.assertEqual(meta["exit_code"], 0)

@@ -501,6 +501,12 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(Option("run \\[c]li agent", id="cli"))
             options.append(Option("run \\[w]eb UI", id="web"))
             options.append(Option("\\[r]estart container", id="restart"))
+            if (
+                self._task_meta
+                and self._task_meta.mode == "run"
+                and self._task_meta.status in ("completed", "failed")
+            ):
+                options.append(Option("follow \\[u]p with new prompt", id="followup"))
             options.append(None)
             options.append(Option("Copy diff vs \\[H]EAD", id="diff_head"))
             options.append(Option("Copy diff vs \\[P]REV", id="diff_prev"))
@@ -557,6 +563,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             "w": "web",
             "r": "restart",
             "l": "login",
+            "u": "followup",
         }
         if key in lower_map:
             if not self._has_tasks:

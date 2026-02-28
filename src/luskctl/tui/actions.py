@@ -18,6 +18,7 @@ from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import wait_for_container_exit
 from ..lib.containers.runtime import container_name
 from ..lib.containers.task_runners import (
+    task_followup_headless,
     task_restart,
     task_run_cli,
     task_run_headless,
@@ -504,6 +505,52 @@ class ActionsMixin:
         """Background worker: wait for the container to exit and update metadata."""
         exit_code, error = wait_for_container_exit(cname, project_id, task_id)
         return project_id, task_id, exit_code, error
+
+    # ── Follow-up on completed/failed autopilot tasks ──
+
+    async def _action_task_followup(self) -> None:
+        """Follow up on a completed/failed autopilot task with a new prompt."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        task = self.current_task
+        if task.mode != "run" or task.status not in ("completed", "failed"):
+            self.notify("Follow-up is only available for completed/failed autopilot tasks.")
+            return
+
+        from .screens import AutopilotPromptScreen
+
+        await self.push_screen(
+            AutopilotPromptScreen(),
+            self._on_followup_prompt_result,
+        )
+
+    async def _on_followup_prompt_result(self, prompt: str | None) -> None:
+        """Handle the prompt returned from follow-up prompt screen."""
+        if not prompt or not self.current_project_id or not self.current_task:
+            return
+        pid = self.current_project_id
+        tid = self.current_task.task_id
+        self.notify(f"Sending follow-up to task {tid}...")
+        self.run_worker(
+            lambda: self._run_followup_worker(pid, tid, prompt),
+            name=f"followup-launch:{pid}:{tid}",
+            group="followup-launch",
+            thread=True,
+            exit_on_error=False,
+        )
+
+    def _run_followup_worker(
+        self, project_id: str, task_id: str, prompt: str
+    ) -> tuple[str, str, str | None]:
+        """Background worker: call task_followup_headless and return result."""
+        try:
+            task_followup_headless(project_id, task_id, prompt, follow=False)
+            return project_id, task_id, None
+        except SystemExit as e:
+            return project_id, task_id, str(e)
+        except Exception as e:
+            return project_id, task_id, str(e)
 
     async def _action_follow_logs(self) -> None:
         """View logs for a task in the integrated log viewer."""
