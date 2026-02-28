@@ -1,12 +1,12 @@
 """Terminal ANSI formatting helpers.
 
 Core color functions (``supports_color``, ``color``, ``yellow``, ``blue``,
-``green``, ``red``) are defined in ``luskctl.lib._util.ansi`` so that
+``green``, ``red``) are defined in ``luskctl.lib.util.ansi`` so that
 service-layer modules can use them without a cross-layer dependency.
 This module re-exports them and adds higher-level helpers.
 """
 
-from luskctl.lib._util.ansi import (  # noqa: F401  -- re-exports
+from luskctl.lib.util.ansi import (  # noqa: F401  -- re-exports
     blue,
     color,
     green,

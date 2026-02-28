@@ -107,7 +107,7 @@ class ModeEmojiTests(unittest.TestCase):
     """Test mode_emoji() for all modes and web backends."""
 
     def test_cli_mode(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="cli")), "⌨️")
+        self.assertEqual(mode_emoji(_task(mode="cli")), "💻")
 
     def test_run_mode(self) -> None:
         self.assertEqual(mode_emoji(_task(mode="run")), "🚀")
@@ -116,7 +116,7 @@ class ModeEmojiTests(unittest.TestCase):
         self.assertEqual(mode_emoji(_task(mode=None)), "🦗")
 
     def test_web_mode_claude(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="claude")), "✴️")
+        self.assertEqual(mode_emoji(_task(mode="web", backend="claude")), "💠")
 
     def test_web_mode_codex(self) -> None:
         self.assertEqual(mode_emoji(_task(mode="web", backend="codex")), "🌸")
@@ -128,10 +128,10 @@ class ModeEmojiTests(unittest.TestCase):
         self.assertEqual(mode_emoji(_task(mode="web", backend="copilot")), "🤖")
 
     def test_web_mode_unknown_backend(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web", backend="something")), "🕸️")
+        self.assertEqual(mode_emoji(_task(mode="web", backend="something")), "🌍")
 
     def test_web_mode_no_backend(self) -> None:
-        self.assertEqual(mode_emoji(_task(mode="web")), "🕸️")
+        self.assertEqual(mode_emoji(_task(mode="web")), "🌍")
 
     def test_all_known_backends_covered(self) -> None:
         for backend, emoji in WEB_BACKEND_EMOJI.items():

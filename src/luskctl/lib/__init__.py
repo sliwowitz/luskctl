@@ -1,6 +1,6 @@
 """luskctl.lib — business logic layer.
 
 All domain packages live here: core, containers, security, wizards,
-integrations, and _util.  The CLI and TUI presentation layers import
+integrations, and util.  The CLI and TUI presentation layers import
 from this package.
 """

@@ -4,7 +4,7 @@ Modules:
 - luskctl.cli: CLI entry point package (luskctl)
 - luskctl.tui: Text UI entry point package (luskctl-tui)
 - luskctl.ui_utils: Shared UI helpers (terminal ANSI, editor launch)
-- luskctl.lib: Business logic layer (core, containers, security, wizards, integrations, _util)
+- luskctl.lib: Business logic layer (core, containers, security, wizards, integrations, util)
 """
 
 __all__ = [

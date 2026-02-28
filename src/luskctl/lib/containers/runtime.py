@@ -97,7 +97,7 @@ def stop_task_containers(project: Any, task_id: str) -> None:
     container. The task itself is already being deleted at this point, so
     a forceful remove is acceptable and keeps state consistent.
     """
-    from .._util.logging_utils import _log_debug
+    from ..util.logging_utils import _log_debug
 
     # The naming scheme is kept in sync with task_run_cli/task_run_web/task_run_headless.
     names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
@@ -173,7 +173,7 @@ def stream_initial_logs(
     import threading
     import time
 
-    from .._util.logging_utils import _log_debug
+    from ..util.logging_utils import _log_debug
 
     # Mutable container so stream_logs can propagate its result back.
     holder: list[bool] = [False]

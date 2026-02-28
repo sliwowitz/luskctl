@@ -206,7 +206,28 @@ python -m luskctl.tui
 
 ### TUI Notes
 
-- When rendering emoji glyphs in list labels, use `draw_emoji` from `src/luskctl/tui/widgets.py` to pad to a consistent width across terminals.
+#### Emoji width constraints
+
+Terminal emulators and Rich/Textual disagree on the width of emojis that use
+Variation Selector-16 (U+FE0F).  Rich reports 2 cells (per Unicode spec); most
+terminals render 1 cell.  This breaks Textual's layout engine — columns shift,
+panel edges misalign — and **cannot be fixed by padding alone**.
+
+**Rules:**
+
+1. All emojis must be **natively wide** (`East_Asian_Width=W`,
+   `Emoji_Presentation=Yes`).  No VS16 (U+FE0F) sequences.
+2. Verify candidates: `python3 -c "import unicodedata; print(unicodedata.east_asian_width('🟢'))"` → must print `W`.
+3. Use `draw_emoji()` from `luskctl.lib.util.emoji` when rendering emojis in
+   list labels or aligned output (both TUI and CLI).
+4. Emoji definitions live in `luskctl.lib.containers.tasks` (`STATUS_DISPLAY`,
+   `MODE_DISPLAY`, `WEB_BACKEND_EMOJI`).
+5. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
+   natively 2 cells wide — adding a VS16 emoji will fail CI.
+
+See `src/luskctl/lib/util/emoji.py` module docstring for full background,
+references, and future terminal developments to watch (Kitty text sizing
+protocol, Mode 2027, terminal convergence).
 
 ### IDE Setup (PyCharm/VSCode)
 

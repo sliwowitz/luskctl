@@ -62,6 +62,7 @@ depends_on = [
     "luskctl.lib.core.projects",
     "luskctl.lib.core.version",
     "luskctl.lib.facade",
+    "luskctl.lib.util.emoji",
 ]
 
 # Service facade (aggregates shared cross-cutting operations)
@@ -87,13 +88,13 @@ depends_on = [
 [[modules]]
 path = "luskctl.lib.containers.agents"
 layer = "services"
-depends_on = ["luskctl.lib.core.projects", "luskctl.lib._util.fs"]
+depends_on = ["luskctl.lib.core.projects", "luskctl.lib.util.fs"]
 
 # Agent config resolution (layered merging across scopes)
 [[modules]]
 path = "luskctl.lib.containers.agent_config"
 layer = "services"
-depends_on = ["luskctl.lib._util.config_stack", "luskctl.lib.core.config", "luskctl.lib.core.projects"]
+depends_on = ["luskctl.lib.util.config_stack", "luskctl.lib.core.config", "luskctl.lib.core.projects"]
 
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
@@ -105,7 +106,7 @@ depends_on = ["luskctl.lib.containers.tasks"]
 [[modules]]
 path = "luskctl.lib.containers.log_format"
 layer = "services"
-depends_on = ["luskctl.lib._util.ansi"]
+depends_on = ["luskctl.lib.util.ansi"]
 
 # Task metadata, lifecycle, and queries
 [[modules]]
@@ -117,9 +118,10 @@ depends_on = [
     "luskctl.lib.containers.runtime",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
-    "luskctl.lib._util.ansi",
-    "luskctl.lib._util.fs",
-    "luskctl.lib._util.logging_utils",
+    "luskctl.lib.util.ansi",
+    "luskctl.lib.util.emoji",
+    "luskctl.lib.util.fs",
+    "luskctl.lib.util.logging_utils",
 ]
 
 # Task container runners (CLI, web, headless, restart)
@@ -135,21 +137,21 @@ depends_on = [
     "luskctl.lib.containers.tasks",
     "luskctl.lib.core.images",
     "luskctl.lib.core.projects",
-    "luskctl.lib._util.ansi",
-    "luskctl.lib._util.podman",
+    "luskctl.lib.util.ansi",
+    "luskctl.lib.util.podman",
 ]
 
 # Container state, GPU args, log streaming
 [[modules]]
 path = "luskctl.lib.containers.runtime"
 layer = "services"
-depends_on = ["luskctl.lib.core.projects", "luskctl.lib._util.logging_utils"]
+depends_on = ["luskctl.lib.core.projects", "luskctl.lib.util.logging_utils"]
 
 # Task environment & volume mounts
 [[modules]]
 path = "luskctl.lib.containers.environment"
 layer = "services"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib._util.fs"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
 
 # Task port allocation
 [[modules]]
@@ -161,7 +163,7 @@ depends_on = ["luskctl.lib.core.config"]
 [[modules]]
 path = "luskctl.lib.containers.docker"
 layer = "services"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.images", "luskctl.lib.core.projects", "luskctl.lib._util.fs"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.images", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
 
 # Project infrastructure state (queries podman & filesystem)
 [[modules]]
@@ -183,11 +185,11 @@ depends_on = [
 path = "luskctl.lib.security.auth"
 layer = "services"
 depends_on = [
-    "luskctl.lib._util.podman",
+    "luskctl.lib.util.podman",
     "luskctl.lib.core.config",
     "luskctl.lib.core.images",
     "luskctl.lib.core.projects",
-    "luskctl.lib._util.fs",
+    "luskctl.lib.util.fs",
 ]
 
 # SSH key management
@@ -197,8 +199,8 @@ layer = "services"
 depends_on = [
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
-    "luskctl.lib._util.fs",
-    "luskctl.lib._util.template_utils",
+    "luskctl.lib.util.fs",
+    "luskctl.lib.util.template_utils",
 ]
 
 # Git gate sync & validation
@@ -218,8 +220,8 @@ layer = "services"
 depends_on = [
     "luskctl.lib.core.config",
     "luskctl.ui_utils.editor",
-    "luskctl.lib._util.fs",
-    "luskctl.lib._util.template_utils",
+    "luskctl.lib.util.fs",
+    "luskctl.lib.util.template_utils",
 ]
 
 # ── CORE LAYER ──────────────────────────────────────────────────────
@@ -255,7 +257,7 @@ depends_on = ["luskctl.lib.core.paths"]
 [[modules]]
 path = "luskctl.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib._util.config_stack"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.util.config_stack"]
 
 # Image naming conventions
 [[modules]]
@@ -271,7 +273,7 @@ depends_on = []
 [[modules]]
 path = "luskctl.ui_utils.terminal"
 layer = "core"
-depends_on = ["luskctl.lib._util.ansi"]
+depends_on = ["luskctl.lib.util.ansi"]
 utility = true
 
 # $EDITOR launching
@@ -282,47 +284,54 @@ depends_on = []
 utility = true
 
 #
-# ·· _util ··  Pure internal helpers
+# ·· util ··  Pure internal helpers
 #
 
 # Podman user namespace handling
 [[modules]]
-path = "luskctl.lib._util.podman"
+path = "luskctl.lib.util.podman"
 layer = "core"
 depends_on = []
 utility = true
 
 # Filesystem helpers (mkdir, writable check)
 [[modules]]
-path = "luskctl.lib._util.fs"
+path = "luskctl.lib.util.fs"
 layer = "core"
 depends_on = []
 utility = true
 
 # Simple {{VAR}} template rendering
 [[modules]]
-path = "luskctl.lib._util.template_utils"
+path = "luskctl.lib.util.template_utils"
 layer = "core"
 depends_on = []
 utility = true
 
 # ANSI color utilities (used by services layer)
 [[modules]]
-path = "luskctl.lib._util.ansi"
+path = "luskctl.lib.util.ansi"
 layer = "core"
 depends_on = []
 utility = true
 
 # Debug logging stub
 [[modules]]
-path = "luskctl.lib._util.logging_utils"
+path = "luskctl.lib.util.logging_utils"
+layer = "core"
+depends_on = []
+utility = true
+
+# Emoji display-width utilities
+[[modules]]
+path = "luskctl.lib.util.emoji"
 layer = "core"
 depends_on = []
 utility = true
 
 # Generic layered config resolution
 [[modules]]
-path = "luskctl.lib._util.config_stack"
+path = "luskctl.lib.util.config_stack"
 layer = "core"
 depends_on = []
 utility = true
@@ -517,12 +526,17 @@ from = ["luskctl.lib.facade"]
 # Config stack utility interface
 [[interfaces]]
 expose = ["deep_merge", "ConfigScope", "ConfigStack", "load_yaml_scope", "load_json_scope"]
-from = ["luskctl.lib._util.config_stack"]
+from = ["luskctl.lib.util.config_stack"]
+
+# Emoji utility interface
+[[interfaces]]
+expose = ["draw_emoji"]
+from = ["luskctl.lib.util.emoji"]
 
 # Filesystem utility interface
 [[interfaces]]
 expose = ["ensure_dir", "ensure_dir_writable"]
-from = ["luskctl.lib._util.fs"]
+from = ["luskctl.lib.util.fs"]
 
 # Port allocation interface
 [[interfaces]]

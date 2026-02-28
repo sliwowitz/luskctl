@@ -14,11 +14,11 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 
-from .._util.fs import ensure_dir_writable
-from .._util.podman import _podman_userns_args
 from ..core.config import get_envs_base_dir
 from ..core.images import project_cli_image
 from ..core.projects import load_project
+from ..util.fs import ensure_dir_writable
+from ..util.podman import _podman_userns_args
 
 # ---------------------------------------------------------------------------
 # Provider descriptor

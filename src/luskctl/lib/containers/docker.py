@@ -9,7 +9,6 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .._util.fs import ensure_dir
 from ..core.config import build_root
 from ..core.images import (
     agent_cli_image,
@@ -20,6 +19,7 @@ from ..core.images import (
     project_web_image,
 )
 from ..core.projects import effective_ssh_key_name, load_project
+from ..util.fs import ensure_dir
 
 # ---------- helpers ----------
 

@@ -14,7 +14,7 @@ import sys
 from enum import Enum, auto
 from typing import Protocol
 
-from .._util.ansi import blue, green, red, supports_color, yellow
+from ..util.ansi import blue, green, red, supports_color, yellow
 
 # ---------------------------------------------------------------------------
 # Formatter protocol
