@@ -559,14 +559,12 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
         """Validate and dismiss with the sanitized name, or show an error."""
         inp = self.query_one("#name-input", Input)
         raw = inp.value.strip()
-        # Fall back to generated default if field is blank
-        if not raw:
-            if not self._default_name:
-                self.notify("Name cannot be empty.")
-                return
-            self.dismiss(self._default_name)
+        # Fall back to default if field is blank, then run full validation pipeline
+        candidate = raw or self._default_name
+        if not candidate:
+            self.notify("Name cannot be empty.")
             return
-        sanitized = sanitize_task_name(raw)
+        sanitized = sanitize_task_name(candidate)
         if sanitized is None:
             self.notify("Invalid name: must contain at least one alphanumeric character.")
             return
