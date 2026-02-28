@@ -49,6 +49,8 @@ _STYLE_SUMMARY = Style(color="yellow")
 
 
 class _StreamState(Enum):
+    """Tracks which streaming content block the formatter is currently inside."""
+
     IDLE = auto()
     TEXT_BLOCK = auto()
     TOOL_USE_BLOCK = auto()
@@ -63,6 +65,12 @@ class _TuiLogFormatter:
     """
 
     def __init__(self, *, streaming: bool = True) -> None:
+        """Initialize the formatter.
+
+        Args:
+            streaming: When True, handle incremental ``content_block_*`` events
+                       (follow mode).  When False, only handle complete messages.
+        """
         self._streaming = streaming
         self._state = _StreamState.IDLE
         self._tool_input_buf: list[str] = []
@@ -119,6 +127,7 @@ class _TuiLogFormatter:
     # -- message handlers --
 
     def _handle_system(self, data: dict) -> list[Text]:
+        """Format a ``system`` event (e.g. session init with model and tool count)."""
         subtype = data.get("subtype", "")
         if subtype == "init":
             session_id = data.get("session_id", "")
@@ -134,6 +143,7 @@ class _TuiLogFormatter:
         return []
 
     def _handle_assistant(self, data: dict) -> list[Text]:
+        """Format a complete ``assistant`` message (text blocks and tool-use blocks)."""
         out: list[Text] = []
         message = data.get("message", {})
         content = message.get("content", [])
@@ -151,6 +161,7 @@ class _TuiLogFormatter:
         return out
 
     def _handle_user(self, data: dict) -> list[Text]:
+        """Format a ``user`` message, extracting tool results and error status."""
         out: list[Text] = []
         message = data.get("message", {})
         content = message.get("content", [])
@@ -182,12 +193,14 @@ class _TuiLogFormatter:
         return out
 
     def _handle_result(self, data: dict) -> list[Text]:
+        """Stash a ``result`` event for display in ``finish()``."""
         self._result = data
         return []
 
     # -- streaming event handlers --
 
     def _handle_block_start(self, data: dict) -> list[Text]:
+        """Begin a new streaming content block (text or tool-use)."""
         content_block = data.get("content_block", {})
         block_type = content_block.get("type", "")
         if block_type == "text":
@@ -201,6 +214,7 @@ class _TuiLogFormatter:
         return []
 
     def _handle_block_delta(self, data: dict) -> list[Text]:
+        """Accumulate incremental text or tool-input JSON from a streaming delta."""
         delta = data.get("delta", {})
         delta_type = delta.get("type", "")
         if self._state == _StreamState.TEXT_BLOCK and delta_type == "text_delta":
@@ -214,6 +228,7 @@ class _TuiLogFormatter:
         return []
 
     def _handle_block_stop(self, _data: dict) -> list[Text]:
+        """Finalize the current streaming block and emit buffered content."""
         out: list[Text] = []
         if self._state == _StreamState.TEXT_BLOCK:
             text = "".join(self._text_buf)
@@ -235,6 +250,7 @@ class _TuiLogFormatter:
     # -- helpers --
 
     def _format_tool_input(self, tool_input: dict[str, object] | str) -> list[Text]:
+        """Render tool-use input as key-value lines, truncating long values."""
         out: list[Text] = []
         if isinstance(tool_input, dict):
             for k, v in tool_input.items():
@@ -247,6 +263,7 @@ class _TuiLogFormatter:
         return out
 
     def _format_result_summary(self) -> list[Text]:
+        """Build a one-line summary showing cost, duration, tokens, and error status."""
         data = self._result
         if not data:
             return []
@@ -287,11 +304,13 @@ class _PlainTextTuiFormatter:
     """Pass-through formatter that wraps each non-empty line in a ``Text``."""
 
     def feed_line(self, line: str) -> list[Text]:
+        """Wrap a non-empty log line in a plain ``Text`` object."""
         if not line.strip():
             return []
         return [Text(line.rstrip("\r\n"))]
 
     def finish(self) -> list[Text]:
+        """No-op; plain text mode has no buffered state to flush."""
         return []
 
 
@@ -344,6 +363,15 @@ class LogViewerScreen(screen.Screen[None]):
         *,
         follow: bool = True,
     ) -> None:
+        """Create a log viewer for a container.
+
+        Args:
+            project_id: Parent project identifier.
+            task_id: Task whose logs to display.
+            mode: Agent run mode (``run``, ``chat``, etc.) — controls formatter choice.
+            container_name: Podman container name for ``podman logs``.
+            follow: If True, stream logs in real-time with auto-scroll.
+        """
         super().__init__()
         self.project_id = project_id
         self.task_id = task_id
@@ -354,6 +382,7 @@ class LogViewerScreen(screen.Screen[None]):
         self._process: subprocess.Popen | None = None
 
     def compose(self) -> ComposeResult:
+        """Build the header, RichLog body, and keybinding footer."""
         scroll_label = "AUTO-SCROLL" if self.follow else "SCROLL PAUSED"
         yield Static(
             f" Task {self.task_id} ({self.mode}) | {self.container_name} \\[{scroll_label}]",
@@ -363,6 +392,7 @@ class LogViewerScreen(screen.Screen[None]):
         yield Static(" \\[Esc/q] Back  \\[f] Toggle scroll  \\[c] Clear", id="log-footer")
 
     def on_mount(self) -> None:
+        """Start the background log-streaming worker when the screen is mounted."""
         self.run_worker(self._stream_logs, thread=True, group="log-stream")
 
     def _stream_logs(self) -> None:
@@ -442,6 +472,7 @@ class LogViewerScreen(screen.Screen[None]):
         self.app.call_from_thread(self._write_to_log, text)
 
     def _write_to_log(self, text: Text) -> None:
+        """Append a ``Text`` object to the RichLog widget (must run on main thread)."""
         try:
             log_widget = self.query_one("#log-view", RichLog)
             log_widget.write(text)
@@ -452,6 +483,7 @@ class LogViewerScreen(screen.Screen[None]):
         """Update footer to reflect STATIC mode after stream ends."""
 
         def _update() -> None:
+            """Switch footer text and disable auto-scroll on the main thread."""
             try:
                 footer = self.query_one("#log-footer", Static)
                 footer.update(" \\[Esc/q] Back  \\[f] Toggle scroll  \\[c] Clear  \\[STREAM ENDED]")
@@ -473,10 +505,12 @@ class LogViewerScreen(screen.Screen[None]):
     # -- actions --
 
     def action_dismiss_screen(self) -> None:
+        """Stop the log stream and dismiss this screen."""
         self._cleanup_process()
         self.dismiss(None)
 
     def action_toggle_follow(self) -> None:
+        """Toggle auto-scroll and update the header label to reflect the new state."""
         self.follow = not self.follow
         try:
             log_widget = self.query_one("#log-view", RichLog)
@@ -490,6 +524,7 @@ class LogViewerScreen(screen.Screen[None]):
             pass
 
     def action_clear_log(self) -> None:
+        """Clear all output in the RichLog widget."""
         try:
             log_widget = self.query_one("#log-view", RichLog)
             log_widget.clear()
@@ -497,4 +532,5 @@ class LogViewerScreen(screen.Screen[None]):
             pass
 
     def on_unmount(self) -> None:
+        """Ensure the subprocess is terminated when the screen is removed."""
         self._cleanup_process()
