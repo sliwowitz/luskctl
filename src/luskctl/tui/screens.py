@@ -202,7 +202,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self.dismiss("init_ssh")
 
     def action_auth(self) -> None:
-        """Open the agent authentication modal."""
+        """Open the authentication modal."""
         self._open_auth_modal()
 
 
@@ -212,7 +212,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
 
 class AuthActionsScreen(screen.ModalScreen[str | None]):
-    """Small modal for selecting which agent to authenticate.
+    """Small modal for selecting an authentication provider.
 
     Options are built dynamically from ``AUTH_PROVIDERS``.
     Number keys (1-9) act as shortcuts for the corresponding list entry.
