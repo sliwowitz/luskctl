@@ -310,6 +310,7 @@ def task_run_web(
     #
     # We treat the appearance of this as the readiness signal.
     def _web_ready(line: str) -> bool:
+        """Return True if *line* contains the LuskUI readiness marker."""
         line = line.strip()
         if not line:
             return False

@@ -1,3 +1,5 @@
+"""Filesystem helpers for directory creation and writability checks."""
+
 import os
 from pathlib import Path
 
@@ -8,6 +10,7 @@ def ensure_dir(path: Path) -> None:
 
 
 def ensure_dir_writable(path: Path, label: str) -> None:
+    """Create *path* if needed and verify it is writable, or exit with an error."""
     try:
         path.mkdir(parents=True, exist_ok=True)
     except Exception as e:

@@ -1,3 +1,5 @@
+"""Global configuration, directory helpers, and preset/image path resolution."""
+
 import os
 import sys
 from collections.abc import Callable
@@ -93,6 +95,7 @@ def global_config_path() -> Path:
 
 
 def load_global_config() -> dict[str, Any]:
+    """Load and return the global luskctl configuration as a dict."""
     cfg_path = global_config_path()
     if not cfg_path.is_file():
         return {}
@@ -163,6 +166,7 @@ def user_projects_root() -> Path:
     """
 
     def _default() -> Path:
+        """Return XDG-based default path for user projects."""
         xdg = os.environ.get("XDG_CONFIG_HOME")
         if xdg:
             return Path(xdg) / "luskctl" / "projects"
@@ -181,6 +185,7 @@ def global_presets_dir() -> Path:
     """
 
     def _default() -> Path:
+        """Return XDG-based default path for global presets."""
         xdg = os.environ.get("XDG_CONFIG_HOME")
         if xdg:
             return Path(xdg) / "luskctl" / "presets"

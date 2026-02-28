@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""CLI entry point and argument parser for luskctl."""
 
 import argparse
 import os
@@ -64,6 +65,7 @@ except ImportError:  # pragma: no cover - optional dep
 def _complete_project_ids(
     prefix: str, parsed_args, **kwargs
 ):  # pragma: no cover - shell integration
+    """Return project IDs matching *prefix* for argcomplete."""
     try:
         ids = [p.id for p in list_projects()]
     except Exception:
@@ -74,6 +76,7 @@ def _complete_project_ids(
 
 
 def _complete_task_ids(prefix: str, parsed_args, **kwargs):  # pragma: no cover - shell integration
+    """Return task IDs matching *prefix* for argcomplete."""
     project_id = getattr(parsed_args, "project_id", None)
     if not project_id:
         return []
@@ -290,6 +293,7 @@ def _print_config() -> None:
 
 
 def main() -> None:
+    """Parse CLI arguments and dispatch to the appropriate command handler."""
     # Get version info for --version flag
     version, branch = get_version_info()
     version_string = format_version_string(version, branch)

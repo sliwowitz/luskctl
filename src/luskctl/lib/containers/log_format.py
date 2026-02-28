@@ -42,9 +42,11 @@ class PlainTextFormatter:
     """Pass-through formatter that prints lines unchanged."""
 
     def feed_line(self, line: str) -> None:
+        """Print *line* as-is."""
         print(line, flush=True)
 
     def finish(self) -> None:
+        """No-op; plain text has no summary."""
         pass
 
 
@@ -74,6 +76,7 @@ class ClaudeStreamJsonFormatter:
     """
 
     def __init__(self, *, streaming: bool = True, color: bool | None = None) -> None:
+        """Initialise formatter with streaming and color preferences."""
         self._streaming = streaming
         self._color = color if color is not None else supports_color()
         self._state = _StreamState.IDLE
@@ -85,20 +88,25 @@ class ClaudeStreamJsonFormatter:
     # -- helpers --
 
     def _blue(self, text: str) -> str:
+        """Wrap *text* in blue ANSI if color is enabled."""
         return blue(text, self._color)
 
     def _yellow(self, text: str) -> str:
+        """Wrap *text* in yellow ANSI if color is enabled."""
         return yellow(text, self._color)
 
     def _green(self, text: str) -> str:
+        """Wrap *text* in green ANSI if color is enabled."""
         return green(text, self._color)
 
     def _red(self, text: str) -> str:
+        """Wrap *text* in red ANSI if color is enabled."""
         return red(text, self._color)
 
     # -- line processing --
 
     def feed_line(self, line: str) -> None:
+        """Parse a single NDJSON log line and print formatted output."""
         if not line.strip():
             return
         stripped = line.strip()
@@ -195,6 +203,7 @@ class ClaudeStreamJsonFormatter:
     # -- streaming event handlers --
 
     def _handle_block_start(self, data: dict) -> None:
+        """Begin a new text or tool-use streaming block."""
         content_block = data.get("content_block", {})
         block_type = content_block.get("type", "")
         if block_type == "text":
@@ -206,6 +215,7 @@ class ClaudeStreamJsonFormatter:
             print(self._blue(f"[tool] {self._current_tool_name}"), flush=True)
 
     def _handle_block_delta(self, data: dict) -> None:
+        """Process an incremental text or tool-input delta."""
         delta = data.get("delta", {})
         delta_type = delta.get("type", "")
         if self._state == _StreamState.TEXT_BLOCK and delta_type == "text_delta":
@@ -218,6 +228,7 @@ class ClaudeStreamJsonFormatter:
                 self._tool_input_buf.append(partial)
 
     def _handle_block_stop(self, _data: dict) -> None:
+        """Finalise the current streaming block and flush output."""
         if self._state == _StreamState.TEXT_BLOCK:
             print(flush=True)  # newline after streamed text
         elif self._state == _StreamState.TOOL_USE_BLOCK:
@@ -234,6 +245,7 @@ class ClaudeStreamJsonFormatter:
     # -- tool input formatting --
 
     def _print_tool_input(self, tool_input: dict | str) -> None:
+        """Print tool input key-value pairs, truncating long values."""
         if isinstance(tool_input, dict):
             for k, v in tool_input.items():
                 val_str = str(v)
@@ -246,6 +258,7 @@ class ClaudeStreamJsonFormatter:
     # -- finish --
 
     def finish(self) -> None:
+        """Flush pending output and print the result summary if available."""
         # Flush any in-progress streaming block
         if self._state == _StreamState.TEXT_BLOCK:
             print(flush=True)
@@ -259,6 +272,7 @@ class ClaudeStreamJsonFormatter:
             self._print_result_summary()
 
     def _print_result_summary(self) -> None:
+        """Print cost, duration, and token usage from the result message."""
         data = self._result
         if not data:
             return

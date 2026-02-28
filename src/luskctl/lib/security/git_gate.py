@@ -1,3 +1,5 @@
+"""Host-side git gate (mirror) management and upstream comparison."""
+
 import os
 import shutil
 import subprocess
@@ -128,6 +130,7 @@ def _git_env_with_ssh(project) -> dict:
 
 
 def _require_project_ssh_config(project) -> None:
+    """Raise SystemExit if the project uses an SSH upstream but SSH config is missing."""
     upstream = project.upstream_url or ""
     is_ssh_upstream = upstream.startswith("git@") or upstream.startswith("ssh://")
     if not is_ssh_upstream:
@@ -144,6 +147,7 @@ def _require_project_ssh_config(project) -> None:
 
 
 def _clone_gate_mirror(project, gate_dir: Path) -> None:
+    """Clone the upstream repository as a bare mirror into *gate_dir*."""
     env = _git_env_with_ssh(project)
     cmd = ["git", "clone", "--mirror", project.upstream_url, str(gate_dir)]
     try:

@@ -1,4 +1,4 @@
-.PHONY: lint format test tach check install install-dev clean
+.PHONY: lint format test tach docstrings check install install-dev clean
 
 # Run linter and format checker (fast, run before commits)
 lint:
@@ -18,8 +18,12 @@ test:
 tach:
 	tach check
 
+# Check docstring coverage (minimum 95%)
+docstrings:
+	poetry run docstr-coverage src/luskctl/ --fail-under=95
+
 # Run all checks (equivalent to CI)
-check: lint test tach
+check: lint test tach docstrings
 
 # Install runtime dependencies only
 install:

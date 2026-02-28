@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+"""Luskctl TUI application built on Textual."""
 
 import os
 import sys
 
 
 def enable_pycharm_debugger():
+    """Attach the PyCharm remote debugger when PYCHARM_DEBUG is set."""
     import os
 
     if os.getenv("PYCHARM_DEBUG"):
@@ -169,6 +171,7 @@ if _HAS_TEXTUAL:
         ]
 
         def __init__(self) -> None:
+            """Initialize the TUI, setting up internal state and dynamic title."""
             super().__init__()
             # Set dynamic title with version and branch info
             self._update_title()
@@ -208,6 +211,7 @@ if _HAS_TEXTUAL:
         # ---------- Layout ----------
 
         def compose(self) -> ComposeResult:
+            """Build the two-pane layout: projects/state on the left, tasks/details on the right."""
             # Use Textual's default Header which will show our title
             yield Header()
 
@@ -234,6 +238,7 @@ if _HAS_TEXTUAL:
             yield Footer()
 
         async def on_mount(self) -> None:
+            """Load projects, restore selection state, and start polling on first mount."""
             try:
                 clipboard_status = get_clipboard_helper_status()
                 if not clipboard_status.available:
@@ -353,6 +358,7 @@ if _HAS_TEXTUAL:
         # ---------- Helpers ----------
 
         async def refresh_projects(self) -> None:
+            """Reload all projects and update the project list widget."""
             proj_widget = self.query_one("#project-list", ProjectList)
             projects = list_projects()
             self._projects_by_id = {proj.id: proj for proj in projects}
@@ -387,6 +393,7 @@ if _HAS_TEXTUAL:
                 state_widget.set_state(None, None, None)
 
         async def refresh_tasks(self) -> None:
+            """Reload tasks for the current project and update the task list."""
             if not self.current_project_id:
                 return
             tasks_meta = get_tasks(self.current_project_id, reverse=True)
@@ -409,6 +416,7 @@ if _HAS_TEXTUAL:
                 # are fully mounted.  An immediate ``index = 0`` after clear()
                 # is a no-op because clear() already reset the index to 0.
                 def _apply_selection(idx: int = desired_idx) -> None:
+                    """Set the task list index after layout is complete."""
                     try:
                         task_list.index = idx
                         task_list._post_selected_task()
@@ -427,6 +435,7 @@ if _HAS_TEXTUAL:
             self._refresh_project_state(task_count=task_count)
 
         def _update_task_details(self) -> None:
+            """Refresh the task details panel for the currently selected task."""
             details = self.query_one("#task-details", TaskDetails)
             if self.current_task is None:
                 details.set_task(None)
@@ -470,6 +479,7 @@ if _HAS_TEXTUAL:
         def _load_project_state(
             self, project_id: str
         ) -> tuple[str, CodexProject | None, dict | None, GateStalenessInfo | None, str | None]:
+            """Load project infrastructure state in a background thread."""
             try:
                 project = load_project(project_id)
                 from ..lib.facade import get_gate_last_commit
@@ -488,6 +498,7 @@ if _HAS_TEXTUAL:
                 return project_id, None, None, None, str(e)
 
         def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
+            """Schedule a background check for whether the task's image is outdated."""
             if not project_id or task is None:
                 return
             if task.status == "deleting":
@@ -506,6 +517,7 @@ if _HAS_TEXTUAL:
         def _load_task_image_status(
             self, project_id: str, task: TaskMeta
         ) -> tuple[str, str, bool | None]:
+            """Check whether a task's container image is outdated (runs in thread)."""
             image_old = is_task_image_old(project_id, task)
             return project_id, task.task_id, image_old
 
@@ -549,6 +561,7 @@ if _HAS_TEXTUAL:
 
         @on(Worker.StateChanged)
         async def handle_worker_state_changed(self, event: Worker.StateChanged) -> None:
+            """Dispatch completed worker results to the appropriate UI panel."""
             worker = event.worker
             if event.state != WorkerState.SUCCESS:
                 if worker.group == "project-state" and event.state == WorkerState.ERROR:
@@ -808,6 +821,7 @@ if _HAS_TEXTUAL:
 else:
 
     def main() -> None:
+        """Print an error message when Textual is not installed and exit."""
         print(
             "luskctl TUI requires the 'textual' package.\n"
             "Install it with: pip install 'luskctl[tui]'",

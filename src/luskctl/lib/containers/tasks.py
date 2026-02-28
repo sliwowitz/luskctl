@@ -80,6 +80,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 
 
 def _tasks_meta_dir(project_id: str) -> Path:
+    """Return the directory containing task metadata YAML files for *project_id*."""
     return state_root() / "projects" / project_id / "tasks"
 
 
@@ -168,6 +169,7 @@ def task_new(project_id: str) -> str:
 
 
 def get_tasks(project_id: str, reverse: bool = False) -> list[dict]:
+    """Return all task metadata dicts for *project_id*, sorted by task ID."""
     meta_dir = _tasks_meta_dir(project_id)
     tasks: list[dict] = []
     if not meta_dir.is_dir():
@@ -214,6 +216,7 @@ def task_list(
 
 
 def _check_mode(meta: dict, expected: str) -> None:
+    """Raise SystemExit if the task's mode conflicts with *expected*."""
     mode = meta.get("mode")
     if mode and mode != expected:
         raise SystemExit(f"Task already ran in mode '{mode}', cannot run in '{expected}'")
@@ -482,6 +485,7 @@ def task_logs(
     original_sigint = signal.getsignal(signal.SIGINT)
 
     def _sigint_handler(signum, frame):
+        """Set the interrupted flag on Ctrl+C."""
         nonlocal interrupted
         interrupted = True
 

@@ -31,6 +31,7 @@ WEB_ENV_PASSTHROUGH_KEYS = (
 
 
 def _normalize_web_backend(backend: str | None) -> str | None:
+    """Lowercase and strip a backend name, returning ``None`` for empty values."""
     if backend is None:
         return None
     backend = backend.strip()

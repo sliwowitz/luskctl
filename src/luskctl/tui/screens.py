@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Full-page and modal Textual screens for the luskctl TUI."""
 
 from typing import TypedDict
 
@@ -38,6 +39,7 @@ from .widgets import TaskMeta, render_project_details, render_project_loading, r
 
 
 def _modal_binding(key: str, action: str, description: str) -> tuple | object:
+    """Create a Binding (or plain tuple fallback) for modal screen key shortcuts."""
     if Binding is None:
         return (key, action, description)
     return Binding(key, action, description, show=False)
@@ -105,6 +107,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         task_count: int | None,
         staleness: GateStalenessInfo | None = None,
     ) -> None:
+        """Store the project data to render when the screen is mounted."""
         super().__init__()
         self._project = project
         self._state = state
@@ -112,6 +115,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self._staleness = staleness
 
     def compose(self) -> ComposeResult:
+        """Build the detail pane and categorized action list for a project."""
         detail_pane = Static(id="detail-content")
         detail_pane.border_title = f"Project: {self._project.id}"
         detail_pane.border_subtitle = "Esc to close"
@@ -135,6 +139,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         )
 
     def on_mount(self) -> None:
+        """Render project details and focus the action list."""
         detail_widget = self.query_one("#detail-content", Static)
         if self._state is not None:
             rendered = render_project_details(
@@ -147,6 +152,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         actions.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Dismiss with the chosen action ID, or open the auth sub-modal."""
         option_id = event.option_id
         if option_id == "auth":
             self._open_auth_modal()
@@ -154,38 +160,49 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             self.dismiss(option_id)
 
     def _open_auth_modal(self) -> None:
+        """Push the authentication provider selection modal."""
         self.app.push_screen(AuthActionsScreen(), self._on_auth_result)
 
     def _on_auth_result(self, result: str | None) -> None:
+        """Forward the selected auth action from the sub-modal as this screen's result."""
         if result:
             self.dismiss(result)
 
     # Action methods invoked by BINDINGS
     def action_dismiss(self) -> None:
+        """Close the screen without selecting an action."""
         self.dismiss(None)
 
     def action_project_init(self) -> None:
+        """Trigger the full project initialization pipeline."""
         self.dismiss("project_init")
 
     def action_sync_gate(self) -> None:
+        """Trigger git gate synchronization."""
         self.dismiss("sync_gate")
 
     def action_generate(self) -> None:
+        """Trigger Dockerfile generation."""
         self.dismiss("generate")
 
     def action_build(self) -> None:
+        """Trigger project image build."""
         self.dismiss("build")
 
     def action_build_agents(self) -> None:
+        """Trigger agent image rebuild."""
         self.dismiss("build_agents")
 
     def action_build_full(self) -> None:
+        """Trigger a full no-cache rebuild."""
         self.dismiss("build_full")
 
     def action_init_ssh(self) -> None:
+        """Trigger SSH directory initialization."""
         self.dismiss("init_ssh")
 
     def action_auth(self) -> None:
+        """Open the agent authentication modal."""
         self._open_auth_modal()
 
 
@@ -228,6 +245,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
     """
 
     def compose(self) -> ComposeResult:
+        """Build the numbered list of authentication providers."""
         from ..lib.facade import AUTH_PROVIDERS
 
         options = [
@@ -240,10 +258,12 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         dialog.border_subtitle = "Esc to close"
 
     def on_mount(self) -> None:
+        """Focus the auth provider list on mount."""
         actions = self.query_one("#auth-actions-list", OptionList)
         actions.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Dismiss with the selected provider's action ID."""
         if event.option_id:
             self.dismiss(event.option_id)
 
@@ -259,6 +279,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
                 event.stop()
 
     def action_dismiss(self) -> None:
+        """Close the auth modal without selecting a provider."""
         self.dismiss(None)
 
 
@@ -328,6 +349,7 @@ class AutopilotPromptScreen(screen.ModalScreen[str | None]):
     """
 
     def compose(self) -> ComposeResult:
+        """Build the prompt text area and submit/cancel buttons."""
         with Vertical(id="autopilot-dialog") as dialog:
             yield TextArea(id="prompt-area")
             with Horizontal(id="prompt-buttons"):
@@ -337,22 +359,26 @@ class AutopilotPromptScreen(screen.ModalScreen[str | None]):
         dialog.border_subtitle = "Esc to cancel"
 
     def on_mount(self) -> None:
+        """Focus the text area for immediate typing."""
         area = self.query_one("#prompt-area", TextArea)
         area.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Run or Cancel button clicks."""
         if event.button.id == "btn-run":
             self._submit()
         elif event.button.id == "btn-cancel":
             self.dismiss(None)
 
     def _submit(self) -> None:
+        """Dismiss with the entered prompt text if non-empty."""
         area = self.query_one("#prompt-area", TextArea)
         text = area.text.strip()
         if text:
             self.dismiss(text)
 
     def action_cancel(self) -> None:
+        """Cancel the prompt and dismiss without a result."""
         self.dismiss(None)
 
 
@@ -402,6 +428,7 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
         self._agents = agents
 
     def compose(self) -> ComposeResult:
+        """Build the agent selection list with OK/Cancel buttons."""
         with Vertical(id="agent-dialog") as dialog:
             items = []
             for agent in self._agents:
@@ -419,21 +446,25 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
         dialog.border_subtitle = "Esc to cancel"
 
     def on_mount(self) -> None:
+        """Focus the OK button on mount."""
         btn = self.query_one("#btn-ok", Button)
         btn.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle OK or Cancel button clicks."""
         if event.button.id == "btn-ok":
             self._submit()
         elif event.button.id == "btn-cancel":
             self.dismiss(None)
 
     def _submit(self) -> None:
+        """Dismiss with the list of selected agent names."""
         sel = self.query_one("#agent-selection", SelectionList)
         selected = list(sel.selected)
         self.dismiss(selected)
 
     def action_cancel(self) -> None:
+        """Cancel agent selection and dismiss without a result."""
         self.dismiss(None)
 
 
@@ -470,6 +501,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         project_id: str,
         image_old: bool | None = None,
     ) -> None:
+        """Store task data and context for rendering when the screen mounts."""
         super().__init__()
         self._task_meta = task
         self._has_tasks = has_tasks
@@ -477,6 +509,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         self._image_old = image_old
 
     def compose(self) -> ComposeResult:
+        """Build the detail pane and categorized action list for a task."""
         detail_pane = Static(id="detail-content")
         title = "Task Details"
         if self._task_meta:
@@ -510,6 +543,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         yield OptionList(*options, id="actions-list")
 
     def on_mount(self) -> None:
+        """Render task details and focus the action list."""
         detail_widget = self.query_one("#detail-content", Static)
         rendered = render_task_details(
             self._task_meta,
@@ -522,11 +556,13 @@ class TaskDetailsScreen(screen.Screen[str | None]):
         actions.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        """Dismiss with the chosen action ID."""
         option_id = event.option_id
         if option_id:
             self.dismiss(option_id)
 
     def on_key(self, event: events.Key) -> None:
+        """Handle case-sensitive shortcut keys for task actions."""
         key = event.key  # case-sensitive
 
         if key.lower() in ("escape", "q"):
@@ -572,4 +608,5 @@ class TaskDetailsScreen(screen.Screen[str | None]):
                 event.stop()
 
     def action_dismiss(self) -> None:
+        """Close the task details screen without selecting an action."""
         self.dismiss(None)

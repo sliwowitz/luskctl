@@ -1,3 +1,5 @@
+"""Per-project SSH keypair generation and config directory setup."""
+
 import getpass
 import os
 import socket

@@ -1,3 +1,5 @@
+"""Project discovery, loading, and preset management."""
+
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -52,6 +54,8 @@ def _git_global_identity() -> dict[str, str]:
 
 @dataclass
 class Project:
+    """Resolved project configuration loaded from ``project.yml``."""
+
     id: str
     security_class: str  # "online" | "gatekeeping"
     upstream_url: str | None
@@ -255,6 +259,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
 
 
 def _find_project_root(project_id: str) -> Path:
+    """Return the root directory for *project_id*, preferring user over system."""
     user_root = user_projects_root() / project_id
     sys_root = config_root() / project_id
     if (user_root / "project.yml").is_file():
@@ -296,6 +301,7 @@ def list_projects() -> list[Project]:
 
 
 def load_project(project_id: str) -> Project:
+    """Load and return a fully resolved :class:`Project` from *project_id*."""
     root = _find_project_root(project_id)
     cfg_path = root / "project.yml"
     if not cfg_path.is_file():

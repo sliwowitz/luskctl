@@ -109,6 +109,7 @@ class ConfigStack:
     """
 
     def __init__(self) -> None:
+        """Initialise an empty config stack."""
         self._scopes: list[ConfigScope] = []
 
     def push(self, scope: ConfigScope) -> None:

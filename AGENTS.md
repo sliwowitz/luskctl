@@ -32,9 +32,10 @@ make format    # Auto-fix lint issues if lint fails
 
 **Before pushing:**
 ```bash
-make test      # Run full test suite with coverage
-make tach      # Check module boundary rules (tach.toml)
-make check     # Run lint + test + tach (equivalent to CI)
+make test       # Run full test suite with coverage
+make tach       # Check module boundary rules (tach.toml)
+make docstrings # Check docstring coverage (minimum 95%)
+make check      # Run lint + test + tach + docstrings (equivalent to CI)
 ```
 
 **When `pyproject.toml` changes** (added/removed/changed dependencies):
@@ -58,7 +59,7 @@ make clean        # Remove build artifacts
 - **Line length**: 100 characters (enforced by ruff)
 - **Imports**: Sorted with isort (part of ruff)
 - **Type hints**: Use Python 3.12+ type hints
-- **Docstrings**: Use clear docstrings for public APIs
+- **Docstrings**: Required for all public functions, classes, and modules (enforced by `docstr-coverage` at 95% minimum in CI)
 - **Testing**: Add tests for new functionality; maintain coverage
 
 ## Development Workflow
