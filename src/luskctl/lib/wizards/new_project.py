@@ -10,9 +10,9 @@ from pathlib import Path
 
 from luskctl.ui_utils.editor import open_in_editor
 
-from .._util.fs import ensure_dir_writable
-from .._util.template_utils import render_template
 from ..core.config import user_projects_root
+from ..util.fs import ensure_dir_writable
+from ..util.template_utils import render_template
 
 # Template variants: (label, filename)
 TEMPLATES: list[tuple[str, str]] = [

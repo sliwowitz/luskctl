@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml  # pip install pyyaml
 
-from .._util.config_stack import ConfigScope, ConfigStack
+from ..util.config_stack import ConfigScope, ConfigStack
 from .config import (
     build_root,
     bundled_presets_dir,

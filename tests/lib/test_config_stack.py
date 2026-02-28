@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from luskctl.lib._util.config_stack import (
+from luskctl.lib.util.config_stack import (
     ConfigScope,
     ConfigStack,
     deep_merge,

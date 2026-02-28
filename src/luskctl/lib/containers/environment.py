@@ -11,9 +11,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .._util.fs import ensure_dir_writable
 from ..core.config import get_envs_base_dir
 from ..core.projects import Project
+from ..util.fs import ensure_dir_writable
 
 # ---------- Constants ----------
 

@@ -1,6 +1,6 @@
 """Agent config resolution: layered merging across global, project, preset, and CLI scopes.
 
-Builds a :class:`~luskctl.lib._util.config_stack.ConfigStack` from up to four
+Builds a :class:`~luskctl.lib.util.config_stack.ConfigStack` from up to four
 layers and returns a single merged agent-config dict that can be fed directly
 into :func:`~luskctl.lib.containers.agents.prepare_agent_config_dir`.
 """
@@ -10,9 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from luskctl.lib._util.config_stack import ConfigScope, ConfigStack
 from luskctl.lib.core.config import bundled_presets_dir, get_global_agent_config, global_presets_dir
 from luskctl.lib.core.projects import load_project
+from luskctl.lib.util.config_stack import ConfigScope, ConfigStack
 
 
 def _preset_scope_label(preset_path: Path) -> str:

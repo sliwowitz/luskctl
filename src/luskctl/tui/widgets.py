@@ -4,7 +4,6 @@
 import inspect
 from typing import Any
 
-from rich.cells import cell_len
 from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
@@ -20,6 +19,7 @@ from ..lib.containers.tasks import (
 )
 from ..lib.core.projects import Project as CodexProject
 from ..lib.facade import GateStalenessInfo
+from ..lib.util.emoji import draw_emoji
 
 
 class ProjectListItem(ListItem):
@@ -49,19 +49,6 @@ def get_backend_name(task: TaskMeta) -> str | None:
     Returns the backend name from the task's backend field, or None if not set.
     """
     return task.backend
-
-
-def draw_emoji(emoji: str, width: int = 2) -> str:
-    """Pad emojis to a consistent cell width for list alignment."""
-    if not emoji:
-        return ""
-    try:
-        emoji_width = cell_len(emoji)
-    except Exception:
-        return emoji
-    if emoji_width >= width:
-        return emoji
-    return f"{emoji}{' ' * (width - emoji_width)}"
 
 
 def _get_css_variables(widget: Static) -> dict[str, str]:
@@ -270,7 +257,7 @@ class TaskList(ListView):
             extra_parts.append(f"port={task.web_port}")
         extra_str = "; ".join(extra_parts)
 
-        label = f"{task.task_id} {m_emoji}{s_emoji}[{s_info.label}"
+        label = f"{task.task_id} {m_emoji} {s_emoji} [{s_info.label}"
         if extra_str:
             label += f"; {extra_str}"
         label += "]"
@@ -357,7 +344,7 @@ def render_task_details(
     accent_style = Style(color=variables.get("primary", "cyan"))
     warning_style = Style(color=variables.get("warning", "yellow"))
 
-    m_emoji = mode_emoji(task)
+    m_emoji = draw_emoji(mode_emoji(task))
     m_info = MODE_DISPLAY.get(task.mode, MODE_DISPLAY[None])
     mode_display = m_info.label or "Not assigned (choose CLI or Web mode)"
 
@@ -365,7 +352,7 @@ def render_task_details(
 
     lines = [
         Text(f"Task ID:   {task.task_id}"),
-        Text(f"Status:    {s_info.emoji} {s_info.label}"),
+        Text(f"Status:    {draw_emoji(s_info.emoji)} {s_info.label}"),
         Text(f"Type:      {m_emoji} {mode_display}"),
         Text(f"Workspace: {task.workspace}"),
     ]
@@ -410,7 +397,7 @@ def render_project_loading(
         return Text("No project selected.")
 
     upstream = project.upstream_url or "-"
-    security_emoji = "🚪" if project.security_class == "gatekeeping" else "🌐"
+    security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
     tasks_line = (
         Text("Tasks:     loading") if task_count is None else Text(f"Tasks:     {task_count}")
     )
@@ -478,7 +465,7 @@ def render_project_details(
         Text("Tasks:     unknown") if task_count is None else Text(f"Tasks:     {task_count}")
     )
     upstream = project.upstream_url or "-"
-    security_emoji = "🚪" if project.security_class == "gatekeeping" else "🌐"
+    security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
 
     lines = [
         Text(f"Project:   {project.id} {security_emoji}"),

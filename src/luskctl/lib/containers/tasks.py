@@ -14,16 +14,17 @@ from pathlib import Path
 
 import yaml  # pip install pyyaml
 
-from .._util.ansi import (
+from ..core.config import state_root
+from ..core.projects import Project, load_project
+from ..util.ansi import (
     green as _green,
     red as _red,
     supports_color as _supports_color,
     yellow as _yellow,
 )
-from .._util.fs import ensure_dir
-from .._util.logging_utils import _log_debug
-from ..core.config import state_root
-from ..core.projects import Project, load_project
+from ..util.emoji import draw_emoji
+from ..util.fs import ensure_dir
+from ..util.logging_utils import _log_debug
 from .log_format import auto_detect_formatter
 from .runtime import (
     container_name,
@@ -53,30 +54,30 @@ class ModeInfo:
 
 
 STATUS_DISPLAY: dict[str, StatusInfo] = {
-    "running": StatusInfo(label="running", emoji="▶️", color="green"),
-    "stopped": StatusInfo(label="stopped", emoji="⏸️", color="yellow"),
+    "running": StatusInfo(label="running", emoji="🟢", color="green"),
+    "stopped": StatusInfo(label="stopped", emoji="🟡", color="yellow"),
     "completed": StatusInfo(label="completed", emoji="✅", color="green"),
     "failed": StatusInfo(label="failed", emoji="❌", color="red"),
     "created": StatusInfo(label="created", emoji="🆕", color="yellow"),
     "not found": StatusInfo(label="not found", emoji="❓", color="yellow"),
-    "deleting": StatusInfo(label="deleting", emoji="🗑️", color="yellow"),
+    "deleting": StatusInfo(label="deleting", emoji="🧹", color="yellow"),
 }
 
 MODE_DISPLAY: dict[str | None, ModeInfo] = {
-    "cli": ModeInfo(emoji="⌨️", label="CLI"),
-    "web": ModeInfo(emoji="🕸️", label="Web"),
+    "cli": ModeInfo(emoji="💻", label="CLI"),
+    "web": ModeInfo(emoji="🌍", label="Web"),
     "run": ModeInfo(emoji="🚀", label="Autopilot"),
     None: ModeInfo(emoji="🦗", label=""),
 }
 
 WEB_BACKEND_EMOJI: dict[str, str] = {
-    "claude": "✴️",
+    "claude": "💠",
     "codex": "🌸",
     "mistral": "🏰",
     "copilot": "🤖",
 }
 
-_WEB_BACKEND_DEFAULT_EMOJI = "🕸️"
+_WEB_BACKEND_DEFAULT_EMOJI = "🌍"
 
 
 def effective_status(task: "TaskMeta") -> str:
@@ -776,11 +777,11 @@ def task_status(project_id: str, task_id: str) -> None:
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
 
     status_color = {"green": _green, "yellow": _yellow, "red": _red}.get(info.color, _yellow)
-    m_emoji = mode_emoji(task)
+    m_emoji = draw_emoji(mode_emoji(task))
     mode_info = MODE_DISPLAY.get(mode, MODE_DISPLAY[None])
 
     print(f"Task {task_id}:")
-    print(f"  Status:          {info.emoji} {status_color(info.label, color_enabled)}")
+    print(f"  Status:          {draw_emoji(info.emoji)} {status_color(info.label, color_enabled)}")
     print(f"  Mode:            {m_emoji} {mode_info.label or 'not set'}")
     if cname:
         print(f"  Container:       {cname}")

@@ -61,6 +61,7 @@ make clean        # Remove build artifacts
 - **Type hints**: Use Python 3.12+ type hints
 - **Docstrings**: Required for all public functions, classes, and modules (enforced by `docstr-coverage` at 95% minimum in CI)
 - **Testing**: Add tests for new functionality; maintain coverage
+- **Emojis**: Must be natively wide (`East_Asian_Width=W`) — no VS16 (U+FE0F) sequences. Use `draw_emoji()` from `luskctl.lib.util.emoji` for aligned output. See `docs/DEVELOPER.md` → "Emoji width constraints" for details
 
 ## Development Workflow
 
