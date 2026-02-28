@@ -80,8 +80,6 @@ RUN set -eux; \
       '  printf "  \\033[36mcopilot\\033[0m   - GitHub Copilot CLI\\n"' \
       '  printf "  \\033[36mvibe\\033[0m      - Mistral Vibe CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mblablador\\033[0m - OpenCode with Helmholtz Blablador (full permissions)\\n"' \
-      '  printf "  \\033[36mgh\\033[0m        - GitHub CLI (issues, PRs, releases)\\n"' \
-      '  printf "  \\033[36mglab\\033[0m      - GitLab CLI (issues, MRs, pipelines)\\n"' \
       '  printf "\\n"' \
       'fi' \
       '' \
