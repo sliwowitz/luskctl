@@ -391,6 +391,10 @@ def task_run_headless(
     wrapper function and filtered subagents, then launches a detached container
     that runs init-ssh-and-repo.sh followed by the claude command.
 
+    Args:
+        name: Optional human-readable name (slug-style).  If ``None``, a
+            random name is generated via :func:`generate_task_name`.
+
     Returns the task_id.
     """
     project = load_project(project_id)

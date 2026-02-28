@@ -16,6 +16,7 @@ from luskctl.lib.containers.tasks import (
     sanitize_task_name,
     task_new,
     task_rename,
+    validate_task_name,
 )
 from test_utils import project_env
 
@@ -39,12 +40,12 @@ class TestSanitizeTaskName(unittest.TestCase):
         """Spaces are replaced with hyphens."""
         self.assertEqual(sanitize_task_name("fix auth bug"), "fix-auth-bug")
 
-    def test_underscores_replaced_with_hyphens(self) -> None:
-        """Underscores are replaced with hyphens."""
-        self.assertEqual(sanitize_task_name("fix_auth_bug"), "fix-auth-bug")
+    def test_underscores_preserved(self) -> None:
+        """Underscores are kept as valid characters."""
+        self.assertEqual(sanitize_task_name("fix_auth_bug"), "fix_auth_bug")
 
     def test_special_chars_stripped(self) -> None:
-        """Non-alphanumeric characters (except hyphens) are stripped."""
+        """Non-alphanumeric characters (except hyphens and underscores) are stripped."""
         self.assertEqual(sanitize_task_name("fix@auth#bug!"), "fixauthbug")
 
     def test_uppercase_lowered(self) -> None:
@@ -55,9 +56,10 @@ class TestSanitizeTaskName(unittest.TestCase):
         """Multiple consecutive hyphens collapse to one."""
         self.assertEqual(sanitize_task_name("fix---auth---bug"), "fix-auth-bug")
 
-    def test_leading_trailing_hyphens_stripped(self) -> None:
-        """Leading and trailing hyphens are stripped."""
-        self.assertEqual(sanitize_task_name("-fix-bug-"), "fix-bug")
+    def test_trailing_hyphens_stripped(self) -> None:
+        """Trailing hyphens are stripped; leading hyphens are preserved."""
+        self.assertEqual(sanitize_task_name("fix-bug-"), "fix-bug")
+        self.assertEqual(sanitize_task_name("-fix-bug"), "-fix-bug")
 
     def test_truncation(self) -> None:
         """Names exceeding TASK_NAME_MAX_LEN are truncated."""
@@ -69,7 +71,7 @@ class TestSanitizeTaskName(unittest.TestCase):
         """Complex input with mixed issues sanitizes correctly."""
         self.assertEqual(
             sanitize_task_name("  Fix__Auth  Bug!! "),
-            "fix-auth-bug",
+            "fix__auth-bug",
         )
 
     def test_only_special_chars_returns_none(self) -> None:
@@ -79,6 +81,28 @@ class TestSanitizeTaskName(unittest.TestCase):
     def test_numeric_name(self) -> None:
         """Numeric-only names are allowed."""
         self.assertEqual(sanitize_task_name("42"), "42")
+
+
+class TestValidateTaskName(unittest.TestCase):
+    """Tests for validate_task_name()."""
+
+    def test_valid_name_returns_none(self) -> None:
+        """A normal slug name passes validation."""
+        self.assertIsNone(validate_task_name("fix-auth-bug"))
+
+    def test_leading_hyphen_rejected(self) -> None:
+        """A name starting with a hyphen is rejected."""
+        err = validate_task_name("-fix-bug")
+        self.assertIsNotNone(err)
+        self.assertIn("hyphen", err)
+
+    def test_underscored_name_valid(self) -> None:
+        """A name with underscores passes validation."""
+        self.assertIsNone(validate_task_name("fix_auth_bug"))
+
+    def test_numeric_name_valid(self) -> None:
+        """A purely numeric name passes validation."""
+        self.assertIsNone(validate_task_name("42"))
 
 
 class TestGenerateTaskName(unittest.TestCase):
@@ -131,6 +155,26 @@ class TestTaskNewWithName(unittest.TestCase):
             self.assertIsNotNone(tasks[0].name)
             self.assertRegex(tasks[0].name, r"^[a-z]+-[a-z]+$")
 
+    def test_task_new_invalid_name_raises(self) -> None:
+        """task_new with all-special-char name raises SystemExit."""
+        project_id = "proj_name_inv"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            with self.assertRaises(SystemExit):
+                task_new(project_id, name="@#$")
+
+    def test_task_new_leading_hyphen_raises(self) -> None:
+        """task_new with a name that sanitizes to leading hyphen raises SystemExit."""
+        project_id = "proj_name_hyp"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            with self.assertRaises(SystemExit):
+                task_new(project_id, name="-my-task")
+
     def test_task_new_prints_name(self) -> None:
         """task_new output includes the task name."""
         project_id = "proj_name3"
@@ -182,6 +226,17 @@ class TestTaskRename(unittest.TestCase):
             task_new(project_id)
             with self.assertRaises(SystemExit):
                 task_rename(project_id, "1", "@#$%")
+
+    def test_rename_leading_hyphen_raises(self) -> None:
+        """task_rename with a leading-hyphen name raises SystemExit."""
+        project_id = "proj_rename5"
+        with project_env(
+            f"project:\n  id: {project_id}\n",
+            project_id=project_id,
+        ):
+            task_new(project_id)
+            with self.assertRaises(SystemExit):
+                task_rename(project_id, "1", "-badname")
 
     def test_rename_sanitizes(self) -> None:
         """task_rename sanitizes the new name."""

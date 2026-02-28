@@ -166,20 +166,35 @@ TASK_NAME_MAX_LEN = 60
 def sanitize_task_name(raw: str | None) -> str | None:
     """Sanitize a raw task name into a slug-style identifier.
 
-    Strips whitespace, lowercases, replaces spaces/underscores with hyphens,
-    removes non-alphanumeric characters (except hyphens), collapses consecutive
-    hyphens, strips leading/trailing hyphens, and truncates to
+    Strips whitespace, lowercases, replaces spaces with hyphens,
+    removes characters outside ``[a-z0-9_-]``, collapses consecutive
+    hyphens, strips trailing hyphens, and truncates to
     ``TASK_NAME_MAX_LEN``.  Returns ``None`` if the result is empty.
+
+    Leading hyphens are preserved so callers can detect and reject them
+    (a name starting with ``-`` looks like a CLI flag).
     """
     if raw is None:
         return None
     name = raw.strip().lower()
-    name = name.replace(" ", "-").replace("_", "-")
-    name = re.sub(r"[^a-z0-9-]", "", name)
+    name = name.replace(" ", "-")
+    name = re.sub(r"[^a-z0-9_-]", "", name)
     name = re.sub(r"-{2,}", "-", name)
-    name = name.strip("-")
+    name = name.rstrip("-")
     name = name[:TASK_NAME_MAX_LEN]
     return name or None
+
+
+def validate_task_name(sanitized: str) -> str | None:
+    """Return an error message if *sanitized* is not a valid task name, else ``None``.
+
+    A name is invalid if it starts with a hyphen (looks like a CLI flag).
+    Callers should first check for ``None`` from :func:`sanitize_task_name`
+    (which indicates the name was empty after sanitization).
+    """
+    if sanitized.startswith("-"):
+        return "name must not start with a hyphen"
+    return None
 
 
 def generate_task_name(project_id: str | None = None) -> str:
@@ -356,7 +371,15 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
     )
 
     # Resolve task name: sanitize if provided, generate if not
-    task_name = sanitize_task_name(name) if name is not None else generate_task_name(project_id)
+    if name is not None:
+        task_name = sanitize_task_name(name)
+        if task_name is None:
+            raise SystemExit(f"Invalid task name: {name!r}")
+        err = validate_task_name(task_name)
+        if err:
+            raise SystemExit(f"Invalid task name: {err}")
+    else:
+        task_name = generate_task_name(project_id)
 
     meta = {
         "task_id": next_id,
@@ -375,7 +398,7 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     """Rename a task by updating its metadata YAML.
 
     Sanitizes *new_name* and writes the result to the task's metadata file.
-    Raises ``SystemExit`` if the task is unknown or the sanitized name is empty.
+    Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
     """
     meta_dir = _tasks_meta_dir(project_id)
     meta_path = meta_dir / f"{task_id}.yml"
@@ -385,6 +408,9 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     sanitized = sanitize_task_name(new_name)
     if sanitized is None:
         raise SystemExit(f"Invalid task name: {new_name!r}")
+    err = validate_task_name(sanitized)
+    if err:
+        raise SystemExit(f"Invalid task name: {err}")
     meta["name"] = sanitized
     meta_path.write_text(yaml.safe_dump(meta))
     print(f"Renamed task {task_id} to {sanitized}")

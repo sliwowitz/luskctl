@@ -376,6 +376,7 @@ expose = [
     "effective_status",
     "mode_emoji",
     "sanitize_task_name",
+    "validate_task_name",
     "generate_task_name",
     "TASK_NAME_MAX_LEN",
     "TaskMeta",

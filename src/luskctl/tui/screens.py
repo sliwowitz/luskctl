@@ -38,6 +38,7 @@ try:  # pragma: no cover - optional import for test stubs
 except Exception:  # pragma: no cover - textual may be a stub module
     Input = None  # type: ignore[assignment,misc]
 
+from ..lib.containers.tasks import sanitize_task_name, validate_task_name
 from ..lib.core.projects import Project as CodexProject
 from ..lib.facade import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
@@ -550,15 +551,27 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
         elif event.button.id == "btn-cancel":
             self.dismiss(None)
 
-    def on_input_submitted(self, event) -> None:
+    def on_input_submitted(self, event: object) -> None:
         """Accept the name on Enter key press."""
         self._submit()
 
     def _submit(self) -> None:
-        """Dismiss with the entered name (falls back to default if empty)."""
+        """Validate and dismiss with the sanitized name, or show an error."""
         inp = self.query_one("#name-input", Input)
-        text = inp.value.strip()
-        self.dismiss(text or self._default_name)
+        raw = inp.value.strip()
+        # Fall back to generated default if field is blank
+        if not raw:
+            self.dismiss(self._default_name)
+            return
+        sanitized = sanitize_task_name(raw)
+        if sanitized is None:
+            self.notify("Invalid name: must contain at least one alphanumeric character.")
+            return
+        err = validate_task_name(sanitized)
+        if err:
+            self.notify(f"Invalid name: {err}.")
+            return
+        self.dismiss(sanitized)
 
     def action_cancel(self) -> None:
         """Cancel the name input and dismiss without a result."""
