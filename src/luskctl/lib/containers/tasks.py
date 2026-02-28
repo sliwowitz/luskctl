@@ -310,7 +310,15 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
             )
         except Exception:
             continue
-    tasks.sort(key=lambda t: int(t.task_id or 0), reverse=reverse)
+
+    def _sort_key(t: TaskMeta) -> tuple[bool, int, str]:
+        """Sort numeric IDs first (ascending), then non-numeric lexically."""
+        try:
+            return (False, int(t.task_id), t.task_id)
+        except (ValueError, TypeError):
+            return (True, 0, t.task_id or "")
+
+    tasks.sort(key=_sort_key, reverse=reverse)
     return tasks
 
 

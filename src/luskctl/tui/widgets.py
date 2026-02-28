@@ -266,7 +266,7 @@ class TaskList(ListView):
         s_emoji = draw_emoji(s_info.emoji)
 
         extra_parts: list[str] = []
-        if task.web_port:
+        if task.web_port is not None:
             extra_parts.append(f"port={task.web_port}")
         extra_str = "; ".join(extra_parts)
 

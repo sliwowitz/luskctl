@@ -98,9 +98,7 @@ class PollingMixin:
             return
         self._queue_container_state_check(self.current_project_id)
 
-    def _queue_container_state_check(
-        self, project_id: str, task_id: str | None = None, mode: str | None = None
-    ) -> None:
+    def _queue_container_state_check(self, project_id: str) -> None:
         """Queue a background batch check for all task container states."""
         self.run_worker(
             self._load_container_state_worker(project_id),

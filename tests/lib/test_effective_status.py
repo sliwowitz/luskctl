@@ -31,59 +31,59 @@ class EffectiveStatusTests(unittest.TestCase):
     """Test effective_status() with all input combinations."""
 
     def test_running_container(self) -> None:
-        assert effective_status(_task(container_state="running", mode="cli")) == "running"
+        self.assertEqual(effective_status(_task(container_state="running", mode="cli")), "running")
 
     def test_running_container_with_exit_code(self) -> None:
         """Running container takes precedence over exit_code."""
         task = _task(container_state="running", mode="run", exit_code=0)
-        assert effective_status(task) == "running"
+        self.assertEqual(effective_status(task), "running")
 
     def test_stopped_container_no_exit_code(self) -> None:
         task = _task(container_state="exited", mode="cli", exit_code=None)
-        assert effective_status(task) == "stopped"
+        self.assertEqual(effective_status(task), "stopped")
 
     def test_stopped_container_exit_zero(self) -> None:
         task = _task(container_state="exited", mode="run", exit_code=0)
-        assert effective_status(task) == "completed"
+        self.assertEqual(effective_status(task), "completed")
 
     def test_stopped_container_exit_nonzero(self) -> None:
         task = _task(container_state="exited", mode="run", exit_code=1)
-        assert effective_status(task) == "failed"
+        self.assertEqual(effective_status(task), "failed")
 
     def test_no_container_no_mode(self) -> None:
         task = _task(container_state=None, mode=None)
-        assert effective_status(task) == "created"
+        self.assertEqual(effective_status(task), "created")
 
     def test_no_container_mode_set_no_exit(self) -> None:
         task = _task(container_state=None, mode="cli", exit_code=None)
-        assert effective_status(task) == "not found"
+        self.assertEqual(effective_status(task), "not found")
 
     def test_no_container_exit_zero(self) -> None:
         """Container removed after successful run."""
         task = _task(container_state=None, mode="run", exit_code=0)
-        assert effective_status(task) == "completed"
+        self.assertEqual(effective_status(task), "completed")
 
     def test_no_container_exit_nonzero(self) -> None:
         """Container removed after failed run."""
         task = _task(container_state=None, mode="run", exit_code=2)
-        assert effective_status(task) == "failed"
+        self.assertEqual(effective_status(task), "failed")
 
     def test_deleting_overrides_everything(self) -> None:
         task = _task(container_state="running", mode="cli", deleting=True)
-        assert effective_status(task) == "deleting"
+        self.assertEqual(effective_status(task), "deleting")
 
     def test_deleting_false_is_ignored(self) -> None:
         task = _task(container_state="running", mode="cli", deleting=False)
-        assert effective_status(task) == "running"
+        self.assertEqual(effective_status(task), "running")
 
     def test_defaults_to_created(self) -> None:
         """Minimal TaskMeta with no relevant fields set."""
-        assert effective_status(_task()) == "created"
+        self.assertEqual(effective_status(_task()), "created")
 
     def test_stopped_podman_state(self) -> None:
         """Podman reports 'stopped' (not 'exited') for some containers."""
         task = _task(container_state="stopped", mode="web")
-        assert effective_status(task) == "stopped"
+        self.assertEqual(effective_status(task), "stopped")
 
     # -- Every status is in STATUS_DISPLAY --
 
@@ -100,42 +100,42 @@ class EffectiveStatusTests(unittest.TestCase):
         ]
         for task in cases:
             status = effective_status(task)
-            assert status in STATUS_DISPLAY, f"Status {status!r} not in STATUS_DISPLAY"
+            self.assertIn(status, STATUS_DISPLAY, f"Status {status!r} not in STATUS_DISPLAY")
 
 
 class ModeEmojiTests(unittest.TestCase):
     """Test mode_emoji() for all modes and web backends."""
 
     def test_cli_mode(self) -> None:
-        assert mode_emoji(_task(mode="cli")) == "⌨️"
+        self.assertEqual(mode_emoji(_task(mode="cli")), "⌨️")
 
     def test_run_mode(self) -> None:
-        assert mode_emoji(_task(mode="run")) == "🚀"
+        self.assertEqual(mode_emoji(_task(mode="run")), "🚀")
 
     def test_none_mode(self) -> None:
-        assert mode_emoji(_task(mode=None)) == "🦗"
+        self.assertEqual(mode_emoji(_task(mode=None)), "🦗")
 
     def test_web_mode_claude(self) -> None:
-        assert mode_emoji(_task(mode="web", backend="claude")) == "✴️"
+        self.assertEqual(mode_emoji(_task(mode="web", backend="claude")), "✴️")
 
     def test_web_mode_codex(self) -> None:
-        assert mode_emoji(_task(mode="web", backend="codex")) == "🌸"
+        self.assertEqual(mode_emoji(_task(mode="web", backend="codex")), "🌸")
 
     def test_web_mode_mistral(self) -> None:
-        assert mode_emoji(_task(mode="web", backend="mistral")) == "🏰"
+        self.assertEqual(mode_emoji(_task(mode="web", backend="mistral")), "🏰")
 
     def test_web_mode_copilot(self) -> None:
-        assert mode_emoji(_task(mode="web", backend="copilot")) == "🤖"
+        self.assertEqual(mode_emoji(_task(mode="web", backend="copilot")), "🤖")
 
     def test_web_mode_unknown_backend(self) -> None:
-        assert mode_emoji(_task(mode="web", backend="something")) == "🕸️"
+        self.assertEqual(mode_emoji(_task(mode="web", backend="something")), "🕸️")
 
     def test_web_mode_no_backend(self) -> None:
-        assert mode_emoji(_task(mode="web")) == "🕸️"
+        self.assertEqual(mode_emoji(_task(mode="web")), "🕸️")
 
     def test_all_known_backends_covered(self) -> None:
         for backend, emoji in WEB_BACKEND_EMOJI.items():
-            assert mode_emoji(_task(mode="web", backend=backend)) == emoji
+            self.assertEqual(mode_emoji(_task(mode="web", backend=backend)), emoji)
 
 
 class BatchContainerStateTests(unittest.TestCase):
@@ -148,11 +148,14 @@ class BatchContainerStateTests(unittest.TestCase):
             return_value=output,
         ):
             result = get_project_container_states("proj")
-        assert result == {
-            "proj-cli-1": "running",
-            "proj-web-2": "exited",
-            "proj-run-3": "stopped",
-        }
+        self.assertEqual(
+            result,
+            {
+                "proj-cli-1": "running",
+                "proj-web-2": "exited",
+                "proj-run-3": "stopped",
+            },
+        )
 
     def test_get_project_container_states_empty(self) -> None:
         with unittest.mock.patch(
@@ -160,7 +163,7 @@ class BatchContainerStateTests(unittest.TestCase):
             return_value="",
         ):
             result = get_project_container_states("proj")
-        assert result == {}
+        self.assertEqual(result, {})
 
     def test_get_project_container_states_podman_missing(self) -> None:
         with unittest.mock.patch(
@@ -168,7 +171,7 @@ class BatchContainerStateTests(unittest.TestCase):
             side_effect=FileNotFoundError,
         ):
             result = get_project_container_states("proj")
-        assert result == {}
+        self.assertEqual(result, {})
 
     def test_get_project_container_states_podman_error(self) -> None:
         with unittest.mock.patch(
@@ -176,7 +179,7 @@ class BatchContainerStateTests(unittest.TestCase):
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
             result = get_project_container_states("proj")
-        assert result == {}
+        self.assertEqual(result, {})
 
     def test_get_all_task_states_maps_correctly(self) -> None:
         tasks = [
@@ -193,7 +196,7 @@ class BatchContainerStateTests(unittest.TestCase):
             return_value=container_states,
         ):
             result = get_all_task_states("proj", tasks)
-        assert result == {"1": "running", "2": "exited", "3": None}
+        self.assertEqual(result, {"1": "running", "2": "exited", "3": None})
 
     def test_get_all_task_states_missing_container(self) -> None:
         tasks = [_task(task_id="1", mode="cli")]
@@ -202,4 +205,4 @@ class BatchContainerStateTests(unittest.TestCase):
             return_value={},
         ):
             result = get_all_task_states("proj", tasks)
-        assert result == {"1": None}
+        self.assertEqual(result, {"1": None})

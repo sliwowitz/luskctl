@@ -35,7 +35,7 @@ if _HAS_TEXTUAL:
     from textual import on
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Footer, Header
+    from textual.widgets import Footer, Header, Static
     from textual.worker import Worker, WorkerState
 
     from ..lib.containers.tasks import get_tasks
@@ -59,6 +59,7 @@ if _HAS_TEXTUAL:
         ProjectState,
         TaskDetails,
         TaskList,
+        TaskListItem,
         TaskMeta,
     )
 
@@ -616,8 +617,10 @@ if _HAS_TEXTUAL:
                         tm.container_state = new_state
                         changed = True
                 if changed:
-                    # Refresh task list labels and details panel
-                    task_list.refresh()
+                    # Regenerate labels on visible list items so status badges update
+                    for item in task_list.query(TaskListItem):
+                        label = task_list._format_task_label(item.task_meta)
+                        item.query_one(Static).update(label)
                     if self.current_task:
                         details = self.query_one("#task-details", TaskDetails)
                         details.set_task(self.current_task)
