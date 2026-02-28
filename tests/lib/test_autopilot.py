@@ -1272,8 +1272,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     self.assertIn("not found", str(ctx.exception))
 
     def test_followup_start_fails(self) -> None:
-        """Follow-up sets status to 'failed' and raises SystemExit with 'failed to start'
-        when the container remains exited after podman start."""
+        """Follow-up sets status to 'failed' and raises SystemExit when container remains exited after start."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_startfail")
@@ -1295,6 +1294,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     ) as run_mock,
                     unittest.mock.patch(
                         "luskctl.lib.containers.task_runners.get_container_state",
+                        # first call: pre-start check (exited); second call: post-start check (still exited)
                         side_effect=["exited", "exited"],
                     ),
                 ):
