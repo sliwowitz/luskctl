@@ -50,6 +50,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 follow=True,
                 agents=None,
                 preset=None,
+                name=None,
             )
 
     def test_run_claude_no_follow_flag(self) -> None:

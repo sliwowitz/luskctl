@@ -165,8 +165,11 @@ class TaskTests(unittest.TestCase):
                 with redirect_stdout(buf):
                     task_list(project_id)
             output = buf.getvalue()
-            self.assertIn("1: running", output)
-            self.assertIn("2: stopped", output)
+            # Output format: "- 1: <name> running [mode=cli]"
+            self.assertIn("- 1:", output)
+            self.assertIn("running", output)
+            self.assertIn("- 2:", output)
+            self.assertIn("stopped", output)
 
     def test_task_list_filter_by_status(self) -> None:
         """task_list --status filters tasks by effective status."""
@@ -190,8 +193,10 @@ class TaskTests(unittest.TestCase):
                 with redirect_stdout(buf):
                     task_list(project_id, status="running")
             output = buf.getvalue()
-            self.assertIn("1: running", output)
-            self.assertNotIn("2:", output)
+            # Output format: "- 1: <name> running [mode=cli]"
+            self.assertIn("- 1:", output)
+            self.assertIn("running", output)
+            self.assertNotIn("- 2:", output)
 
     def test_task_list_filter_by_mode(self) -> None:
         """task_list --mode filters tasks by their mode field."""

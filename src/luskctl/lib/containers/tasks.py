@@ -7,6 +7,7 @@ management.
 """
 
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -150,11 +151,82 @@ class TaskMeta:
     exit_code: int | None = None
     deleting: bool = False
     preset: str | None = None
+    name: str | None = None
 
     @property
     def status(self) -> str:
         """Compute effective status from live container state + metadata."""
         return effective_status(self)
+
+
+TASK_NAME_MAX_LEN = 60
+"""Maximum length of a sanitized task name."""
+
+
+def sanitize_task_name(raw: str | None) -> str | None:
+    """Sanitize a raw task name into a slug-style identifier.
+
+    Strips whitespace, lowercases, replaces spaces/underscores with hyphens,
+    removes non-alphanumeric characters (except hyphens), collapses consecutive
+    hyphens, strips leading/trailing hyphens, and truncates to
+    ``TASK_NAME_MAX_LEN``.  Returns ``None`` if the result is empty.
+    """
+    if raw is None:
+        return None
+    name = raw.strip().lower()
+    name = name.replace(" ", "-").replace("_", "-")
+    name = re.sub(r"[^a-z0-9-]", "", name)
+    name = re.sub(r"-{2,}", "-", name)
+    name = name.strip("-")
+    name = name[:TASK_NAME_MAX_LEN]
+    return name or None
+
+
+def generate_task_name(project_id: str | None = None) -> str:
+    """Generate a random human-readable task name (e.g. ``talented-toucan``).
+
+    When *project_id* is given, name categories are resolved from config:
+    project ``tasks.name_categories`` → global ``tasks.name_categories``
+    → deterministic 3-category selection based on project ID hash.
+    """
+    import namer
+
+    categories = _resolve_name_categories(project_id) if project_id else None
+    return namer.generate(separator="-", category=categories)
+
+
+def _resolve_name_categories(project_id: str) -> list[str] | None:
+    """Resolve task-name categories: project config → global config → hash default."""
+    from ..core.config import get_task_name_categories
+
+    # 1. Per-project override
+    try:
+        project = load_project(project_id)
+        if project.task_name_categories:
+            return project.task_name_categories
+    except SystemExit:
+        pass
+
+    # 2. Global config
+    global_cats = get_task_name_categories()
+    if global_cats:
+        return global_cats
+
+    # 3. Hash-based default: pick 3 categories deterministically from project ID
+    return _default_categories_for_project(project_id)
+
+
+def _default_categories_for_project(project_id: str) -> list[str]:
+    """Pick 3 categories deterministically based on a hash of the project ID."""
+    import hashlib
+    import random
+
+    import namer
+
+    categories = sorted(namer.list_categories())
+    seed = int(hashlib.md5(project_id.encode()).hexdigest(), 16)
+    rng = random.Random(seed)
+    return rng.sample(categories, min(3, len(categories)))
 
 
 def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD") -> str | None:
@@ -227,8 +299,13 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
     meta_path.write_text(yaml.safe_dump(meta))
 
 
-def task_new(project_id: str) -> str:
+def task_new(project_id: str, *, name: str | None = None) -> str:
     """Create a new task with a fresh workspace for a project.
+
+    Args:
+        project_id: The project to create the task under.
+        name: Optional human-readable name (slug-style).  If ``None``, a
+            random name is generated via :func:`generate_task_name`.
 
     Workspace Initialization Protocol:
     ----------------------------------
@@ -278,15 +355,39 @@ def task_new(project_id: str) -> str:
         encoding="utf-8",
     )
 
+    # Resolve task name: sanitize if provided, generate if not
+    task_name = sanitize_task_name(name) if name is not None else generate_task_name(project_id)
+
     meta = {
         "task_id": next_id,
+        "name": task_name,
         "mode": None,
         "workspace": str(ws),
         "web_port": None,
     }
     (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
-    print(f"Created task {next_id} in {ws}")
+    name_str = f" ({task_name})" if task_name else ""
+    print(f"Created task {next_id}{name_str} in {ws}")
     return next_id
+
+
+def task_rename(project_id: str, task_id: str, new_name: str) -> None:
+    """Rename a task by updating its metadata YAML.
+
+    Sanitizes *new_name* and writes the result to the task's metadata file.
+    Raises ``SystemExit`` if the task is unknown or the sanitized name is empty.
+    """
+    meta_dir = _tasks_meta_dir(project_id)
+    meta_path = meta_dir / f"{task_id}.yml"
+    if not meta_path.is_file():
+        raise SystemExit(f"Unknown task {task_id}")
+    meta = yaml.safe_load(meta_path.read_text()) or {}
+    sanitized = sanitize_task_name(new_name)
+    if sanitized is None:
+        raise SystemExit(f"Invalid task name: {new_name!r}")
+    meta["name"] = sanitized
+    meta_path.write_text(yaml.safe_dump(meta))
+    print(f"Renamed task {task_id} to {sanitized}")
 
 
 def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
@@ -308,6 +409,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     exit_code=meta.get("exit_code"),
                     deleting=bool(meta.get("deleting")),
                     preset=meta.get("preset"),
+                    name=meta.get("name"),
                 )
             )
         except Exception:
@@ -393,7 +495,8 @@ def task_list(
         if t.web_port:
             extra.append(f"port={t.web_port}")
         extra_s = f" [{'; '.join(extra)}]" if extra else ""
-        print(f"- {t.task_id}: {t_status}{extra_s}")
+        name_s = f" {t.name}" if t.name else ""
+        print(f"- {t.task_id}:{name_s} {t_status}{extra_s}")
 
 
 def _check_mode(meta: dict, expected: str) -> None:
@@ -772,6 +875,7 @@ def task_status(project_id: str, task_id: str) -> None:
         exit_code=exit_code,
         deleting=bool(meta.get("deleting")),
         container_state=cs,
+        name=meta.get("name"),
     )
     status = effective_status(task)
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
@@ -781,6 +885,8 @@ def task_status(project_id: str, task_id: str) -> None:
     mode_info = MODE_DISPLAY.get(mode, MODE_DISPLAY[None])
 
     print(f"Task {task_id}:")
+    if task.name:
+        print(f"  Name:            {task.name}")
     print(f"  Status:          {draw_emoji(info.emoji)} {status_color(info.label, color_enabled)}")
     print(f"  Mode:            {m_emoji} {mode_info.label or 'not set'}")
     if cname:

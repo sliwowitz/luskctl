@@ -261,6 +261,8 @@ class TaskList(ListView):
         if extra_str:
             label += f"; {extra_str}"
         label += "]"
+        if task.name:
+            label += f" {task.name}"
         return label
 
     def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
@@ -352,6 +354,10 @@ def render_task_details(
 
     lines = [
         Text(f"Task ID:   {task.task_id}"),
+    ]
+    if task.name:
+        lines.append(Text(f"Name:      {task.name}"))
+    lines += [
         Text(f"Status:    {draw_emoji(s_info.emoji)} {s_info.label}"),
         Text(f"Type:      {m_emoji} {mode_display}"),
         Text(f"Workspace: {task.workspace}"),

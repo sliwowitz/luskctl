@@ -124,7 +124,7 @@ class TaskStartTests(unittest.TestCase):
         with unittest.mock.patch("sys.argv", ["luskctl", "task", "start", "proj1"]):
             main()
 
-        mock_new.assert_called_once_with("proj1")
+        mock_new.assert_called_once_with("proj1", name=None)
         mock_run_cli.assert_called_once_with("proj1", "42", agents=None, preset=None)
 
     @unittest.mock.patch("luskctl.cli.main.task_run_web")
@@ -135,7 +135,7 @@ class TaskStartTests(unittest.TestCase):
         with unittest.mock.patch("sys.argv", ["luskctl", "task", "start", "proj2", "--web"]):
             main()
 
-        mock_new.assert_called_once_with("proj2")
+        mock_new.assert_called_once_with("proj2", name=None)
         mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None, preset=None)
 
     @unittest.mock.patch("luskctl.cli.main.task_run_web")
@@ -149,7 +149,7 @@ class TaskStartTests(unittest.TestCase):
         ):
             main()
 
-        mock_new.assert_called_once_with("proj3")
+        mock_new.assert_called_once_with("proj3", name=None)
         mock_run_web.assert_called_once_with(
             "proj3", "3", backend="gradio", agents=None, preset=None
         )

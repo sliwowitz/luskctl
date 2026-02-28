@@ -19,6 +19,7 @@ from ..lib.containers.tasks import (
     task_login,
     task_logs,
     task_new,
+    task_rename,
     task_status,
     task_stop,
 )
@@ -507,6 +508,9 @@ def main() -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
+    p_run_claude.add_argument(
+        "--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)"
+    )
 
     # tasks
     p_task = sub.add_parser("task", help="Manage tasks")
@@ -518,6 +522,7 @@ def main() -> None:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except AttributeError:
         pass
+    t_new.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
 
     t_list = tsub.add_parser("list", help="List tasks")
     _a = t_list.add_argument("project_id")
@@ -680,6 +685,20 @@ def main() -> None:
         help="Include a non-default agent by name (repeatable)",
     )
     t_start.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
+    t_start.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
+
+    t_rename = tsub.add_parser("rename", help="Rename a task")
+    _a = t_rename.add_argument("project_id")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    _a = t_rename.add_argument("task_id")
+    try:
+        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    t_rename.add_argument("name", help="New task name (slug-style, e.g. fix-auth-bug)")
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
     _a = t_status.add_argument("project_id")
@@ -806,10 +825,11 @@ def main() -> None:
             follow=not getattr(args, "no_follow", False),
             agents=getattr(args, "selected_agents", None),
             preset=getattr(args, "preset", None),
+            name=getattr(args, "name", None),
         )
     elif args.cmd == "task":
         if args.task_cmd == "new":
-            task_new(args.project_id)
+            task_new(args.project_id, name=getattr(args, "name", None))
         elif args.task_cmd == "list":
             task_list(
                 args.project_id,
@@ -849,7 +869,7 @@ def main() -> None:
                 follow=not getattr(args, "no_follow", False),
             )
         elif args.task_cmd == "start":
-            task_id = task_new(args.project_id)
+            task_id = task_new(args.project_id, name=getattr(args, "name", None))
             selected = getattr(args, "selected_agents", None)
             preset = getattr(args, "preset", None)
             if args.web:
@@ -862,6 +882,8 @@ def main() -> None:
                 )
             else:
                 task_run_cli(args.project_id, task_id, agents=selected, preset=preset)
+        elif args.task_cmd == "rename":
+            task_rename(args.project_id, args.task_id, args.name)
         elif args.task_cmd == "status":
             task_status(args.project_id, args.task_id)
         elif args.task_cmd == "logs":
