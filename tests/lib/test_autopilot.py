@@ -339,6 +339,16 @@ class WriteSessionHookTests(unittest.TestCase):
             # Hook added
             self.assertIn("SessionStart", data["hooks"])
 
+    def test_idempotent_hook_write(self) -> None:
+        """Calling _write_session_hook twice doesn't create duplicate hooks."""
+        with tempfile.TemporaryDirectory() as td:
+            settings_path = Path(td) / "settings.json"
+            _write_session_hook(settings_path)
+            _write_session_hook(settings_path)
+            data = json.loads(settings_path.read_text())
+            hooks = data["hooks"]["SessionStart"]
+            self.assertEqual(len(hooks), 1)
+
 
 class StreamUntilExitTests(unittest.TestCase):
     """Tests for _stream_until_exit and _get_container_exit_code."""

@@ -225,7 +225,9 @@ def _write_session_hook(settings_path: Path) -> None:
 
     hooks = existing.setdefault("hooks", {})
     session_hooks = hooks.setdefault("SessionStart", [])
-    session_hooks.append(hook_entry)
+    # Idempotent: skip if our hook is already present
+    if hook_entry not in session_hooks:
+        session_hooks.append(hook_entry)
 
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
 
