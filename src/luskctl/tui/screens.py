@@ -551,7 +551,7 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
         elif event.button.id == "btn-cancel":
             self.dismiss(None)
 
-    def on_input_submitted(self, event: object) -> None:
+    def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
         """Accept the name on Enter key press."""
         self._submit()
 
@@ -561,6 +561,9 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
         raw = inp.value.strip()
         # Fall back to generated default if field is blank
         if not raw:
+            if not self._default_name:
+                self.notify("Name cannot be empty.")
+                return
             self.dismiss(self._default_name)
             return
         sanitized = sanitize_task_name(raw)
