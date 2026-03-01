@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot (Level 1+2) features: run-claude and agent config."""
+"""Tests for autopilot (Level 1+2) features: luskctl run and agent config."""
 
 import json
 import os
@@ -488,8 +488,8 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     cmd_str = " ".join(cmd)
                     self.assertIn("/home/dev/.luskctl:Z", cmd_str)
 
-    def test_headless_generates_claude_wrapper(self) -> None:
-        """task_run_headless generates luskctl-claude.sh in agent-config dir."""
+    def test_headless_generates_agent_wrapper(self) -> None:
+        """task_run_headless generates luskctl-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_wrap")
@@ -526,7 +526,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                         / "proj_wrap"
                         / "1"
                         / "agent-config"
-                        / "luskctl-claude.sh"
+                        / "luskctl-agent.sh"
                     )
                     self.assertTrue(wrapper.is_file())
                     content = wrapper.read_text()
@@ -729,7 +729,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                         / "proj_flags"
                         / "1"
                         / "agent-config"
-                        / "luskctl-claude.sh"
+                        / "luskctl-agent.sh"
                     )
                     content = wrapper.read_text()
                     self.assertNotIn("--model", content)
@@ -986,7 +986,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
         return task_id
 
     def test_followup_writes_new_prompt(self) -> None:
-        """Follow-up overwrites prompt.txt with the new prompt."""
+        """Follow-up appends the new prompt to the existing prompt.txt."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_fu")
@@ -1023,7 +1023,11 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     prompt_file = (
                         state_dir / "tasks" / "proj_fu" / "1" / "agent-config" / "prompt.txt"
                     )
-                    self.assertEqual(prompt_file.read_text(), "fix the remaining tests")
+                    content = prompt_file.read_text()
+                    # Original prompt is preserved, new prompt appended after separator
+                    self.assertIn("initial prompt", content)
+                    self.assertIn("---", content)
+                    self.assertIn("fix the remaining tests", content)
 
     def test_followup_uses_podman_start(self) -> None:
         """Follow-up uses podman start, not podman run."""

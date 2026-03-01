@@ -255,34 +255,51 @@ class TaskActionsMixin:
 
         pid = self.current_project_id
 
-        # Load project to check for subagents
+        # Load project to check for subagents and resolve provider
         try:
             project = load_project(pid)
         except Exception as e:
             self.notify(f"Error loading project: {e}")
             return
 
+        # Resolve provider — agent selection is only relevant for Claude
+        from ..lib.containers.headless_providers import get_provider
+
+        try:
+            resolved = get_provider(None, project)
+        except SystemExit as e:
+            self.notify(str(e))
+            return
+
         raw_subagents = project.agent_config.get("subagents", [])
         subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
 
-        if subagents:
-            # Show agent selection screen
+        provider_name = resolved.name
+
+        if subagents and resolved.supports_agents_json:
+            # Show agent selection screen (Claude only)
             await self.push_screen(
                 AgentSelectionScreen(subagents),
-                lambda selected, p=prompt: self._on_agent_selection_result(p, selected),
+                lambda selected, p=prompt, prov=provider_name: self._on_agent_selection_result(
+                    p, selected, provider=prov
+                ),
             )
         else:
-            # No agents configured, launch directly
-            await self._launch_autopilot(prompt, agents=None)
+            # No agents or non-Claude provider — launch directly
+            await self._launch_autopilot(prompt, agents=None, provider=provider_name)
 
-    async def _on_agent_selection_result(self, prompt: str, selected: list[str] | None) -> None:
+    async def _on_agent_selection_result(
+        self, prompt: str, selected: list[str] | None, provider: str | None = None
+    ) -> None:
         """Handle the agent list returned from AgentSelectionScreen."""
         if selected is None:
             # User cancelled agent selection
             return
-        await self._launch_autopilot(prompt, agents=selected)
+        await self._launch_autopilot(prompt, agents=selected, provider=provider)
 
-    async def _launch_autopilot(self, prompt: str, agents: list[str] | None = None) -> None:
+    async def _launch_autopilot(
+        self, prompt: str, agents: list[str] | None = None, provider: str | None = None
+    ) -> None:
         """Launch a headless autopilot task in a background worker."""
         if not self.current_project_id:
             return
@@ -291,7 +308,7 @@ class TaskActionsMixin:
         self._autopilot_pending_name = None
         self.notify(f"Starting autopilot task for {pid}...")
         self.run_worker(
-            lambda: self._run_headless_worker(pid, prompt, agents, name),
+            lambda: self._run_headless_worker(pid, prompt, agents, name, provider=provider),
             name=f"autopilot-launch:{pid}",
             group="autopilot-launch",
             thread=True,
@@ -299,11 +316,18 @@ class TaskActionsMixin:
         )
 
     def _run_headless_worker(
-        self, project_id: str, prompt: str, agents: list[str] | None, name: str | None = None
+        self,
+        project_id: str,
+        prompt: str,
+        agents: list[str] | None,
+        name: str | None = None,
+        provider: str | None = None,
     ) -> tuple[str, str, str | None]:
         """Background worker: launch task_run_headless and return result."""
         try:
-            task_id = task_run_headless(project_id, prompt, follow=False, agents=agents, name=name)
+            task_id = task_run_headless(
+                project_id, prompt, follow=False, agents=agents, name=name, provider=provider
+            )
             return project_id, task_id, None
         except SystemExit as e:
             return project_id, "", str(e)
@@ -395,6 +419,7 @@ class TaskActionsMixin:
 
         from .log_viewer import LogViewerScreen
 
+        provider = getattr(task, "provider", None)
         await self.push_screen(
             LogViewerScreen(
                 project_id=pid,
@@ -402,6 +427,7 @@ class TaskActionsMixin:
                 mode=task.mode,
                 container_name=cname,
                 follow=follow,
+                provider=provider,
             )
         )
 

@@ -86,7 +86,8 @@ def task_logs(
             raise SystemExit("podman not found; please install podman")
 
     # Formatted mode: pipe through formatter
-    formatter = auto_detect_formatter(mode, streaming=streaming)
+    provider = meta.get("provider")
+    formatter = auto_detect_formatter(mode, streaming=streaming, provider=provider)
 
     try:
         proc = subprocess.Popen(

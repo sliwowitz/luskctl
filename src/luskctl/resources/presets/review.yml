@@ -1,7 +1,7 @@
 # Code review — read-only analysis and recommendations.
 #
 # Good for: architecture review, refactoring advice, pre-merge checks.
-# Usage: luskctl run-claude <project> "<prompt>" --preset review
+# Usage: luskctl run <project> "<prompt>" --preset review
 
 model: opus
 max_turns: 15

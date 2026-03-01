@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 
+from ...lib.containers.headless_providers import PROVIDER_NAMES as _PROVIDER_NAMES
 from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
 from ...lib.facade import (
     WEB_BACKENDS,
@@ -65,36 +66,36 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     p_login = subparsers.add_parser("login", help="Open interactive shell in a running container")
     _add_project_task_args(p_login)
 
-    # run-claude (headless autopilot, top-level shortcut)
-    p_run_claude = subparsers.add_parser(
-        "run-claude", help="Run Claude headlessly in a new task (autopilot mode)"
+    # run (headless autopilot, top-level shortcut — replaces run-claude)
+    p_run = subparsers.add_parser(
+        "run", help="Run an agent headlessly in a new task (autopilot mode)"
     )
-    _add_project_arg(p_run_claude, help="Project ID")
-    p_run_claude.add_argument("prompt", help="Task prompt for Claude")
-    p_run_claude.add_argument(
-        "--config", dest="agent_config", help="Path to agent config YAML file"
+    _add_project_arg(p_run, help="Project ID")
+    p_run.add_argument("prompt", help="Task prompt for the agent")
+    p_run.add_argument(
+        "--provider",
+        choices=list(_PROVIDER_NAMES),
+        default=None,
+        help="Agent provider (default: from project/global config, or claude)",
     )
-    p_run_claude.add_argument(
-        "--preset", help="Name of a preset to apply (global or project-level)"
-    )
-    p_run_claude.add_argument("--model", help="Model override (sonnet, opus, haiku)")
-    p_run_claude.add_argument("--max-turns", type=int, help="Maximum agent turns")
-    p_run_claude.add_argument("--timeout", type=int, help="Maximum runtime in seconds")
-    p_run_claude.add_argument(
+    p_run.add_argument("--config", dest="agent_config", help="Path to agent config YAML file")
+    p_run.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
+    p_run.add_argument("--model", help="Model override (provider-specific)")
+    p_run.add_argument("--max-turns", type=int, help="Maximum agent turns")
+    p_run.add_argument("--timeout", type=int, help="Maximum runtime in seconds")
+    p_run.add_argument(
         "--no-follow",
         action="store_true",
         help="Detach after starting (don't stream output)",
     )
-    p_run_claude.add_argument(
+    p_run.add_argument(
         "--agent",
         dest="selected_agents",
         action="append",
         default=None,
-        help="Include a non-default agent by name (repeatable)",
+        help="Include a non-default agent by name (repeatable, Claude only)",
     )
-    p_run_claude.add_argument(
-        "--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)"
-    )
+    p_run.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
 
     # task subcommand group
     p_task = subparsers.add_parser("task", help="Manage tasks")
@@ -174,7 +175,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "followup", help="Follow up on a completed/failed headless task with a new prompt"
     )
     _add_project_task_args(t_followup)
-    t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for Claude")
+    t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for the agent")
     t_followup.add_argument(
         "--no-follow",
         action="store_true",
@@ -240,7 +241,7 @@ def dispatch(args: argparse.Namespace) -> bool:
     if args.cmd == "login":
         task_login(args.project_id, args.task_id)
         return True
-    if args.cmd == "run-claude":
+    if args.cmd == "run":
         task_run_headless(
             args.project_id,
             args.prompt,
@@ -252,6 +253,7 @@ def dispatch(args: argparse.Namespace) -> bool:
             agents=getattr(args, "selected_agents", None),
             preset=getattr(args, "preset", None),
             name=getattr(args, "name", None),
+            provider=getattr(args, "provider", None),
         )
         return True
     if args.cmd == "task":
