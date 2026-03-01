@@ -148,9 +148,7 @@ def register(subparsers) -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_run_cli.add_argument(
-        "--preset", help="Name of a preset to apply (global or project-level)"
-    )
+    t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
     _a = t_run_ui.add_argument("project_id")
@@ -176,9 +174,7 @@ def register(subparsers) -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_run_ui.add_argument(
-        "--preset", help="Name of a preset to apply (global or project-level)"
-    )
+    t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
     _a = t_delete.add_argument("project_id")
@@ -272,12 +268,8 @@ def register(subparsers) -> None:
         default=None,
         help="Include a non-default agent by name (repeatable)",
     )
-    t_start.add_argument(
-        "--preset", help="Name of a preset to apply (global or project-level)"
-    )
-    t_start.add_argument(
-        "--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)"
-    )
+    t_start.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
+    t_start.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
 
     t_rename = tsub.add_parser("rename", help="Rename a task")
     _a = t_rename.add_argument("project_id")

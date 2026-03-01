@@ -30,8 +30,7 @@ def register(subparsers) -> None:
     # project-derive
     p_derive = subparsers.add_parser(
         "project-derive",
-        help="Create a new project derived from an existing one "
-        "(shared infra, fresh agent config)",
+        help="Create a new project derived from an existing one (shared infra, fresh agent config)",
     )
     _a = p_derive.add_argument("source_id", help="Source project ID to derive from")
     try:
