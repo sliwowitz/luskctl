@@ -1,0 +1,176 @@
+"""Project state rendering widget and helpers."""
+
+from typing import Any
+
+from rich.style import Style
+from rich.text import Text
+from textual.widgets import Static
+
+from ...lib.core.projects import Project
+from ...lib.facade import GateStalenessInfo
+from ...lib.util.emoji import draw_emoji
+from .task_detail import _get_css_variables
+
+
+def render_project_loading(
+    project: Project | None,
+    task_count: int | None = None,
+) -> Text:
+    """Render project loading state as a Rich Text object."""
+    if project is None:
+        return Text("No project selected.")
+
+    upstream = project.upstream_url or "-"
+    security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
+    tasks_line = (
+        Text("Tasks:     loading") if task_count is None else Text(f"Tasks:     {task_count}")
+    )
+
+    lines = [
+        Text(f"Project:   {project.id} {security_emoji}"),
+        Text(upstream),
+        Text(""),
+        Text("Loading details..."),
+        tasks_line,
+    ]
+    return Text("\n").join(lines)
+
+
+def render_project_details(
+    project: Project | None,
+    state: dict | None,
+    task_count: int | None = None,
+    staleness: GateStalenessInfo | None = None,
+    css_variables: dict[str, str] | None = None,
+) -> Text:
+    """Render project details as a Rich Text object."""
+    if project is None or state is None:
+        return Text("No project selected.")
+
+    variables = css_variables or {}
+    success_color = variables.get("success", "green")
+    error_color = variables.get("error", "red")
+    warning_color = variables.get("warning", "yellow")
+
+    status_styles = {
+        "yes": Style(color=success_color),
+        "no": Style(color=error_color),
+        "old": Style(color=warning_color),
+        "new": Style(color="blue"),
+    }
+
+    def _status_text(value: str) -> Text:
+        """Return a styled Rich Text for a status value like 'yes', 'no', or 'old'."""
+        style = status_styles.get(value, Style(color=error_color))
+        return Text(value, style=style)
+
+    docker_value = "yes" if state.get("dockerfiles") else "no"
+    if docker_value == "yes" and state.get("dockerfiles_old"):
+        docker_value = "old"
+    docker_s = _status_text(docker_value)
+
+    images_value = "yes" if state.get("images") else "no"
+    if images_value == "yes" and state.get("images_old"):
+        images_value = "old"
+    images_s = _status_text(images_value)
+    ssh_s = _status_text("yes" if state.get("ssh") else "no")
+    gate_value = "yes" if state.get("gate") else "no"
+    if gate_value == "yes" and staleness is not None and not staleness.error and staleness.is_stale:
+        behind = staleness.commits_behind or 0
+        ahead = staleness.commits_ahead or 0
+        if ahead > 0 and behind == 0:
+            gate_value = "new"
+        else:
+            gate_value = "old"
+    gate_s = _status_text(gate_value)
+
+    tasks_line = (
+        Text("Tasks:     unknown") if task_count is None else Text(f"Tasks:     {task_count}")
+    )
+    upstream = project.upstream_url or "-"
+    security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
+
+    lines = [
+        Text(f"Project:   {project.id} {security_emoji}"),
+        Text(upstream),
+        Text(""),
+        Text.assemble("Dockerfiles: ", docker_s),
+        Text.assemble("Images:      ", images_s),
+        Text.assemble("SSH dir:     ", ssh_s),
+        Text.assemble("Git gate:    ", gate_s),
+        tasks_line,
+    ]
+
+    gate_commit = state.get("gate_last_commit")
+    if gate_commit:
+        commit_hash = gate_commit.get("commit_hash") or "unknown"
+        commit_hash_short = commit_hash[:8] if isinstance(commit_hash, str) else "unknown"
+        commit_date = gate_commit.get("commit_date") or "unknown"
+        commit_author = gate_commit.get("commit_author") or "unknown"
+        commit_message = gate_commit.get("commit_message") or "unknown"
+        commit_message_short = (
+            commit_message[:50] + ("..." if len(commit_message) > 50 else "")
+            if isinstance(commit_message, str)
+            else "unknown"
+        )
+
+        lines.append(Text(""))
+        lines.append(Text("Gate info:"))
+        lines.append(Text(f"  Commit:   {commit_hash_short}"))
+        lines.append(Text(f"  Date:     {commit_date}"))
+        lines.append(Text(f"  Author:   {commit_author}"))
+        lines.append(Text(f"  Message:  {commit_message_short}"))
+
+    if staleness is not None:
+        lines.append(Text(""))
+        lines.append(Text("Upstream status:"))
+        if staleness.error:
+            lines.append(Text(f"  Error:    {staleness.error}"))
+        elif staleness.is_stale:
+            behind = staleness.commits_behind or 0
+            ahead = staleness.commits_ahead or 0
+
+            if ahead > 0 and behind > 0:
+                status_str = f"DIVERGED ({ahead} ahead, {behind} behind) on {staleness.branch}"
+            elif ahead > 0:
+                status_str = f"AHEAD ({ahead} commits) on {staleness.branch}"
+            else:
+                behind_str = "unknown" if staleness.commits_behind is None else str(behind)
+                status_str = f"BEHIND ({behind_str} commits) on {staleness.branch}"
+
+            lines.append(Text(f"  Status:   {status_str}"))
+            upstream_head = staleness.upstream_head[:8] if staleness.upstream_head else "unknown"
+            gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+            lines.append(Text(f"  Upstream: {upstream_head}"))
+            lines.append(Text(f"  Gate:     {gate_head}"))
+        else:
+            lines.append(Text(f"  Status:   Up to date on {staleness.branch}"))
+            gate_head = staleness.gate_head[:8] if staleness.gate_head else "unknown"
+            lines.append(Text(f"  Commit:   {gate_head}"))
+        lines.append(Text(f"  Checked:  {staleness.last_checked}"))
+
+    return Text("\n").join(lines)
+
+
+class ProjectState(Static):
+    """Panel showing detailed information about the active project."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the project state panel."""
+        super().__init__(**kwargs)
+
+    def set_loading(self, project: Project | None, task_count: int | None = None) -> None:
+        """Show a loading placeholder while project state is being fetched."""
+        self.update(render_project_loading(project, task_count))
+
+    def set_state(
+        self,
+        project: Project | None,
+        state: dict | None,
+        task_count: int | None = None,
+        staleness: GateStalenessInfo | None = None,
+    ) -> None:
+        """Display fully loaded project details including infrastructure status."""
+        self.update(
+            render_project_details(project, state, task_count, staleness, _get_css_variables(self))
+        )
