@@ -91,7 +91,7 @@ depends_on = [
 [[modules]]
 path = "luskctl.lib.containers.agents"
 layer = "services"
-depends_on = ["luskctl.lib.containers.headless_providers", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+depends_on = ["luskctl.lib.containers.headless_providers", "luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
 
 # Headless provider registry (multi-agent autopilot support)
 [[modules]]

@@ -177,7 +177,9 @@ def task_run_cli(
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
-    agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
+    agent_config_dir = prepare_agent_config_dir(
+        project, task_id, subagents, agents, provider=project.default_agent or "claude"
+    )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     # Run detached and keep the container alive so users can exec into it later
@@ -254,7 +256,9 @@ def task_run_web(
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
-    agent_config_dir = prepare_agent_config_dir(project, task_id, subagents, agents)
+    agent_config_dir = prepare_agent_config_dir(
+        project, task_id, subagents, agents, provider=project.default_agent or "claude"
+    )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     env = apply_web_env_overrides(env, backend, project.default_agent)
@@ -558,7 +562,7 @@ def task_followup_headless(
 
         warnings.warn(
             f"Unknown provider {provider_name!r} in task metadata; session resume check skipped.",
-            stacklevel=1,
+            stacklevel=2,
         )
     label = resolved.label if resolved else provider_name
 

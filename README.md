@@ -73,7 +73,7 @@ luskctl task run-ui myproj 1     # Web UI mode
 ### Headless Agent Runs (Autopilot)
 
 ```bash
-# Run an agent headlessly with a prompt (default: claude)
+# Run an agent headlessly with a prompt (uses default_agent config; falls back to claude)
 luskctl run myproj "Fix the authentication bug"
 
 # With model override and timeout

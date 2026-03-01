@@ -160,12 +160,12 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         self.assertIn("--max-turns 50", cmd)
 
     def test_codex_command(self) -> None:
-        """Codex command uses exec subcommand and --full-auto."""
+        """Codex command uses exec subcommand and --full-auto via wrapper."""
         p = HEADLESS_PROVIDERS["codex"]
         cmd = build_headless_command(p, timeout=1800)
-        self.assertIn("codex exec", cmd)
+        self.assertIn("codex --luskctl-timeout 1800", cmd)
+        self.assertIn("exec", cmd)
         self.assertIn("--full-auto", cmd)
-        self.assertIn("timeout 1800", cmd)
         self.assertIn("prompt.txt", cmd)
 
     def test_codex_command_with_model(self) -> None:
@@ -175,13 +175,12 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         self.assertIn("--model o3", cmd)
 
     def test_copilot_command(self) -> None:
-        """Copilot command uses -p flag and --allow-all-tools."""
+        """Copilot command uses -p flag and --allow-all-tools via wrapper."""
         p = HEADLESS_PROVIDERS["copilot"]
         cmd = build_headless_command(p, timeout=900)
-        self.assertIn("copilot", cmd)
+        self.assertIn("copilot --luskctl-timeout 900", cmd)
         self.assertIn("--allow-all-tools", cmd)
         self.assertIn("-p", cmd)
-        self.assertIn("timeout 900", cmd)
 
     def test_vibe_command(self) -> None:
         """Vibe command uses --prompt flag."""
@@ -198,10 +197,11 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         self.assertIn("--agent large", cmd)
 
     def test_opencode_command(self) -> None:
-        """OpenCode command uses run subcommand."""
+        """OpenCode command uses run subcommand via wrapper."""
         p = HEADLESS_PROVIDERS["opencode"]
         cmd = build_headless_command(p, timeout=1800)
-        self.assertIn("opencode run", cmd)
+        self.assertIn("opencode --luskctl-timeout 1800", cmd)
+        self.assertIn("run", cmd)
         self.assertIn("prompt.txt", cmd)
 
     def test_blablador_command(self) -> None:

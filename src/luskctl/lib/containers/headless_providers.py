@@ -306,14 +306,22 @@ def _build_generic_command(
     model: str | None,
     max_turns: int | None,
 ) -> str:
-    """Build the headless command for non-Claude providers."""
+    """Build the headless command for non-Claude providers.
+
+    Uses the shell wrapper function (e.g. ``codex()``) instead of invoking the
+    binary directly, so that git env vars and session resume logic from
+    ``luskctl-agent.sh`` are applied.  The wrapper parses ``--luskctl-timeout``
+    to wrap the actual invocation with ``timeout``.
+    """
     parts = ["init-ssh-and-repo.sh &&"]
 
-    # Timeout wrapper
-    parts.append(f"timeout {timeout}")
-
-    # Binary + subcommand
+    # Call the wrapper function (sourced via bash -l from profile.d);
+    # it handles git identity env vars and session resume args.
     parts.append(provider.binary)
+    parts.append("--luskctl-timeout")
+    parts.append(str(int(timeout)))
+
+    # Subcommand (e.g. "exec" for codex, "run" for opencode)
     if provider.headless_subcommand:
         parts.append(provider.headless_subcommand)
 
