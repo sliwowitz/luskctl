@@ -89,6 +89,8 @@ def resolve_instructions(
             base = default
         elif isinstance(resolved, list):
             base = _splice_inherit(resolved, default)
+        elif resolved == _INHERIT_SENTINEL:
+            base = default
         else:
             base = str(resolved)
     elif isinstance(val, list):

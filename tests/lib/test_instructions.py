@@ -73,6 +73,13 @@ class ResolveInstructionsTests(unittest.TestCase):
             f"{default}\n\nTeam policy.",
         )
 
+    def test_per_provider_dict_bare_inherit_returns_default(self) -> None:
+        """Bare _inherit string in per-provider dict returns bundled default."""
+        config = {"instructions": {"claude": "_inherit", "codex": "Codex custom"}}
+        default = bundled_default_instructions()
+        self.assertEqual(resolve_instructions(config, "claude"), default)
+        self.assertEqual(resolve_instructions(config, "codex"), "Codex custom")
+
     def test_per_provider_dict_no_match_returns_bundled(self) -> None:
         """Per-provider dict with no match and no _default returns bundled default."""
         config = {"instructions": {"claude": "Claude only"}}
