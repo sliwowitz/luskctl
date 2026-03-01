@@ -39,7 +39,7 @@ if _HAS_TEXTUAL:
     from textual.worker import Worker, WorkerState
 
     from ..lib.containers.tasks import get_tasks
-    from ..lib.core.config import get_tui_default_tmux
+    from ..lib.core.config import get_tui_default_tmux, state_root
     from ..lib.core.projects import Project, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
@@ -268,15 +268,13 @@ if _HAS_TEXTUAL:
                 pass
 
         def _log_layout_debug(self) -> None:
-            """Write a one-shot snapshot of key widget sizes to /tmp.
+            """Write a one-shot snapshot of key widget sizes to the state dir.
 
             This is for debugging why the right-hand task list/details may
             not be visible even though the widgets exist.
             """
             try:
-                from pathlib import Path as _Path
-
-                log_path = _Path("/tmp/luskctl-tui.log")
+                log_path = state_root() / "luskctl-tui.log"
                 log_path.parent.mkdir(parents=True, exist_ok=True)
 
                 left_pane = self.query_one("#left-pane")
@@ -313,9 +311,8 @@ if _HAS_TEXTUAL:
 
             try:
                 from datetime import datetime as _dt
-                from pathlib import Path as _Path
 
-                log_path = _Path("/tmp/luskctl-tui.log")
+                log_path = state_root() / "luskctl-tui.log"
                 log_path.parent.mkdir(parents=True, exist_ok=True)
                 ts = _dt.now().isoformat(timespec="seconds")
                 with log_path.open("a", encoding="utf-8") as _f:
@@ -328,9 +325,8 @@ if _HAS_TEXTUAL:
             """Load last selected project and tasks from persistent storage."""
             try:
                 import json
-                from pathlib import Path as _Path
 
-                state_path = _Path("~/.luskctl-tui-state.json").expanduser()
+                state_path = state_root() / "luskctl-tui-state.json"
                 if state_path.exists():
                     with state_path.open("r", encoding="utf-8") as f:
                         state = json.load(f)
@@ -345,9 +341,9 @@ if _HAS_TEXTUAL:
             """Save current selection state to persistent storage."""
             try:
                 import json
-                from pathlib import Path as _Path
 
-                state_path = _Path("~/.luskctl-tui-state.json").expanduser()
+                state_path = state_root() / "luskctl-tui-state.json"
+                state_path.parent.mkdir(parents=True, exist_ok=True)
                 state = {
                     "last_project": self.current_project_id,
                     "last_tasks": self._last_selected_tasks,

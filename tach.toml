@@ -319,7 +319,7 @@ utility = true
 [[modules]]
 path = "luskctl.lib.util.logging_utils"
 layer = "core"
-depends_on = []
+depends_on = ["luskctl.lib.core.paths"]
 utility = true
 
 # Emoji display-width utilities
