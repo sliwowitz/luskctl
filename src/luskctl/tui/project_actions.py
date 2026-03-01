@@ -10,6 +10,7 @@ project and task actions.
 """
 
 import os
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable
@@ -323,8 +324,9 @@ class ProjectActionsMixin:
 
                 instr_path.write_text(bundled_default_instructions(), encoding="utf-8")
                 print(f"Created {instr_path} with bundled defaults.")
-            editor = os.environ.get("EDITOR", "vi")
-            subprocess.run([editor, str(instr_path)])
+            editor = os.environ.get("EDITOR", "").strip() or "vi"
+            editor_cmd = shlex.split(editor)
+            subprocess.run([*editor_cmd, str(instr_path)], check=False)
 
         await self._run_suspended(work, success_msg=f"Instructions updated for {pid}")
 

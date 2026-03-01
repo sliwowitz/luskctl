@@ -256,7 +256,16 @@ def dispatch(args: argparse.Namespace) -> bool:
             ipath = Path(instructions_path)
             if not ipath.is_file():
                 raise SystemExit(f"Instructions file not found: {instructions_path}")
-            instructions_text = ipath.read_text(encoding="utf-8")
+            try:
+                instructions_text = ipath.read_text(encoding="utf-8")
+            except UnicodeDecodeError as exc:
+                raise SystemExit(
+                    f"Instructions file must be UTF-8 text: {instructions_path}"
+                ) from exc
+            except OSError as exc:
+                raise SystemExit(
+                    f"Failed to read instructions file {instructions_path}: {exc}"
+                ) from exc
 
         task_run_headless(
             args.project_id,

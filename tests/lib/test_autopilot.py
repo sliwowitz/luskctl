@@ -4,6 +4,8 @@
 
 """Tests for autopilot (Level 1+2) features: luskctl run and agent config."""
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -14,8 +16,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
+
+if TYPE_CHECKING:
+    from luskctl.lib.core.projects import Project
 
 from luskctl.lib.containers.agents import (
     _generate_claude_wrapper,
@@ -232,7 +238,7 @@ class ParseMdAgentTests(unittest.TestCase):
 class GenerateClaudeWrapperTests(unittest.TestCase):
     """Tests for _generate_claude_wrapper."""
 
-    def _make_project(self):
+    def _make_project(self) -> Project:
         from luskctl.lib.core.projects import Project
 
         return Project(
@@ -407,7 +413,7 @@ class WriteSessionHookTests(unittest.TestCase):
 class PrepareAgentConfigDirTests(unittest.TestCase):
     """Tests for prepare_agent_config_dir."""
 
-    def _make_project(self):
+    def _make_project(self) -> Project:
         from luskctl.lib.core.projects import Project
 
         return Project(

@@ -3,16 +3,19 @@
 You are running inside an isolated Podman container managed by luskctl.
 
 ## Workspace
+
 - `/workspace/` — Git repository checkout (your working directory)
 - `/home/dev/` — Your home directory (uid 1000)
 - The container IS the security boundary — you have full filesystem access within it.
 
 ## Privileges
+
 - You can use `sudo` without a password to install packages, modify system config, etc.
 - Use `sudo apt install <package>` for any tools you need.
 - The environment is disposable — feel free to install, configure, and experiment.
 
 ## Pre-installed tools
+
 - **git** — version control
 - **gh** — GitHub CLI (issues, PRs, API)
 - **glab** — GitLab CLI
@@ -22,6 +25,7 @@ You are running inside an isolated Podman container managed by luskctl.
 Python 3 and Node.js are available. Use `sudo apt install` or `pip`/`npm` for anything else.
 
 ## Git workflow
+
 - Git identity is pre-configured:
   - Author (you): AI agent name and email (set automatically)
   - Committer: human operator's name and email
@@ -29,6 +33,7 @@ Python 3 and Node.js are available. Use `sudo apt install` or `pip`/`npm` for an
 - Always work on a branch; commit with clear, descriptive messages.
 
 ## Conventions
+
 - Read existing project documentation (README, CLAUDE.md, AGENTS.md, etc.) first.
 - Make focused, minimal changes; avoid unrelated modifications.
 - Run the project's test suite after making changes when possible.

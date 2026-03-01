@@ -53,6 +53,29 @@ if TYPE_CHECKING:
     from ..core.project_model import Project
 
 
+def _prepare_agent_config(
+    project: Project,
+    project_id: str,
+    task_id: str,
+    agents: list[str] | None,
+    preset: str | None,
+) -> Path:
+    """Resolve agent config, instructions, and prepare the agent-config dir.
+
+    Shared by CLI and web task runners to avoid duplicating the
+    resolve → instructions → prepare sequence.
+    """
+    effective = resolve_agent_config(project_id, preset=preset)
+    subagents = list(effective.get("subagents") or [])
+    from .headless_providers import get_provider as _get_provider
+
+    resolved = _get_provider(None, project)
+    instr_text = resolve_instructions(effective, resolved.name)
+    return prepare_agent_config_dir(
+        project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
+    )
+
+
 def _podman_start(cname: str) -> None:
     """Start an existing container, raising SystemExit on failure."""
     try:
@@ -176,15 +199,7 @@ def task_run_cli(
     env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
-    effective = resolve_agent_config(project_id, preset=preset)
-    subagents = list(effective.get("subagents") or [])
-    from .headless_providers import get_provider as _get_provider
-
-    resolved = _get_provider(None, project)
-    instr_text = resolve_instructions(effective, resolved.name)
-    agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
-    )
+    agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     # Run detached and keep the container alive so users can exec into it later
@@ -259,15 +274,7 @@ def task_run_web(
     env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
-    effective = resolve_agent_config(project_id, preset=preset)
-    subagents = list(effective.get("subagents") or [])
-    from .headless_providers import get_provider as _get_provider
-
-    resolved_web = _get_provider(None, project)
-    instr_text = resolve_instructions(effective, resolved_web.name)
-    agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=resolved_web.name, instructions=instr_text
-    )
+    agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
     env = apply_web_env_overrides(env, backend, project.default_agent)
