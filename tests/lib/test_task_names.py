@@ -289,7 +289,7 @@ class TestGetTasksLoadsName(unittest.TestCase):
 
             tasks = get_tasks(project_id)
             self.assertEqual(len(tasks), 1)
-            self.assertIsNone(tasks[0].name)
+            self.assertEqual(tasks[0].name, "")
 
 
 class TestDefaultCategoriesForProject(unittest.TestCase):

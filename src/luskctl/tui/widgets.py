@@ -256,9 +256,7 @@ class TaskList(ListView):
         if task.web_port is not None:
             extra_parts.append(f"port={task.web_port}")
 
-        label = f"{task.task_id} {m_emoji} {s_emoji}"
-        if task.name:
-            label += f" {task.name}"
+        label = f"{task.task_id} {m_emoji} {s_emoji} {task.name}"
         if extra_parts:
             label += f" [{'; '.join(extra_parts)}]"
         return label
@@ -353,8 +351,7 @@ def render_task_details(
     lines = [
         Text(f"Task ID:   {task.task_id}"),
     ]
-    if task.name:
-        lines.append(Text(f"Name:      {task.name}"))
+    lines.append(Text(f"Name:      {task.name}"))
     lines += [
         Text(f"Status:    {draw_emoji(s_info.emoji)} {s_info.label}"),
         Text(f"Type:      {m_emoji} {mode_display}"),

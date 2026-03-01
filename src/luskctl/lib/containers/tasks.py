@@ -151,7 +151,7 @@ class TaskMeta:
     exit_code: int | None = None
     deleting: bool = False
     preset: str | None = None
-    name: str | None = None
+    name: str = ""
 
     @property
     def status(self) -> str:
@@ -389,8 +389,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         "web_port": None,
     }
     (meta_dir / f"{next_id}.yml").write_text(yaml.safe_dump(meta))
-    name_str = f" ({task_name})" if task_name else ""
-    print(f"Created task {next_id}{name_str} in {ws}")
+    print(f"Created task {next_id} ({task_name}) in {ws}")
     return next_id
 
 
@@ -435,7 +434,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     exit_code=meta.get("exit_code"),
                     deleting=bool(meta.get("deleting")),
                     preset=meta.get("preset"),
-                    name=meta.get("name"),
+                    name=meta.get("name") or "",
                 )
             )
         except Exception:
@@ -521,8 +520,7 @@ def task_list(
         if t.web_port:
             extra.append(f"port={t.web_port}")
         extra_s = f" [{'; '.join(extra)}]" if extra else ""
-        name_s = f" {t.name}" if t.name else ""
-        print(f"- {t.task_id}:{name_s} {t_status}{extra_s}")
+        print(f"- {t.task_id}: {t.name} {t_status}{extra_s}")
 
 
 def _check_mode(meta: dict, expected: str) -> None:
@@ -901,7 +899,7 @@ def task_status(project_id: str, task_id: str) -> None:
         exit_code=exit_code,
         deleting=bool(meta.get("deleting")),
         container_state=cs,
-        name=meta.get("name"),
+        name=meta.get("name") or "",
     )
     status = effective_status(task)
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
@@ -911,8 +909,7 @@ def task_status(project_id: str, task_id: str) -> None:
     mode_info = MODE_DISPLAY.get(mode, MODE_DISPLAY[None])
 
     print(f"Task {task_id}:")
-    if task.name:
-        print(f"  Name:            {task.name}")
+    print(f"  Name:            {task.name}")
     print(f"  Status:          {draw_emoji(info.emoji)} {status_color(info.label, color_enabled)}")
     print(f"  Mode:            {m_emoji} {mode_info.label or 'not set'}")
     if cname:
