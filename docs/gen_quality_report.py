@@ -145,6 +145,11 @@ def _section_dead_code() -> str:
 def _section_dependency_diagram() -> str:
     """Generate module dependency diagram from tach."""
     result = _run(sys.executable, "-m", "tach", "show", "--mermaid", "-o", "-")
+    if result.returncode != 0:
+        output = (result.stdout + result.stderr).strip() or "no output"
+        return (
+            f"!!! warning\n    tach show failed (exit {result.returncode}).\n\n```\n{output}\n```\n"
+        )
     output = result.stdout.strip()
     if not output:
         return "!!! warning\n    tach show --mermaid produced no output.\n"
@@ -167,6 +172,9 @@ def _section_dependency_diagram() -> str:
 def _section_dependency_report() -> str:
     """Generate dependency report from tach."""
     result = _run(sys.executable, "-m", "tach", "report", str(SRC))
+    if result.returncode != 0:
+        output = (result.stdout + result.stderr).strip() or "no output"
+        return f"!!! warning\n    tach report failed (exit {result.returncode}).\n\n```\n{output}\n```\n"
     output = result.stdout.strip()
     if not output:
         return "No dependency report available.\n"
