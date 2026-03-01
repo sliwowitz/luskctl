@@ -273,28 +273,6 @@ class TestGetTasksLoadsName(unittest.TestCase):
             self.assertEqual(len(tasks), 1)
             self.assertEqual(tasks[0].name, "test-task")
 
-    def test_backward_compat_no_name(self) -> None:
-        """YAML without a name field produces name=None."""
-        project_id = "proj_compat"
-        with project_env(
-            f"project:\n  id: {project_id}\n",
-            project_id=project_id,
-        ) as ctx:
-            # Write a YAML file without the name field (legacy format)
-            meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
-            meta_dir.mkdir(parents=True, exist_ok=True)
-            meta = {
-                "task_id": "1",
-                "mode": None,
-                "workspace": "/tmp/ws",
-                "web_port": None,
-            }
-            (meta_dir / "1.yml").write_text(yaml.safe_dump(meta))
-
-            tasks = get_tasks(project_id)
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0].name, "")
-
 
 class TestDefaultCategoriesForProject(unittest.TestCase):
     """Tests for _default_categories_for_project()."""

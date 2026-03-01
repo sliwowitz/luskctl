@@ -346,6 +346,8 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
     - Stale workspace from incompletely deleted previous task with same ID
     - Ensuring new tasks always start with latest code
     """
+    project = load_project(project_id)
+
     # Validate name early (before creating any artifacts on disk)
     if name is not None:
         task_name = sanitize_task_name(name)
@@ -355,9 +357,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         if err:
             raise SystemExit(f"Invalid task name: {err}")
     else:
-        task_name = generate_task_name(project_id)
-
-    project = load_project(project_id)
+        task_name = generate_task_name(project.id)
     tasks_root = project.tasks_root
     ensure_dir(tasks_root)
     meta_dir = _tasks_meta_dir(project.id)
@@ -437,7 +437,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     exit_code=meta.get("exit_code"),
                     deleting=bool(meta.get("deleting")),
                     preset=meta.get("preset"),
-                    name=meta.get("name") or "",
+                    name=meta["name"],
                 )
             )
         except Exception:
@@ -902,7 +902,7 @@ def task_status(project_id: str, task_id: str) -> None:
         exit_code=exit_code,
         deleting=bool(meta.get("deleting")),
         container_state=cs,
-        name=meta.get("name") or "",
+        name=meta["name"],
     )
     status = effective_status(task)
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
