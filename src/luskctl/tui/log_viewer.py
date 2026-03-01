@@ -325,8 +325,7 @@ class LogViewerScreen(screen.Screen[None]):
     BINDINGS = [
         _modal_binding("escape", "dismiss_screen", "Back"),
         _modal_binding("q", "dismiss_screen", "Back"),
-        _modal_binding("f", "toggle_follow", "Follow"),
-        _modal_binding("c", "clear_log", "Clear"),
+        _modal_binding("f", "dismiss_screen", "Back"),
     ]
 
     CSS = """
@@ -383,13 +382,12 @@ class LogViewerScreen(screen.Screen[None]):
 
     def compose(self) -> ComposeResult:
         """Build the header, RichLog body, and keybinding footer."""
-        scroll_label = "AUTO-SCROLL" if self.follow else "SCROLL PAUSED"
         yield Static(
-            f" Task {self.task_id} ({self.mode}) | {self.container_name} \\[{scroll_label}]",
+            f" Task {self.task_id} ({self.mode}) | {self.container_name}",
             id="log-header",
         )
         yield RichLog(auto_scroll=self.follow, id="log-view")
-        yield Static(" \\[Esc/q] Back  \\[f] Toggle scroll  \\[c] Clear", id="log-footer")
+        yield Static(" \\[Esc/q/f] Back", id="log-footer")
 
     def on_mount(self) -> None:
         """Start the background log-streaming worker when the screen is mounted."""
@@ -486,7 +484,7 @@ class LogViewerScreen(screen.Screen[None]):
             """Switch footer text and disable auto-scroll on the main thread."""
             try:
                 footer = self.query_one("#log-footer", Static)
-                footer.update(" \\[Esc/q] Back  \\[f] Toggle scroll  \\[c] Clear  \\[STREAM ENDED]")
+                footer.update(" \\[Esc/q/f] Back  \\[STREAM ENDED]")
                 log_widget = self.query_one("#log-view", RichLog)
                 log_widget.auto_scroll = False
             except NoMatches:
@@ -508,28 +506,6 @@ class LogViewerScreen(screen.Screen[None]):
         """Stop the log stream and dismiss this screen."""
         self._cleanup_process()
         self.dismiss(None)
-
-    def action_toggle_follow(self) -> None:
-        """Toggle auto-scroll and update the header label to reflect the new state."""
-        self.follow = not self.follow
-        try:
-            log_widget = self.query_one("#log-view", RichLog)
-            log_widget.auto_scroll = self.follow
-            header = self.query_one("#log-header", Static)
-            scroll_label = "AUTO-SCROLL" if self.follow else "SCROLL PAUSED"
-            header.update(
-                f" Task {self.task_id} ({self.mode}) | {self.container_name} \\[{scroll_label}]"
-            )
-        except NoMatches:
-            pass
-
-    def action_clear_log(self) -> None:
-        """Clear all output in the RichLog widget."""
-        try:
-            log_widget = self.query_one("#log-view", RichLog)
-            log_widget.clear()
-        except NoMatches:
-            pass
 
     def on_unmount(self) -> None:
         """Ensure the subprocess is terminated when the screen is removed."""
