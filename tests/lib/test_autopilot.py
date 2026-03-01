@@ -986,7 +986,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
         return task_id
 
     def test_followup_writes_new_prompt(self) -> None:
-        """Follow-up overwrites prompt.txt with the new prompt."""
+        """Follow-up appends the new prompt to the existing prompt.txt."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_fu")
@@ -1023,7 +1023,11 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     prompt_file = (
                         state_dir / "tasks" / "proj_fu" / "1" / "agent-config" / "prompt.txt"
                     )
-                    self.assertEqual(prompt_file.read_text(), "fix the remaining tests")
+                    content = prompt_file.read_text()
+                    # Original prompt is preserved, new prompt appended after separator
+                    self.assertIn("initial prompt", content)
+                    self.assertIn("---", content)
+                    self.assertIn("fix the remaining tests", content)
 
     def test_followup_uses_podman_start(self) -> None:
         """Follow-up uses podman start, not podman run."""

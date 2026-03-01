@@ -350,6 +350,14 @@ def prepare_agent_config_dir(
         if agents_dict:  # non-empty dict
             (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
             has_agents = True
+    elif subagents or selected_agents:
+        import warnings
+
+        warnings.warn(
+            f"{resolved.label} does not support sub-agents (--agents); "
+            f"sub-agent definitions will be ignored.",
+            stacklevel=2,
+        )
 
     # Write shell wrapper functions for ALL providers so interactive CLI users
     # can invoke any agent (each provider gets its own shell function).

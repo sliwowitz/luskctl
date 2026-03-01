@@ -426,11 +426,11 @@ agent:
 #### Selecting Non-Default Agents
 
 ```bash
-# Include the debugger agent for this run
-luskctl run myproj "Find and fix the memory leak" --agent debugger
+# Include the debugger agent for this run (sub-agents require --provider claude)
+luskctl run myproj "Find and fix the memory leak" --provider claude --agent debugger
 
 # Include multiple non-default agents
-luskctl run myproj "Debug and plan a fix" --agent debugger --agent planner
+luskctl run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
 ```
 
 The `--agent` flag also works with interactive modes:

@@ -177,8 +177,11 @@ def task_run_cli(
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
+    from .headless_providers import get_provider as _get_provider
+
+    resolved = _get_provider(None, project)
     agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=project.default_agent or "claude"
+        project, task_id, subagents, agents, provider=resolved.name
     )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -256,8 +259,11 @@ def task_run_web(
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
+    from .headless_providers import get_provider as _get_provider
+
+    resolved_web = _get_provider(None, project)
     agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=project.default_agent or "claude"
+        project, task_id, subagents, agents, provider=resolved_web.name
     )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -590,10 +596,14 @@ def task_followup_headless(
             f"Follow-up will start a fresh session with the new prompt."
         )
 
-    # Update prompt.txt with the new follow-up prompt (after all validation)
+    # Append follow-up prompt to prompt.txt (preserves original prompt,
+    # provider-injected guidance, and prior follow-ups)
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
-    (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    prompt_path = agent_config_dir / "prompt.txt"
+    existing = prompt_path.read_text(encoding="utf-8") if prompt_path.is_file() else ""
+    updated = f"{existing}\n\n---\n\n{prompt}" if existing else prompt
+    prompt_path.write_text(updated, encoding="utf-8")
 
     # Restart the existing container (re-runs the original bash command,
     # which reads prompt.txt and session files from the volume)

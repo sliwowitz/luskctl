@@ -88,6 +88,13 @@ def resolve_provider_value(
       → looks up *provider_name*, falls back to ``_default``, then ``None``.
 
     Returns ``None`` when the key is absent or has no match for the provider.
+
+    **Null override behaviour**: when a per-provider dict maps a provider to
+    ``null`` (Python ``None``), that ``None`` is treated as "no value" and the
+    resolver falls back to ``_default``.  This is intentional — it allows a
+    lower-priority config layer to set a provider-specific value that a
+    higher-priority layer can effectively *unset* by mapping it to ``null``,
+    letting the ``_default`` (or ``None``) bubble up instead.
     """
     val = config.get(key)
     if val is None:

@@ -336,6 +336,15 @@ class ResolveProviderValueTests(unittest.TestCase):
         config = {"model": None}
         self.assertIsNone(resolve_provider_value("model", config, "claude"))
 
+    def test_per_provider_null_falls_back_to_default(self) -> None:
+        """Explicit null for a provider falls back to _default."""
+        config = {"model": {"claude": None, "_default": "fast"}}
+        # null provider value → falls back to _default
+        self.assertEqual(resolve_provider_value("model", config, "claude"), "fast")
+        # non-null provider value is returned directly
+        config2 = {"model": {"claude": "opus", "_default": "fast"}}
+        self.assertEqual(resolve_provider_value("model", config2, "claude"), "opus")
+
 
 class ApplyProviderConfigTests(unittest.TestCase):
     """Tests for apply_provider_config() best-effort feature mapping."""

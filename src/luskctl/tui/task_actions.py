@@ -265,7 +265,11 @@ class TaskActionsMixin:
         # Resolve provider — agent selection is only relevant for Claude
         from ..lib.containers.headless_providers import get_provider
 
-        resolved = get_provider(None, project)
+        try:
+            resolved = get_provider(None, project)
+        except SystemExit as e:
+            self.notify(str(e))
+            return
 
         raw_subagents = project.agent_config.get("subagents", [])
         subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
