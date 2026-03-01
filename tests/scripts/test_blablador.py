@@ -6,8 +6,7 @@
 
 These tests verify that:
 1. The blablador wrapper script is syntactically correct Python
-2. The L1 CLI Dockerfile includes the blablador alias
-3. The blablador alias has proper git author/committer configuration
+2. The L1 CLI Dockerfile includes the blablador binary installation
 """
 
 import ast
