@@ -62,6 +62,39 @@ git:
                 self.assertEqual(projects[0].upstream_url, "https://user.example/repo.git")
                 self.assertEqual(projects[0].root, (user_projects / project_id).resolve())
 
+    def test_load_project_malformed_yaml(self) -> None:
+        """load_project raises SystemExit on malformed YAML (not an unhandled YAMLError)."""
+        project_id = "bad-yaml"
+        malformed = "project:\n  id: bad-yaml\n  foo: [invalid yaml\n"
+        with project_env(malformed, project_id=project_id):
+            with self.assertRaises(SystemExit) as ctx:
+                load_project(project_id)
+            self.assertIn("Failed to parse", str(ctx.exception))
+
+    def test_list_projects_skips_malformed_yaml(self) -> None:
+        """list_projects skips projects with malformed YAML instead of crashing."""
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            config_dir = base / "config"
+
+            # One valid project
+            write_project(
+                config_dir,
+                "good",
+                "project:\n  id: good\ngit:\n  upstream_url: https://example.com/good.git\n",
+            )
+            # One malformed project
+            write_project(config_dir, "bad", "project:\n  id: bad\n  foo: [invalid\n")
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"LUSKCTL_CONFIG_DIR": str(config_dir), "XDG_CONFIG_HOME": str(base / "empty")},
+            ):
+                projects = list_projects()
+                # The malformed project should be skipped, only the good one returned
+                self.assertEqual(len(projects), 1)
+                self.assertEqual(projects[0].id, "good")
+
     def test_get_project_state(self) -> None:
         project_id = "proj3"
         yaml = f"""\
