@@ -26,19 +26,7 @@ from ...ui_utils.terminal import (
     violet as _violet,
     yes_no as _yes_no,
 )
-
-
-def _complete_project_ids(
-    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
-) -> list[str]:  # pragma: no cover
-    """Return project IDs matching *prefix* for argcomplete."""
-    try:
-        ids = [p.id for p in list_projects()]
-    except Exception:
-        return []
-    if prefix:
-        ids = [i for i in ids if str(i).startswith(prefix)]
-    return ids
+from ._completers import complete_project_ids as _complete_project_ids
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

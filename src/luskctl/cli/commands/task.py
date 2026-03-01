@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 
 from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
-from ...lib.core.projects import list_projects
 from ...lib.facade import (
     WEB_BACKENDS,
     get_tasks as _get_tasks,
@@ -23,19 +22,7 @@ from ...lib.facade import (
     task_status,
     task_stop,
 )
-
-
-def _complete_project_ids(
-    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
-) -> list[str]:  # pragma: no cover
-    """Return project IDs matching *prefix* for argcomplete."""
-    try:
-        ids = [p.id for p in list_projects()]
-    except Exception:
-        return []
-    if prefix:
-        ids = [i for i in ids if str(i).startswith(prefix)]
-    return ids
+from ._completers import complete_project_ids as _complete_project_ids
 
 
 def _complete_task_ids(

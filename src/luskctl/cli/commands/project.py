@@ -6,20 +6,8 @@ import argparse
 
 from ...lib.core.projects import derive_project, list_presets, list_projects
 from ...lib.wizards.new_project import run_wizard
+from ._completers import complete_project_ids as _complete_project_ids
 from .setup import cmd_project_init
-
-
-def _complete_project_ids(
-    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
-) -> list[str]:  # pragma: no cover
-    """Return project IDs matching *prefix* for argcomplete."""
-    try:
-        ids = [p.id for p in list_projects()]
-    except Exception:
-        return []
-    if prefix:
-        ids = [i for i in ids if str(i).startswith(prefix)]
-    return ids
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

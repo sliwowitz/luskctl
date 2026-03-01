@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-from ...lib.core.projects import list_projects
 from ...lib.facade import (
     AUTH_PROVIDERS,
     authenticate,
@@ -14,19 +13,7 @@ from ...lib.facade import (
     maybe_pause_for_ssh_key_registration,
     sync_project_gate,
 )
-
-
-def _complete_project_ids(
-    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
-) -> list[str]:  # pragma: no cover
-    """Return project IDs matching *prefix* for argcomplete."""
-    try:
-        ids = [p.id for p in list_projects()]
-    except Exception:
-        return []
-    if prefix:
-        ids = [i for i in ids if str(i).startswith(prefix)]
-    return ids
+from ._completers import complete_project_ids as _complete_project_ids
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
