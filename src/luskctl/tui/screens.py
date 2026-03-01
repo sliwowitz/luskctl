@@ -100,6 +100,8 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         _modal_binding("s", "init_ssh", "Init SSH"),
         _modal_binding("a", "auth", "Authenticate"),
         _modal_binding("I", "edit_instructions", "Edit instructions"),
+        _modal_binding("t", "toggle_inherit", "Toggle inherit"),
+        _modal_binding("v", "show_resolved", "Show resolved instructions"),
     ]
 
     CSS = (
@@ -149,6 +151,8 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             Option("\\[a]uthenticate...", id="auth"),
             None,
             Option("edit \\[I]nstructions", id="edit_instructions"),
+            Option("\\[t]oggle instructions inherit", id="toggle_inherit"),
+            Option("\\[v]iew resolved instructions", id="show_resolved"),
             id="actions-list",
         )
 
@@ -222,6 +226,14 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
     def action_edit_instructions(self) -> None:
         """Open instructions for editing."""
         self.dismiss("edit_instructions")
+
+    def action_toggle_inherit(self) -> None:
+        """Toggle instructions inheritance mode."""
+        self.dismiss("toggle_inherit")
+
+    def action_show_resolved(self) -> None:
+        """Show fully resolved instructions."""
+        self.dismiss("show_resolved")
 
 
 # ---------------------------------------------------------------------------

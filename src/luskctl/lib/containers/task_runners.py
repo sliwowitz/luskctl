@@ -73,7 +73,7 @@ def _prepare_agent_config(
     from .headless_providers import get_provider as _get_provider
 
     resolved = _get_provider(provider_name, project)
-    instr_text = resolve_instructions(effective, resolved.name)
+    instr_text = resolve_instructions(effective, resolved.name, project_root=project.root)
     return prepare_agent_config_dir(
         project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
     )
@@ -460,7 +460,9 @@ def task_run_headless(
 
     # Resolve instructions: CLI --instructions overrides config stack
     instr_text = (
-        instructions if instructions is not None else resolve_instructions(effective, resolved.name)
+        instructions
+        if instructions is not None
+        else resolve_instructions(effective, resolved.name, project_root=project.root)
     )
 
     # Apply provider-aware config resolution with best-effort feature mapping.

@@ -4,7 +4,9 @@
 
 """Tests for agent instruction resolution module."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from luskctl.lib.containers.instructions import (
     bundled_default_instructions,
@@ -87,11 +89,133 @@ class ResolveInstructionsTests(unittest.TestCase):
         result = resolve_instructions(config, "claude")
         self.assertEqual(result, "First part.\n\nSecond part.\n\nThird part.")
 
-    def test_list_with_inherit_stripped(self) -> None:
-        """_inherit sentinel is stripped from lists."""
-        config = {"instructions": ["Base text.", "_inherit", "Extra text."]}
+    def test_list_with_inherit_splices_default(self) -> None:
+        """_inherit sentinel is replaced with bundled default in lists."""
+        config = {"instructions": ["_inherit", "Extra text."]}
         result = resolve_instructions(config, "claude")
-        self.assertEqual(result, "Base text.\n\nExtra text.")
+        default = bundled_default_instructions()
+        self.assertEqual(result, f"{default}\n\nExtra text.")
+
+    def test_list_inherit_in_middle(self) -> None:
+        """_inherit in the middle of a list splices default at that position."""
+        config = {"instructions": ["Before.", "_inherit", "After."]}
+        result = resolve_instructions(config, "claude")
+        default = bundled_default_instructions()
+        self.assertEqual(result, f"Before.\n\n{default}\n\nAfter.")
+
+    def test_list_without_inherit(self) -> None:
+        """List without _inherit contains no bundled default."""
+        config = {"instructions": ["Custom only."]}
+        result = resolve_instructions(config, "claude")
+        self.assertEqual(result, "Custom only.")
+        self.assertNotIn("luskctl", result)
+
+    def test_empty_list(self) -> None:
+        """Empty list produces empty string (no default)."""
+        config = {"instructions": []}
+        result = resolve_instructions(config, "claude")
+        self.assertEqual(result, "")
+
+
+class FileAppendTests(unittest.TestCase):
+    """Tests for standalone instructions.md file append behavior."""
+
+    def test_absent_yaml_absent_file_returns_default(self) -> None:
+        """No YAML + no file = bundled default."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = resolve_instructions({}, "claude", project_root=Path(tmpdir))
+            self.assertIn("luskctl", result)
+
+    def test_absent_yaml_with_file_appends(self) -> None:
+        """No YAML + file = bundled default + file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("Project notes.", encoding="utf-8")
+            result = resolve_instructions({}, "claude", project_root=root)
+            default = bundled_default_instructions()
+            self.assertTrue(result.startswith(default))
+            self.assertTrue(result.endswith("Project notes."))
+
+    def test_inherit_list_with_file(self) -> None:
+        """YAML ["_inherit"] + file = bundled default + file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("File content.", encoding="utf-8")
+            config = {"instructions": ["_inherit"]}
+            result = resolve_instructions(config, "claude", project_root=root)
+            default = bundled_default_instructions()
+            self.assertTrue(result.startswith(default))
+            self.assertTrue(result.endswith("File content."))
+
+    def test_inherit_plus_extra_plus_file(self) -> None:
+        """YAML ["_inherit", "extra"] + file = default + extra + file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("File text.", encoding="utf-8")
+            config = {"instructions": ["_inherit", "Extra YAML."]}
+            result = resolve_instructions(config, "claude", project_root=root)
+            default = bundled_default_instructions()
+            self.assertIn(default, result)
+            self.assertIn("Extra YAML.", result)
+            self.assertTrue(result.endswith("File text."))
+
+    def test_custom_only_no_file(self) -> None:
+        """YAML ["custom only"] + no file = custom only (no default)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = {"instructions": ["custom only"]}
+            result = resolve_instructions(config, "claude", project_root=Path(tmpdir))
+            self.assertEqual(result, "custom only")
+
+    def test_custom_only_with_file(self) -> None:
+        """YAML ["custom only"] + file = custom + file (no default)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("File.", encoding="utf-8")
+            config = {"instructions": ["custom only"]}
+            result = resolve_instructions(config, "claude", project_root=root)
+            self.assertEqual(result, "custom only\n\nFile.")
+
+    def test_empty_list_with_file(self) -> None:
+        """YAML [] + file = file only."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("Only file.", encoding="utf-8")
+            config = {"instructions": []}
+            result = resolve_instructions(config, "claude", project_root=root)
+            self.assertEqual(result, "Only file.")
+
+    def test_flat_string_with_file(self) -> None:
+        """YAML flat string + file = string + file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("Appended.", encoding="utf-8")
+            config = {"instructions": "flat string"}
+            result = resolve_instructions(config, "claude", project_root=root)
+            self.assertEqual(result, "flat string\n\nAppended.")
+
+    def test_empty_file_not_appended(self) -> None:
+        """An empty instructions.md file is not appended."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("", encoding="utf-8")
+            config = {"instructions": "base"}
+            result = resolve_instructions(config, "claude", project_root=root)
+            self.assertEqual(result, "base")
+
+    def test_whitespace_only_file_not_appended(self) -> None:
+        """Whitespace-only instructions.md is not appended."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("  \n  \n  ", encoding="utf-8")
+            config = {"instructions": "base"}
+            result = resolve_instructions(config, "claude", project_root=root)
+            self.assertEqual(result, "base")
+
+    def test_no_project_root_skips_file(self) -> None:
+        """When project_root is None, no file append occurs."""
+        config = {"instructions": "base"}
+        result = resolve_instructions(config, "claude", project_root=None)
+        self.assertEqual(result, "base")
 
 
 class HasCustomInstructionsTests(unittest.TestCase):
@@ -116,6 +240,22 @@ class HasCustomInstructionsTests(unittest.TestCase):
     def test_true_for_list_form(self) -> None:
         """Returns True for list form."""
         self.assertTrue(has_custom_instructions({"instructions": ["Part 1", "Part 2"]}))
+
+    def test_true_with_instructions_file(self) -> None:
+        """Returns True when instructions.md exists even without YAML key."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "instructions.md").write_text("Content", encoding="utf-8")
+            self.assertTrue(has_custom_instructions({}, project_root=root))
+
+    def test_false_no_yaml_no_file(self) -> None:
+        """Returns False when no YAML key and no file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.assertFalse(has_custom_instructions({}, project_root=Path(tmpdir)))
+
+    def test_false_no_project_root(self) -> None:
+        """Returns False when no YAML key and project_root is None."""
+        self.assertFalse(has_custom_instructions({}, project_root=None))
 
 
 if __name__ == "__main__":

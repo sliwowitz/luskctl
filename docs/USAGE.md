@@ -501,12 +501,39 @@ luskctl provides layered agent instructions that describe the container environm
 
 ### How It Works
 
-Every task container receives instructions explaining the workspace layout, available tools, sudo access, git workflow, and conventions. By default, luskctl uses bundled instructions that cover the standard container environment.
+Every task container receives instructions explaining the workspace layout, available tools, sudo access, git workflow, and conventions. Two independent layers control what a task receives:
+
+1. **YAML `instructions` key** — controls the inheritance chain via config stack. Uses `_inherit` in list form to splice the bundled default at that position. Absent = bundled default.
+2. **Standalone `instructions.md` file** in the project root — always appended at the end of whatever the YAML chain resolved. Purely additive. If empty or absent, nothing is appended.
 
 - **Claude**: instructions are injected via `--append-system-prompt` (system-level context)
 - **Other providers**: instructions are prepended to the task prompt
 
+### Scenarios
+
+| YAML `instructions` | File | Result |
+|---|---|---|
+| absent | absent | bundled default |
+| absent | has content | bundled default + file |
+| `["_inherit"]` | has content | bundled default + file (same, explicit) |
+| `["_inherit", "extra"]` | has content | bundled default + extra + file |
+| `["custom only"]` | absent | custom only (no default) |
+| `["custom only"]` | has content | custom only + file |
+| `[]` | has content | file only |
+| `"flat string"` | has content | flat string + file |
+
 ### Customizing Instructions
+
+#### Option 1: Standalone file (recommended for most users)
+
+Create `instructions.md` in your project root with project-specific notes. These are appended to the bundled default automatically:
+
+```
+# Project Notes
+This project uses Poetry. Run `make check` before committing.
+```
+
+#### Option 2: YAML config
 
 Set the `instructions` key in your project's `agent:` config or in a preset:
 
@@ -544,6 +571,13 @@ agent:
       Run `make check` before committing.
 ```
 
+To suppress defaults entirely, use an empty list:
+
+```yaml
+agent:
+  instructions: []
+```
+
 ### CLI Flag
 
 Override all config-stack instructions with a file:
@@ -554,7 +588,22 @@ luskctl run myproj "Fix the bug" --instructions path/to/instructions.md
 
 ### TUI
 
-The project details panel shows an **Instruct:** badge (`custom` or `default`). Press **Shift+I** in the project details screen to edit instructions in `$EDITOR`.
+The project details panel shows an **Instruct:** badge with three states:
+
+- **default** (dim) — no custom instructions
+- **custom + inherited** (green) — has custom content with defaults included
+- **custom only** (cyan) — has custom content, defaults overridden
+
+Available actions from the project details screen:
+
+- **Shift+I** — edit project `instructions.md` in `$EDITOR`
+- **t** — toggle instructions inheritance (include/exclude bundled defaults)
+- **v** — view fully resolved instructions as a task would receive them
+
+Command palette (`Ctrl+P`) actions:
+
+- **Edit Global Instructions** — edit the global `instructions.md` in `$EDITOR`
+- **Show Default Instructions** — view the bundled default instructions (read-only)
 
 ### Debugging
 

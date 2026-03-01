@@ -252,6 +252,25 @@ pip install -e .
 
 ---
 
+## Agent Instructions Architecture
+
+Agent instructions use a "YAML config + standalone file" two-layer pattern:
+
+1. **YAML `instructions` key** — controls what base to use (bundled default, global, custom, or a mix via `_inherit`). Absent = bundled default.
+2. **Standalone `instructions.md` file** in the project root — always appended at the end of whatever the YAML chain resolved. Purely additive.
+
+The `_inherit` sentinel in a YAML list is replaced with the bundled default content at that position (splicing), rather than being stripped. This lets projects compose instructions as: default + project-specific YAML + file addendum.
+
+Key implementation details:
+- `resolve_instructions()` in `instructions.py` accepts `project_root` to locate the standalone file
+- `has_custom_instructions()` checks both YAML key and file existence
+- The TUI badge shows three states: `default`, `custom + inherited`, `custom only`
+- Task runners pass `project_root=project.root` to ensure file content is included
+
+This pattern (config key for inheritance control + file for additive content) is recommended for future similar functionality where users need both structured overrides and free-form additions. See PR #272 for the design discussion.
+
+---
+
 ## Packaging
 
 See [PACKAGING.md](PACKAGING.md) for details on:

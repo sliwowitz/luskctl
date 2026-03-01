@@ -10,7 +10,6 @@ from rich.style import Style
 from rich.text import Text
 from textual.widgets import Static
 
-from ...lib.containers.instructions import has_custom_instructions
 from ...lib.core.projects import Project
 from ...lib.facade import GateStalenessInfo
 from ...lib.util.emoji import draw_emoji
@@ -96,12 +95,25 @@ def render_project_details(
     security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
 
     dim_style = Style(dim=True)
-    custom_instr = has_custom_instructions(project.agent_config)
-    instr_s = (
-        Text("custom", style=Style(color=success_color))
-        if custom_instr
-        else Text("default", style=dim_style)
-    )
+    # Three-state badge based on YAML config + file existence
+    yaml_instructions = project.agent_config.get("instructions")
+    try:
+        has_file = (project.root / "instructions.md").is_file()
+    except (TypeError, AttributeError):
+        has_file = False
+    has_yaml = yaml_instructions is not None
+
+    if has_yaml or has_file:
+        # Check if _inherit is present (or YAML is absent = implicit inherit)
+        inherits = not has_yaml or (
+            isinstance(yaml_instructions, list) and "_inherit" in yaml_instructions
+        )
+        if inherits:
+            instr_s = Text("custom + inherited", style=Style(color=success_color))
+        else:
+            instr_s = Text("custom only", style=Style(color="cyan"))
+    else:
+        instr_s = Text("default", style=dim_style)
 
     lines = [
         Text(f"Project:   {project.id} {security_emoji}"),

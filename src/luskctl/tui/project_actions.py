@@ -309,21 +309,16 @@ class ProjectActionsMixin:
     # ---------- Instructions editing ----------
 
     async def _action_edit_instructions(self) -> None:
-        """Open instructions file in $EDITOR for the current project."""
+        """Open project instructions.md in $EDITOR for the current project."""
         if not self.current_project_id:
             self.notify("No project selected.")
             return
         pid = self.current_project_id
 
         def work() -> None:
-            """Open instructions file in $EDITOR, seeding with default if absent."""
+            """Open instructions file in $EDITOR (creates if absent)."""
             project = load_project(pid)
             instr_path = project.root / "instructions.md"
-            if not instr_path.is_file():
-                from ..lib.containers.instructions import bundled_default_instructions
-
-                instr_path.write_text(bundled_default_instructions(), encoding="utf-8")
-                print(f"Created {instr_path} with bundled defaults.")
             editor = os.environ.get("EDITOR", "").strip() or "vi"
             editor_cmd = shlex.split(editor)
             result = subprocess.run([*editor_cmd, str(instr_path)], check=False)
@@ -331,6 +326,96 @@ class ProjectActionsMixin:
                 raise SystemExit(f"Editor exited with code {result.returncode}")
 
         await self._run_suspended(work, success_msg=f"Instructions updated for {pid}")
+
+    async def _action_toggle_instructions_inherit(self) -> None:
+        """Toggle YAML instructions between inherit and override mode."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+        pid = self.current_project_id
+
+        try:
+            import yaml as _yaml
+
+            project = load_project(pid)
+            project_yml = project.root / "project.yml"
+            if not project_yml.is_file():
+                self.notify("No project.yml found.")
+                return
+            raw = _yaml.safe_load(project_yml.read_text(encoding="utf-8")) or {}
+            agent = raw.setdefault("agent", {})
+            current = agent.get("instructions")
+
+            # Determine current mode and toggle
+            has_inherit = (isinstance(current, list) and "_inherit" in current) or current is None
+            if has_inherit:
+                # Switch to override mode (no parent defaults)
+                agent["instructions"] = []
+                mode_label = "custom only (defaults disabled)"
+            else:
+                # Switch to inherit mode (include parent defaults)
+                agent["instructions"] = ["_inherit"]
+                mode_label = "inheriting defaults"
+
+            project_yml.write_text(_yaml.safe_dump(raw, default_flow_style=False), encoding="utf-8")
+            self.notify(f"Instructions: {mode_label}")
+        except Exception as e:
+            self.notify(f"Toggle failed: {e}")
+        self._refresh_project_state()
+
+    async def _action_show_resolved_instructions(self) -> None:
+        """Display fully resolved instructions as a task would receive them."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+        pid = self.current_project_id
+
+        def work() -> None:
+            """Resolve and print the effective instructions."""
+            from ..lib.containers.agent_config import resolve_agent_config
+            from ..lib.containers.instructions import resolve_instructions
+
+            project = load_project(pid)
+            effective = resolve_agent_config(pid)
+            from ..lib.containers.headless_providers import get_provider as _get_provider
+
+            resolved = _get_provider(None, project)
+            text = resolve_instructions(effective, resolved.name, project_root=project.root)
+            print("=== Resolved Instructions ===\n")
+            print(text)
+            print(f"\n=== End ({len(text)} chars) ===")
+
+        await self._run_suspended(work, refresh=None)
+
+    async def _action_edit_global_instructions(self) -> None:
+        """Open global instructions.md in $EDITOR."""
+
+        def work() -> None:
+            """Open global instructions file in $EDITOR."""
+            from ..lib.core.config import global_config_path
+
+            global_instr = global_config_path().parent / "instructions.md"
+            editor = os.environ.get("EDITOR", "").strip() or "vi"
+            editor_cmd = shlex.split(editor)
+            result = subprocess.run([*editor_cmd, str(global_instr)], check=False)
+            if result.returncode != 0:
+                raise SystemExit(f"Editor exited with code {result.returncode}")
+
+        await self._run_suspended(work, success_msg="Global instructions updated", refresh=None)
+
+    async def _action_show_default_instructions(self) -> None:
+        """Display the bundled default instructions (read-only)."""
+
+        def work() -> None:
+            """Print bundled default instructions."""
+            from ..lib.containers.instructions import bundled_default_instructions
+
+            text = bundled_default_instructions()
+            print("=== Bundled Default Instructions ===\n")
+            print(text)
+            print(f"\n=== End ({len(text)} chars) ===")
+
+        await self._run_suspended(work, refresh=None)
 
     # --- Project wizard ---
 
