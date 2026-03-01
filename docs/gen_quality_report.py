@@ -20,14 +20,20 @@ SRC = ROOT / "src" / "luskctl"
 COMPLEXITY_THRESHOLD = 15
 
 
-def _run(*cmd: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
+def _run(
+    *cmd: str, cwd: Path = ROOT, timeout_seconds: float = 120.0
+) -> subprocess.CompletedProcess[str]:
     """Run a command and return the result (never raises on failure)."""
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr="timed out")
 
 
 def _section_complexity() -> str:
@@ -51,7 +57,21 @@ def _section_complexity() -> str:
         data = json.loads(latest_cache.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return "!!! warning\n    complexipy cache is invalid JSON — skipping complexity report.\n"
-    functions = data.get("functions", [])
+    raw_functions = data.get("functions", [])
+    functions: list[dict[str, object]] = []
+    for item in raw_functions:
+        if not isinstance(item, dict):
+            continue
+        complexity = item.get("complexity")
+        if not isinstance(complexity, (int, float)):
+            continue
+        functions.append(
+            {
+                "complexity": complexity,
+                "function_name": str(item.get("function_name", "<unknown>")),
+                "path": str(item.get("path", "<unknown>")),
+            }
+        )
     if not functions:
         return "No functions found.\n"
 
@@ -100,6 +120,9 @@ def _section_dead_code() -> str:
     if not output:
         return "No dead code found at 80% confidence threshold.\n"
 
+    def _md_cell(value: str) -> str:
+        return value.replace("|", r"\|").replace("\n", " ")
+
     lines = ["| Confidence | Location | Issue |\n", "|---:|---|---|\n"]
     for line in output.splitlines():
         # Format: path:line: message (NN% confidence)
@@ -111,9 +134,11 @@ def _section_dead_code() -> str:
             loc_parts = location_msg.split(": ", 1)
             location = loc_parts[0] if loc_parts else location_msg
             message = loc_parts[1] if len(loc_parts) > 1 else ""
-            lines.append(f"| {confidence} | `{location}` | {message} |\n")
+            lines.append(
+                f"| {_md_cell(confidence)} | `{_md_cell(location)}` | {_md_cell(message)} |\n"
+            )
         else:
-            lines.append(f"| — | — | {line} |\n")
+            lines.append(f"| — | — | {_md_cell(line)} |\n")
     return "".join(lines)
 
 
