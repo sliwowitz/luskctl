@@ -392,8 +392,8 @@ class ProjectActionsMixin:
             effective = resolve_agent_config(pid)
             from ..lib.containers.headless_providers import get_provider as _get_provider
 
-            resolved = _get_provider(None, project)
-            text = resolve_instructions(effective, resolved.name, project_root=project.root)
+            provider = _get_provider(None, project)
+            text = resolve_instructions(effective, provider.name, project_root=project.root)
             print("=== Resolved Instructions ===\n")
             print(text)
             print(f"\n=== End ({len(text)} chars) ===")
@@ -408,6 +408,7 @@ class ProjectActionsMixin:
             from ..lib.core.config import global_config_path
 
             global_instr = global_config_path().parent / "instructions.md"
+            global_instr.parent.mkdir(parents=True, exist_ok=True)
             editor = os.environ.get("EDITOR", "").strip() or "vi"
             editor_cmd = shlex.split(editor)
             result = subprocess.run([*editor_cmd, str(global_instr)], check=False)

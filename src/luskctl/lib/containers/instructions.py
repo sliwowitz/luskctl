@@ -41,8 +41,10 @@ def _read_instructions_file(project_root: Path | None) -> str:
     path = project_root / "instructions.md"
     if not path.is_file():
         return ""
-    text = path.read_text(encoding="utf-8").strip()
-    return text
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return ""
 
 
 def _splice_inherit(items: list, default: str) -> str:
