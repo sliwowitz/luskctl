@@ -2,3 +2,4 @@
 # Keep in sync with the caret constraints in pyproject.toml [tool.poetry.group.dev.dependencies].
 docstr-coverage>=2.3.2,<3.0.0
 tach>=0.33.3,<0.34.0
+vulture>=2.12,<3.0.0
