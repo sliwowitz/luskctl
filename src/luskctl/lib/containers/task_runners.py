@@ -543,8 +543,10 @@ def task_followup_headless(
 ) -> None:
     """Send a follow-up prompt to a completed/failed headless task.
 
-    Updates prompt.txt in the existing agent-config directory and restarts
-    the stopped container via ``podman start``.  Session context is
+    Replaces prompt.txt with the new prompt (so the agent only sees the
+    current instruction) and archives the previous content to
+    ``prompt-history.txt``.  Restarts the stopped container via
+    ``podman start``.  Session context is
     automatically restored for providers that support it:
 
     - **Claude**: resumes via ``--resume <session-id>`` (captured by a
@@ -553,7 +555,7 @@ def task_followup_headless(
       flag.  A ``session-id.txt`` marker is written after the first run;
       the shell wrapper detects it on restart and passes ``--continue``.
     - **Codex / Copilot**: no session resume support — follow-ups start a
-      fresh session with the accumulated prompt history.
+      fresh session with the new prompt only.
 
     Per-run flags (model, max_turns, timeout) carry forward from the
     original ``task_run_headless`` invocation since ``podman start``
@@ -601,14 +603,18 @@ def task_followup_headless(
             f"Follow-up will start a fresh session with the new prompt."
         )
 
-    # Append follow-up prompt to prompt.txt (preserves original prompt,
-    # provider-injected guidance, and prior follow-ups)
+    # Write follow-up prompt to prompt.txt (replaces previous content so the
+    # agent only sees the current instruction).  Prior prompts are archived to
+    # prompt-history.txt for logging/debugging.
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
     prompt_path = agent_config_dir / "prompt.txt"
+    history_path = agent_config_dir / "prompt-history.txt"
     existing = prompt_path.read_text(encoding="utf-8") if prompt_path.is_file() else ""
-    updated = f"{existing}\n\n---\n\n{prompt}" if existing else prompt
-    prompt_path.write_text(updated, encoding="utf-8")
+    if existing:
+        with history_path.open("a", encoding="utf-8") as hf:
+            hf.write(f"{existing}\n\n---\n\n")
+    prompt_path.write_text(prompt, encoding="utf-8")
 
     # Restart the existing container (re-runs the original bash command,
     # which reads prompt.txt and session files from the volume)
