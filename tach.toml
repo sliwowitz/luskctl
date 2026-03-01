@@ -271,11 +271,17 @@ path = "luskctl.lib.core.config"
 layer = "core"
 depends_on = ["luskctl.lib.core.paths"]
 
-# Project data model & loader
+# Project and preset data models (pure types, no I/O)
+[[modules]]
+path = "luskctl.lib.core.project_model"
+layer = "core"
+depends_on = []
+
+# Project discovery, loading, and preset management
 [[modules]]
 path = "luskctl.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.util.config_stack"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.project_model", "luskctl.lib.util.config_stack"]
 
 # Image naming conventions
 [[modules]]
@@ -360,6 +366,15 @@ utility = true
 expose = [
     "Project",
     "PresetInfo",
+    "effective_ssh_key_name",
+    "validate_project_id",
+]
+from = ["luskctl.lib.core.project_model"]
+
+[[interfaces]]
+expose = [
+    "Project",
+    "PresetInfo",
     "find_preset_path",
     "list_projects",
     "load_project",
@@ -367,6 +382,7 @@ expose = [
     "list_presets",
     "derive_project",
     "effective_ssh_key_name",
+    "validate_project_id",
 ]
 from = ["luskctl.lib.core.projects"]
 
