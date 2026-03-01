@@ -257,10 +257,10 @@ class TaskList(ListView):
             extra_parts.append(f"port={task.web_port}")
 
         label = f"{task.task_id} {m_emoji} {s_emoji}"
-        if extra_parts:
-            label += f" [{'; '.join(extra_parts)}]"
         if task.name:
             label += f" {task.name}"
+        if extra_parts:
+            label += f" [{'; '.join(extra_parts)}]"
         return label
 
     def set_tasks(self, project_id: str, tasks_meta: list[TaskMeta]) -> None:
