@@ -56,7 +56,7 @@ def _git_global_identity() -> dict[str, str]:
     return result
 
 
-def _resolve_subagent_files(subagents: list | None, base_dir: Path) -> None:
+def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Path) -> None:
     """Resolve relative ``file`` paths in subagent entries against *base_dir*."""
     for sa in subagents or []:
         if not isinstance(sa, dict):
