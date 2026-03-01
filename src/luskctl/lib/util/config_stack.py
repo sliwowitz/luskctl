@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Generic layered config resolution.
 
 Domain-agnostic: no luskctl service dependencies.  Could be extracted to a

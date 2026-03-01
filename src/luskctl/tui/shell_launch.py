@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Helpers for launching interactive login shells from the TUI.
 
 Provides tmux detection, desktop terminal detection, web-mode ttyd spawning,

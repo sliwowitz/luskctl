@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate a code quality report page for MkDocs.
 
 This script runs during ``mkdocs build`` via the mkdocs-gen-files plugin.
