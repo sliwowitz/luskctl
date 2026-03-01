@@ -17,7 +17,7 @@ from ..lib.containers.tasks import (
     TaskMeta,
     mode_emoji,
 )
-from ..lib.core.projects import Project as CodexProject
+from ..lib.core.projects import Project
 from ..lib.facade import GateStalenessInfo
 from ..lib.util.emoji import draw_emoji
 
@@ -83,10 +83,10 @@ class ProjectList(ListView):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the project list with empty state."""
         super().__init__(**kwargs)
-        self.projects: list[CodexProject] = []
+        self.projects: list[Project] = []
         self._generation = 0
 
-    def set_projects(self, projects: list[CodexProject]) -> None:
+    def set_projects(self, projects: list[Project]) -> None:
         """Populate the list with projects."""
         self.projects = projects
         self._generation += 1
@@ -390,7 +390,7 @@ def render_task_details(
 
 
 def render_project_loading(
-    project: CodexProject | None,
+    project: Project | None,
     task_count: int | None = None,
 ) -> Text:
     """Render project loading state as a Rich Text object."""
@@ -414,7 +414,7 @@ def render_project_loading(
 
 
 def render_project_details(
-    project: CodexProject | None,
+    project: Project | None,
     state: dict | None,
     task_count: int | None = None,
     staleness: GateStalenessInfo | None = None,
@@ -571,13 +571,13 @@ class ProjectState(Static):
         """Initialize the project state panel."""
         super().__init__(**kwargs)
 
-    def set_loading(self, project: CodexProject | None, task_count: int | None = None) -> None:
+    def set_loading(self, project: Project | None, task_count: int | None = None) -> None:
         """Show a loading placeholder while project state is being fetched."""
         self.update(render_project_loading(project, task_count))
 
     def set_state(
         self,
-        project: CodexProject | None,
+        project: Project | None,
         state: dict | None,
         task_count: int | None = None,
         staleness: GateStalenessInfo | None = None,

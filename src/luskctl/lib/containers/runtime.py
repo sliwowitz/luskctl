@@ -134,7 +134,7 @@ def gpu_run_args(project: "Project") -> list[str]:
     try:
         proj_cfg = yaml.safe_load((project.root / "project.yml").read_text()) or {}
         run_cfg = proj_cfg.get("run", {}) or {}
-        gpus = run_cfg.get("gpus", run_cfg.get("gpu"))
+        gpus = run_cfg.get("gpus")
         if isinstance(gpus, str):
             enabled = gpus.lower() == "all"
         elif isinstance(gpus, bool):

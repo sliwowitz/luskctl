@@ -39,7 +39,7 @@ except Exception:  # pragma: no cover - textual may be a stub module
     Input = None  # type: ignore[assignment,misc]
 
 from ..lib.containers.tasks import sanitize_task_name, validate_task_name
-from ..lib.core.projects import Project as CodexProject
+from ..lib.core.projects import Project
 from ..lib.facade import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
 
@@ -108,7 +108,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
     def __init__(
         self,
-        project: CodexProject,
+        project: Project,
         state: dict | None,
         task_count: int | None,
         staleness: GateStalenessInfo | None = None,

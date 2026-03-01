@@ -487,8 +487,7 @@ def task_list(
 ) -> None:
     """List tasks for a project, optionally filtered by status, mode, or agent preset.
 
-    Status is computed live from podman container state + task metadata
-    (never from the legacy ``status`` YAML field).
+    Status is computed live from podman container state + task metadata.
     """
     tasks = get_tasks(project_id)
 
