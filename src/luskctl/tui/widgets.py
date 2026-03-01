@@ -255,12 +255,10 @@ class TaskList(ListView):
         extra_parts: list[str] = []
         if task.web_port is not None:
             extra_parts.append(f"port={task.web_port}")
-        extra_str = "; ".join(extra_parts)
 
-        label = f"{task.task_id} {m_emoji} {s_emoji} [{s_info.label}"
-        if extra_str:
-            label += f"; {extra_str}"
-        label += "]"
+        label = f"{task.task_id} {m_emoji} {s_emoji}"
+        if extra_parts:
+            label += f" [{'; '.join(extra_parts)}]"
         if task.name:
             label += f" {task.name}"
         return label
