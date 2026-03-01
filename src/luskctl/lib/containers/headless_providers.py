@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Headless (autopilot) provider registry for multi-agent support.
 
 Defines a frozen dataclass per provider and a registry dict, following the
@@ -13,6 +17,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ..core.project_model import Project
 
 
@@ -276,7 +282,7 @@ def _build_claude_command(
     max_turns: int | None,
 ) -> str:
     """Build the headless command for Claude using the wrapper function."""
-    # Claude uses the claude() wrapper from luskctl-claude.sh which handles
+    # Claude uses the claude() wrapper from luskctl-agent.sh which handles
     # --dangerously-skip-permissions, --add-dir, --agents, git env, and timeout
     flags = ""
     if model:
@@ -346,7 +352,7 @@ def generate_agent_wrapper(
     project: Project,
     has_agents: bool,
     *,
-    claude_wrapper_fn: object | None = None,
+    claude_wrapper_fn: Callable[[bool, Project, bool], str] | None = None,
 ) -> str:
     """Generate the shell wrapper function content for a provider.
 
@@ -360,7 +366,7 @@ def generate_agent_wrapper(
     and delegates to the binary.
 
     Args:
-        claude_wrapper_fn: Callable ``(has_agents, project, skip_permissions) -> str``.
+        claude_wrapper_fn: ``(has_agents, project, skip_permissions) -> str``.
             Required when ``provider.name == "claude"``.
     """
     if provider.name == "claude":

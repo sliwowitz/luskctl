@@ -175,7 +175,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "followup", help="Follow up on a completed/failed headless task with a new prompt"
     )
     _add_project_task_args(t_followup)
-    t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for Claude")
+    t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for the agent")
     t_followup.add_argument(
         "--no-follow",
         action="store_true",

@@ -553,6 +553,13 @@ def task_followup_headless(
     # Resolve provider from task metadata
     provider_name = meta.get("provider", "claude")
     resolved = HEADLESS_PROVIDERS.get(provider_name)
+    if resolved is None:
+        import warnings
+
+        warnings.warn(
+            f"Unknown provider {provider_name!r} in task metadata; session resume check skipped.",
+            stacklevel=1,
+        )
     label = resolved.label if resolved else provider_name
 
     if resolved and not resolved.supports_session_resume:

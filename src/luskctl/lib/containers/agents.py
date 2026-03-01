@@ -5,7 +5,7 @@
 """Agent configuration: parsing, filtering, and wrapper generation.
 
 Handles .md frontmatter parsing, sub-agent JSON conversion for Claude's
-``--agents`` flag, and the ``luskctl-claude.sh`` wrapper function that
+``--agents`` flag, and the ``luskctl-agent.sh`` wrapper function that
 sets up git identity and CLI flags inside task containers.
 """
 
@@ -135,7 +135,7 @@ def _generate_claude_wrapper(
     project: Project,
     skip_permissions: bool = True,
 ) -> str:
-    """Generate the luskctl-claude.sh wrapper function content.
+    """Generate the luskctl-agent.sh wrapper function content for Claude.
 
     Always includes git env vars. Conditionally includes
     --dangerously-skip-permissions, --add-dir /, and --agents.
@@ -322,7 +322,7 @@ def prepare_agent_config_dir(
     """Create and populate the agent-config directory for a task.
 
     Writes:
-    - luskctl-claude.sh (always) — wrapper function with git env vars
+    - luskctl-agent.sh (always) — wrapper function with git env vars
     - agents.json (only when provider supports it and sub-agents are non-empty)
     - prompt.txt (if prompt given, headless only)
     - <envs>/_claude-config/settings.json — SessionStart hook (Claude only)
@@ -357,7 +357,7 @@ def prepare_agent_config_dir(
     wrapper = generate_agent_wrapper(
         resolved, project, has_agents, claude_wrapper_fn=_generate_claude_wrapper
     )
-    (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
+    (agent_config_dir / "luskctl-agent.sh").write_text(wrapper, encoding="utf-8")
 
     # Write SessionStart hook — only for providers that support it (Claude)
     if resolved.supports_session_hook:

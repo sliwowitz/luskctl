@@ -489,7 +489,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("/home/dev/.luskctl:Z", cmd_str)
 
     def test_headless_generates_claude_wrapper(self) -> None:
-        """task_run_headless generates luskctl-claude.sh in agent-config dir."""
+        """task_run_headless generates luskctl-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_wrap")
@@ -526,7 +526,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                         / "proj_wrap"
                         / "1"
                         / "agent-config"
-                        / "luskctl-claude.sh"
+                        / "luskctl-agent.sh"
                     )
                     self.assertTrue(wrapper.is_file())
                     content = wrapper.read_text()
@@ -729,7 +729,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                         / "proj_flags"
                         / "1"
                         / "agent-config"
-                        / "luskctl-claude.sh"
+                        / "luskctl-agent.sh"
                     )
                     content = wrapper.read_text()
                     self.assertNotIn("--model", content)
