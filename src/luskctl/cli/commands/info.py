@@ -1,0 +1,249 @@
+"""Informational CLI commands: config overview and resolved agent config."""
+
+import os
+from importlib import resources
+from pathlib import Path
+
+from ...lib.core.config import (
+    build_root as _build_root,
+    bundled_presets_dir as _bundled_presets_dir,
+    config_root as _config_root,
+    get_envs_base_dir as _get_envs_base_dir,
+    get_ui_base_port as _get_ui_base_port,
+    global_config_path as _global_config_path,
+    global_config_search_paths as _global_config_search_paths,
+    global_presets_dir as _global_presets_dir,
+    state_root as _state_root,
+    user_projects_root as _user_projects_root,
+)
+from ...lib.core.projects import list_projects
+from ...ui_utils.terminal import (
+    gray as _gray,
+    supports_color as _supports_color,
+    violet as _violet,
+    yes_no as _yes_no,
+)
+
+
+def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+    """Return project IDs matching *prefix* for argcomplete."""
+    try:
+        ids = [p.id for p in list_projects()]
+    except Exception:
+        return []
+    if prefix:
+        ids = [i for i in ids if str(i).startswith(prefix)]
+    return ids
+
+
+def register(subparsers) -> None:
+    """Register informational subcommands (config, config-show)."""
+    # config overview
+    subparsers.add_parser("config", help="Show configuration, template and output paths")
+
+    # config-show (resolved agent config with provenance)
+    p_config_show = subparsers.add_parser(
+        "config-show",
+        help="Show resolved agent config for a project (with provenance per level)",
+    )
+    _a = p_config_show.add_argument("project_id", help="Project ID")
+    try:
+        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    p_config_show.add_argument("--preset", help="Apply a preset before showing resolved config")
+
+
+def dispatch(args) -> bool:
+    """Handle config and config-show commands.  Returns True if handled."""
+    if args.cmd == "config":
+        _print_config()
+        return True
+    if args.cmd == "config-show":
+        _cmd_config_show(args.project_id, getattr(args, "preset", None))
+        return True
+    return False
+
+
+def _cmd_config_show(project_id: str, preset: str | None) -> None:
+    """Show resolved agent config with provenance annotations."""
+    import json
+
+    from ...lib.containers.agent_config import build_agent_config_stack
+
+    color_enabled = _supports_color()
+
+    stack = build_agent_config_stack(project_id, preset=preset)
+    resolved = stack.resolve()
+    scopes = stack.scopes
+
+    # Print provenance per level
+    if not scopes and not resolved:
+        print(f"No agent config defined for project '{project_id}'")
+        return
+
+    print(f"Resolved agent config for '{project_id}':")
+    if preset:
+        print(f"  (with preset: {preset})")
+    print()
+
+    for scope in scopes:
+        keys = ", ".join(sorted(scope.data.keys()))
+        print(f"  [{_gray(scope.level, color_enabled)}] keys: {keys}")
+
+    print()
+    print(json.dumps(resolved, indent=2, default=str))
+
+
+def _print_config() -> None:
+    """Display all configuration, template and output paths."""
+    color_enabled = _supports_color()
+    # READ PATHS
+    print("Configuration (read):")
+    gcfg = _global_config_path()
+    gcfg_exists = Path(gcfg).is_file()
+    print(
+        f"- Global config file: {_gray(str(gcfg), color_enabled)} "
+        f"(exists: {_yes_no(gcfg_exists, color_enabled)})"
+    )
+    paths = _global_config_search_paths()
+    if paths:
+        print("- Global config search order:")
+        for p in paths:
+            exists = Path(p).is_file()
+            print(f"  • {_gray(str(p), color_enabled)} (exists: {_yes_no(exists, color_enabled)})")
+    print(f"- Web base port: {_get_ui_base_port()}")
+
+    # Envs base dir
+    try:
+        print(f"- Envs base dir (for mounts): {_gray(str(_get_envs_base_dir()), color_enabled)}")
+    except OSError as e:
+        print(f"- Envs base dir (for mounts): error: {e}")
+
+    uproj = _user_projects_root()
+    sproj = _config_root()
+    uproj_exists = Path(uproj).is_dir()
+    print(
+        f"- User projects root: {_gray(str(uproj), color_enabled)} "
+        f"(exists: {_yes_no(uproj_exists, color_enabled)})"
+    )
+    print(
+        f"- System projects root: {_gray(str(sproj), color_enabled)} "
+        f"(exists: {_yes_no(Path(sproj).is_dir(), color_enabled)})"
+    )
+    gpresets = _global_presets_dir()
+    print(
+        f"- Global presets dir: {_gray(str(gpresets), color_enabled)} "
+        f"(exists: {_yes_no(Path(gpresets).is_dir(), color_enabled)})"
+    )
+    bpresets = _bundled_presets_dir()
+    bpresets_names: list[str] = []
+    try:
+        bpresets_names = sorted(
+            p.stem for p in bpresets.iterdir() if p.is_file() and p.suffix in (".yml", ".yaml")
+        )
+    except FileNotFoundError:
+        pass  # Directory may not exist in some installations
+    except OSError as e:
+        print(f"  Warning: could not list bundled presets: {e}")
+    print(f"- Bundled presets: {_gray(str(bpresets), color_enabled)}")
+    if bpresets_names:
+        for n in bpresets_names:
+            print(f"  • {n}")
+
+    # Project configs discovered
+    projs = list_projects()
+    if projs:
+        print("- Project configs:")
+        for p in projs:
+            print(
+                f"  • {_violet(str(p.id), color_enabled)}: "
+                f"{_gray(str(p.root / 'project.yml'), color_enabled)}"
+            )
+    else:
+        print("- Project configs: none found")
+
+    # Templates (package resources)
+    print("Templates (read):")
+    tmpl_pkg = resources.files("luskctl") / "resources" / "templates"
+    try:
+        names = [child.name for child in tmpl_pkg.iterdir() if child.name.endswith(".template")]
+    except FileNotFoundError:
+        names = []
+    except OSError as e:
+        names = []
+        print(f"  Warning: could not list templates: {e}")
+    print(f"- Package templates dir: {_gray(str(tmpl_pkg), color_enabled)}")
+    if names:
+        for n in sorted(names):
+            print(f"  • {_gray(str(n), color_enabled)}")
+
+    # Scripts (package resources)
+    scr_pkg = resources.files("luskctl") / "resources" / "scripts"
+    try:
+        scr_names = [child.name for child in scr_pkg.iterdir() if child.is_file()]
+    except FileNotFoundError:
+        scr_names = []
+    except OSError as e:
+        scr_names = []
+        print(f"  Warning: could not list scripts: {e}")
+    print(f"Scripts (read):\n- Package scripts dir: {_gray(str(scr_pkg), color_enabled)}")
+    if scr_names:
+        for n in sorted(scr_names):
+            print(f"  • {_gray(str(n), color_enabled)}")
+
+    # WRITE PATHS
+    print("Writable locations (write):")
+    sroot = _state_root()
+    sroot_exists = Path(sroot).is_dir()
+    print(
+        f"- State root: {_gray(str(sroot), color_enabled)} "
+        f"(exists: {_yes_no(sroot_exists, color_enabled)})"
+    )
+    build_root = _build_root()
+    print(f"- Build root for generated files: {_gray(str(build_root), color_enabled)}")
+    if projs:
+        print("- Expected generated files per project:")
+        for p in projs:
+            base = build_root / p.id
+            for fname in (
+                "L0.Dockerfile",
+                "L1.cli.Dockerfile",
+                "L1.ui.Dockerfile",
+                "L2.Dockerfile",
+            ):
+                path = base / fname
+                print(
+                    f"  • {_violet(str(p.id), color_enabled)}: "
+                    f"{_gray(str(path), color_enabled)} "
+                    f"(exists: {_yes_no(path.is_file(), color_enabled)})"
+                )
+
+    # Native Claude configuration locations
+    home = Path.home()
+    claude_agents_dir = home / ".claude" / "agents"
+    claude_settings = home / ".claude" / "settings.json"
+    print("Native Claude configuration (edit with your OS tools):")
+    print(
+        f"- Global agents dir: {_gray(str(claude_agents_dir), color_enabled)} "
+        f"(exists: {_yes_no(claude_agents_dir.is_dir(), color_enabled)})"
+    )
+    print(
+        f"- Global settings: {_gray(str(claude_settings), color_enabled)} "
+        f"(exists: {_yes_no(claude_settings.is_file(), color_enabled)})"
+    )
+    print("  (MCPs go in settings.json under mcpServers)")
+
+    # ENVIRONMENT
+    print("Environment overrides (if set):")
+    for var in (
+        "LUSKCTL_CONFIG_FILE",
+        "LUSKCTL_CONFIG_DIR",
+        "LUSKCTL_STATE_DIR",
+        "LUSKCTL_RUNTIME_DIR",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+    ):
+        val = os.environ.get(var)
+        if val is not None:
+            print(f"- {var}={_gray(val, color_enabled)}")

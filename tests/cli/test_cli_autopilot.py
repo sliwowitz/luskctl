@@ -37,7 +37,7 @@ class RunClaudeCliTests(unittest.TestCase):
                     "3600",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(
@@ -60,7 +60,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 "sys.argv",
                 ["luskctl", "run-claude", "myproject", "test", "--no-follow"],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -82,7 +82,7 @@ class RunClaudeCliTests(unittest.TestCase):
                     "/path/to/agent.yml",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -105,7 +105,7 @@ class RunClaudeCliTests(unittest.TestCase):
                     "planner",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_headless") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -119,7 +119,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 "sys.argv",
                 ["luskctl", "task", "run-cli", "myproject", "1", "--agent", "debugger"],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_cli") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_cli") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(
@@ -136,7 +136,7 @@ class RunClaudeCliTests(unittest.TestCase):
                 "sys.argv",
                 ["luskctl", "task", "run-web", "myproject", "1", "--agent", "reviewer"],
             ),
-            unittest.mock.patch("luskctl.cli.main.task_run_web") as mock_run,
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_web") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(

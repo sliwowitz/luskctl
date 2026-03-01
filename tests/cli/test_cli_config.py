@@ -51,45 +51,45 @@ class CliConfigOutputTests(unittest.TestCase):
                     clear=True,
                 ),
                 unittest.mock.patch.object(sys, "argv", ["luskctl", "config"]),
-                unittest.mock.patch("luskctl.cli.main._supports_color", return_value=True),
+                unittest.mock.patch("luskctl.cli.commands.info._supports_color", return_value=True),
                 unittest.mock.patch(
-                    "luskctl.cli.main._global_config_path",
+                    "luskctl.cli.commands.info._global_config_path",
                     return_value=global_cfg,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._global_config_search_paths",
+                    "luskctl.cli.commands.info._global_config_search_paths",
                     return_value=[global_cfg],
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._get_ui_base_port",
+                    "luskctl.cli.commands.info._get_ui_base_port",
                     return_value=7777,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._get_envs_base_dir",
+                    "luskctl.cli.commands.info._get_envs_base_dir",
                     return_value=envs_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._user_projects_root",
+                    "luskctl.cli.commands.info._user_projects_root",
                     return_value=user_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._config_root",
+                    "luskctl.cli.commands.info._config_root",
                     return_value=system_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._state_root",
+                    "luskctl.cli.commands.info._state_root",
                     return_value=state_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main._build_root",
+                    "luskctl.cli.commands.info._build_root",
                     return_value=build_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main.list_projects",
+                    "luskctl.cli.commands.info.list_projects",
                     return_value=[SimpleNamespace(id="alpha", root=project_root)],
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.main.resources.files",
+                    "luskctl.cli.commands.info.resources.files",
                     return_value=resources_root,
                 ),
                 redirect_stdout(buffer),
