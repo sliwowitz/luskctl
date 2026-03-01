@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot CLI commands: run-claude."""
+"""Tests for autopilot CLI commands: luskctl run (replaces run-claude)."""
 
 import unittest
 import unittest.mock
@@ -10,27 +10,27 @@ import unittest.mock
 from luskctl.cli.main import main
 
 
-class RunClaudeCliTests(unittest.TestCase):
-    """Tests for luskctl run-claude argument parsing."""
+class RunCliTests(unittest.TestCase):
+    """Tests for luskctl run argument parsing."""
 
-    def test_run_claude_requires_project_and_prompt(self) -> None:
-        """run-claude requires project_id and prompt arguments."""
+    def test_run_requires_project_and_prompt(self) -> None:
+        """run requires project_id and prompt arguments."""
         with (
-            unittest.mock.patch("sys.argv", ["luskctl", "run-claude"]),
+            unittest.mock.patch("sys.argv", ["luskctl", "run"]),
             self.assertRaises(SystemExit) as ctx,
         ):
             main()
         # argparse exits with code 2 for missing required args
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_run_claude_dispatches_to_task_run_headless(self) -> None:
-        """run-claude dispatches to task_run_headless with correct args."""
+    def test_run_dispatches_to_task_run_headless(self) -> None:
+        """run dispatches to task_run_headless with correct args."""
         with (
             unittest.mock.patch(
                 "sys.argv",
                 [
                     "luskctl",
-                    "run-claude",
+                    "run",
                     "myproject",
                     "Fix the auth bug",
                     "--model",
@@ -55,14 +55,15 @@ class RunClaudeCliTests(unittest.TestCase):
                 agents=None,
                 preset=None,
                 name=None,
+                provider=None,
             )
 
-    def test_run_claude_no_follow_flag(self) -> None:
-        """run-claude --no-follow passes follow=False."""
+    def test_run_no_follow_flag(self) -> None:
+        """run --no-follow passes follow=False."""
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "run-claude", "myproject", "test", "--no-follow"],
+                ["luskctl", "run", "myproject", "test", "--no-follow"],
             ),
             unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
         ):
@@ -72,14 +73,14 @@ class RunClaudeCliTests(unittest.TestCase):
             # follow should be False
             self.assertFalse(call_kwargs[1]["follow"])
 
-    def test_run_claude_with_config(self) -> None:
-        """run-claude --config passes config_path."""
+    def test_run_with_config(self) -> None:
+        """run --config passes config_path."""
         with (
             unittest.mock.patch(
                 "sys.argv",
                 [
                     "luskctl",
-                    "run-claude",
+                    "run",
                     "myproject",
                     "test",
                     "--config",
@@ -93,14 +94,14 @@ class RunClaudeCliTests(unittest.TestCase):
             call_kwargs = mock_run.call_args
             self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.yml")
 
-    def test_run_claude_with_agent_selection(self) -> None:
-        """run-claude --agent passes agents list to task_run_headless."""
+    def test_run_with_agent_selection(self) -> None:
+        """run --agent passes agents list to task_run_headless."""
         with (
             unittest.mock.patch(
                 "sys.argv",
                 [
                     "luskctl",
-                    "run-claude",
+                    "run",
                     "myproject",
                     "test",
                     "--agent",
@@ -115,6 +116,46 @@ class RunClaudeCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args
             self.assertEqual(call_kwargs[1]["agents"], ["debugger", "planner"])
+
+    def test_run_with_provider_flag(self) -> None:
+        """run --provider passes provider to task_run_headless."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["luskctl", "run", "myproject", "test", "--provider", "codex"],
+            ),
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once()
+            call_kwargs = mock_run.call_args
+            self.assertEqual(call_kwargs[1]["provider"], "codex")
+
+    def test_run_invalid_provider_rejected(self) -> None:
+        """run --provider with invalid name is rejected by argparse."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["luskctl", "run", "myproject", "test", "--provider", "invalid"],
+            ),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            main()
+        self.assertEqual(ctx.exception.code, 2)
+
+    def test_run_default_provider_is_none(self) -> None:
+        """run without --provider passes provider=None."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                ["luskctl", "run", "myproject", "test"],
+            ),
+            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+        ):
+            main()
+            mock_run.assert_called_once()
+            call_kwargs = mock_run.call_args
+            self.assertIsNone(call_kwargs[1]["provider"])
 
     def test_task_run_cli_with_agent_selection(self) -> None:
         """task run-cli --agent passes agents to task_run_cli."""

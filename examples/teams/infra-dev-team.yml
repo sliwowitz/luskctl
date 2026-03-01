@@ -6,8 +6,8 @@
 # cross-cutting refactors, and similar medium-to-large scoped tasks.
 #
 # Usage:
-#   luskctl run-claude <project> "<prompt>" --config examples/teams/infra-dev-team.yml
-#   luskctl run-claude <project> "<prompt>" --config examples/teams/infra-dev-team.yml --agent cli-engineer
+#   luskctl run <project> "<prompt>" --config examples/teams/infra-dev-team.yml
+#   luskctl run <project> "<prompt>" --config examples/teams/infra-dev-team.yml --agent cli-engineer
 #
 # Or copy into a project preset:
 #   cp examples/teams/infra-dev-team.yml ~/.config/luskctl/projects/<id>/presets/infra-team.yml

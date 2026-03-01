@@ -313,22 +313,27 @@ class ClaudeStreamJsonFormatter:
 # Factory
 # ---------------------------------------------------------------------------
 
-# TODO: Add CodexJsonFormatter, MistralVibeFormatter when log formats are known.
-
 
 def auto_detect_formatter(
     mode: str | None,
     *,
     streaming: bool = True,
     color: bool | None = None,
+    provider: str | None = None,
 ) -> AgentLogFormatter:
-    """Return the appropriate formatter for a task's mode.
+    """Return the appropriate formatter for a task's mode and provider.
 
     Args:
         mode: Task mode (``"run"`` for headless/autopilot, ``"cli"``, ``"web"``).
         streaming: Enable partial streaming for supported formatters.
         color: Force color on/off. ``None`` auto-detects from terminal.
+        provider: Headless provider name.  When mode is ``"run"`` and
+            provider is ``"claude"`` (or ``None``), returns the Claude
+            stream-json formatter.  Other providers get plain text.
     """
     if mode == "run":
-        return ClaudeStreamJsonFormatter(streaming=streaming, color=color)
+        effective_provider = provider or "claude"
+        if effective_provider == "claude":
+            return ClaudeStreamJsonFormatter(streaming=streaming, color=color)
+        return PlainTextFormatter()
     return PlainTextFormatter()

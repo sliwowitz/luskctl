@@ -365,6 +365,7 @@ class LogViewerScreen(screen.Screen[None]):
         container_name: str,
         *,
         follow: bool = True,
+        provider: str | None = None,
     ) -> None:
         """Create a log viewer for a container.
 
@@ -374,6 +375,8 @@ class LogViewerScreen(screen.Screen[None]):
             mode: Agent run mode (``run``, ``chat``, etc.) — controls formatter choice.
             container_name: Podman container name for ``podman logs``.
             follow: If True, stream logs in real-time with auto-scroll.
+            provider: Headless provider name (e.g. ``"claude"``).  Controls
+                whether the Claude stream-json formatter or plain text is used.
         """
         super().__init__()
         self.project_id = project_id
@@ -381,6 +384,7 @@ class LogViewerScreen(screen.Screen[None]):
         self.mode = mode
         self.container_name = container_name
         self.follow = follow
+        self.provider = provider
         self._stop_event = threading.Event()
         self._process: subprocess.Popen | None = None
 
@@ -400,7 +404,7 @@ class LogViewerScreen(screen.Screen[None]):
     def _stream_logs(self) -> None:
         """Worker thread: stream podman logs through the formatter."""
         formatter: _TuiLogFormatter | _PlainTextTuiFormatter
-        if self.mode == "run":
+        if self.mode == "run" and (self.provider or "claude") == "claude":
             formatter = _TuiLogFormatter(streaming=self.follow)
         else:
             formatter = _PlainTextTuiFormatter()

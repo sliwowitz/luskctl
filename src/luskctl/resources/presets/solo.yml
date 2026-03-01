@@ -1,7 +1,7 @@
 # Solo agent — single fast agent for straightforward tasks.
 #
 # Good for: quick fixes, small features, one-shot prompts.
-# Usage: luskctl run-claude <project> "<prompt>" --preset solo
+# Usage: luskctl run <project> "<prompt>" --preset solo
 
 model: sonnet
 max_turns: 25

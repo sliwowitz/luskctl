@@ -95,7 +95,7 @@ RUN set -eux; \
     printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
 # Symlink for luskctl project config (resolved at runtime via mount).
-RUN ln -s /home/dev/.luskctl/luskctl-claude.sh /etc/profile.d/zz-luskctl-project.sh
+RUN ln -s /home/dev/.luskctl/luskctl-agent.sh /etc/profile.d/zz-luskctl-project.sh
 
 # === User operations ===
 ENV HOME=/home/dev

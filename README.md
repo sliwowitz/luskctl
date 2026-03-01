@@ -70,14 +70,17 @@ luskctl task run-cli myproj 1    # CLI mode
 luskctl task run-ui myproj 1     # Web UI mode
 ```
 
-### Headless Claude (Autopilot)
+### Headless Agent Runs (Autopilot)
 
 ```bash
-# Run Claude headlessly with a prompt
-luskctl run-claude myproj "Fix the authentication bug"
+# Run an agent headlessly with a prompt (default: claude)
+luskctl run myproj "Fix the authentication bug"
 
 # With model override and timeout
-luskctl run-claude myproj "Add tests" --model opus --timeout 3600
+luskctl run myproj "Add tests" --model opus --timeout 3600
+
+# Use a specific provider
+luskctl run myproj "Fix the bug" --provider codex
 ```
 
 ### Presets
@@ -85,9 +88,9 @@ luskctl run-claude myproj "Add tests" --model opus --timeout 3600
 Three presets work out of the box — no config needed:
 
 ```bash
-luskctl run-claude myproj "Fix the typo" --preset solo          # single fast agent
-luskctl run-claude myproj "Review auth module" --preset review   # read-only analysis
-luskctl run-claude myproj "Add pagination" --preset team         # multi-agent team
+luskctl run myproj "Fix the typo" --preset solo          # single fast agent
+luskctl run myproj "Review auth module" --preset review   # read-only analysis
+luskctl run myproj "Add pagination" --preset team         # multi-agent team
 ```
 
 Create your own in `~/.config/luskctl/presets/` (shared across projects) or

@@ -8,7 +8,7 @@ A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman.
 - [Runtime Locations](#runtime-locations)
 - [Global Configuration](#global-configuration)
 - [From Zero to First Run](#from-zero-to-first-run)
-- [Headless Claude Runs (Autopilot)](#headless-claude-runs-autopilot)
+- [Headless Agent Runs (Autopilot)](#headless-agent-runs-autopilot)
 - [Presets](#presets)
 - [GPU Passthrough](#gpu-passthrough)
 - [Tips](#tips)
@@ -290,27 +290,61 @@ conflicts. The container status bar shows `host: ^b` as a reminder.
 
 ---
 
-## Headless Claude Runs (Autopilot)
+## Headless Agent Runs (Autopilot)
 
-Run Claude headlessly in a container — no interactive session needed. Useful for
-CI/CD pipelines, batch tasks, or scripted workflows.
+Run any supported agent headlessly in a container — no interactive session needed.
+Useful for CI/CD pipelines, batch tasks, or scripted workflows.
+
+Supported providers: `claude`, `codex`, `copilot`, `vibe`, `blablador`, `opencode`.
 
 ### Basic Usage
 
 ```bash
-# Run Claude with a prompt (creates a new task automatically)
-luskctl run-claude myproj "Fix the authentication bug in login.py"
+# Run with a prompt (uses default provider — claude unless configured otherwise)
+luskctl run myproj "Fix the authentication bug in login.py"
 
 # Override model and set a timeout
-luskctl run-claude myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
+luskctl run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
 
 # Detach immediately (don't stream output)
-luskctl run-claude myproj "Refactor the database layer" --no-follow
+luskctl run myproj "Refactor the database layer" --no-follow
+
+# Use a specific provider
+luskctl run myproj "Fix the auth bug" --provider codex
+luskctl run myproj "Add tests" --provider copilot
 ```
 
-The command creates a new task, starts a container, runs `claude` with the given
-prompt, and streams the output. When Claude finishes, the task is marked as
+The command creates a new task, starts a container, runs the agent with the given
+prompt, and streams the output. When the agent finishes, the task is marked as
 completed and a diff summary is printed.
+
+### Default Provider
+
+The provider is resolved in this order:
+1. `--provider` flag (if given)
+2. `default_agent` in project config (`project.yml`)
+3. `default_agent` in global config (`config.yml`)
+4. `claude` (ultimate fallback)
+
+```yaml
+# Set per-project default in project.yml
+project:
+  id: myproj
+  default_agent: codex
+
+# Set global default in config.yml
+default_agent: claude
+```
+
+### Provider Feature Matrix
+
+| Feature | claude | codex | copilot | vibe | blablador | opencode |
+|---------|--------|-------|---------|------|-----------|----------|
+| `--model` | Yes | Yes | Yes | Yes (`--agent`) | No | Yes |
+| `--max-turns` | Yes | No | No | Yes | No | No |
+| Session resume | Yes | No | No | Yes | Yes | Yes |
+| Sub-agents (`--agent`) | Yes | No | No | No | No | No |
+| Structured log output | Yes | No | No | No | No | No |
 
 ### Sub-Agent Configuration
 
@@ -357,10 +391,10 @@ agent:
 
 ```bash
 # Include the debugger agent for this run
-luskctl run-claude myproj "Find and fix the memory leak" --agent debugger
+luskctl run myproj "Find and fix the memory leak" --agent debugger
 
 # Include multiple non-default agents
-luskctl run-claude myproj "Debug and plan a fix" --agent debugger --agent planner
+luskctl run myproj "Debug and plan a fix" --agent debugger --agent planner
 ```
 
 The `--agent` flag also works with interactive modes:
@@ -393,7 +427,7 @@ Reference them in `project.yml` with `file:` (paths relative to project root).
 Pass an additional YAML file with `--config` to add more sub-agents at runtime:
 
 ```bash
-luskctl run-claude myproj "Review the PR" --config /path/to/extra-agents.yml
+luskctl run myproj "Review the PR" --config /path/to/extra-agents.yml
 ```
 
 The file should contain a `subagents:` list in the same format as `project.yml`.
@@ -446,16 +480,16 @@ global presets you create will shadow them automatically.
 
 ```bash
 # Quick fix — single fast agent
-luskctl run-claude myproj "Fix the typo in login.py" --preset solo
+luskctl run myproj "Fix the typo in login.py" --preset solo
 
 # Code review — read-only analysis
-luskctl run-claude myproj "Review the auth module for security issues" --preset review
+luskctl run myproj "Review the auth module for security issues" --preset review
 
 # Full dev team — architect plans, engineers implement, testers verify
-luskctl run-claude myproj "Add pagination to the /users endpoint" --preset team
+luskctl run myproj "Add pagination to the /users endpoint" --preset team
 
 # Team preset with an on-demand agent enabled
-luskctl run-claude myproj "Update the CLI help text" --preset team --agent cli-engineer
+luskctl run myproj "Update the CLI help text" --preset team --agent cli-engineer
 ```
 
 Presets work with all task modes:
@@ -508,7 +542,7 @@ subagents:
 EOF
 ```
 
-Now use it anywhere: `luskctl run-claude anyproject "Review PR #42" --preset quick-review`
+Now use it anywhere: `luskctl run anyproject "Review PR #42" --preset quick-review`
 
 ### Preset Search Order
 

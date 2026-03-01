@@ -38,6 +38,7 @@ path = "luskctl.cli"
 layer = "presentation"
 depends_on = [
     "luskctl.lib.containers.agent_config",
+    "luskctl.lib.containers.headless_providers",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.core.version",
@@ -53,6 +54,7 @@ layer = "presentation"
 depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.autopilot",
+    "luskctl.lib.containers.headless_providers",
     "luskctl.lib.containers.runtime",
     "luskctl.lib.containers.task_display",
     "luskctl.lib.containers.tasks",
@@ -89,7 +91,13 @@ depends_on = [
 [[modules]]
 path = "luskctl.lib.containers.agents"
 layer = "services"
-depends_on = ["luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+depends_on = ["luskctl.lib.containers.headless_providers", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+
+# Headless provider registry (multi-agent autopilot support)
+[[modules]]
+path = "luskctl.lib.containers.headless_providers"
+layer = "services"
+depends_on = ["luskctl.lib.core.projects"]
 
 # Agent config resolution (layered merging across scopes)
 [[modules]]
@@ -149,6 +157,7 @@ depends_on = [
     "luskctl.lib.containers.agent_config",
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.environment",
+    "luskctl.lib.containers.headless_providers",
     "luskctl.lib.containers.ports",
     "luskctl.lib.containers.runtime",
     "luskctl.lib.containers.tasks",
@@ -434,6 +443,10 @@ from = ["luskctl.lib.containers.task_runners"]
 [[interfaces]]
 expose = ["parse_md_agent", "prepare_agent_config_dir"]
 from = ["luskctl.lib.containers.agents"]
+
+[[interfaces]]
+expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "get_provider", "build_headless_command", "generate_agent_wrapper"]
+from = ["luskctl.lib.containers.headless_providers"]
 
 [[interfaces]]
 expose = ["build_agent_config_stack", "resolve_agent_config"]

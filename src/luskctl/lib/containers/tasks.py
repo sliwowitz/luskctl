@@ -58,6 +58,7 @@ class TaskMeta:
     deleting: bool = False
     preset: str | None = None
     name: str = ""
+    provider: str | None = None
 
     @property
     def status(self) -> str:
@@ -344,6 +345,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     deleting=bool(meta.get("deleting")),
                     preset=meta.get("preset"),
                     name=meta["name"],
+                    provider=meta.get("provider"),
                 )
             )
         except Exception:
@@ -663,6 +665,7 @@ def task_status(project_id: str, task_id: str) -> None:
         deleting=bool(meta.get("deleting")),
         container_state=cs,
         name=meta["name"],
+        provider=meta.get("provider"),
     )
     status = effective_status(task)
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
