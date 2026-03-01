@@ -183,6 +183,17 @@ frozenlist = ">=1.1.0"
 typing-extensions = {version = ">=4.2", markers = "python_version < \"3.13\""}
 
 [[package]]
+name = "annotated-doc"
+version = "0.0.4"
+description = "Document parameters, class attributes, return types, and variables inline, with Annotated."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "annotated_doc-0.0.4-py3-none-any.whl", hash = "sha256:571ac1dc6991c450b25a9c2d84a3705e2ae7a53467b5d111c24fa8baabbed320"},
+    {file = "annotated_doc-0.0.4.tar.gz", hash = "sha256:fbcda96e87e9c92ad167c2e53839e57503ecfda18804ea28102353485033faa4"},
+]
+
+[[package]]
 name = "argcomplete"
 version = "3.6.3"
 description = "Bash tab completion for argparse"
@@ -397,6 +408,108 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
+
+[[package]]
+name = "complexipy"
+version = "5.2.0"
+description = "An extremely fast Python library to calculate the cognitive complexity of Python files, written in Rust."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "complexipy-5.2.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:2ac0827d4b022e90dfe2165f9967e9f17415ca8b912dc3c94a9284e40d29c1b2"},
+    {file = "complexipy-5.2.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8437c232c438e930edad8dab1b524252dd5be38e8f047333ece4e2114c694fc9"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:76e261d7ca31971d5f40b45f768a1f7fa2fba13bbaf02119da43f6505f14529f"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:962b1ad8eade5da7f2cb78c3888f55eb754189e8c48a4380f0193eca48df6d34"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:edfd62e022711ff8db11eebc8899d62696bbf88951a89c7db618491ee4e4f410"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:7c109127b93df024cd7e7899ea59e94c5dbd40bc285c17898c3380fdb25730be"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:d01fddf2a2100d744cb1f7d1b0c90046fc7005f3c9618367d006472ab6176ba5"},
+    {file = "complexipy-5.2.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:760eb500387c36fcc6e31cba5257f33015b5ae31cf3612b0ac0722f96a556423"},
+    {file = "complexipy-5.2.0-cp310-cp310-win32.whl", hash = "sha256:62d6afdde276c053087a1a90448c3d3b06d8fa1b73f2c7c83706e280cabaac83"},
+    {file = "complexipy-5.2.0-cp310-cp310-win_amd64.whl", hash = "sha256:3d130708edc0a4e26c6af99c489f37f44ee505ad76a4a7a483d92296eba1cc48"},
+    {file = "complexipy-5.2.0-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:2bd19f5df57884e280c983d1c833c97a812971d7bc102afd6ee5ca0278d65994"},
+    {file = "complexipy-5.2.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:214bb07249702188b7aa61d6ad9e0eb9cb1376ba520fb80c47aa49797e79a12c"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:36608ef25bab118202a71f0c92eac06ed4d8add1bb191b21179ad986c0a812f7"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:632ad26ddc756438df7f9b0f803467fd8acb3c98276444c5dee9010d5225025d"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:44ceacf89fc762f7db165b1ff1dabc605a24ee948b9a5b3d25a9f6f1fcbded09"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:d9357a40a1802832d08e96b2d59b869928be0ebaf867f776d386b7b3225197bb"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:cf965d6b5da7dd779d5839be690fbb6dd1454cd282578e4a16defbf1cb215bbc"},
+    {file = "complexipy-5.2.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:77bc4051ae8a2cca23f743219e0e896f21bb207b7e240ddfd797e9da0a6f58fe"},
+    {file = "complexipy-5.2.0-cp311-cp311-win32.whl", hash = "sha256:ff5648b008a92c004c27427087c0d3afbe770cf7976029b7a3670320dce8dc04"},
+    {file = "complexipy-5.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:e1e18dc55f17fae864bf363abe0cb847d24b0a3475e3d8f48749e7d428ff90cc"},
+    {file = "complexipy-5.2.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:a9743b353d061f1baab9103e1637b3c4263c867c22f333359714f029d7feada2"},
+    {file = "complexipy-5.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:319f27531e9a69e601dd12e129149f31e59af5f151dab8267a787847afc7f36c"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:1f3ea7d1cf99fc2f56b89b0726f0c3158dee2e4db1d255418ae03c925a948340"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:fbe00a1240422d3dc7350314ff88cdea108991efd8b89ee2d040c9bb620ae77d"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:3bd5bc19ae5e4f04c96bd91b13c4ee3b3eb108ab9fdddd52aa137f6bc57da304"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:5296b2a9117f65ea8db5bad0c19c237dfb029dda82cff2defae4c7eb930c4c67"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:42e43092a7ff3fca83cd63417e834990c8f9f7026158464545fe8c3d333c8623"},
+    {file = "complexipy-5.2.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:747e2f12dcc22c58529084dd24ee19f985a465e8fbf6fb5dc5b1b2d5635d19c6"},
+    {file = "complexipy-5.2.0-cp312-cp312-win32.whl", hash = "sha256:1f3e373a7f1a22aa106f08e82ce3e135185636c2e4a9a3c7a11d110b8984951f"},
+    {file = "complexipy-5.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:e82bce83ed234cbf09686cb78727839123dcc40761c3295fe464734bf8c613ba"},
+    {file = "complexipy-5.2.0-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:085ed0371ef2d9c1bf73785ac8392b1ea29404d1ad391456f9dc681fa15a7214"},
+    {file = "complexipy-5.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:97a6d03f034417c8d44eb375add0c8da9fb47d0f14e4ba0772f61f9df35fc085"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b30becb1266c782a69b21addd5ab9aa4817e8f1f2ca591809a3299281cbf0a06"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:dfe3be3598ad0bd67bb1f44c402c04fe68a03f38ec2c5e6dfd89ea4752b05dad"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:4b9d9c6449c310466b335b8570f567931f723eea5c59c1bb9ec9512ac6b8cfe7"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:f3b52412132ee43a5c14ae2b9bdcc61b5c2b5d317ae949ba02b8beb93ccf6472"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:74ce37791b2c5f44715209160a208ddd3ff5d87f46ef9c9468ac30a904baaf1b"},
+    {file = "complexipy-5.2.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4fb40a9dcaa5326a41a0afc2011d00e6c5edcc2218cca118464b73ebc079d4d8"},
+    {file = "complexipy-5.2.0-cp313-cp313-win32.whl", hash = "sha256:0775da8120183fdd02fe2c9534cc2c0f3130dacd608d661e16894cd338a35a08"},
+    {file = "complexipy-5.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:521e879d406528bbbf9407908a20c1d8601959413fca94772d7ee379d7cba178"},
+    {file = "complexipy-5.2.0-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:09c416a46f99083b87ea7912f3bf98768bba06207b3f917a68aef9679cb50c64"},
+    {file = "complexipy-5.2.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:4201f65c874ca32c44e9926a932fe2905c52492223a3e33c463fa60350ad2f05"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b70c3eefcbd4bd8efb1d939b0acaa7046f384a1c0b999e2f3173197153e325c5"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:b055c8e2aecd5aa2146001d9bd1672194508fcf82b64b0958ceb51ca55f13684"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:1024b5589a7bb8ffec286d1ede20c18cbe6387525077b44507d310f83ae5ce0c"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:db78059193ed960d1d76214aaaa5311046c9e2f884f5bfc2ba56a981f3afb920"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:a2adbd79a2f16aec8169e78084d1e3693aa905ce907a37aa065ceaa94a67988f"},
+    {file = "complexipy-5.2.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:238bb47723cfc77c999aa2ffb8182d49b74093538280129bec34a8f47e270226"},
+    {file = "complexipy-5.2.0-cp314-cp314-win32.whl", hash = "sha256:23da083d986cf880eccef8446269bd626ef025d327bb4e20a2bd557675989f77"},
+    {file = "complexipy-5.2.0-cp314-cp314-win_amd64.whl", hash = "sha256:fc7342f782edbe63e66197b25ce7716e8e6e6ab684c84c276977f5e2f797810a"},
+    {file = "complexipy-5.2.0-cp38-cp38-macosx_10_12_x86_64.whl", hash = "sha256:267883f038ff566aa7915edf3afa85b45724359928f99358f82a480be2d32869"},
+    {file = "complexipy-5.2.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:1d343f6f0a4cdb6fb79d96cf463bb83ce707f23cf794b081de09be1e40773286"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:805e251a2b5f8b98b8653f3a7f95ac913d76870470094a0205f3c71dbad7818a"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:5a6a90a8a7240108f04d867614807d32361eb0c3d9b3962fce70933e07181d54"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:031ded8861a1ac59e3112cded4e6db18f3b81915cf252d4353f0f7f5bb4e4458"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:a31d67e4bda16750998f9d2e5c3b2d135ea7853658587c5910267d6bf54efee3"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:c497d9cb1ffeb834252592110e5fd2e8d8e538197665fb67257b02a7f5f7616f"},
+    {file = "complexipy-5.2.0-cp38-cp38-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e4335b6765e6882de64e3d584c85e87a171d087d072b144954c591666085128a"},
+    {file = "complexipy-5.2.0-cp38-cp38-win32.whl", hash = "sha256:c01ef46a1c95d9c5b1d340edda1363950c88044aeb9d45fa9d987cd2da6c034a"},
+    {file = "complexipy-5.2.0-cp38-cp38-win_amd64.whl", hash = "sha256:8f3e13538a6d6ce79c86ea9f453ea198539538d5ddbbe5b86f812ef1104501bf"},
+    {file = "complexipy-5.2.0-cp39-cp39-macosx_10_12_x86_64.whl", hash = "sha256:bc1816ffecf56983d48013d0d640b4074d0931f3cc2a56c6e7114c97914307e8"},
+    {file = "complexipy-5.2.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:845afab660a3c4fd07287bea9ac93af61700fbaba5855874c8dd715613d6093a"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b36e0e57cde88f571c1d621fe72af887252f22d261d8aa52f92f2d7c762d9c71"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:5ebf4a3ae6015a285e0d9389255ec22a35bc9a852feedeeb4b1a9c1538c5c66a"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:f8e8795252ac2520f9d676b27202491c52b796be35f58b44f675899258d496a5"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:368703cf42b8aad0e7db98b7563070f64e8b0d362616e94b1f01049a5edfe191"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:0899959d38299411a60c47715775961563da185205c98db901884a4fcacf46cf"},
+    {file = "complexipy-5.2.0-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:964200dd2da3b39c489b57fadc7eab6d2cae8818091920ad40a84452a6f8dec0"},
+    {file = "complexipy-5.2.0-cp39-cp39-win32.whl", hash = "sha256:54db51d08306f74cc8e99402be3f90c1748b279a88a36935e9e9594020a68d0a"},
+    {file = "complexipy-5.2.0-cp39-cp39-win_amd64.whl", hash = "sha256:b80da5471014aca9889da3e06f463bbf37f569883571a7eef92885e661bbbb76"},
+    {file = "complexipy-5.2.0-pp310-pypy310_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:449578cc808a23506689c8c61186620c8072984563c3f2d687f0eaf0a4e41495"},
+    {file = "complexipy-5.2.0-pp310-pypy310_pp73-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:454bde3c7dffc3f9c0db1695b7cc62b85536b5100306a066fb27a5b96722dd02"},
+    {file = "complexipy-5.2.0-pp310-pypy310_pp73-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:abe7299d69c017d8026ff87b9fb1134c4dd3bdc8ffbbfb298075976f45a27881"},
+    {file = "complexipy-5.2.0-pp310-pypy310_pp73-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:16476d7852378b692ca46df4694c6109079f743abd03554bdc5522beb59caf00"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9a9255fae510ec134638220432c46f46493912d72d309e7f4b1f70fe75f4e666"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:6520a2614d99f02fb429d83a6603fc1f620bac7f4caf71a4e4d962082676c44d"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:93a5511cefe351a6a98f345768c0d4348b31c0aa4b5f108c0be323956becd352"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:5f3ed7fb63ca69a97a3f5214af0a29b9e47a761eec98662d53d88d01c66b6a6e"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:031bd5157019afd20491c1916932d404389e868592478b113309d268fc44492c"},
+    {file = "complexipy-5.2.0-pp311-pypy311_pp73-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2e2a297f8606127995b5bff2fb034aa24dc71b9bcc2b3ee487d8dbad2b6385b9"},
+    {file = "complexipy-5.2.0-pp38-pypy38_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:68d66bd43c50728c9de53352d6ec32d3bbbea087eeb8809eb82765e727d7b263"},
+    {file = "complexipy-5.2.0-pp38-pypy38_pp73-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:f059a64b87a8daf26d977dbcfa06e07c72b254bda13fb10754785fff37657e54"},
+    {file = "complexipy-5.2.0-pp38-pypy38_pp73-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:b0414b50acabf7750ecd9da46e24da613bf8fefdcb9779ffdfffe1ca2e1c3956"},
+    {file = "complexipy-5.2.0-pp38-pypy38_pp73-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:0d76551c446f8c456f65ce707c4c45766f808e4d7db3220d87c12fa35d5d58bc"},
+    {file = "complexipy-5.2.0-pp39-pypy39_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:3d7655941b2e579a6288bbbf604e4ffc01776690d7133ef678bc945f1f855cfb"},
+    {file = "complexipy-5.2.0-pp39-pypy39_pp73-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:0a19e5c3b6837549b43ee3d924cda1e074d8a6a079156a0d1334ee96d560f84e"},
+    {file = "complexipy-5.2.0-pp39-pypy39_pp73-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:cbe3dbada242624647822178d50dd6467a868d985716004567c943314bddd8f8"},
+    {file = "complexipy-5.2.0-pp39-pypy39_pp73-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:1a727fd1664857d3e131717a23dd5f7ef0483baa8ec220cf5453695e726c1a31"},
+    {file = "complexipy-5.2.0.tar.gz", hash = "sha256:3eee6916cf2acab5e247abfc75d09610b24fd370e45903810f1f33d20914e0c1"},
+]
+
+[package.dependencies]
+tomli = ">=2.2.1"
+typer = ">=0.12.5"
 
 [[package]]
 name = "coverage"
@@ -1908,6 +2021,17 @@ files = [
 ]
 
 [[package]]
+name = "shellingham"
+version = "1.5.4"
+description = "Tool to Detect Surrounding Shell"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686"},
+    {file = "shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de"},
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -2114,6 +2238,23 @@ slack = ["slack-sdk"]
 telegram = ["requests"]
 
 [[package]]
+name = "typer"
+version = "0.24.1"
+description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e"},
+    {file = "typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45"},
+]
+
+[package.dependencies]
+annotated-doc = ">=0.0.2"
+click = ">=8.2.1"
+rich = ">=12.3.0"
+shellingham = ">=1.3.0"
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -2165,6 +2306,17 @@ brotli = ["brotli (>=1.2.0)", "brotlicffi (>=1.2.0.0)"]
 h2 = ["h2 (>=4,<5)"]
 socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["backports-zstd (>=1.0.0)"]
+
+[[package]]
+name = "vulture"
+version = "2.14"
+description = "Find dead code"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "vulture-2.14-py2.py3-none-any.whl", hash = "sha256:d9a90dba89607489548a49d557f8bac8112bd25d3cbc8aeef23e860811bd5ed9"},
+    {file = "vulture-2.14.tar.gz", hash = "sha256:cb8277902a1138deeab796ec5bef7076a6e0248ca3607a3f3dee0b6d9e9b8415"},
+]
 
 [[package]]
 name = "watchdog"
@@ -2366,4 +2518,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<4.0"
-content-hash = "72078e305ec14f3028015ff41550364cc4c6392e6a08e2e6dc5b43d7fa7116c5"
+content-hash = "892d8a2d6cc62aefa78300f0113bbfad5b55af3095a9e386e2b59ec24aef8ec6"

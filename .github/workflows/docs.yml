@@ -44,7 +44,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --with docs --no-interaction
+        run: poetry install --with dev,docs --no-interaction
 
       - name: Build documentation
         run: poetry run mkdocs build --strict

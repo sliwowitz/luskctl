@@ -54,6 +54,22 @@ jobs:
       - name: Check docstring coverage
         run: docstr-coverage src/luskctl/ --fail-under=95
 
+  dead-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install vulture
+        run: pip install -r .github/requirements-ci.txt
+
+      - name: Check for dead code
+        run: vulture src/luskctl/ vulture_whitelist.py --min-confidence 80
+
   test:
     runs-on: ubuntu-latest
     steps:
