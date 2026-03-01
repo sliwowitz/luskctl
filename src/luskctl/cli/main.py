@@ -6,23 +6,6 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from ..lib.containers.task_logs import task_logs
-from ..lib.containers.task_runners import (
-    task_restart,
-    task_run_cli,
-    task_run_headless,
-    task_run_web,
-)
-from ..lib.containers.tasks import (
-    get_tasks as _get_tasks,
-    task_delete,
-    task_list,
-    task_login,
-    task_new,
-    task_rename,
-    task_status,
-    task_stop,
-)
 from ..lib.core.config import (
     build_root as _build_root,
     bundled_presets_dir as _bundled_presets_dir,
@@ -44,9 +27,22 @@ from ..lib.facade import (
     authenticate,
     build_images,
     generate_dockerfiles,
+    get_tasks as _get_tasks,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
     sync_project_gate,
+    task_delete,
+    task_list,
+    task_login,
+    task_logs,
+    task_new,
+    task_rename,
+    task_restart,
+    task_run_cli,
+    task_run_headless,
+    task_run_web,
+    task_status,
+    task_stop,
 )
 from ..lib.wizards.new_project import run_wizard
 from ..ui_utils.terminal import (
@@ -860,7 +856,7 @@ def main() -> None:
             backend = getattr(args, "backend", None)
             task_restart(args.project_id, args.task_id, backend=backend)
         elif args.task_cmd == "followup":
-            from ..lib.containers.task_runners import task_followup_headless
+            from ..lib.facade import task_followup_headless
 
             task_followup_headless(
                 args.project_id,

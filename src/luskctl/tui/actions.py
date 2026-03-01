@@ -18,21 +18,11 @@ from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import wait_for_container_exit
 from ..lib.containers.runtime import container_name
 from ..lib.containers.task_display import effective_status
-from ..lib.containers.task_runners import (
-    task_followup_headless,
-    task_restart,
-    task_run_cli,
-    task_run_headless,
-    task_run_web,
-)
 from ..lib.containers.tasks import (
     generate_task_name,
     get_login_command,
     get_workspace_git_diff,
     mark_task_deleting,
-    task_delete,
-    task_new,
-    task_rename,
 )
 from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
@@ -44,6 +34,14 @@ from ..lib.facade import (
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
     sync_project_gate,
+    task_delete,
+    task_followup_headless,
+    task_new,
+    task_rename,
+    task_restart,
+    task_run_cli,
+    task_run_headless,
+    task_run_web,
 )
 from .clipboard import copy_to_clipboard_detailed
 from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen, TaskNameScreen
