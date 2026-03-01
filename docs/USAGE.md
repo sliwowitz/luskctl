@@ -495,6 +495,73 @@ Run `luskctl config` to see the actual paths on your system.
 
 ---
 
+## Agent Instructions
+
+luskctl provides layered agent instructions that describe the container environment to AI agents. Instructions are delivered automatically — no setup required.
+
+### How It Works
+
+Every task container receives instructions explaining the workspace layout, available tools, sudo access, git workflow, and conventions. By default, luskctl uses bundled instructions that cover the standard container environment.
+
+- **Claude**: instructions are injected via `--append-system-prompt` (system-level context)
+- **Other providers**: instructions are prepended to the task prompt
+
+### Customizing Instructions
+
+Set the `instructions` key in your project's `agent:` config or in a preset:
+
+```yaml
+# project.yml — flat string (replaces default)
+agent:
+  instructions: |
+    You are in a Podman container. This project uses Poetry.
+    Run `make check` before committing.
+```
+
+Per-provider instructions:
+
+```yaml
+agent:
+  instructions:
+    claude: |
+      Use Claude-specific conventions...
+    codex: |
+      Use Codex-specific conventions...
+    _default: |
+      Generic instructions for all providers.
+```
+
+Extend (rather than replace) parent instructions using `_inherit`:
+
+```yaml
+# Project config — appends to global/default instructions
+agent:
+  instructions:
+    - _inherit
+    - |
+      ## Project-specific additions
+      This project uses Poetry for dependency management.
+      Run `make check` before committing.
+```
+
+### CLI Flag
+
+Override all config-stack instructions with a file:
+
+```bash
+luskctl run myproj "Fix the bug" --instructions path/to/instructions.md
+```
+
+### TUI
+
+The project details panel shows an **Instruct:** badge (`custom` or `default`). Press **Shift+I** in the project details screen to edit instructions in `$EDITOR`.
+
+### Debugging
+
+Resolved instructions are always written to `<tasks_root>/<task_id>/agent-config/instructions.md` on the host for inspection.
+
+---
+
 ## Presets
 
 Presets are reusable agent configurations you apply with `--preset <name>`.

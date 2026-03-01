@@ -305,6 +305,29 @@ class ProjectActionsMixin:
             self.notify("Gate sync failed. See terminal output.")
         self._refresh_project_state()
 
+    # ---------- Instructions editing ----------
+
+    async def _action_edit_instructions(self) -> None:
+        """Open instructions file in $EDITOR for the current project."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+        pid = self.current_project_id
+
+        def work() -> None:
+            """Open instructions file in $EDITOR, seeding with default if absent."""
+            project = load_project(pid)
+            instr_path = project.root / "instructions.md"
+            if not instr_path.is_file():
+                from ..lib.containers.instructions import bundled_default_instructions
+
+                instr_path.write_text(bundled_default_instructions(), encoding="utf-8")
+                print(f"Created {instr_path} with bundled defaults.")
+            editor = os.environ.get("EDITOR", "vi")
+            subprocess.run([editor, str(instr_path)])
+
+        await self._run_suspended(work, success_msg=f"Instructions updated for {pid}")
+
     # --- Project wizard ---
 
     async def action_new_project_wizard(self) -> None:

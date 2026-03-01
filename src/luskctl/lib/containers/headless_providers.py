@@ -283,6 +283,7 @@ def apply_provider_config(
     model_override: str | None = None,
     max_turns_override: int | None = None,
     timeout_override: int | None = None,
+    instructions: str | None = None,
 ) -> ProviderConfig:
     """Resolve config values for a provider with best-effort feature mapping.
 
@@ -296,6 +297,10 @@ def apply_provider_config(
         model_override: Explicit ``--model`` from CLI (takes precedence).
         max_turns_override: Explicit ``--max-turns`` from CLI.
         timeout_override: Explicit ``--timeout`` from CLI.
+        instructions: Resolved instructions text.  For non-Claude providers,
+            prepended to ``prompt_extra`` so the agent receives them as part
+            of the prompt.  Claude receives instructions via the wrapper's
+            ``--append-system-prompt`` flag instead.
     """
     from ..containers.agent_config import resolve_provider_value
 
@@ -335,6 +340,12 @@ def apply_provider_config(
             f"{provider.label} does not support sub-agents (--agents); "
             f"sub-agent definitions will be ignored"
         )
+
+    # --- Instructions (non-Claude: inject into prompt) ---
+    # Claude receives instructions via --append-system-prompt in the wrapper,
+    # so we only inject into the prompt for other providers.
+    if instructions and provider.name != "claude":
+        prompt_parts.insert(0, instructions)
 
     return ProviderConfig(
         model=model,

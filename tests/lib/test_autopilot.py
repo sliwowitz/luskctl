@@ -282,13 +282,21 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertIn('--add-dir "/"', wrapper)
 
     def test_wrapper_no_model_or_mcp(self) -> None:
-        """Wrapper does not contain --model, --mcp-config, or --append-system-prompt."""
+        """Wrapper does not contain --model, --mcp-config by default."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(has_agents=True, project=project)
         self.assertNotIn("--model", wrapper)
         self.assertNotIn("--mcp-config", wrapper)
-        self.assertNotIn("--append-system-prompt", wrapper)
         self.assertNotIn("--max-turns", wrapper)
+        # --append-system-prompt absent when has_instructions=False (default)
+        self.assertNotIn("--append-system-prompt", wrapper)
+
+    def test_wrapper_includes_append_system_prompt(self) -> None:
+        """Wrapper includes --append-system-prompt when has_instructions=True."""
+        project = self._make_project()
+        wrapper = _generate_claude_wrapper(has_agents=False, project=project, has_instructions=True)
+        self.assertIn("--append-system-prompt", wrapper)
+        self.assertIn("instructions.md", wrapper)
 
     def test_wrapper_timeout_support(self) -> None:
         """Wrapper parses --luskctl-timeout and wraps claude with timeout."""
@@ -394,6 +402,74 @@ class WriteSessionHookTests(unittest.TestCase):
             data = json.loads(settings_path.read_text(encoding="utf-8"))
             hooks = data["hooks"]["SessionStart"]
             self.assertEqual(len(hooks), 1)
+
+
+class PrepareAgentConfigDirTests(unittest.TestCase):
+    """Tests for prepare_agent_config_dir."""
+
+    def _make_project(self):
+        from luskctl.lib.core.projects import Project
+
+        return Project(
+            id="test-proj",
+            security_class="online",
+            upstream_url=None,
+            default_branch="main",
+            root=Path("/tmp/test"),
+            tasks_root=Path(tempfile.mkdtemp()),
+            gate_path=Path("/tmp/test/gate"),
+            staging_root=None,
+            ssh_key_name=None,
+            ssh_host_dir=None,
+            default_agent=None,
+            human_name="Test User",
+            human_email="test@example.com",
+        )
+
+    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    def test_prepare_agent_config_writes_instructions(self, _mock_hook: object) -> None:
+        """Instructions text is written to instructions.md in agent-config dir."""
+        from luskctl.lib.containers.agents import prepare_agent_config_dir
+
+        project = self._make_project()
+        task_id = "test-task-1"
+        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
+
+        agent_config_dir = prepare_agent_config_dir(
+            project, task_id, subagents=[], instructions="Custom instructions here."
+        )
+        instr_path = agent_config_dir / "instructions.md"
+        self.assertTrue(instr_path.is_file())
+        self.assertEqual(instr_path.read_text(encoding="utf-8"), "Custom instructions here.")
+
+    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    def test_prepare_agent_config_no_instructions_file_when_none(self, _mock_hook: object) -> None:
+        """No instructions.md when instructions is None."""
+        from luskctl.lib.containers.agents import prepare_agent_config_dir
+
+        project = self._make_project()
+        task_id = "test-task-2"
+        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
+
+        agent_config_dir = prepare_agent_config_dir(project, task_id, subagents=[])
+        instr_path = agent_config_dir / "instructions.md"
+        self.assertFalse(instr_path.is_file())
+
+    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    def test_wrapper_has_append_system_prompt_when_instructions(self, _mock_hook: object) -> None:
+        """Claude wrapper includes --append-system-prompt when instructions are provided."""
+        from luskctl.lib.containers.agents import prepare_agent_config_dir
+
+        project = self._make_project()
+        task_id = "test-task-3"
+        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
+
+        agent_config_dir = prepare_agent_config_dir(
+            project, task_id, subagents=[], instructions="Test instructions."
+        )
+        wrapper = (agent_config_dir / "luskctl-agent.sh").read_text(encoding="utf-8")
+        self.assertIn("--append-system-prompt", wrapper)
+        self.assertIn("instructions.md", wrapper)
 
 
 class TaskRunHeadlessTests(unittest.TestCase):

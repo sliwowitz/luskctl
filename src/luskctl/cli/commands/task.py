@@ -96,6 +96,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Include a non-default agent by name (repeatable, Claude only)",
     )
     p_run.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
+    p_run.add_argument(
+        "--instructions",
+        metavar="FILE",
+        help="Path to instructions file (overrides config stack)",
+    )
 
     # task subcommand group
     p_task = subparsers.add_parser("task", help="Manage tasks")
@@ -242,6 +247,17 @@ def dispatch(args: argparse.Namespace) -> bool:
         task_login(args.project_id, args.task_id)
         return True
     if args.cmd == "run":
+        # Read instructions file if provided via --instructions
+        instructions_text = None
+        instructions_path = getattr(args, "instructions", None)
+        if instructions_path:
+            from pathlib import Path
+
+            ipath = Path(instructions_path)
+            if not ipath.is_file():
+                raise SystemExit(f"Instructions file not found: {instructions_path}")
+            instructions_text = ipath.read_text(encoding="utf-8")
+
         task_run_headless(
             args.project_id,
             args.prompt,
@@ -254,6 +270,7 @@ def dispatch(args: argparse.Namespace) -> bool:
             preset=getattr(args, "preset", None),
             name=getattr(args, "name", None),
             provider=getattr(args, "provider", None),
+            instructions=instructions_text,
         )
         return True
     if args.cmd == "task":

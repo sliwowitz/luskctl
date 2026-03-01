@@ -480,6 +480,27 @@ class ApplyProviderConfigTests(unittest.TestCase):
         self.assertIsNone(pcfg.model)
         self.assertIsNone(pcfg.max_turns)
 
+    def test_instructions_non_claude_in_prompt_extra(self) -> None:
+        """Non-Claude providers get instructions prepended to prompt_extra."""
+        p = HEADLESS_PROVIDERS["codex"]
+        pcfg = apply_provider_config(p, {}, instructions="Custom instructions.")
+        self.assertIn("Custom instructions.", pcfg.prompt_extra)
+
+    def test_instructions_claude_not_in_prompt_extra(self) -> None:
+        """Claude provider does NOT get instructions in prompt_extra (uses wrapper)."""
+        p = HEADLESS_PROVIDERS["claude"]
+        pcfg = apply_provider_config(p, {}, instructions="Custom instructions.")
+        self.assertNotIn("Custom instructions.", pcfg.prompt_extra)
+
+    def test_instructions_prepended_before_other_prompt_parts(self) -> None:
+        """Instructions are prepended before max-turns guidance for non-Claude."""
+        p = HEADLESS_PROVIDERS["codex"]  # no max_turns_flag
+        pcfg = apply_provider_config(p, {"max_turns": 30}, instructions="Do the thing.")
+        # Instructions should come before the max-turns guidance
+        idx_instr = pcfg.prompt_extra.index("Do the thing.")
+        idx_turns = pcfg.prompt_extra.index("30 steps")
+        self.assertLess(idx_instr, idx_turns)
+
 
 class GenerateAllWrappersTests(unittest.TestCase):
     """Tests for generate_all_wrappers() multi-provider file."""

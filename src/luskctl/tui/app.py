@@ -81,6 +81,7 @@ if _HAS_TEXTUAL:
         "build_full": "_action_build_full",
         "init_ssh": "action_init_ssh",
         "sync_gate": "_action_sync_gate",
+        "edit_instructions": "_action_edit_instructions",
     }
 
     TASK_ACTION_HANDLERS: dict[str, str] = {

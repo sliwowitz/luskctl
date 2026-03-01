@@ -55,6 +55,7 @@ depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.autopilot",
     "luskctl.lib.containers.headless_providers",
+    "luskctl.lib.containers.instructions",
     "luskctl.lib.containers.runtime",
     "luskctl.lib.containers.task_display",
     "luskctl.lib.containers.tasks",
@@ -104,6 +105,12 @@ depends_on = ["luskctl.lib.containers.agent_config", "luskctl.lib.core.projects"
 path = "luskctl.lib.containers.agent_config"
 layer = "services"
 depends_on = ["luskctl.lib.util.config_stack", "luskctl.lib.core.config", "luskctl.lib.core.projects"]
+
+# Agent instruction resolution (layered merging with bundled defaults)
+[[modules]]
+path = "luskctl.lib.containers.instructions"
+layer = "services"
+depends_on = ["luskctl.lib.containers.agent_config"]
 
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
@@ -158,6 +165,7 @@ depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.environment",
     "luskctl.lib.containers.headless_providers",
+    "luskctl.lib.containers.instructions",
     "luskctl.lib.containers.ports",
     "luskctl.lib.containers.runtime",
     "luskctl.lib.containers.tasks",
@@ -451,6 +459,10 @@ from = ["luskctl.lib.containers.headless_providers"]
 [[interfaces]]
 expose = ["build_agent_config_stack", "resolve_agent_config", "resolve_provider_value"]
 from = ["luskctl.lib.containers.agent_config"]
+
+[[interfaces]]
+expose = ["resolve_instructions", "bundled_default_instructions", "has_custom_instructions"]
+from = ["luskctl.lib.containers.instructions"]
 
 [[interfaces]]
 expose = ["AUTH_PROVIDERS", "AuthProvider", "authenticate"]

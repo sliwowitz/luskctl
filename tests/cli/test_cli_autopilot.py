@@ -56,6 +56,7 @@ class RunCliTests(unittest.TestCase):
                 preset=None,
                 name=None,
                 provider=None,
+                instructions=None,
             )
 
     def test_run_no_follow_flag(self) -> None:
@@ -156,6 +157,50 @@ class RunCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_kwargs = mock_run.call_args
             self.assertIsNone(call_kwargs[1]["provider"])
+
+    def test_run_with_instructions_flag(self) -> None:
+        """run --instructions FILE reads file and passes instructions."""
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write("Custom agent instructions here.")
+            f.flush()
+            instr_path = f.name
+
+        try:
+            with (
+                unittest.mock.patch(
+                    "sys.argv",
+                    ["luskctl", "run", "myproject", "test", "--instructions", instr_path],
+                ),
+                unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            ):
+                main()
+                mock_run.assert_called_once()
+                call_kwargs = mock_run.call_args
+                self.assertEqual(call_kwargs[1]["instructions"], "Custom agent instructions here.")
+        finally:
+            Path(instr_path).unlink()
+
+    def test_run_instructions_file_not_found(self) -> None:
+        """run --instructions with nonexistent file raises SystemExit."""
+        with (
+            unittest.mock.patch(
+                "sys.argv",
+                [
+                    "luskctl",
+                    "run",
+                    "myproject",
+                    "test",
+                    "--instructions",
+                    "/nonexistent/path.md",
+                ],
+            ),
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            main()
+        self.assertIn("not found", str(ctx.exception))
 
     def test_task_run_cli_with_agent_selection(self) -> None:
         """task run-cli --agent passes agents to task_run_cli."""

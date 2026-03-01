@@ -77,6 +77,7 @@ make clean        # Remove build artifacts
 
 - **Container Readiness**: When modifying init scripts or server startup, preserve readiness markers (see `docs/DEVELOPER.md`)
 - **Security Modes**: Understand online vs gatekeeping modes when working with git operations
+- **Agent Instructions**: When modifying container setup (Dockerfile templates, init scripts, installed tools), check if `src/luskctl/resources/instructions/default.md` needs updating
 - **Minimal Changes**: Make surgical, focused changes
 - **Existing Tests**: Never remove or modify unrelated tests
 - **Dependencies**: Use Poetry for dependency management; avoid adding unnecessary dependencies

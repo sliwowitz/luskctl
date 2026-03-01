@@ -134,6 +134,7 @@ def _generate_claude_wrapper(
     has_agents: bool,
     project: Project,
     skip_permissions: bool = True,
+    has_instructions: bool = False,
 ) -> str:
     """Generate the luskctl-agent.sh wrapper function content for Claude.
 
@@ -182,6 +183,12 @@ def _generate_claude_wrapper(
     if has_agents:
         lines.append("    [ -f /home/dev/.luskctl/agents.json ] && \\")
         lines.append('        _args+=(--agents "$(cat /home/dev/.luskctl/agents.json)")')
+
+    if has_instructions:
+        lines.append("    [ -f /home/dev/.luskctl/instructions.md ] && \\")
+        lines.append(
+            '        _args+=(--append-system-prompt "$(cat /home/dev/.luskctl/instructions.md)")'
+        )
 
     # Resume previous session if session file exists (written by SessionStart hook)
     lines.append("    [ -s /home/dev/.luskctl/claude-session.txt ] && \\")
@@ -318,6 +325,7 @@ def prepare_agent_config_dir(
     prompt: str | None = None,
     skip_permissions: bool = True,
     provider: str = "claude",
+    instructions: str | None = None,
 ) -> Path:
     """Create and populate the agent-config directory for a task.
 
@@ -325,12 +333,15 @@ def prepare_agent_config_dir(
     - luskctl-agent.sh (always) — wrapper function with git env vars
     - agents.json (only when provider supports it and sub-agents are non-empty)
     - prompt.txt (if prompt given, headless only)
+    - instructions.md (if instructions given) — resolved agent instructions
     - <envs>/_claude-config/settings.json — SessionStart hook (Claude only)
 
     Args:
         provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
             Controls which wrapper is generated and which provider-specific
             files are written.
+        instructions: Resolved instructions text to write to ``instructions.md``.
+            For Claude, the wrapper reads this file via ``--append-system-prompt``.
 
     Returns the agent_config_dir path.
     """
@@ -359,11 +370,22 @@ def prepare_agent_config_dir(
             stacklevel=2,
         )
 
+    # Write instructions file (resolved instructions for debugging and Claude delivery)
+    has_instructions = bool(instructions)
+    if instructions:
+        (agent_config_dir / "instructions.md").write_text(instructions, encoding="utf-8")
+
     # Write shell wrapper functions for ALL providers so interactive CLI users
     # can invoke any agent (each provider gets its own shell function).
     from .headless_providers import generate_all_wrappers
 
-    wrapper = generate_all_wrappers(project, has_agents, claude_wrapper_fn=_generate_claude_wrapper)
+    def _claude_wrapper_with_instructions(ha: bool, proj: Project, sp: bool = True) -> str:
+        """Wrap _generate_claude_wrapper with the resolved has_instructions flag."""
+        return _generate_claude_wrapper(ha, proj, sp, has_instructions=has_instructions)
+
+    wrapper = generate_all_wrappers(
+        project, has_agents, claude_wrapper_fn=_claude_wrapper_with_instructions
+    )
     (agent_config_dir / "luskctl-agent.sh").write_text(wrapper, encoding="utf-8")
 
     # Write SessionStart hook — only for providers that support it (Claude)

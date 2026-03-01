@@ -33,6 +33,7 @@ from .environment import (
     apply_web_env_overrides,
     build_task_env_and_volumes,
 )
+from .instructions import resolve_instructions
 from .ports import assign_web_port
 from .runtime import (
     container_name,
@@ -180,8 +181,9 @@ def task_run_cli(
     from .headless_providers import get_provider as _get_provider
 
     resolved = _get_provider(None, project)
+    instr_text = resolve_instructions(effective, resolved.name)
     agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=resolved.name
+        project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
     )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -262,8 +264,9 @@ def task_run_web(
     from .headless_providers import get_provider as _get_provider
 
     resolved_web = _get_provider(None, project)
+    instr_text = resolve_instructions(effective, resolved_web.name)
     agent_config_dir = prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=resolved_web.name
+        project, task_id, subagents, agents, provider=resolved_web.name, instructions=instr_text
     )
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 
@@ -405,6 +408,7 @@ def task_run_headless(
     preset: str | None = None,
     name: str | None = None,
     provider: str | None = None,
+    instructions: str | None = None,
 ) -> str:
     """Run an agent headlessly (autopilot mode) in a new task container.
 
@@ -419,6 +423,8 @@ def task_run_headless(
             :func:`generate_task_name`.
         provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
             Defaults to project/global config, falling back to ``"claude"``.
+        instructions: Explicit instructions text (from ``--instructions`` CLI
+            flag).  Overrides the config stack when provided.
 
     Returns the task_id.
     """
@@ -441,6 +447,11 @@ def task_run_headless(
         project_id, preset=preset, cli_overrides=cli_overrides if cli_overrides else None
     )
 
+    # Resolve instructions: CLI --instructions overrides config stack
+    instr_text = (
+        instructions if instructions is not None else resolve_instructions(effective, resolved.name)
+    )
+
     # Apply provider-aware config resolution with best-effort feature mapping.
     # CLI flags override config values; unsupported features produce warnings
     # or prompt augmentation.
@@ -450,6 +461,7 @@ def task_run_headless(
         model_override=model,
         max_turns_override=max_turns,
         timeout_override=timeout,
+        instructions=instr_text,
     )
 
     # Print warnings about unsupported features
@@ -467,7 +479,7 @@ def task_run_headless(
     # Collect subagents from resolved config
     subagents = list(effective.get("subagents") or [])
 
-    # Prepare agent-config dir with wrapper, agents.json, prompt.txt
+    # Prepare agent-config dir with wrapper, agents.json, prompt.txt, instructions.md
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = prepare_agent_config_dir(
         project,
@@ -476,6 +488,7 @@ def task_run_headless(
         agents,
         prompt=effective_prompt,
         provider=resolved.name,
+        instructions=instr_text,
     )
 
     # Build env and volumes

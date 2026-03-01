@@ -10,6 +10,7 @@ from rich.style import Style
 from rich.text import Text
 from textual.widgets import Static
 
+from ...lib.containers.instructions import has_custom_instructions
 from ...lib.core.projects import Project
 from ...lib.facade import GateStalenessInfo
 from ...lib.util.emoji import draw_emoji
@@ -94,6 +95,14 @@ def render_project_details(
     upstream = project.upstream_url or "-"
     security_emoji = draw_emoji("🚪" if project.security_class == "gatekeeping" else "🌐")
 
+    dim_style = Style(dim=True)
+    custom_instr = has_custom_instructions(project.agent_config)
+    instr_s = (
+        Text("custom", style=Style(color=success_color))
+        if custom_instr
+        else Text("default", style=dim_style)
+    )
+
     lines = [
         Text(f"Project:   {project.id} {security_emoji}"),
         Text(upstream),
@@ -102,6 +111,7 @@ def render_project_details(
         Text.assemble("Images:      ", images_s),
         Text.assemble("SSH dir:     ", ssh_s),
         Text.assemble("Git gate:    ", gate_s),
+        Text.assemble("Instruct:    ", instr_s),
         tasks_line,
     ]
 

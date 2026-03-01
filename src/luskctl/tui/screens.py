@@ -99,6 +99,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         _modal_binding("f", "build_full", "Full rebuild no cache"),
         _modal_binding("s", "init_ssh", "Init SSH"),
         _modal_binding("a", "auth", "Authenticate"),
+        _modal_binding("I", "edit_instructions", "Edit instructions"),
     ]
 
     CSS = (
@@ -146,6 +147,8 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             Option("initialize \\[s]sh", id="init_ssh"),
             None,
             Option("\\[a]uthenticate...", id="auth"),
+            None,
+            Option("edit \\[I]nstructions", id="edit_instructions"),
             id="actions-list",
         )
 
@@ -215,6 +218,10 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
     def action_auth(self) -> None:
         """Open the authenticate agents and tools modal."""
         self._open_auth_modal()
+
+    def action_edit_instructions(self) -> None:
+        """Open instructions for editing."""
+        self.dismiss("edit_instructions")
 
 
 # ---------------------------------------------------------------------------
