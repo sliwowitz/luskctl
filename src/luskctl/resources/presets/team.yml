@@ -7,8 +7,8 @@
 #
 # Good for: new features, cross-cutting refactors, multi-file changes.
 # Usage:
-#   luskctl run-claude <project> "<prompt>" --preset team
-#   luskctl run-claude <project> "<prompt>" --preset team --agent docs-writer
+#   luskctl run <project> "<prompt>" --preset team
+#   luskctl run <project> "<prompt>" --preset team --agent docs-writer
 
 subagents:
 

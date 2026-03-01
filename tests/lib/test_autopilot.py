@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot (Level 1+2) features: run-claude and agent config."""
+"""Tests for autopilot (Level 1+2) features: luskctl run and agent config."""
 
 import json
 import os

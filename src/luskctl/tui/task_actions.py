@@ -255,24 +255,29 @@ class TaskActionsMixin:
 
         pid = self.current_project_id
 
-        # Load project to check for subagents
+        # Load project to check for subagents and resolve provider
         try:
             project = load_project(pid)
         except Exception as e:
             self.notify(f"Error loading project: {e}")
             return
 
+        # Resolve provider — agent selection is only relevant for Claude
+        from ..lib.containers.headless_providers import get_provider
+
+        resolved = get_provider(None, project)
+
         raw_subagents = project.agent_config.get("subagents", [])
         subagents = self._normalize_subagents(raw_subagents) if raw_subagents else []
 
-        if subagents:
-            # Show agent selection screen
+        if subagents and resolved.supports_agents_json:
+            # Show agent selection screen (Claude only)
             await self.push_screen(
                 AgentSelectionScreen(subagents),
                 lambda selected, p=prompt: self._on_agent_selection_result(p, selected),
             )
         else:
-            # No agents configured, launch directly
+            # No agents or non-Claude provider — launch directly
             await self._launch_autopilot(prompt, agents=None)
 
     async def _on_agent_selection_result(self, prompt: str, selected: list[str] | None) -> None:
@@ -395,6 +400,7 @@ class TaskActionsMixin:
 
         from .log_viewer import LogViewerScreen
 
+        provider = getattr(task, "provider", None)
         await self.push_screen(
             LogViewerScreen(
                 project_id=pid,
@@ -402,6 +408,7 @@ class TaskActionsMixin:
                 mode=task.mode,
                 container_name=cname,
                 follow=follow,
+                provider=provider,
             )
         )
 

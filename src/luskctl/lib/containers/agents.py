@@ -317,43 +317,53 @@ def prepare_agent_config_dir(
     selected_agents: list[str] | None = None,
     prompt: str | None = None,
     skip_permissions: bool = True,
+    provider: str = "claude",
 ) -> Path:
     """Create and populate the agent-config directory for a task.
 
     Writes:
     - luskctl-claude.sh (always) — wrapper function with git env vars
-    - agents.json (if sub-agents produce non-empty dict after filtering)
+    - agents.json (only when provider supports it and sub-agents are non-empty)
     - prompt.txt (if prompt given, headless only)
-    - <envs>/_claude-config/settings.json — SessionStart hook to capture session ID
+    - <envs>/_claude-config/settings.json — SessionStart hook (Claude only)
+
+    Args:
+        provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
+            Controls which wrapper is generated and which provider-specific
+            files are written.
 
     Returns the agent_config_dir path.
     """
+    from .headless_providers import get_provider as _get_provider
+
+    resolved = _get_provider(provider, project)
+
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
     ensure_dir(agent_config_dir)
-    # Build agents JSON (may be empty dict "{}")
+
+    # Build agents JSON — only for providers that support --agents (Claude)
     has_agents = False
-    if subagents:
+    if resolved.supports_agents_json and subagents:
         agents_json = _subagents_to_json(subagents, selected_agents)
         agents_dict = json.loads(agents_json)
         if agents_dict:  # non-empty dict
             (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
             has_agents = True
 
-    # Always write the claude wrapper function
-    wrapper = _generate_claude_wrapper(has_agents, project, skip_permissions)
+    # Write the shell wrapper function (provider-aware)
+    from .headless_providers import generate_agent_wrapper
+
+    wrapper = generate_agent_wrapper(
+        resolved, project, has_agents, claude_wrapper_fn=_generate_claude_wrapper
+    )
     (agent_config_dir / "luskctl-claude.sh").write_text(wrapper, encoding="utf-8")
 
-    # Write SessionStart hook to the shared Claude config mount
-    # (/home/dev/.claude inside containers). For now this is global across
-    # projects/tasks, while the emitted session ID file remains per-task under
-    # /home/dev/.luskctl/claude-session.txt.
-    #
-    # This keeps /workspace clean for init clone while preserving task-local
-    # resume behavior.
-    shared_claude_dir = get_envs_base_dir() / "_claude-config"
-    ensure_dir_writable(shared_claude_dir, "_claude-config")
-    _write_session_hook(shared_claude_dir / "settings.json")
+    # Write SessionStart hook — only for providers that support it (Claude)
+    if resolved.supports_session_hook:
+        shared_claude_dir = get_envs_base_dir() / "_claude-config"
+        ensure_dir_writable(shared_claude_dir, "_claude-config")
+        _write_session_hook(shared_claude_dir / "settings.json")
 
     # Prompt (headless only)
     if prompt is not None:

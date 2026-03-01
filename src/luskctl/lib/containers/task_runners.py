@@ -11,7 +11,6 @@ retains task metadata, lifecycle, and query operations.
 
 from __future__ import annotations
 
-import shlex
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -395,22 +394,28 @@ def task_run_headless(
     agents: list[str] | None = None,
     preset: str | None = None,
     name: str | None = None,
+    provider: str | None = None,
 ) -> str:
-    """Run Claude headlessly (autopilot mode) in a new task container.
+    """Run an agent headlessly (autopilot mode) in a new task container.
 
-    Creates a new task, prepares the agent-config directory with the claude
+    Creates a new task, prepares the agent-config directory with the provider's
     wrapper function and filtered subagents, then launches a detached container
-    that runs init-ssh-and-repo.sh followed by the claude command.
+    that runs init-ssh-and-repo.sh followed by the agent command.
 
     Args:
         name: Optional human-readable name.  Allowed characters are
             lowercase letters, digits, hyphens, and underscores.
             If ``None``, a random name is generated via
             :func:`generate_task_name`.
+        provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
+            Defaults to project/global config, falling back to ``"claude"``.
 
     Returns the task_id.
     """
+    from .headless_providers import build_headless_command, get_provider
+
     project = load_project(project_id)
+    resolved = get_provider(provider, project)
 
     # Build CLI overrides from --config file and explicit flags
     cli_overrides: dict = {}
@@ -440,6 +445,7 @@ def task_run_headless(
         subagents,
         agents,
         prompt=prompt,
+        provider=resolved.name,
     )
 
     # Build env and volumes
@@ -450,26 +456,17 @@ def task_run_headless(
 
     effective_timeout = timeout or 1800
 
-    # Build CLI flags for model/max_turns (passed directly in headless command)
-    claude_flags = ""
-    if model:
-        claude_flags += f" --model {shlex.quote(model)}"
-    if max_turns:
-        claude_flags += f" --max-turns {int(max_turns)}"
+    # Build headless command via provider registry
+    headless_cmd = build_headless_command(
+        resolved,
+        timeout=effective_timeout,
+        model=model,
+        max_turns=max_turns,
+    )
 
     # Build podman command (DETACHED)
-    # The claude() wrapper from luskctl-claude.sh handles --dangerously-skip-permissions,
-    # --add-dir /, --agents, git env vars, and (via --luskctl-timeout) the timeout.
-    # Only per-run flags (model, max_turns, prompt) are passed here.
     cname = container_name(project.id, "run", task_id)
 
-    headless_cmd = (
-        f"init-ssh-and-repo.sh &&"
-        f" claude --luskctl-timeout {effective_timeout}"
-        f" -p "
-        '"$(cat /home/dev/.luskctl/prompt.txt)"'
-        f"{claude_flags} --output-format stream-json --verbose"
-    )
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
@@ -482,6 +479,7 @@ def task_run_headless(
     # Update task metadata
     meta, meta_path = load_task_meta(project.id, task_id)
     meta["mode"] = "run"
+    meta["provider"] = resolved.name
     if preset:
         meta["preset"] = preset
     meta_path.write_text(yaml.safe_dump(meta))
@@ -495,10 +493,10 @@ def task_run_headless(
         update_task_exit_code(project.id, task_id, exit_code)
 
         if exit_code != 0:
-            print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
+            print(f"\n{resolved.label} exited with code {_red(str(exit_code), color_enabled)}")
     else:
         _print_detached_summary(
-            "Headless Claude task started (detached).",
+            f"Headless {resolved.label} task started (detached).",
             task_id,
             cname,
             color_enabled,
@@ -518,14 +516,18 @@ def task_followup_headless(
     """Send a follow-up prompt to a completed/failed headless task.
 
     Updates prompt.txt in the existing agent-config directory and restarts
-    the stopped container via ``podman start``.  The claude wrapper
-    automatically resumes the previous session via ``--resume`` from
-    ``claude-session.txt`` (written by the SessionStart hook).
+    the stopped container via ``podman start``.  For providers that support
+    session resume (e.g. Claude via ``--resume`` from ``claude-session.txt``),
+    the session is automatically continued.  For providers without session
+    resume, the container restarts and re-reads ``prompt.txt`` but starts a
+    fresh session.
 
     Per-run flags (model, max_turns, timeout) carry forward from the
     original ``task_run_headless`` invocation since ``podman start``
     re-executes the same container command.
     """
+    from .headless_providers import HEADLESS_PROVIDERS
+
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id)
 
@@ -548,13 +550,24 @@ def task_followup_headless(
             f"Container {cname} not found. Cannot follow up — the container may have been removed."
         )
 
+    # Resolve provider from task metadata
+    provider_name = meta.get("provider", "claude")
+    resolved = HEADLESS_PROVIDERS.get(provider_name)
+    label = resolved.label if resolved else provider_name
+
+    if resolved and not resolved.supports_session_resume:
+        print(
+            f"Note: {label} does not support session resume. "
+            f"Follow-up will start a fresh session with the new prompt."
+        )
+
     # Update prompt.txt with the new follow-up prompt (after all validation)
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = task_dir / "agent-config"
     (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
 
     # Restart the existing container (re-runs the original bash command,
-    # which reads prompt.txt and claude-session.txt from the volume)
+    # which reads prompt.txt and session files from the volume)
     _podman_start(cname)
     _assert_running(cname)
 
@@ -571,7 +584,7 @@ def task_followup_headless(
         update_task_exit_code(project.id, task_id, exit_code)
 
         if exit_code != 0:
-            print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
+            print(f"\n{label} exited with code {_red(str(exit_code), color_enabled)}")
     else:
         _print_detached_summary(
             "Follow-up started (detached).",
