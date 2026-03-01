@@ -82,5 +82,6 @@ def dispatch(args) -> bool:
                 print(f"Presets for '{args.project_id}':")
                 for info in presets:
                     print(f"  - {info.name} ({info.source})")
-        return True
+            return True
+        return False
     return False

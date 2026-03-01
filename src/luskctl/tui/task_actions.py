@@ -95,6 +95,8 @@ class TaskActionsMixin:
         try:
             task_delete(project_id, task_id)
             return project_id, task_id, None
+        except SystemExit as e:
+            return project_id, task_id, str(e)
         except Exception as e:
             return project_id, task_id, str(e)
 

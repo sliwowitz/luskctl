@@ -602,7 +602,7 @@ class BundledPresetTests(unittest.TestCase):
 
 
 class ValidateProjectIdTests(unittest.TestCase):
-    """Tests for _validate_project_id error messages."""
+    """Tests for validate_project_id error messages."""
 
     def test_error_message_mentions_first_char(self) -> None:
         """Error message describes the first-character requirement."""

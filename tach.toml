@@ -122,7 +122,7 @@ layer = "services"
 depends_on = [
     "luskctl.lib.containers.log_format",
     "luskctl.lib.containers.runtime",
-    "luskctl.lib.core.config",
+    "luskctl.lib.containers.tasks",
     "luskctl.lib.core.projects",
 ]
 
@@ -392,7 +392,7 @@ expose = [
     "STATUS_DISPLAY",
     "MODE_DISPLAY",
     "WEB_BACKEND_EMOJI",
-    "_WEB_BACKEND_DEFAULT_EMOJI",
+    "WEB_BACKEND_DEFAULT_EMOJI",
     "effective_status",
     "mode_emoji",
 ]
@@ -423,6 +423,7 @@ expose = [
     "generate_task_name",
     "TASK_NAME_MAX_LEN",
     "TaskMeta",
+    "_tasks_meta_dir",
 ]
 from = ["luskctl.lib.containers.tasks"]
 

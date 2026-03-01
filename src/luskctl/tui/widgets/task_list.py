@@ -102,6 +102,7 @@ class TaskList(ListView):
         for tm in self.tasks:
             if tm.task_id == task_id:
                 tm.deleting = True
+                found = True
                 break
 
         for item in self.query(TaskListItem):

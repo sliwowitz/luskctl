@@ -58,7 +58,7 @@ WEB_BACKEND_EMOJI: dict[str, str] = {
     "copilot": "🤖",
 }
 
-_WEB_BACKEND_DEFAULT_EMOJI = "🌍"
+WEB_BACKEND_DEFAULT_EMOJI = "🌍"
 
 
 def effective_status(task: TaskMeta) -> str:
@@ -112,7 +112,7 @@ def mode_emoji(task: TaskMeta) -> str:
     if mode == "web":
         backend = task.backend
         if isinstance(backend, str):
-            return WEB_BACKEND_EMOJI.get(backend, _WEB_BACKEND_DEFAULT_EMOJI)
-        return _WEB_BACKEND_DEFAULT_EMOJI
+            return WEB_BACKEND_EMOJI.get(backend, WEB_BACKEND_DEFAULT_EMOJI)
+        return WEB_BACKEND_DEFAULT_EMOJI
     info = MODE_DISPLAY.get(mode if isinstance(mode, str) else None)
     return info.emoji if info else MODE_DISPLAY[None].emoji

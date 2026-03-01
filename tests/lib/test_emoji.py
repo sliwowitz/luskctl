@@ -67,7 +67,7 @@ class TestDrawEmoji(unittest.TestCase):
     def test_all_backend_emojis_are_exactly_width_2(self):
         """All web backend emojis are exactly 2 cells wide."""
         from luskctl.lib.containers.task_display import (
-            _WEB_BACKEND_DEFAULT_EMOJI,
+            WEB_BACKEND_DEFAULT_EMOJI,
             WEB_BACKEND_EMOJI,
         )
 
@@ -82,10 +82,10 @@ class TestDrawEmoji(unittest.TestCase):
                 f"{emoji} ",
                 f"Backend emoji for {backend!r} should be exactly 2 cells wide",
             )
-        self.assertEqual(draw_emoji(_WEB_BACKEND_DEFAULT_EMOJI), _WEB_BACKEND_DEFAULT_EMOJI)
+        self.assertEqual(draw_emoji(WEB_BACKEND_DEFAULT_EMOJI), WEB_BACKEND_DEFAULT_EMOJI)
         self.assertEqual(
-            draw_emoji(_WEB_BACKEND_DEFAULT_EMOJI, width=3),
-            f"{_WEB_BACKEND_DEFAULT_EMOJI} ",
+            draw_emoji(WEB_BACKEND_DEFAULT_EMOJI, width=3),
+            f"{WEB_BACKEND_DEFAULT_EMOJI} ",
         )
 
 

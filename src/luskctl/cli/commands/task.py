@@ -217,10 +217,11 @@ def register(subparsers) -> None:
         _a.completer = _complete_task_ids  # type: ignore[attr-defined]
     except AttributeError:
         pass
+    restart_backends = ", ".join(WEB_BACKENDS)
     t_restart.add_argument(
         "--backend",
-        choices=["gradio", "streamlit"],
-        help="Backend to use when re-running a web task (default: use saved backend)",
+        choices=list(WEB_BACKENDS),
+        help=f"Backend to use when re-running a web task ({restart_backends}; default: use saved backend)",
     )
 
     t_followup = tsub.add_parser(

@@ -62,22 +62,23 @@ def render_task_details(
             )
         )
     if task.mode == "cli" and project_id:
-        cname = f"{project_id}-cli-{task.task_id}"
         lines.append(
             Text.assemble(
                 "Log in:    ",
-                Text(f"podman exec -it {cname} bash", style=accent_style),
+                Text(f"luskctl login {project_id} {task.task_id}", style=accent_style),
             )
         )
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))
         if project_id:
-            cname = f"{project_id}-run-{task.task_id}"
             lines.append(
                 Text.assemble(
                     "Logs:      ",
-                    Text(f"podman logs -f {cname}", style=accent_style),
+                    Text(
+                        f"luskctl task logs {project_id} {task.task_id} -f",
+                        style=accent_style,
+                    ),
                 )
             )
 

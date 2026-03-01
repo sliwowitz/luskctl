@@ -39,7 +39,7 @@ class ProjectActionsMixin:
         """Prompt the user to select a web UI backend and return the choice."""
         backends = list(WEB_BACKENDS)
         default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
-        if not default:
+        if default not in backends:
             default = backends[0] if backends else "codex"
 
         print("Select UI backend:")
@@ -57,7 +57,8 @@ class ProjectActionsMixin:
             if 1 <= idx <= len(backends):
                 return backends[idx - 1]
             return default
-        return choice.lower()
+        normalized = choice.lower()
+        return normalized if normalized in backends else default
 
     def _print_sync_gate_ssh_help(self, project_id: str) -> None:
         """Print SSH-specific troubleshooting details for gate sync failures."""

@@ -101,7 +101,7 @@ class RenderHelpersTests(TestCase):
         self.assertIsInstance(result, Text)
         text_str = str(result)
         self.assertIn("Autopilot", text_str)
-        self.assertIn("podman logs", text_str)
+        self.assertIn("luskctl task logs", text_str)
 
     def test_render_task_details_autopilot_with_exit_code(self) -> None:
         widgets = import_widgets()
