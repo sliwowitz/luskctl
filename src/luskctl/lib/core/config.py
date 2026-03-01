@@ -264,6 +264,20 @@ def get_logs_partial_streaming() -> bool:
     return bool(get_global_section("logs").get("partial_streaming", True))
 
 
+def get_task_name_categories() -> list[str] | None:
+    """Return ``tasks.name_categories`` from global config, or ``None`` if unset.
+
+    The value may be a list of category strings (e.g. ``["animals", "food"]``)
+    or a single string.  Returns ``None`` when the key is absent or empty.
+    """
+    val = get_global_section("tasks").get("name_categories")
+    if isinstance(val, list):
+        return [str(c) for c in val] if val else None
+    if isinstance(val, str) and val.strip():
+        return [val.strip()]
+    return None
+
+
 def get_global_agent_config() -> dict[str, Any]:
     """Return the ``agent:`` section from the global config, or ``{}``."""
     return get_global_section("agent")

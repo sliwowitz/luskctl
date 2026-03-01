@@ -383,12 +383,19 @@ def task_run_headless(
     follow: bool = True,
     agents: list[str] | None = None,
     preset: str | None = None,
+    name: str | None = None,
 ) -> str:
     """Run Claude headlessly (autopilot mode) in a new task container.
 
     Creates a new task, prepares the agent-config directory with the claude
     wrapper function and filtered subagents, then launches a detached container
     that runs init-ssh-and-repo.sh followed by the claude command.
+
+    Args:
+        name: Optional human-readable name.  Allowed characters are
+            lowercase letters, digits, hyphens, and underscores.
+            If ``None``, a random name is generated via
+            :func:`generate_task_name`.
 
     Returns the task_id.
     """
@@ -409,7 +416,7 @@ def task_run_headless(
     )
 
     # Create a new task
-    task_id = task_new(project_id)
+    task_id = task_new(project_id, name=name)
 
     # Collect subagents from resolved config
     subagents = list(effective.get("subagents") or [])

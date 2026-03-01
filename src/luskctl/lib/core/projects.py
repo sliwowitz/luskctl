@@ -97,6 +97,8 @@ class Project:
     # Seconds to wait before SIGKILL when stopping a container (podman stop --time).
     # Default 10 matches podman's built-in default.
     shutdown_timeout: int = 10
+    # Task name categories for unique-namer (from tasks.name_categories in project.yml)
+    task_name_categories: list[str] | None = None
 
     @property
     def presets_dir(self) -> Path:
@@ -382,6 +384,14 @@ def load_project(project_id: str) -> Project:
     run_cfg = cfg.get("run", {}) or {}
     shutdown_timeout = int(run_cfg.get("shutdown_timeout", 10))
 
+    # Task name categories (from tasks.name_categories in project.yml)
+    raw_cats = tasks_cfg.get("name_categories")
+    task_name_categories: list[str] | None = None
+    if isinstance(raw_cats, list) and raw_cats:
+        task_name_categories = [str(c) for c in raw_cats]
+    elif isinstance(raw_cats, str) and raw_cats.strip():
+        task_name_categories = [raw_cats.strip()]
+
     # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
     # Resolve subagent file: paths relative to project root
@@ -416,5 +426,6 @@ def load_project(project_id: str) -> Project:
         default_agent=default_agent,
         agent_config=agent_cfg,
         shutdown_timeout=shutdown_timeout,
+        task_name_categories=task_name_categories,
     )
     return p

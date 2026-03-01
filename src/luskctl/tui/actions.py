@@ -26,11 +26,13 @@ from ..lib.containers.task_runners import (
 )
 from ..lib.containers.tasks import (
     effective_status,
+    generate_task_name,
     get_login_command,
     get_workspace_git_diff,
     mark_task_deleting,
     task_delete,
     task_new,
+    task_rename,
 )
 from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
@@ -44,7 +46,7 @@ from ..lib.facade import (
     sync_project_gate,
 )
 from .clipboard import copy_to_clipboard_detailed
-from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen
+from .screens import AgentInfo, AgentSelectionScreen, AutopilotPromptScreen, TaskNameScreen
 from .shell_launch import launch_login
 from .widgets import TaskList
 
@@ -352,11 +354,22 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
+
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskNameScreen(default_name=default_name),
+            self._on_new_task_name,
+        )
+
+    async def _on_new_task_name(self, name: str | None) -> None:
+        """Handle name result from TaskNameScreen for new task creation."""
+        if name is None or not self.current_project_id:
+            return
         pid = self.current_project_id
 
         def work() -> None:
             """Create the task and update focus state."""
-            task_id = task_new(pid)
+            task_id = task_new(pid, name=name)
             self._focus_task_after_creation(pid, task_id)
 
         await self._run_suspended(work, success_msg="Task created.", refresh="tasks")
@@ -401,11 +414,22 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
+
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskNameScreen(default_name=default_name),
+            self._on_task_start_cli_name,
+        )
+
+    async def _on_task_start_cli_name(self, name: str | None) -> None:
+        """Handle name result from TaskNameScreen for CLI task start."""
+        if name is None or not self.current_project_id:
+            return
         pid = self.current_project_id
 
         def work() -> None:
             """Create a new task and immediately launch CLI mode."""
-            task_id = task_new(pid)
+            task_id = task_new(pid, name=name)
             self._focus_task_after_creation(pid, task_id)
             print(f"\nRunning CLI for {pid}/{task_id}...\n")
             task_run_cli(pid, task_id)
@@ -417,11 +441,22 @@ class ActionsMixin:
         if not self.current_project_id:
             self.notify("No project selected.")
             return
+
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskNameScreen(default_name=default_name),
+            self._on_task_start_web_name,
+        )
+
+    async def _on_task_start_web_name(self, name: str | None) -> None:
+        """Handle name result from TaskNameScreen for web task start."""
+        if name is None or not self.current_project_id:
+            return
         pid = self.current_project_id
 
         def work() -> None:
             """Create a new task and immediately launch web mode."""
-            task_id = task_new(pid)
+            task_id = task_new(pid, name=name)
             self._focus_task_after_creation(pid, task_id)
             backend = self._prompt_ui_backend()
             print(f"\nStarting Web UI for {pid}/{task_id} (backend: {backend})...\n")
@@ -435,7 +470,20 @@ class ActionsMixin:
             self.notify("No project selected.")
             return
 
-        # Show prompt input screen
+        # Show name input screen first, then prompt
+        default_name = generate_task_name(self.current_project_id)
+        await self.push_screen(
+            TaskNameScreen(default_name=default_name),
+            self._on_autopilot_name_result,
+        )
+
+    async def _on_autopilot_name_result(self, name: str | None) -> None:
+        """Handle the name returned from TaskNameScreen for autopilot."""
+        if name is None or not self.current_project_id:
+            return
+
+        # Store the name and show prompt input screen
+        self._autopilot_pending_name = name
         await self.push_screen(
             AutopilotPromptScreen(),
             self._on_autopilot_prompt_result,
@@ -480,9 +528,11 @@ class ActionsMixin:
         if not self.current_project_id:
             return
         pid = self.current_project_id
+        name = getattr(self, "_autopilot_pending_name", None)
+        self._autopilot_pending_name = None
         self.notify(f"Starting autopilot task for {pid}...")
         self.run_worker(
-            lambda: self._run_headless_worker(pid, prompt, agents),
+            lambda: self._run_headless_worker(pid, prompt, agents, name),
             name=f"autopilot-launch:{pid}",
             group="autopilot-launch",
             thread=True,
@@ -490,11 +540,11 @@ class ActionsMixin:
         )
 
     def _run_headless_worker(
-        self, project_id: str, prompt: str, agents: list[str] | None
+        self, project_id: str, prompt: str, agents: list[str] | None, name: str | None = None
     ) -> tuple[str, str, str | None]:
         """Background worker: launch task_run_headless and return result."""
         try:
-            task_id = task_run_headless(project_id, prompt, follow=False, agents=agents)
+            task_id = task_run_headless(project_id, prompt, follow=False, agents=agents, name=name)
             return project_id, task_id, None
         except SystemExit as e:
             return project_id, "", str(e)
@@ -649,6 +699,31 @@ class ActionsMixin:
 
         mark_task_deleting(self.current_project_id, tid)
         self._queue_task_delete(self.current_project_id, tid)
+
+    async def _action_rename_task(self) -> None:
+        """Rename the currently selected task."""
+        if not self.current_project_id or not self.current_task:
+            self.notify("No task selected.")
+            return
+        current_name = self.current_task.name or ""
+        await self.push_screen(
+            TaskNameScreen(default_name=current_name),
+            self._on_rename_task_result,
+        )
+
+    async def _on_rename_task_result(self, name: str | None) -> None:
+        """Handle name result from TaskNameScreen for rename."""
+        if name is None or not self.current_project_id or not self.current_task:
+            return
+        pid = self.current_project_id
+        tid = self.current_task.task_id
+        try:
+            task_rename(pid, tid, name)
+        except SystemExit as e:
+            self.notify(str(e))
+            return
+        self.notify(f"Task {tid} renamed.")
+        await self.refresh_tasks()
 
     async def _copy_diff_to_clipboard(self, git_ref: str, label: str) -> None:
         """Common helper to copy a git diff to the clipboard."""

@@ -480,14 +480,23 @@ class ActionSelectionTests(TestCase):
         fake_task_new = mock.Mock(return_value="7")
         action_globals = AppClass.action_new_task.__globals__
 
+        # push_screen now shows a name modal; simulate immediate callback
+        async def fake_push_screen(screen, callback):
+            await callback("test-name")
+
+        instance.push_screen = fake_push_screen
+
         with (
-            mock.patch.dict(action_globals, {"task_new": fake_task_new}),
+            mock.patch.dict(
+                action_globals,
+                {"task_new": fake_task_new, "generate_task_name": lambda *a, **kw: "test-name"},
+            ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass.action_new_task(instance))
 
         self.assertEqual(instance._last_selected_tasks.get("proj1"), "7")
-        fake_task_new.assert_called_once_with("proj1")
+        fake_task_new.assert_called_once_with("proj1", name="test-name")
         instance._save_selection_state.assert_called_once()
         instance.refresh_tasks.assert_awaited_once()
 
@@ -506,13 +515,21 @@ class ActionSelectionTests(TestCase):
         original_focus = instance._focus_task_after_creation
         instance._focus_task_after_creation = mock.Mock(wraps=original_focus)
 
+        async def fake_push_screen(screen, callback):
+            await callback("test-name")
+
+        instance.push_screen = fake_push_screen
+
         with (
-            mock.patch.dict(action_globals, {"task_new": fake_task_new}),
+            mock.patch.dict(
+                action_globals,
+                {"task_new": fake_task_new, "generate_task_name": lambda *a, **kw: "test-name"},
+            ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass.action_new_task(instance))
 
-        fake_task_new.assert_called_once_with("proj1")
+        fake_task_new.assert_called_once_with("proj1", name="test-name")
         instance._focus_task_after_creation.assert_called_once_with("proj1", "8")
         instance._save_selection_state.assert_called_once()
         instance.refresh_tasks.assert_awaited_once()
@@ -531,17 +548,26 @@ class ActionSelectionTests(TestCase):
         fake_task_run_cli = mock.Mock()
         action_globals = AppClass._action_task_start_cli.__globals__
 
+        async def fake_push_screen(screen, callback):
+            await callback("test-name")
+
+        instance.push_screen = fake_push_screen
+
         with (
             mock.patch.dict(
                 action_globals,
-                {"task_new": fake_task_new, "task_run_cli": fake_task_run_cli},
+                {
+                    "task_new": fake_task_new,
+                    "task_run_cli": fake_task_run_cli,
+                    "generate_task_name": lambda *a, **kw: "test-name",
+                },
             ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass._action_task_start_cli(instance))
 
         self.assertEqual(instance._last_selected_tasks.get("proj1"), "42")
-        fake_task_new.assert_called_once_with("proj1")
+        fake_task_new.assert_called_once_with("proj1", name="test-name")
         fake_task_run_cli.assert_called_once_with("proj1", "42")
         instance._save_selection_state.assert_called_once()
         instance.refresh_tasks.assert_awaited_once()
@@ -561,17 +587,26 @@ class ActionSelectionTests(TestCase):
         fake_task_run_web = mock.Mock()
         action_globals = AppClass._action_task_start_web.__globals__
 
+        async def fake_push_screen(screen, callback):
+            await callback("test-name")
+
+        instance.push_screen = fake_push_screen
+
         with (
             mock.patch.dict(
                 action_globals,
-                {"task_new": fake_task_new, "task_run_web": fake_task_run_web},
+                {
+                    "task_new": fake_task_new,
+                    "task_run_web": fake_task_run_web,
+                    "generate_task_name": lambda *a, **kw: "test-name",
+                },
             ),
             mock.patch("builtins.input", return_value=""),
         ):
             asyncio.run(AppClass._action_task_start_web(instance))
 
         self.assertEqual(instance._last_selected_tasks.get("proj1"), "99")
-        fake_task_new.assert_called_once_with("proj1")
+        fake_task_new.assert_called_once_with("proj1", name="test-name")
         fake_task_run_web.assert_called_once_with("proj1", "99", backend="codex")
         instance._save_selection_state.assert_called_once()
         instance.refresh_tasks.assert_awaited_once()

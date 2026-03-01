@@ -92,6 +92,7 @@ if _HAS_TEXTUAL:
         "diff_prev": "action_copy_diff_prev",
         "login": "_action_login",
         "follow_logs": "_action_follow_logs",
+        "rename": "_action_rename_task",
     }
 
     class LuskTUI(PollingMixin, ActionsMixin, App):

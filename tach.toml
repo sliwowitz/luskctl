@@ -355,6 +355,7 @@ from = ["luskctl.lib.core.projects"]
 [[interfaces]]
 expose = [
     "task_new",
+    "task_rename",
     "task_run_cli",
     "task_run_web",
     "task_run_headless",
@@ -374,6 +375,10 @@ expose = [
     "load_task_meta",
     "effective_status",
     "mode_emoji",
+    "sanitize_task_name",
+    "validate_task_name",
+    "generate_task_name",
+    "TASK_NAME_MAX_LEN",
     "TaskMeta",
     "StatusInfo",
     "ModeInfo",
@@ -449,6 +454,7 @@ expose = [
     "load_global_config",
     "get_global_section",
     "get_global_agent_config",
+    "get_task_name_categories",
     "get_prefix",
 ]
 from = ["luskctl.lib.core.config"]

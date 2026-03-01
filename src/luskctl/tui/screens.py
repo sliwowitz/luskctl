@@ -33,6 +33,12 @@ try:  # pragma: no cover - optional import for test stubs
 except Exception:  # pragma: no cover - textual may be a stub module
     SelectionList = None  # type: ignore[assignment,misc]
 
+try:  # pragma: no cover - optional import for test stubs
+    from textual.widgets import Input
+except Exception:  # pragma: no cover - textual may be a stub module
+    Input = None  # type: ignore[assignment,misc]
+
+from ..lib.containers.tasks import sanitize_task_name, validate_task_name
 from ..lib.core.projects import Project as CodexProject
 from ..lib.facade import GateStalenessInfo
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
@@ -469,6 +475,111 @@ class AgentSelectionScreen(screen.ModalScreen[list[str] | None]):
 
 
 # ---------------------------------------------------------------------------
+# Task Name Screen (name input for new task or rename)
+# ---------------------------------------------------------------------------
+
+
+class TaskNameScreen(screen.ModalScreen[str | None]):
+    """Modal for entering or editing a task name.
+
+    Dismisses with the name string if submitted, or ``None`` if cancelled.
+    Pre-fills the input with a default (generated or current) name.
+    """
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    TaskNameScreen {
+        align: center middle;
+    }
+
+    #name-dialog {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #name-input {
+        margin-bottom: 1;
+    }
+
+    #name-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #name-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def __init__(self, default_name: str = "") -> None:
+        """Create the name screen with a pre-filled default name."""
+        super().__init__()
+        self._default_name = default_name
+
+    def compose(self) -> ComposeResult:
+        """Build the name input field and OK/Cancel buttons."""
+        with Vertical(id="name-dialog") as dialog:
+            yield Input(
+                value=self._default_name,
+                placeholder="task-name",
+                id="name-input",
+            )
+            with Horizontal(id="name-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+                yield Button("OK", id="btn-ok", variant="primary")
+        dialog.border_title = "Task Name"
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        """Focus the name input for immediate editing."""
+        inp = self.query_one("#name-input", Input)
+        inp.focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle OK or Cancel button clicks."""
+        if event.button.id == "btn-ok":
+            self._submit()
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
+        """Accept the name on Enter key press."""
+        self._submit()
+
+    def _submit(self) -> None:
+        """Validate and dismiss with the sanitized name, or show an error."""
+        inp = self.query_one("#name-input", Input)
+        raw = inp.value.strip()
+        # Fall back to default if field is blank, then run full validation pipeline
+        candidate = raw or self._default_name
+        if not candidate:
+            self.notify("Name cannot be empty.")
+            return
+        sanitized = sanitize_task_name(candidate)
+        if sanitized is None:
+            self.notify("Invalid name: must contain at least one alphanumeric character.")
+            return
+        err = validate_task_name(sanitized)
+        if err:
+            self.notify(f"Invalid name: {err}.")
+            return
+        self.dismiss(sanitized)
+
+    def action_cancel(self) -> None:
+        """Cancel the name input and dismiss without a result."""
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
 # Task Details Screen
 # ---------------------------------------------------------------------------
 
@@ -543,6 +654,8 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             options.append(None)
             options.append(Option("Copy diff vs \\[H]EAD", id="diff_head"))
             options.append(Option("Copy diff vs \\[P]REV", id="diff_prev"))
+            options.append(None)
+            options.append(Option("re\\[n]ame task", id="rename"))
         options.append(None)
         options.append(Option("New task (no run)  \\[C]", id="new"))
 
@@ -600,6 +713,7 @@ class TaskDetailsScreen(screen.Screen[str | None]):
             "r": "restart",
             "l": "login",
             "u": "followup",
+            "n": "rename",
         }
         if key in lower_map:
             if not self._has_tasks:
