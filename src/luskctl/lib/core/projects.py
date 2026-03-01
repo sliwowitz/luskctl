@@ -296,8 +296,9 @@ def list_projects() -> list[Project]:
         # load_project will automatically prefer user over system config
         try:
             projects.append(load_project(pid))
-        except SystemExit:
-            # if a project is broken, skip it rather than crashing the listing
+        except (SystemExit, Exception):
+            # if a project is broken (malformed YAML, missing fields, etc.),
+            # skip it rather than crashing the listing or the TUI
             continue
     return projects
 
@@ -308,7 +309,10 @@ def load_project(project_id: str) -> Project:
     cfg_path = root / "project.yml"
     if not cfg_path.is_file():
         raise SystemExit(f"Missing project.yml in {root}")
-    cfg = yaml.safe_load(cfg_path.read_text()) or {}
+    try:
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"Failed to parse {cfg_path}: {exc}")
 
     proj_cfg = cfg.get("project", {}) or {}
     git_cfg = cfg.get("git", {}) or {}
