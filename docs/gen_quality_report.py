@@ -33,7 +33,12 @@ def _run(*cmd: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
 def _section_complexity() -> str:
     """Generate cognitive complexity section from complexipy."""
     # Run complexipy to populate the cache
-    _run(sys.executable, "-m", "complexipy", str(SRC), "--ignore-complexity", "--quiet")
+    run_result = _run(
+        sys.executable, "-m", "complexipy", str(SRC), "--ignore-complexity", "--quiet"
+    )
+    if run_result.returncode != 0:
+        output = (run_result.stdout + run_result.stderr).strip()
+        return f"!!! warning\n    complexipy failed; skipping complexity report.\n\n```\n{output}\n```\n"
 
     # Find the cache file
     cache_dir = ROOT / ".complexipy_cache"
@@ -41,7 +46,11 @@ def _section_complexity() -> str:
     if not cache_files:
         return "!!! warning\n    complexipy cache not found — skipping complexity report.\n"
 
-    data = json.loads(cache_files[-1].read_text(encoding="utf-8"))
+    latest_cache = max(cache_files, key=lambda p: p.stat().st_mtime)
+    try:
+        data = json.loads(latest_cache.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return "!!! warning\n    complexipy cache is invalid JSON — skipping complexity report.\n"
     functions = data.get("functions", [])
     if not functions:
         return "No functions found.\n"

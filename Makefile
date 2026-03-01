@@ -1,4 +1,6 @@
-.PHONY: lint format test tach docstrings complexity deadcode check install install-dev clean
+.PHONY: all lint format test tach docstrings complexity deadcode check install install-dev clean
+
+all: check
 
 # Run linter and format checker (fast, run before commits)
 lint:
