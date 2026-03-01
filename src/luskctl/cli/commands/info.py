@@ -26,7 +26,7 @@ from ...ui_utils.terminal import (
     violet as _violet,
     yes_no as _yes_no,
 )
-from ._completers import complete_project_ids as _complete_project_ids
+from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -39,11 +39,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "config-show",
         help="Show resolved agent config for a project (with provenance per level)",
     )
-    _a = p_config_show.add_argument("project_id", help="Project ID")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    set_completer(
+        p_config_show.add_argument("project_id", help="Project ID"), _complete_project_ids
+    )
     p_config_show.add_argument("--preset", help="Apply a preset before showing resolved config")
 
 

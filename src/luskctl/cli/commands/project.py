@@ -6,7 +6,7 @@ import argparse
 
 from ...lib.core.projects import derive_project, list_presets, list_projects
 from ...lib.wizards.new_project import run_wizard
-from ._completers import complete_project_ids as _complete_project_ids
+from ._completers import complete_project_ids as _complete_project_ids, set_completer
 from .setup import cmd_project_init
 
 
@@ -26,22 +26,19 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "project-derive",
         help="Create a new project derived from an existing one (shared infra, fresh agent config)",
     )
-    _a = p_derive.add_argument("source_id", help="Source project ID to derive from")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    set_completer(
+        p_derive.add_argument("source_id", help="Source project ID to derive from"),
+        _complete_project_ids,
+    )
     p_derive.add_argument("new_id", help="New project ID")
 
     # presets
     p_presets = subparsers.add_parser("presets", help="Manage agent config presets")
     presets_sub = p_presets.add_subparsers(dest="presets_cmd", required=True)
     p_presets_list = presets_sub.add_parser("list", help="List available presets for a project")
-    _a = p_presets_list.add_argument("project_id", help="Project ID")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    set_completer(
+        p_presets_list.add_argument("project_id", help="Project ID"), _complete_project_ids
+    )
 
 
 def dispatch(args: argparse.Namespace) -> bool:

@@ -56,6 +56,20 @@ def _git_global_identity() -> dict[str, str]:
     return result
 
 
+def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Path) -> None:
+    """Resolve relative ``file`` paths in subagent entries against *base_dir*."""
+    for sa in subagents or []:
+        if not isinstance(sa, dict):
+            continue
+        raw_file = sa.get("file")
+        if not isinstance(raw_file, str) or not raw_file.strip():
+            continue
+        file_path = Path(raw_file).expanduser()
+        if not file_path.is_absolute():
+            file_path = base_dir / file_path
+        sa["file"] = str(file_path.resolve())
+
+
 def find_preset_path(project: Project, preset_name: str) -> Path | None:
     """Return the path of a preset file, or ``None`` if not found.
 
@@ -78,24 +92,16 @@ def list_presets(project_id: str) -> list[PresetInfo]:
     project = load_project(project_id)
 
     seen: dict[str, PresetInfo] = {}
-    # Bundled first (lowest priority)
-    bdir = bundled_presets_dir()
-    if bdir.is_dir():
-        for p in bdir.iterdir():
-            if p.is_file() and p.suffix in (".yml", ".yaml"):
-                seen[p.stem] = PresetInfo(name=p.stem, source="bundled", path=p)
-    # Global overwrites bundled
-    gdir = global_presets_dir()
-    if gdir.is_dir():
-        for p in gdir.iterdir():
-            if p.is_file() and p.suffix in (".yml", ".yaml"):
-                seen[p.stem] = PresetInfo(name=p.stem, source="global", path=p)
-    # Project overwrites global
-    presets_dir = project.presets_dir
-    if presets_dir.is_dir():
-        for p in presets_dir.iterdir():
-            if p.is_file() and p.suffix in (".yml", ".yaml"):
-                seen[p.stem] = PresetInfo(name=p.stem, source="project", path=p)
+    # Higher-priority tiers overwrite lower ones
+    for source, search_dir in [
+        ("bundled", bundled_presets_dir()),
+        ("global", global_presets_dir()),
+        ("project", project.presets_dir),
+    ]:
+        if search_dir.is_dir():
+            for p in search_dir.iterdir():
+                if p.is_file() and p.suffix in (".yml", ".yaml"):
+                    seen[p.stem] = PresetInfo(name=p.stem, source=source, path=p)
     return sorted(seen.values(), key=lambda info: info.name)
 
 
@@ -117,13 +123,7 @@ def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path
     except yaml.YAMLError as exc:
         raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
     # Resolve subagent file: paths relative to the preset file's directory
-    preset_dir = path.parent
-    for sa in data.get("subagents", []) or []:
-        if isinstance(sa, dict) and "file" in sa:
-            file_path = Path(str(sa["file"])).expanduser()
-            if not file_path.is_absolute():
-                file_path = preset_dir / file_path
-            sa["file"] = str(file_path.resolve())
+    _resolve_subagent_files(data.get("subagents", []), path.parent)
     return data, path
 
 
@@ -308,12 +308,7 @@ def load_project(project_id: str) -> Project:
     # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
     # Resolve subagent file: paths relative to project root
-    for sa in agent_cfg.get("subagents", []) or []:
-        if isinstance(sa, dict) and "file" in sa:
-            file_path = Path(str(sa["file"])).expanduser()
-            if not file_path.is_absolute():
-                file_path = root / file_path
-            sa["file"] = str(file_path.resolve())
+    _resolve_subagent_files(agent_cfg.get("subagents", []), root)
 
     p = Project(
         id=pid,

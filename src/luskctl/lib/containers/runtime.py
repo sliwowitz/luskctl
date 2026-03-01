@@ -291,34 +291,3 @@ def get_task_container_state(project_id: str, task_id: str, mode: str | None) ->
         return None
     cname = container_name(project.id, mode, task_id)
     return get_container_state(cname)
-
-
-def _get_container_exit_code(container_name: str) -> int:
-    """Return the exit code of a stopped container. Returns -1 on error."""
-    try:
-        out = subprocess.check_output(
-            ["podman", "inspect", "-f", "{{.State.ExitCode}}", container_name],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return int(out)
-    except (subprocess.CalledProcessError, FileNotFoundError, ValueError):
-        return -1
-
-
-def _stream_until_exit(container_name: str, timeout_sec: float | None = None) -> int:
-    """Stream container logs until the container exits. Returns exit code.
-
-    This is used for headless/autopilot containers where the container runs
-    a finite task and we want to stream all output until it completes.
-    """
-    import time
-
-    stream_initial_logs(
-        container_name=container_name,
-        timeout_sec=timeout_sec,
-        ready_check=lambda line: False,  # never "ready", stream until exit
-    )
-    while is_container_running(container_name):
-        time.sleep(0.5)
-    return _get_container_exit_code(container_name)
