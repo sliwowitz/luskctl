@@ -11,12 +11,8 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, ListItem, ListView, Static
 
-from ..lib.containers.tasks import (
-    MODE_DISPLAY,
-    STATUS_DISPLAY,
-    TaskMeta,
-    mode_emoji,
-)
+from ..lib.containers.task_display import MODE_DISPLAY, STATUS_DISPLAY, mode_emoji
+from ..lib.containers.tasks import TaskMeta
 from ..lib.core.projects import Project
 from ..lib.facade import GateStalenessInfo
 from ..lib.util.emoji import draw_emoji

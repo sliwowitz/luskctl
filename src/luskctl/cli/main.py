@@ -6,6 +6,7 @@ import os
 from importlib import resources
 from pathlib import Path
 
+from ..lib.containers.task_logs import task_logs
 from ..lib.containers.task_runners import (
     task_restart,
     task_run_cli,
@@ -17,7 +18,6 @@ from ..lib.containers.tasks import (
     task_delete,
     task_list,
     task_login,
-    task_logs,
     task_new,
     task_rename,
     task_status,

@@ -17,6 +17,7 @@ from collections.abc import Callable
 from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import wait_for_container_exit
 from ..lib.containers.runtime import container_name
+from ..lib.containers.task_display import effective_status
 from ..lib.containers.task_runners import (
     task_followup_headless,
     task_restart,
@@ -25,7 +26,6 @@ from ..lib.containers.task_runners import (
     task_run_web,
 )
 from ..lib.containers.tasks import (
-    effective_status,
     generate_task_name,
     get_login_command,
     get_workspace_git_diff,
