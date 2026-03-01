@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Minimal template rendering via ``{{VAR}}`` token replacement."""
 
 from pathlib import Path

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 from unittest import TestCase, main, mock
 
 from tui_test_helpers import build_textual_stubs, import_fresh

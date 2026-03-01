@@ -1,0 +1,24 @@
+version = 1
+
+[[annotations]]
+path = [
+  "**/*.md",
+  "**/*.yml",
+  "**/*.yaml",
+  "**/*.toml",
+  "**/*.json",
+  "**/*.css",
+  "**/*.lock",
+  "**/*.txt",
+  "**/*.template",
+  "**/*.conf",
+  "**/*.dockerinclude",
+  ".gitignore",
+  "MANIFEST.in",
+  "Makefile",
+  "completions/**",
+  "vulture_whitelist.py",
+  "src/luskctl/resources/scripts/blablador",
+]
+SPDX-FileCopyrightText = "2025-2026 Jiri Vyskocil <jiri@vyskocil.com>"
+SPDX-License-Identifier = "Apache-2.0"

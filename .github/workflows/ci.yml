@@ -7,6 +7,13 @@ on:
     branches: [master, main]
 
 jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: REUSE compliance check
+        uses: fsfe/reuse-action@v5
+
   lint:
     runs-on: ubuntu-latest
     steps:

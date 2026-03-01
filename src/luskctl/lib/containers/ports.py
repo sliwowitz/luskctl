@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Web port allocation for task containers.
 
 Scans existing task metadata to find used ports and allocates the next

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """CLI entry point and argument parser for luskctl.
 
 Subcommand registration and dispatch are delegated to focused modules
@@ -46,7 +51,11 @@ def main() -> None:
             "→ task new → task run-*\n"
         ),
     )
-    parser.add_argument("--version", action="version", version=f"luskctl {version_string}")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"luskctl {version_string}\nLicense: Apache-2.0\nCopyright: 2025-2026 Jiri Vyskocil",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # Register subcommands from each module

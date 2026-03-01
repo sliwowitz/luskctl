@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Polling mixin for the LuskTUI app.
 
 Extracts upstream polling, container status polling, and auto-sync logic

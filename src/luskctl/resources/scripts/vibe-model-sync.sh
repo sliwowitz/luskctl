@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Mistral Model Sync Wrapper Script
 # This script is designed to be called from bashrc to check for new Mistral models
 

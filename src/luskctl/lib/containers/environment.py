@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Container environment and volume assembly for task containers.
 
 Translates project configuration and security mode into the environment

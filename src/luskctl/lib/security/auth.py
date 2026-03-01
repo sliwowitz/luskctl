@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Authentication workflows for AI coding agents.
 
 Provides a data-driven registry of auth providers (``AUTH_PROVIDERS``) and a

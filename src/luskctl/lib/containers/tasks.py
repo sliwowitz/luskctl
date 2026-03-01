@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Task metadata, lifecycle, and query operations.
 
 Container runner functions (``task_run_cli``, ``task_run_web``,
