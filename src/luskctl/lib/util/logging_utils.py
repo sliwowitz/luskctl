@@ -9,14 +9,17 @@ def _log_debug(message: str) -> None:
     between different frontends (e.g. CLI vs TUI) when calling the shared
     helpers in this module.
 
-    Writes timestamped lines to ~/.luskctl.log. Fully exception-safe: any IO
-    error is silently ignored so this function never raises or affects callers.
+    Writes timestamped lines to ``state_root()/luskctl.log``. Fully
+    exception-safe: any IO error is silently ignored so this function never
+    raises or affects callers.
     """
     try:
-        import os
         import time
 
-        log_path = os.path.join(os.path.expanduser("~"), ".luskctl.log")
+        from ..core.paths import state_root
+
+        log_path = state_root() / "luskctl.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {message}\n")
