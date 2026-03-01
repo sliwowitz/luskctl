@@ -5,14 +5,13 @@ import unittest
 import unittest.mock
 
 from luskctl.lib.containers.runtime import get_project_container_states
-from luskctl.lib.containers.tasks import (
+from luskctl.lib.containers.task_display import (
     STATUS_DISPLAY,
     WEB_BACKEND_EMOJI,
-    TaskMeta,
     effective_status,
-    get_all_task_states,
     mode_emoji,
 )
+from luskctl.lib.containers.tasks import TaskMeta, get_all_task_states
 
 
 def _task(**kwargs) -> TaskMeta:

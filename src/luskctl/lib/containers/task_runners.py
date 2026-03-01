@@ -5,9 +5,12 @@ the ``podman run`` orchestration for each task mode while ``tasks.py``
 retains task metadata, lifecycle, and query operations.
 """
 
+from __future__ import annotations
+
 import shlex
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -41,6 +44,56 @@ from .tasks import (
     task_new,
     update_task_exit_code,
 )
+
+if TYPE_CHECKING:
+    from ..core.project_model import Project
+
+
+def _run_container(
+    *,
+    cname: str,
+    image: str,
+    env: dict[str, str],
+    volumes: list[str],
+    project: Project,
+    extra_args: list[str] | None = None,
+    command: list[str] | None = None,
+) -> None:
+    """Build, print, and execute a detached ``podman run`` command.
+
+    Centralises the shared container-launch boilerplate used by the CLI, web,
+    and headless runners: user-namespace mapping, GPU passthrough, volume and
+    environment injection, and uniform error handling.
+
+    Args:
+        cname: Container name (``--name``).
+        image: Container image to run.
+        env: Environment variables to pass via ``-e``.
+        volumes: Volume mounts to pass via ``-v``.
+        project: The resolved :class:`Project` (used for GPU args).
+        extra_args: Additional ``podman run`` flags inserted after the GPU
+            args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
+        command: Optional command + args appended after the image name.
+    """
+    cmd: list[str] = ["podman", "run", "-d"]
+    cmd += _podman_userns_args()
+    cmd += gpu_run_args(project)
+    if extra_args:
+        cmd += extra_args
+    for v in volumes:
+        cmd += ["-v", v]
+    for k, v in env.items():
+        cmd += ["-e", f"{k}={v}"]
+    cmd += ["--name", cname, "-w", "/workspace", image]
+    if command:
+        cmd += command
+    print("$", " ".join(map(str, cmd)))
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Run failed: {e}")
 
 
 def task_run_cli(
@@ -110,35 +163,16 @@ def task_run_cli(
     # Run detached and keep the container alive so users can exec into it later
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
-    cmd = ["podman", "run", "-d"]
-    cmd += _podman_userns_args()
-    cmd += gpu_run_args(project)
-    # Volumes
-    for v in volumes:
-        cmd += ["-v", v]
-    # Environment
-    for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
-    # Name, workdir, image and command
-    cmd += [
-        "--name",
-        cname,
-        "-w",
-        "/workspace",
-        project_cli_image(project.id),
+    _run_container(
+        cname=cname,
+        image=project_cli_image(project.id),
+        env=env,
+        volumes=volumes,
+        project=project,
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
-        "bash",
-        "-lc",
-        "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null",
-    ]
-    print("$", " ".join(map(str, cmd)))
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Run failed: {e}")
+        command=["bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null"],
+    )
 
     # Stream initial logs until ready marker is seen (or timeout), then detach
     stream_initial_logs(
@@ -266,29 +300,14 @@ def task_run_web(
     # Start UI in background and return terminal when it's reachable
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
-    cmd = ["podman", "run", "-d", "-p", f"127.0.0.1:{port}:7860"]
-    cmd += _podman_userns_args()
-    cmd += gpu_run_args(project)
-    # Volumes
-    for v in volumes:
-        cmd += ["-v", v]
-    # Environment
-    for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
-    cmd += [
-        "--name",
-        cname,
-        "-w",
-        "/workspace",
-        project_web_image(project.id),
-    ]
-    print("$", " ".join(map(str, cmd)))
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Run failed: {e}")
+    _run_container(
+        cname=cname,
+        image=project_web_image(project.id),
+        env=env,
+        volumes=volumes,
+        project=project,
+        extra_args=["-p", f"127.0.0.1:{port}:7860"],
+    )
 
     # Stream initial logs and detach once the LuskUI server reports that it
     # is actually running. We intentionally rely on a *log marker* here
@@ -459,30 +478,14 @@ def task_run_headless(
         '"$(cat /home/dev/.luskctl/prompt.txt)"'
         f"{claude_flags} --output-format stream-json --verbose"
     )
-    cmd: list[str] = ["podman", "run", "-d"]
-    cmd += _podman_userns_args()
-    cmd += gpu_run_args(project)
-    for v in volumes:
-        cmd += ["-v", v]
-    for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
-    cmd += [
-        "--name",
-        cname,
-        "-w",
-        "/workspace",
-        project_cli_image(project.id),
-        "bash",
-        "-lc",
-        headless_cmd,
-    ]
-    print("$", " ".join(map(str, cmd)))
-    try:
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Run failed: {e}")
+    _run_container(
+        cname=cname,
+        image=project_cli_image(project.id),
+        env=env,
+        volumes=volumes,
+        project=project,
+        command=["bash", "-lc", headless_cmd],
+    )
 
     # Update task metadata
     meta, meta_path = load_task_meta(project.id, task_id)

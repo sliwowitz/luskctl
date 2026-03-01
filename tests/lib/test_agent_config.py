@@ -602,13 +602,13 @@ class BundledPresetTests(unittest.TestCase):
 
 
 class ValidateProjectIdTests(unittest.TestCase):
-    """Tests for _validate_project_id error messages."""
+    """Tests for validate_project_id error messages."""
 
     def test_error_message_mentions_first_char(self) -> None:
         """Error message describes the first-character requirement."""
-        from luskctl.lib.core.projects import _validate_project_id
+        from luskctl.lib.core.project_model import validate_project_id
 
         with self.assertRaises(SystemExit) as ctx:
-            _validate_project_id("-bad")
+            validate_project_id("-bad")
         msg = str(ctx.exception)
         self.assertIn("must start with a letter or digit", msg)

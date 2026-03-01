@@ -5,16 +5,17 @@ import unittest.mock
 class ProjectWizardDispatchTests(unittest.TestCase):
     """Tests for the project-wizard CLI command dispatch."""
 
-    @unittest.mock.patch("luskctl.cli.main.run_wizard")
+    @unittest.mock.patch("luskctl.cli.commands.project.run_wizard")
     def test_project_wizard_dispatch(self, mock_wizard: unittest.mock.Mock) -> None:
-        from luskctl.cli.main import _cmd_project_init, main
+        from luskctl.cli.commands.setup import cmd_project_init
+        from luskctl.cli.main import main
 
         with unittest.mock.patch("sys.argv", ["luskctl", "project-wizard"]):
             main()
 
         mock_wizard.assert_called_once()
         _, kwargs = mock_wizard.call_args
-        self.assertIs(kwargs.get("init_fn"), _cmd_project_init)
+        self.assertIs(kwargs.get("init_fn"), cmd_project_init)
 
 
 if __name__ == "__main__":

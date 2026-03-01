@@ -2,8 +2,8 @@
 
 Container runner functions (``task_run_cli``, ``task_run_web``,
 ``task_run_headless``, ``task_restart``) live in the companion
-``task_runners`` module to keep this file focused on task metadata
-management.
+``task_runners`` module.  Display types and status computation live in
+``task_display``.  Log viewing lives in ``task_logs``.
 """
 
 import os
@@ -26,116 +26,18 @@ from ..util.ansi import (
 from ..util.emoji import draw_emoji
 from ..util.fs import ensure_dir
 from ..util.logging_utils import _log_debug
-from .log_format import auto_detect_formatter
 from .runtime import (
     container_name,
     get_container_state,
     get_project_container_states,
     stop_task_containers,
 )
-
-# ---------- Status & mode display infrastructure ----------
-
-
-@dataclass(frozen=True)
-class StatusInfo:
-    """Display attributes for a task effective status."""
-
-    label: str
-    emoji: str
-    color: str
-
-
-@dataclass(frozen=True)
-class ModeInfo:
-    """Display attributes for a task mode."""
-
-    emoji: str
-    label: str
-
-
-STATUS_DISPLAY: dict[str, StatusInfo] = {
-    "running": StatusInfo(label="running", emoji="🟢", color="green"),
-    "stopped": StatusInfo(label="stopped", emoji="🟡", color="yellow"),
-    "completed": StatusInfo(label="completed", emoji="✅", color="green"),
-    "failed": StatusInfo(label="failed", emoji="❌", color="red"),
-    "created": StatusInfo(label="created", emoji="🆕", color="yellow"),
-    "not found": StatusInfo(label="not found", emoji="❓", color="yellow"),
-    "deleting": StatusInfo(label="deleting", emoji="🧹", color="yellow"),
-}
-
-MODE_DISPLAY: dict[str | None, ModeInfo] = {
-    "cli": ModeInfo(emoji="💻", label="CLI"),
-    "web": ModeInfo(emoji="🌍", label="Web"),
-    "run": ModeInfo(emoji="🚀", label="Autopilot"),
-    None: ModeInfo(emoji="🦗", label=""),
-}
-
-WEB_BACKEND_EMOJI: dict[str, str] = {
-    "claude": "💠",
-    "codex": "🌸",
-    "mistral": "🏰",
-    "copilot": "🤖",
-}
-
-_WEB_BACKEND_DEFAULT_EMOJI = "🌍"
-
-
-def effective_status(task: "TaskMeta") -> str:
-    """Compute the display status from task metadata + live container state.
-
-    Reads the following fields from a ``TaskMeta`` instance:
-
-    - ``container_state`` (str | None): live podman state, or None
-    - ``mode`` (str | None): task mode (cli/web/run/None)
-    - ``exit_code`` (int | None): process exit code, or None
-    - ``deleting`` (bool): persisted to YAML before deletion starts
-
-    Returns one of: ``"deleting"``, ``"running"``, ``"stopped"``,
-    ``"completed"``, ``"failed"``, ``"created"``, ``"not found"``.
-    """
-    if task.deleting:
-        return "deleting"
-
-    cs = task.container_state
-    mode = task.mode
-    exit_code = task.exit_code
-
-    if cs == "running":
-        return "running"
-
-    if cs is not None:
-        # Container exists but is not running
-        if exit_code is not None and exit_code == 0:
-            return "completed"
-        if exit_code is not None and exit_code != 0:
-            return "failed"
-        return "stopped"
-
-    # No container found
-    if mode is None:
-        return "created"
-    if exit_code is not None and exit_code == 0:
-        return "completed"
-    if exit_code is not None and exit_code != 0:
-        return "failed"
-    return "not found"
-
-
-def mode_emoji(task: "TaskMeta") -> str:
-    """Return the mode emoji for a task, resolving web backends.
-
-    For ``mode="web"``, the emoji is looked up from ``WEB_BACKEND_EMOJI``
-    using the task's ``backend`` field.  Other modes use ``MODE_DISPLAY``.
-    """
-    mode = task.mode
-    if mode == "web":
-        backend = task.backend
-        if isinstance(backend, str):
-            return WEB_BACKEND_EMOJI.get(backend, _WEB_BACKEND_DEFAULT_EMOJI)
-        return _WEB_BACKEND_DEFAULT_EMOJI
-    info = MODE_DISPLAY.get(mode if isinstance(mode, str) else None)
-    return info.emoji if info else MODE_DISPLAY[None].emoji
+from .task_display import (
+    MODE_DISPLAY,
+    STATUS_DISPLAY,
+    effective_status,
+    mode_emoji,
+)
 
 
 @dataclass
@@ -292,7 +194,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 # ---------- Tasks ----------
 
 
-def _tasks_meta_dir(project_id: str) -> Path:
+def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
     return state_root() / "projects" / project_id / "tasks"
 
@@ -305,7 +207,7 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
         task_id: The task ID
         exit_code: The exit code from the task, or None if unknown/failed
     """
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         return
@@ -360,7 +262,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         task_name = generate_task_name(project.id)
     tasks_root = project.tasks_root
     ensure_dir(tasks_root)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     ensure_dir(meta_dir)
 
     # Simple ID: numeric increment
@@ -402,7 +304,7 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
     """
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -420,7 +322,7 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
 
 def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     """Return all task metadata for *project_id*, sorted by task ID."""
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     tasks: list[TaskMeta] = []
     if not meta_dir.is_dir():
         return tasks
@@ -540,7 +442,7 @@ def load_task_meta(
     Returns (meta, meta_path). Raises SystemExit if task is unknown or mode
     conflicts with *expected_mode*.
     """
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -553,7 +455,7 @@ def load_task_meta(
 def mark_task_deleting(project_id: str, task_id: str) -> None:
     """Persist ``deleting: true`` to the task's YAML metadata file."""
     try:
-        meta_dir = _tasks_meta_dir(project_id)
+        meta_dir = tasks_meta_dir(project_id)
         meta_path = meta_dir / f"{task_id}.yml"
         if not meta_path.is_file():
             return
@@ -581,7 +483,7 @@ def task_delete(project_id: str, task_id: str) -> None:
     workspace = project.tasks_root / str(task_id)
 
     # Metadata lives in the per-project tasks state dir.
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
 
@@ -611,7 +513,7 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
     Raises SystemExit with actionable messages on failure.
     """
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -689,7 +591,7 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
     """
     project = load_project(project_id)
     effective_timeout = timeout if timeout is not None else project.shutdown_timeout
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -724,155 +626,10 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
     print(f"Restart with: luskctl task restart {project_id} {task_id}")
 
 
-def task_logs(
-    project_id: str,
-    task_id: str,
-    *,
-    follow: bool = False,
-    raw: bool = False,
-    tail: int | None = None,
-    streaming: bool = True,
-) -> None:
-    """View formatted logs for a task container.
-
-    Works on both running and exited containers (podman logs supports both).
-
-    Args:
-        project_id: The project ID.
-        task_id: The task ID.
-        follow: Follow live output (``-f``).
-        raw: Bypass formatting, show raw podman output.
-        tail: Show only the last N lines.
-        streaming: Enable partial streaming (typewriter effect) for supported formatters.
-    """
-    import select
-    import signal
-
-    project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
-    meta_path = meta_dir / f"{task_id}.yml"
-    if not meta_path.is_file():
-        raise SystemExit(f"Unknown task {task_id}")
-    meta = yaml.safe_load(meta_path.read_text()) or {}
-
-    mode = meta.get("mode")
-    if not mode:
-        raise SystemExit(
-            f"Task {task_id} has never been run (no mode set). "
-            f"Start it first via 'luskctl task run-cli {project_id} {task_id}'."
-        )
-
-    cname = container_name(project.id, mode, task_id)
-
-    # Verify container exists (running or exited)
-    state = get_container_state(cname)
-    if state is None:
-        raise SystemExit(
-            f"Container {cname} does not exist. "
-            f"Run 'luskctl task restart {project_id} {task_id}' first."
-        )
-
-    # Build podman logs command
-    cmd = ["podman", "logs"]
-    if follow:
-        cmd.append("-f")
-    if tail is not None:
-        if tail < 0:
-            raise SystemExit("--tail must be >= 0")
-        cmd.extend(["--tail", str(tail)])
-    cmd.append(cname)
-
-    if raw:
-        # Raw mode: exec podman directly, no formatting
-        try:
-            os.execvp(cmd[0], cmd)
-        except FileNotFoundError:
-            raise SystemExit("podman not found; please install podman")
-
-    # Formatted mode: pipe through formatter
-    formatter = auto_detect_formatter(mode, streaming=streaming)
-
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-
-    # Handle Ctrl+C gracefully
-    interrupted = False
-    original_sigint = signal.getsignal(signal.SIGINT)
-
-    def _sigint_handler(signum, frame):
-        """Set the interrupted flag on Ctrl+C."""
-        nonlocal interrupted
-        interrupted = True
-
-    signal.signal(signal.SIGINT, _sigint_handler)
-
-    try:
-        buf = b""
-        while not interrupted:
-            if proc.poll() is not None:
-                # Process exited — drain remaining output
-                remaining = proc.stdout.read()
-                if remaining:
-                    buf += remaining
-                break
-
-            try:
-                ready, _, _ = select.select([proc.stdout], [], [], 0.2)
-                if not ready:
-                    continue
-                chunk = proc.stdout.read1(4096) if hasattr(proc.stdout, "read1") else b""
-                if not chunk:
-                    continue
-                buf += chunk
-            except (OSError, ValueError):
-                break
-
-            # Process complete lines
-            while b"\n" in buf:
-                raw_line, buf = buf.split(b"\n", 1)
-                line = raw_line.decode("utf-8", errors="replace")
-                formatter.feed_line(line)
-
-        # Flush any trailing partial line
-        if buf:
-            line = buf.decode("utf-8", errors="replace")
-            if line.strip():
-                formatter.feed_line(line)
-    finally:
-        signal.signal(signal.SIGINT, original_sigint)
-        # Check for stderr from podman before terminating
-        stderr_output = b""
-        try:
-            stderr_output = proc.stderr.read() or b""
-        except (OSError, ValueError):
-            pass
-        proc.terminate()
-        try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        formatter.finish()
-
-    # Report podman errors if process failed and wasn't interrupted
-    if not interrupted and proc.returncode and proc.returncode != 0:
-        stderr_text = stderr_output.decode("utf-8", errors="replace").strip()
-        if stderr_text:
-            print(f"Warning: podman logs exited with code {proc.returncode}: {stderr_text}")
-
-    if interrupted:
-        print()
-
-
 def task_status(project_id: str, task_id: str) -> None:
     """Show live task status with container state diagnostics."""
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")

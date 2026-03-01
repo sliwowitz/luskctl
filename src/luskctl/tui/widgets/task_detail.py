@@ -1,0 +1,115 @@
+"""Task detail rendering widget and helper."""
+
+from typing import Any
+
+from rich.style import Style
+from rich.text import Text
+from textual.app import ComposeResult
+from textual.widgets import Static
+
+from ...lib.containers.task_display import MODE_DISPLAY, STATUS_DISPLAY, mode_emoji
+from ...lib.containers.tasks import TaskMeta
+from ...lib.util.emoji import draw_emoji
+
+
+def _get_css_variables(widget: Static) -> dict[str, str]:
+    """Extract CSS theme variables from a widget's parent app."""
+    if widget.app is None:
+        return {}
+    try:
+        return widget.app.get_css_variables()
+    except Exception:
+        return {}
+
+
+def render_task_details(
+    task: TaskMeta | None,
+    project_id: str | None = None,
+    image_old: bool | None = None,
+    empty_message: str | None = None,
+    css_variables: dict[str, str] | None = None,
+) -> Text:
+    """Render task details as a Rich Text object."""
+    if task is None:
+        return Text(empty_message or "")
+
+    variables = css_variables or {}
+    accent_style = Style(color=variables.get("primary", "cyan"))
+    warning_style = Style(color=variables.get("warning", "yellow"))
+
+    m_emoji = draw_emoji(mode_emoji(task))
+    m_info = MODE_DISPLAY.get(task.mode, MODE_DISPLAY[None])
+    mode_display = m_info.label or "Not assigned (choose CLI or Web mode)"
+
+    s_info = STATUS_DISPLAY.get(task.status, STATUS_DISPLAY["created"])
+
+    lines = [
+        Text(f"Task ID:   {task.task_id}"),
+    ]
+    lines.append(Text(f"Name:      {task.name}"))
+    lines += [
+        Text(f"Status:    {draw_emoji(s_info.emoji)} {s_info.label}"),
+        Text(f"Type:      {m_emoji} {mode_display}"),
+        Text(f"Workspace: {task.workspace}"),
+    ]
+    if task.status == "running" and image_old:
+        lines.append(Text.assemble("Image:     ", Text("old", style=warning_style)))
+    if task.web_port:
+        lines.append(
+            Text.assemble(
+                "Web URL:   ",
+                Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
+            )
+        )
+    if task.mode == "cli" and project_id:
+        lines.append(
+            Text.assemble(
+                "Log in:    ",
+                Text(f"luskctl login {project_id} {task.task_id}", style=accent_style),
+            )
+        )
+    if task.mode == "run":
+        if task.exit_code is not None:
+            lines.append(Text(f"Exit code: {task.exit_code}"))
+        if project_id:
+            lines.append(
+                Text.assemble(
+                    "Logs:      ",
+                    Text(
+                        f"luskctl task logs {project_id} {task.task_id} -f",
+                        style=accent_style,
+                    ),
+                )
+            )
+
+    return Text("\n").join(lines)
+
+
+class TaskDetails(Static):
+    """Panel showing details for the currently selected task."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the task details panel."""
+        super().__init__(**kwargs)
+        self.current_project_id: str | None = None
+
+    def compose(self) -> ComposeResult:
+        """Yield the inner Static widget used for rendered task content."""
+        yield Static(id="task-details-content")
+
+    def set_task(
+        self,
+        task: TaskMeta | None,
+        empty_message: str | None = None,
+        image_old: bool | None = None,
+    ) -> None:
+        """Render and display details for the given task (or clear if None)."""
+        content = self.query_one("#task-details-content", Static)
+        if task is None:
+            self.current_project_id = None
+        else:
+            self.current_project_id = self.app.current_project_id if self.app else None
+        rendered = render_task_details(
+            task, self.current_project_id, image_old, empty_message, _get_css_variables(self)
+        )
+        content.update(rendered)

@@ -9,12 +9,12 @@ from pathlib import Path
 import yaml
 
 from luskctl.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
+from luskctl.lib.containers.task_logs import task_logs
 from luskctl.lib.containers.task_runners import task_run_cli, task_run_web
 from luskctl.lib.containers.tasks import (
     get_workspace_git_diff,
     task_delete,
     task_list,
-    task_logs,
     task_new,
 )
 from luskctl.lib.core.projects import load_project
@@ -1133,7 +1133,7 @@ class TaskLogsTests(unittest.TestCase):
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs3", "run")
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value=None
+                    "luskctl.lib.containers.task_logs.get_container_state", return_value=None
                 ):
                     with self.assertRaises(SystemExit) as cm:
                         task_logs("proj_logs3", task_id)
@@ -1148,7 +1148,8 @@ class TaskLogsTests(unittest.TestCase):
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs4", "run")
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                    "luskctl.lib.containers.task_logs.get_container_state",
+                    return_value="running",
                 ):
                     with self.assertRaises(SystemExit) as cm:
                         task_logs("proj_logs4", task_id, tail=-1)
@@ -1172,10 +1173,11 @@ class TaskLogsTests(unittest.TestCase):
 
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                        "luskctl.lib.containers.task_logs.get_container_state",
+                        return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.os.execvp", side_effect=fake_execvp
+                        "luskctl.lib.containers.task_logs.os.execvp", side_effect=fake_execvp
                     ),
                 ):
                     with self.assertRaises(SystemExit):
@@ -1194,10 +1196,11 @@ class TaskLogsTests(unittest.TestCase):
                 task_id = self._setup_task_with_mode("proj_logs6", "cli")
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                        "luskctl.lib.containers.task_logs.get_container_state",
+                        return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.os.execvp",
+                        "luskctl.lib.containers.task_logs.os.execvp",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
@@ -1217,8 +1220,8 @@ class TaskLogsTests(unittest.TestCase):
                 # Create a mock process that returns some data then exits
                 mock_proc = unittest.mock.Mock()
                 mock_proc.stdout = unittest.mock.Mock()
-                # First poll returns None (running), then 0 (exited)
-                mock_proc.poll = unittest.mock.Mock(side_effect=[None, 0])
+                # First poll returns None (running), then 0 (exited), then 0 (finally block)
+                mock_proc.poll = unittest.mock.Mock(side_effect=[None, 0, 0])
                 # read1 returns data, then read returns remaining
                 mock_proc.stdout.read1 = unittest.mock.Mock(return_value=b'{"type":"system"}\n')
                 mock_proc.stdout.read = unittest.mock.Mock(return_value=b"")
@@ -1233,13 +1236,15 @@ class TaskLogsTests(unittest.TestCase):
 
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                        "luskctl.lib.containers.task_logs.get_container_state",
+                        return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.subprocess.Popen", return_value=mock_proc
+                        "luskctl.lib.containers.task_logs.subprocess.Popen",
+                        return_value=mock_proc,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.auto_detect_formatter",
+                        "luskctl.lib.containers.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                     unittest.mock.patch("select.select") as mock_select,
@@ -1262,10 +1267,11 @@ class TaskLogsTests(unittest.TestCase):
                 task_id = self._setup_task_with_mode("proj_logs8", "run")
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                        "luskctl.lib.containers.task_logs.get_container_state",
+                        return_value="running",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.tasks.subprocess.Popen",
+                        "luskctl.lib.containers.task_logs.subprocess.Popen",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):

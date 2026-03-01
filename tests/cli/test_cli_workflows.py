@@ -8,11 +8,13 @@ def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
 
     Mock args are injected as: mock_ssh, mock_pause, mock_gen, mock_build, mock_gate.
     """
-    func = unittest.mock.patch("luskctl.cli.main.init_project_ssh")(func)
-    func = unittest.mock.patch("luskctl.cli.main.maybe_pause_for_ssh_key_registration")(func)
-    func = unittest.mock.patch("luskctl.cli.main.generate_dockerfiles")(func)
-    func = unittest.mock.patch("luskctl.cli.main.build_images")(func)
-    func = unittest.mock.patch("luskctl.cli.main.sync_project_gate")(func)
+    func = unittest.mock.patch("luskctl.cli.commands.setup.init_project_ssh")(func)
+    func = unittest.mock.patch("luskctl.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
+        func
+    )
+    func = unittest.mock.patch("luskctl.cli.commands.setup.generate_dockerfiles")(func)
+    func = unittest.mock.patch("luskctl.cli.commands.setup.build_images")(func)
+    func = unittest.mock.patch("luskctl.cli.commands.setup.sync_project_gate")(func)
     return func
 
 
@@ -25,9 +27,9 @@ class ProjectInitTests(unittest.TestCase):
     ) -> None:
         mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
 
-        from luskctl.cli.main import _cmd_project_init
+        from luskctl.cli.commands.setup import cmd_project_init
 
-        _cmd_project_init("myproj")
+        cmd_project_init("myproj")
 
         mock_ssh.assert_called_once_with("myproj")
         mock_pause.assert_called_once_with("myproj")
@@ -49,9 +51,9 @@ class ProjectInitTests(unittest.TestCase):
             {"success": True, "path": "/tmp/gate"},
         )[-1]
 
-        from luskctl.cli.main import _cmd_project_init
+        from luskctl.cli.commands.setup import cmd_project_init
 
-        _cmd_project_init("proj1")
+        cmd_project_init("proj1")
 
         self.assertEqual(call_order, ["ssh", "pause", "generate", "build", "gate"])
 
@@ -61,10 +63,10 @@ class ProjectInitTests(unittest.TestCase):
     ) -> None:
         mock_gate.return_value = {"success": False, "errors": ["no upstream_url"]}
 
-        from luskctl.cli.main import _cmd_project_init
+        from luskctl.cli.commands.setup import cmd_project_init
 
         with self.assertRaises(SystemExit) as ctx:
-            _cmd_project_init("badproj")
+            cmd_project_init("badproj")
         self.assertIn("Gate sync failed", str(ctx.exception))
 
 
@@ -102,9 +104,9 @@ class SshPauseTests(unittest.TestCase):
         """Verify generate/build/gate-sync all proceed after the pause step."""
         mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
 
-        from luskctl.cli.main import _cmd_project_init
+        from luskctl.cli.commands.setup import cmd_project_init
 
-        _cmd_project_init("sshproj")
+        cmd_project_init("sshproj")
 
         mock_ssh.assert_called_once_with("sshproj")
         mock_pause.assert_called_once_with("sshproj")
@@ -116,8 +118,8 @@ class SshPauseTests(unittest.TestCase):
 class TaskStartTests(unittest.TestCase):
     """Tests for the 'task start' convenience command."""
 
-    @unittest.mock.patch("luskctl.cli.main.task_run_cli")
-    @unittest.mock.patch("luskctl.cli.main.task_new", return_value="42")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_run_cli")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="42")
     def test_task_start_cli_mode(self, mock_new, mock_run_cli) -> None:
         from luskctl.cli.main import main
 
@@ -127,8 +129,8 @@ class TaskStartTests(unittest.TestCase):
         mock_new.assert_called_once_with("proj1", name=None)
         mock_run_cli.assert_called_once_with("proj1", "42", agents=None, preset=None)
 
-    @unittest.mock.patch("luskctl.cli.main.task_run_web")
-    @unittest.mock.patch("luskctl.cli.main.task_new", return_value="7")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_run_web")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="7")
     def test_task_start_web_mode(self, mock_new, mock_run_web) -> None:
         from luskctl.cli.main import main
 
@@ -138,23 +140,23 @@ class TaskStartTests(unittest.TestCase):
         mock_new.assert_called_once_with("proj2", name=None)
         mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None, preset=None)
 
-    @unittest.mock.patch("luskctl.cli.main.task_run_web")
-    @unittest.mock.patch("luskctl.cli.main.task_new", return_value="3")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_run_web")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="3")
     def test_task_start_web_with_backend(self, mock_new, mock_run_web) -> None:
         from luskctl.cli.main import main
 
         with unittest.mock.patch(
             "sys.argv",
-            ["luskctl", "task", "start", "proj3", "--web", "--backend", "gradio"],
+            ["luskctl", "task", "start", "proj3", "--web", "--backend", "codex"],
         ):
             main()
 
         mock_new.assert_called_once_with("proj3", name=None)
         mock_run_web.assert_called_once_with(
-            "proj3", "3", backend="gradio", agents=None, preset=None
+            "proj3", "3", backend="codex", agents=None, preset=None
         )
 
-    @unittest.mock.patch("luskctl.cli.main._cmd_project_init")
+    @unittest.mock.patch("luskctl.cli.commands.setup.cmd_project_init")
     def test_project_init_dispatch(self, mock_init) -> None:
         from luskctl.cli.main import main
 
@@ -163,7 +165,7 @@ class TaskStartTests(unittest.TestCase):
 
         mock_init.assert_called_once_with("myproj")
 
-    @unittest.mock.patch("luskctl.cli.main.task_login")
+    @unittest.mock.patch("luskctl.cli.commands.task.task_login")
     def test_login_dispatch(self, mock_login) -> None:
         from luskctl.cli.main import main
 

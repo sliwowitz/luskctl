@@ -38,8 +38,6 @@ path = "luskctl.cli"
 layer = "presentation"
 depends_on = [
     "luskctl.lib.containers.agent_config",
-    "luskctl.lib.containers.task_runners",
-    "luskctl.lib.containers.tasks",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.core.version",
@@ -56,7 +54,7 @@ depends_on = [
     "luskctl.lib.containers.agents",
     "luskctl.lib.containers.autopilot",
     "luskctl.lib.containers.runtime",
-    "luskctl.lib.containers.task_runners",
+    "luskctl.lib.containers.task_display",
     "luskctl.lib.containers.tasks",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
@@ -73,6 +71,9 @@ depends_on = [
     "luskctl.lib.containers.docker",
     "luskctl.lib.containers.environment",
     "luskctl.lib.containers.project_state",
+    "luskctl.lib.containers.task_logs",
+    "luskctl.lib.containers.task_runners",
+    "luskctl.lib.containers.tasks",
     "luskctl.lib.core.projects",
     "luskctl.lib.security.auth",
     "luskctl.lib.security.git_gate",
@@ -108,14 +109,30 @@ path = "luskctl.lib.containers.log_format"
 layer = "services"
 depends_on = ["luskctl.lib.util.ansi"]
 
+# Task display types and status computation
+[[modules]]
+path = "luskctl.lib.containers.task_display"
+layer = "services"
+depends_on = []
+
+# Task log viewing and streaming
+[[modules]]
+path = "luskctl.lib.containers.task_logs"
+layer = "services"
+depends_on = [
+    "luskctl.lib.containers.log_format",
+    "luskctl.lib.containers.runtime",
+    "luskctl.lib.containers.tasks",
+    "luskctl.lib.core.projects",
+]
+
 # Task metadata, lifecycle, and queries
 [[modules]]
 path = "luskctl.lib.containers.tasks"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.environment",
-    "luskctl.lib.containers.log_format",
     "luskctl.lib.containers.runtime",
+    "luskctl.lib.containers.task_display",
     "luskctl.lib.core.config",
     "luskctl.lib.core.projects",
     "luskctl.lib.util.ansi",
@@ -253,11 +270,17 @@ path = "luskctl.lib.core.config"
 layer = "core"
 depends_on = ["luskctl.lib.core.paths"]
 
-# Project data model & loader
+# Project and preset data models (pure types, no I/O)
+[[modules]]
+path = "luskctl.lib.core.project_model"
+layer = "core"
+depends_on = []
+
+# Project discovery, loading, and preset management
 [[modules]]
 path = "luskctl.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.util.config_stack"]
+depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.project_model", "luskctl.lib.util.config_stack"]
 
 # Image naming conventions
 [[modules]]
@@ -342,6 +365,15 @@ utility = true
 expose = [
     "Project",
     "PresetInfo",
+    "effective_ssh_key_name",
+    "validate_project_id",
+]
+from = ["luskctl.lib.core.project_model"]
+
+[[interfaces]]
+expose = [
+    "Project",
+    "PresetInfo",
     "find_preset_path",
     "list_projects",
     "load_project",
@@ -349,22 +381,35 @@ expose = [
     "list_presets",
     "derive_project",
     "effective_ssh_key_name",
+    "validate_project_id",
 ]
 from = ["luskctl.lib.core.projects"]
 
 [[interfaces]]
 expose = [
+    "StatusInfo",
+    "ModeInfo",
+    "STATUS_DISPLAY",
+    "MODE_DISPLAY",
+    "WEB_BACKEND_EMOJI",
+    "WEB_BACKEND_DEFAULT_EMOJI",
+    "effective_status",
+    "mode_emoji",
+]
+from = ["luskctl.lib.containers.task_display"]
+
+[[interfaces]]
+expose = ["task_logs"]
+from = ["luskctl.lib.containers.task_logs"]
+
+[[interfaces]]
+expose = [
     "task_new",
     "task_rename",
-    "task_run_cli",
-    "task_run_web",
-    "task_run_headless",
     "task_stop",
-    "task_restart",
     "task_delete",
     "task_login",
     "task_list",
-    "task_logs",
     "task_status",
     "get_tasks",
     "get_all_task_states",
@@ -373,18 +418,12 @@ expose = [
     "mark_task_deleting",
     "update_task_exit_code",
     "load_task_meta",
-    "effective_status",
-    "mode_emoji",
     "sanitize_task_name",
     "validate_task_name",
     "generate_task_name",
     "TASK_NAME_MAX_LEN",
     "TaskMeta",
-    "StatusInfo",
-    "ModeInfo",
-    "STATUS_DISPLAY",
-    "MODE_DISPLAY",
-    "WEB_BACKEND_EMOJI",
+    "tasks_meta_dir",
 ]
 from = ["luskctl.lib.containers.tasks"]
 
@@ -513,6 +552,20 @@ expose = [
     "generate_dockerfiles",
     "build_images",
     "WEB_BACKENDS",
+    "task_new",
+    "task_delete",
+    "task_rename",
+    "task_login",
+    "task_list",
+    "task_status",
+    "task_stop",
+    "get_tasks",
+    "task_run_cli",
+    "task_run_web",
+    "task_run_headless",
+    "task_restart",
+    "task_followup_headless",
+    "task_logs",
     "init_project_ssh",
     "sync_project_gate",
     "AUTH_PROVIDERS",
