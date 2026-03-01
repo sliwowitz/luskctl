@@ -1220,8 +1220,8 @@ class TaskLogsTests(unittest.TestCase):
                 # Create a mock process that returns some data then exits
                 mock_proc = unittest.mock.Mock()
                 mock_proc.stdout = unittest.mock.Mock()
-                # First poll returns None (running), then 0 (exited)
-                mock_proc.poll = unittest.mock.Mock(side_effect=[None, 0])
+                # First poll returns None (running), then 0 (exited), then 0 (finally block)
+                mock_proc.poll = unittest.mock.Mock(side_effect=[None, 0, 0])
                 # read1 returns data, then read returns remaining
                 mock_proc.stdout.read1 = unittest.mock.Mock(return_value=b'{"type":"system"}\n')
                 mock_proc.stdout.read = unittest.mock.Mock(return_value=b"")

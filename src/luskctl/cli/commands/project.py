@@ -49,7 +49,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     p_presets = subparsers.add_parser("presets", help="Manage agent config presets")
     presets_sub = p_presets.add_subparsers(dest="presets_cmd", required=True)
     p_presets_list = presets_sub.add_parser("list", help="List available presets for a project")
-    _a = p_presets_list.add_argument("project_id")
+    _a = p_presets_list.add_argument("project_id", help="Project ID")
     try:
         _a.completer = _complete_project_ids  # type: ignore[attr-defined]
     except AttributeError:

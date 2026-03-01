@@ -138,17 +138,18 @@ def task_logs(
                 formatter.feed_line(line)
     finally:
         signal.signal(signal.SIGINT, original_sigint)
-        # Check for stderr from podman before terminating
         stderr_output = b""
-        try:
-            stderr_output = proc.stderr.read() or b""
-        except (OSError, ValueError):
-            pass
-        proc.terminate()
+        if proc.poll() is None:
+            proc.terminate()
         try:
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             proc.kill()
+            proc.wait()
+        try:
+            stderr_output = proc.stderr.read() or b""
+        except (OSError, ValueError):
+            pass
         formatter.finish()
 
     # Report podman errors if process failed and wasn't interrupted
