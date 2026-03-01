@@ -404,51 +404,32 @@ def compare_gate_vs_upstream(project_id: str, branch: str = None) -> GateStalene
     )
 
 
-def _count_commits_behind(project_id: str, local_head: str, remote_head: str) -> int | None:
-    """Count commits between local and remote HEAD.
+def _count_commits_range(project_id: str, from_ref: str, to_ref: str) -> int | None:
+    """Count commits reachable from *to_ref* but not from *from_ref*.
 
-    This requires the remote commits to exist in the gate (they won't if gate
-    is stale). Returns None if we can't determine the count.
+    Uses ``git rev-list --count from..to``.  Returns ``None`` when the
+    count cannot be determined (e.g. refs not yet fetched).
     """
     try:
         project = load_project(project_id)
-        gate_dir = project.gate_path
         env = _git_env_with_ssh(project)
-
-        # This will only work if we've fetched the commits
-        # For a stale gate, we may not have remote_head locally
-        cmd = ["git", "-C", str(gate_dir), "rev-list", "--count", f"{local_head}..{remote_head}"]
+        cmd = ["git", "-C", str(project.gate_path), "rev-list", "--count", f"{from_ref}..{to_ref}"]
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-
         if result.returncode == 0:
             return int(result.stdout.strip())
         return None
     except Exception:
         return None
+
+
+def _count_commits_behind(project_id: str, local_head: str, remote_head: str) -> int | None:
+    """Count how many commits the gate is behind upstream."""
+    return _count_commits_range(project_id, local_head, remote_head)
 
 
 def _count_commits_ahead(project_id: str, local_head: str, remote_head: str) -> int | None:
-    """Count commits that are ahead of upstream (in local but not in remote).
-
-    Uses git rev-list to count commits reachable from local_head but not from remote_head.
-    This represents how many commits the local branch is ahead of the remote.
-
-    Returns None if we can't determine the count.
-    """
-    try:
-        project = load_project(project_id)
-        gate_dir = project.gate_path
-        env = _git_env_with_ssh(project)
-
-        # Count commits in local that are not in remote
-        cmd = ["git", "-C", str(gate_dir), "rev-list", "--count", f"{remote_head}..{local_head}"]
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-
-        if result.returncode == 0:
-            return int(result.stdout.strip())
-        return None
-    except Exception:
-        return None
+    """Count how many commits the gate is ahead of upstream."""
+    return _count_commits_range(project_id, remote_head, local_head)
 
 
 def sync_gate_branches(project_id: str, branches: list[str] = None) -> dict:

@@ -22,7 +22,7 @@ from ...lib.facade import (
     task_status,
     task_stop,
 )
-from ._completers import complete_project_ids as _complete_project_ids
+from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
 def _complete_task_ids(
@@ -41,30 +41,31 @@ def _complete_task_ids(
     return tids
 
 
+def _add_project_arg(parser: argparse.ArgumentParser, **kwargs: object) -> None:
+    """Add a ``project_id`` positional with project-ID completion."""
+    set_completer(parser.add_argument("project_id", **kwargs), _complete_project_ids)
+
+
+def _add_project_task_args(parser: argparse.ArgumentParser) -> None:
+    """Add ``project_id`` and ``task_id`` positionals with completers."""
+    _add_project_arg(parser)
+    set_completer(parser.add_argument("task_id"), _complete_task_ids)
+
+
+_BACKENDS_HELP = ", ".join(WEB_BACKENDS)
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register task-related subcommands."""
     # login (top-level shortcut)
     p_login = subparsers.add_parser("login", help="Open interactive shell in a running container")
-    _a = p_login.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = p_login.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(p_login)
 
     # run-claude (headless autopilot, top-level shortcut)
     p_run_claude = subparsers.add_parser(
         "run-claude", help="Run Claude headlessly in a new task (autopilot mode)"
     )
-    _a = p_run_claude.add_argument("project_id", help="Project ID")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_run_claude, help="Project ID")
     p_run_claude.add_argument("prompt", help="Task prompt for Claude")
     p_run_claude.add_argument(
         "--config", dest="agent_config", help="Path to agent config YAML file"
@@ -96,19 +97,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     tsub = p_task.add_subparsers(dest="task_cmd", required=True)
 
     t_new = tsub.add_parser("new", help="Create a new task")
-    _a = t_new.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(t_new)
     t_new.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
 
     t_list = tsub.add_parser("list", help="List tasks")
-    _a = t_list.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(t_list)
     t_list.add_argument(
         "--status",
         dest="filter_status",
@@ -126,16 +119,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
 
     t_run_cli = tsub.add_parser("run-cli", help="Run task in CLI (codex agent) mode")
-    _a = t_run_cli.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_run_cli.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_run_cli)
     t_run_cli.add_argument(
         "--agent",
         dest="selected_agents",
@@ -146,22 +130,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
-    _a = t_run_ui.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_run_ui.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    known_backends = ", ".join(WEB_BACKENDS)
+    _add_project_task_args(t_run_ui)
     t_run_ui.add_argument(
         "--backend",
         dest="ui_backend",
         choices=list(WEB_BACKENDS),
-        help=f"Web backend ({known_backends})",
+        help=f"Web backend ({_BACKENDS_HELP})",
     )
     t_run_ui.add_argument(
         "--agent",
@@ -173,28 +147,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
-    _a = t_delete.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_delete.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_delete)
 
     t_stop = tsub.add_parser("stop", help="Gracefully stop a running task container")
-    _a = t_stop.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_stop.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_stop)
     t_stop.add_argument(
         "--timeout",
         type=int,
@@ -203,36 +159,17 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
 
     t_restart = tsub.add_parser("restart", help="Restart a stopped task or re-run if gone")
-    _a = t_restart.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_restart.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    restart_backends = ", ".join(WEB_BACKENDS)
+    _add_project_task_args(t_restart)
     t_restart.add_argument(
         "--backend",
         choices=list(WEB_BACKENDS),
-        help=f"Backend to use when re-running a web task ({restart_backends}; default: use saved backend)",
+        help=f"Backend to use when re-running a web task ({_BACKENDS_HELP}; default: use saved backend)",
     )
 
     t_followup = tsub.add_parser(
         "followup", help="Follow up on a completed/failed headless task with a new prompt"
     )
-    _a = t_followup.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_followup.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_followup)
     t_followup.add_argument("-p", "--prompt", required=True, help="Follow-up prompt for Claude")
     t_followup.add_argument(
         "--no-follow",
@@ -244,21 +181,16 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "start",
         help="Create a new task and immediately run it (default: CLI mode)",
     )
-    _a = t_start.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(t_start)
     t_start.add_argument(
         "--web",
         action="store_true",
         help="Start in web mode instead of CLI",
     )
-    start_backends = ", ".join(WEB_BACKENDS)
     t_start.add_argument(
         "--backend",
         choices=list(WEB_BACKENDS),
-        help=f"Web backend ({start_backends}; default from project config)",
+        help=f"Web backend ({_BACKENDS_HELP}; default from project config)",
     )
     t_start.add_argument(
         "--agent",
@@ -271,41 +203,14 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_start.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
 
     t_rename = tsub.add_parser("rename", help="Rename a task")
-    _a = t_rename.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_rename.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_rename)
     t_rename.add_argument("name", help="New task name (slug-style, e.g. fix-auth-bug)")
 
     t_status = tsub.add_parser("status", help="Show actual container state vs metadata")
-    _a = t_status.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_status.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_status)
 
     t_logs = tsub.add_parser("logs", help="View formatted container logs for a task")
-    _a = t_logs.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    _a = t_logs.add_argument("task_id")
-    try:
-        _a.completer = _complete_task_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_task_args(t_logs)
     t_logs.add_argument("-f", "--follow", action="store_true", help="Follow live output")
     t_logs.add_argument(
         "--raw", action="store_true", help="Show raw podman output (bypass formatting)"

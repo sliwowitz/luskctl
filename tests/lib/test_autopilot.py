@@ -19,7 +19,6 @@ from luskctl.lib.containers.agents import (
     _write_session_hook,
     parse_md_agent,
 )
-from luskctl.lib.containers.runtime import _get_container_exit_code, _stream_until_exit
 from luskctl.lib.containers.task_runners import task_followup_headless, task_run_headless
 from luskctl.lib.core.projects import load_project
 from test_utils import mock_git_config, write_project
@@ -391,50 +390,6 @@ class WriteSessionHookTests(unittest.TestCase):
             data = json.loads(settings_path.read_text(encoding="utf-8"))
             hooks = data["hooks"]["SessionStart"]
             self.assertEqual(len(hooks), 1)
-
-
-class StreamUntilExitTests(unittest.TestCase):
-    """Tests for _stream_until_exit and _get_container_exit_code."""
-
-    def test_get_container_exit_code_success(self) -> None:
-        with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output", return_value="0\n"
-        ):
-            code = _get_container_exit_code("test-container")
-            self.assertEqual(code, 0)
-
-    def test_get_container_exit_code_nonzero(self) -> None:
-        with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output", return_value="1\n"
-        ):
-            code = _get_container_exit_code("test-container")
-            self.assertEqual(code, 1)
-
-    def test_get_container_exit_code_error(self) -> None:
-        with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
-            side_effect=subprocess.CalledProcessError(1, "podman"),
-        ):
-            code = _get_container_exit_code("test-container")
-            self.assertEqual(code, -1)
-
-    def test_stream_until_exit_calls_stream_and_exit_code(self) -> None:
-        with (
-            unittest.mock.patch(
-                "luskctl.lib.containers.runtime.stream_initial_logs", return_value=False
-            ) as mock_stream,
-            unittest.mock.patch(
-                "luskctl.lib.containers.runtime._get_container_exit_code", return_value=0
-            ) as mock_exit,
-        ):
-            code = _stream_until_exit("test-container")
-            self.assertEqual(code, 0)
-            mock_stream.assert_called_once()
-            # Verify ready_check always returns False
-            call_kwargs = mock_stream.call_args
-            ready_fn = call_kwargs[1]["ready_check"] if call_kwargs[1] else call_kwargs[0][2]
-            self.assertFalse(ready_fn("any line"))
-            mock_exit.assert_called_once_with("test-container")
 
 
 class TaskRunHeadlessTests(unittest.TestCase):

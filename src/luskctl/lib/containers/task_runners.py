@@ -49,6 +49,47 @@ if TYPE_CHECKING:
     from ..core.project_model import Project
 
 
+def _podman_start(cname: str) -> None:
+    """Start an existing container, raising SystemExit on failure."""
+    try:
+        subprocess.run(["podman", "start", cname], check=True, stdout=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise SystemExit("podman not found; please install podman")
+    except subprocess.CalledProcessError as e:
+        raise SystemExit(f"Failed to start container: {e}")
+
+
+def _assert_running(cname: str) -> None:
+    """Verify a container is running after start, or raise SystemExit."""
+    post_state = get_container_state(cname)
+    if post_state != "running":
+        raise SystemExit(
+            f"Container {cname} failed to start (state: {post_state}). "
+            f"Check logs with: podman logs {cname}"
+        )
+
+
+def _print_login_instructions(project_id: str, task_id: str, cname: str, color: bool) -> None:
+    """Print how to log into a CLI container."""
+    login_cmd = f"luskctl login {project_id} {task_id}"
+    raw_cmd = f"podman exec -it {cname} bash"
+    print(f"Login with: {_blue(login_cmd, color)}")
+    print(f"  (or:      {_blue(raw_cmd, color)})")
+
+
+def _print_detached_summary(
+    label: str, task_id: str, cname: str, color: bool, *, log_cmd: str, stop_cmd: str
+) -> None:
+    """Print the summary block shown after detaching from a headless/follow-up task."""
+    print(
+        f"\n{label}"
+        f"\n- Task:  {task_id}"
+        f"\n- Name:  {_green(cname, color)}"
+        f"\n- Logs:  {_blue(log_cmd, color)}"
+        f"\n- Stop:  {_red(stop_cmd, color)}\n"
+    )
+
+
 def _run_container(
     *,
     cname: str,
@@ -116,41 +157,17 @@ def task_run_cli(
         color_enabled = _supports_color()
         if container_state == "running":
             print(f"Container {_green(cname, color_enabled)} is already running.")
-            login_cmd = f"luskctl login {project.id} {task_id}"
-            raw_cmd = f"podman exec -it {cname} bash"
-            print(f"Login with: {_blue(login_cmd, color_enabled)}")
-            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
+            _print_login_instructions(project.id, task_id, cname, color_enabled)
             return
-        else:
-            # Container exists but is stopped/exited - start it
-            print(f"Starting existing container {_green(cname, color_enabled)}...")
-            try:
-                subprocess.run(
-                    ["podman", "start", cname],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                )
-            except FileNotFoundError:
-                raise SystemExit(
-                    "Failed to start container: 'podman' executable not found. "
-                    "Please install podman or ensure it is available on your PATH."
-                )
-            except subprocess.CalledProcessError as e:
-                raise SystemExit(f"Failed to start container: {e}")
-            post_state = get_container_state(cname)
-            if post_state != "running":
-                raise SystemExit(
-                    f"Container {cname} failed to start (state: {post_state}). "
-                    f"Check logs with: podman logs {cname}"
-                )
-            meta["mode"] = "cli"
-            meta_path.write_text(yaml.safe_dump(meta))
-            print("Container started.")
-            login_cmd = f"luskctl login {project.id} {task_id}"
-            raw_cmd = f"podman exec -it {cname} bash"
-            print(f"Login with: {_blue(login_cmd, color_enabled)}")
-            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
-            return
+        # Container exists but is stopped/exited - start it
+        print(f"Starting existing container {_green(cname, color_enabled)}...")
+        _podman_start(cname)
+        _assert_running(cname)
+        meta["mode"] = "cli"
+        meta_path.write_text(yaml.safe_dump(meta))
+        print("Container started.")
+        _print_login_instructions(project.id, task_id, cname, color_enabled)
+        return
 
     env, volumes = build_task_env_and_volumes(project, task_id)
 
@@ -182,12 +199,7 @@ def task_run_cli(
     )
 
     # Verify the container is still alive after log streaming
-    post_state = get_container_state(cname)
-    if post_state != "running":
-        raise SystemExit(
-            f"Container {cname} exited unexpectedly (state: {post_state}). "
-            f"Check logs with: podman logs {cname}"
-        )
+    _assert_running(cname)
 
     meta["mode"] = "cli"
     if preset:
@@ -195,17 +207,11 @@ def task_run_cli(
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
-    login_cmd = f"luskctl login {project.id} {task_id}"
-    raw_cmd = f"podman exec -it {cname} bash"
-    stop_command = f"podman stop {cname}"
-
     print(
-        "\nCLI container is running in the background."
-        f"\n- Name:     {_green(cname, color_enabled)}"
-        f"\n- To enter: {_blue(login_cmd, color_enabled)}"
-        f"\n  (or:      {_blue(raw_cmd, color_enabled)})"
-        f"\n- To stop:  {_red(stop_command, color_enabled)}\n"
+        f"\nCLI container is running in the background.\n- Name:     {_green(cname, color_enabled)}"
     )
+    _print_login_instructions(project.id, task_id, cname, color_enabled)
+    print(f"- To stop:  {_red(f'podman stop {cname}', color_enabled)}\n")
 
 
 def task_run_web(
@@ -271,31 +277,13 @@ def task_run_web(
             print(f"Container {_green(cname, color_enabled)} is already running.")
             print(f"Web UI: {_blue(url, color_enabled)}")
             return
-        else:
-            # Container exists but is stopped/exited - start it
-            print(f"Starting existing container {_green(cname, color_enabled)}...")
-            try:
-                subprocess.run(
-                    ["podman", "start", cname],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                )
-            except FileNotFoundError:
-                raise SystemExit(
-                    "Failed to start container: 'podman' executable not found. "
-                    "Please install podman or ensure it is available on your PATH."
-                )
-            except subprocess.CalledProcessError as e:
-                raise SystemExit(f"Failed to start container: {e}")
-            post_state = get_container_state(cname)
-            if post_state != "running":
-                raise SystemExit(
-                    f"Container {cname} failed to start (state: {post_state}). "
-                    f"Check logs with: podman logs {cname}"
-                )
-            print("Container started.")
-            print(f"Web UI: {_blue(url, color_enabled)}")
-            return
+        # Container exists but is stopped/exited - start it
+        print(f"Starting existing container {_green(cname, color_enabled)}...")
+        _podman_start(cname)
+        _assert_running(cname)
+        print("Container started.")
+        print(f"Web UI: {_blue(url, color_enabled)}")
+        return
 
     # Start UI in background and return terminal when it's reachable
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
@@ -505,14 +493,13 @@ def task_run_headless(
         if exit_code != 0:
             print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
     else:
-        log_command = f"podman logs -f {cname}"
-        stop_command = f"podman stop {cname}"
-        print(
-            f"\nHeadless Claude task started (detached)."
-            f"\n- Task:  {task_id}"
-            f"\n- Name:  {_green(cname, color_enabled)}"
-            f"\n- Logs:  {_blue(log_command, color_enabled)}"
-            f"\n- Stop:  {_red(stop_command, color_enabled)}\n"
+        _print_detached_summary(
+            "Headless Claude task started (detached).",
+            task_id,
+            cname,
+            color_enabled,
+            log_cmd=f"podman logs -f {cname}",
+            stop_cmd=f"podman stop {cname}",
         )
 
     return task_id
@@ -564,24 +551,8 @@ def task_followup_headless(
 
     # Restart the existing container (re-runs the original bash command,
     # which reads prompt.txt and claude-session.txt from the volume)
-    try:
-        subprocess.run(
-            ["podman", "start", cname],
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(f"Failed to start container: {e}")
-
-    # Verify the container actually started
-    post_state = get_container_state(cname)
-    if post_state != "running":
-        raise SystemExit(
-            f"Container {cname} failed to start for follow-up (state: {post_state}). "
-            f"Check logs with: podman logs {cname}"
-        )
+    _podman_start(cname)
+    _assert_running(cname)
 
     # Clear previous exit_code so effective_status shows "running" until new exit
     meta["exit_code"] = None
@@ -598,14 +569,13 @@ def task_followup_headless(
         if exit_code != 0:
             print(f"\nClaude exited with code {_red(str(exit_code), color_enabled)}")
     else:
-        log_command = f"podman logs -f {cname}"
-        stop_command = f"podman stop {cname}"
-        print(
-            f"\nFollow-up started (detached)."
-            f"\n- Task:  {task_id}"
-            f"\n- Name:  {_green(cname, color_enabled)}"
-            f"\n- Logs:  {_blue(log_command, color_enabled)}"
-            f"\n- Stop:  {_red(stop_command, color_enabled)}\n"
+        _print_detached_summary(
+            "Follow-up started (detached).",
+            task_id,
+            cname,
+            color_enabled,
+            log_cmd=f"podman logs -f {cname}",
+            stop_cmd=f"podman stop {cname}",
         )
 
 
@@ -651,32 +621,13 @@ def task_restart(project_id: str, task_id: str, backend: str | None = None) -> N
 
     if container_state is not None:
         # Container exists (stopped/exited, or just stopped above) - start it
-        try:
-            subprocess.run(
-                ["podman", "start", cname],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except FileNotFoundError:
-            raise SystemExit("podman not found; please install podman")
-        except subprocess.CalledProcessError as e:
-            raise SystemExit(f"Failed to start container: {e}")
-
-        post_state = get_container_state(cname)
-        if post_state != "running":
-            raise SystemExit(
-                f"Container {cname} failed to start (state: {post_state}). "
-                f"Check logs with: podman logs {cname}"
-            )
+        _podman_start(cname)
+        _assert_running(cname)
 
         color_enabled = _supports_color()
         print(f"Restarted task {task_id}: {_green(cname, color_enabled)}")
         if mode == "cli":
-            login_cmd = f"luskctl login {project_id} {task_id}"
-            raw_cmd = f"podman exec -it {cname} bash"
-            print(f"Login with: {_blue(login_cmd, color_enabled)}")
-            print(f"  (or:      {_blue(raw_cmd, color_enabled)})")
+            _print_login_instructions(project_id, task_id, cname, color_enabled)
         elif mode == "web":
             port = meta.get("web_port")
             if port:

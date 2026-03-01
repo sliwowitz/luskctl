@@ -301,27 +301,6 @@ class ProjectActionsMixin:
             self.notify("Gate sync failed. See terminal output.")
         self._refresh_project_state()
 
-    async def _sync_gate_worker(self, project_id: str) -> None:
-        """Background worker to sync gate (init if needed)."""
-        try:
-            result = sync_project_gate(project_id)
-            if project_id == self.current_project_id:
-                if result["success"]:
-                    if result["created"]:
-                        self.notify("Gate created and synced from upstream")
-                    else:
-                        self.notify("Gate synced from upstream")
-                else:
-                    self.notify(f"Gate sync failed: {', '.join(result['errors'])}")
-
-            # Refresh state after gate operation
-            if project_id == self.current_project_id:
-                self._refresh_project_state()
-
-        except Exception as e:
-            if project_id == self.current_project_id:
-                self.notify(f"Gate operation error: {e}")
-
     # --- Project wizard ---
 
     async def action_new_project_wizard(self) -> None:

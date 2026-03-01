@@ -13,26 +13,23 @@ from ...lib.facade import (
     maybe_pause_for_ssh_key_registration,
     sync_project_gate,
 )
-from ._completers import complete_project_ids as _complete_project_ids
+from ._completers import complete_project_ids as _complete_project_ids, set_completer
+
+
+def _add_project_arg(parser: argparse.ArgumentParser) -> None:
+    """Add a ``project_id`` positional with project-ID completion."""
+    set_completer(parser.add_argument("project_id"), _complete_project_ids)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register infrastructure setup subcommands."""
     # generate
     p_gen = subparsers.add_parser("generate", help="Generate Dockerfiles for a project")
-    _a = p_gen.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_gen)
 
     # build
     p_build = subparsers.add_parser("build", help="Build images for a project")
-    _a = p_build.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_build)
     p_build.add_argument(
         "--agents",
         action="store_true",
@@ -53,11 +50,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     p_ssh = subparsers.add_parser(
         "ssh-init", help="Initialize shared SSH dir and generate a keypair for a project"
     )
-    _a = p_ssh.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_ssh)
     p_ssh.add_argument(
         "--key-type",
         choices=["ed25519", "rsa"],
@@ -80,11 +73,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "'ssh-init' (not ~/.ssh)."
         ),
     )
-    _a = p_gate.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_gate)
     p_gate.add_argument(
         "--force-reinit",
         dest="force_reinit",
@@ -97,11 +86,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "project-init",
         help="Full project setup: ssh-init + generate + build + gate-sync",
     )
-    _a = p_pinit.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_pinit)
 
     # auth
     provider_names = list(AUTH_PROVIDERS)
@@ -112,11 +97,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         description=f"Available providers: {providers_help}",
     )
     p_auth.add_argument("provider", choices=provider_names, metavar="provider")
-    _a = p_auth.add_argument("project_id")
-    try:
-        _a.completer = _complete_project_ids  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _add_project_arg(p_auth)
 
 
 def dispatch(args: argparse.Namespace) -> bool:

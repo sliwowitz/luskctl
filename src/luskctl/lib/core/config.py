@@ -110,9 +110,7 @@ def get_global_section(key: str) -> dict[str, Any]:
     """
     cfg = load_global_config()
     value = cfg.get(key, {})
-    if not isinstance(value, dict):
-        return {}
-    return value or {}
+    return value if isinstance(value, dict) else {}
 
 
 # ---------- Path resolution ----------
@@ -156,6 +154,12 @@ def state_root() -> Path:
     return _resolve_path("LUSKCTL_STATE_DIR", ("paths", "state_root"), _state_root_base)
 
 
+def _xdg_config_subdir(subdir: str) -> Path:
+    """Return ``$XDG_CONFIG_HOME/luskctl/<subdir>`` (or ``~/.config/…`` fallback)."""
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".config") / "luskctl" / subdir
+
+
 def user_projects_root() -> Path:
     """User projects directory.
 
@@ -164,15 +168,9 @@ def user_projects_root() -> Path:
     - XDG_CONFIG_HOME/luskctl/projects
     - ~/.config/luskctl/projects
     """
-
-    def _default() -> Path:
-        """Return XDG-based default path for user projects."""
-        xdg = os.environ.get("XDG_CONFIG_HOME")
-        if xdg:
-            return Path(xdg) / "luskctl" / "projects"
-        return Path.home() / ".config" / "luskctl" / "projects"
-
-    return _resolve_path(None, ("paths", "user_projects_root"), _default)
+    return _resolve_path(
+        None, ("paths", "user_projects_root"), lambda: _xdg_config_subdir("projects")
+    )
 
 
 def global_presets_dir() -> Path:
@@ -183,15 +181,9 @@ def global_presets_dir() -> Path:
     - XDG_CONFIG_HOME/luskctl/presets
     - ~/.config/luskctl/presets
     """
-
-    def _default() -> Path:
-        """Return XDG-based default path for global presets."""
-        xdg = os.environ.get("XDG_CONFIG_HOME")
-        if xdg:
-            return Path(xdg) / "luskctl" / "presets"
-        return Path.home() / ".config" / "luskctl" / "presets"
-
-    return _resolve_path(None, ("paths", "global_presets_dir"), _default)
+    return _resolve_path(
+        None, ("paths", "global_presets_dir"), lambda: _xdg_config_subdir("presets")
+    )
 
 
 def bundled_presets_dir() -> Path:
