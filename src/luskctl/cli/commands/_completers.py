@@ -24,7 +24,4 @@ def complete_project_ids(
 
 def set_completer(action: argparse.Action, fn: Callable[..., Any]) -> None:
     """Attach an argcomplete completer to *action*, ignoring missing argcomplete."""
-    try:
-        action.completer = fn  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    action.completer = fn  # type: ignore[attr-defined]

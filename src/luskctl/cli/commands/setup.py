@@ -16,9 +16,9 @@ from ...lib.facade import (
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
-def _add_project_arg(parser: argparse.ArgumentParser) -> None:
+def _add_project_arg(parser: argparse.ArgumentParser, **kwargs: object) -> None:
     """Add a ``project_id`` positional with project-ID completion."""
-    set_completer(parser.add_argument("project_id"), _complete_project_ids)
+    set_completer(parser.add_argument("project_id", **kwargs), _complete_project_ids)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

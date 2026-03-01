@@ -56,14 +56,18 @@ def _git_global_identity() -> dict[str, str]:
     return result
 
 
-def _resolve_subagent_files(subagents: list, base_dir: Path) -> None:
+def _resolve_subagent_files(subagents: list | None, base_dir: Path) -> None:
     """Resolve relative ``file`` paths in subagent entries against *base_dir*."""
     for sa in subagents or []:
-        if isinstance(sa, dict) and "file" in sa:
-            file_path = Path(sa["file"]).expanduser()
-            if not file_path.is_absolute():
-                file_path = base_dir / file_path
-            sa["file"] = str(file_path.resolve())
+        if not isinstance(sa, dict):
+            continue
+        raw_file = sa.get("file")
+        if not isinstance(raw_file, str) or not raw_file.strip():
+            continue
+        file_path = Path(raw_file).expanduser()
+        if not file_path.is_absolute():
+            file_path = base_dir / file_path
+        sa["file"] = str(file_path.resolve())
 
 
 def find_preset_path(project: Project, preset_name: str) -> Path | None:
