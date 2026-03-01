@@ -59,17 +59,20 @@ def _prepare_agent_config(
     task_id: str,
     agents: list[str] | None,
     preset: str | None,
+    *,
+    provider_name: str | None = None,
 ) -> Path:
     """Resolve agent config, instructions, and prepare the agent-config dir.
 
     Shared by CLI and web task runners to avoid duplicating the
-    resolve → instructions → prepare sequence.
+    resolve → instructions → prepare sequence.  *provider_name* overrides
+    the auto-detected provider (e.g. web backend selection).
     """
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
     from .headless_providers import get_provider as _get_provider
 
-    resolved = _get_provider(None, project)
+    resolved = _get_provider(provider_name, project)
     instr_text = resolve_instructions(effective, resolved.name)
     return prepare_agent_config_dir(
         project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
@@ -274,6 +277,7 @@ def task_run_web(
     env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
+    # Note: backend is a web UI name (codex/claude/copilot), not a headless provider
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.luskctl:Z")
 

@@ -326,7 +326,9 @@ class ProjectActionsMixin:
                 print(f"Created {instr_path} with bundled defaults.")
             editor = os.environ.get("EDITOR", "").strip() or "vi"
             editor_cmd = shlex.split(editor)
-            subprocess.run([*editor_cmd, str(instr_path)], check=False)
+            result = subprocess.run([*editor_cmd, str(instr_path)], check=False)
+            if result.returncode != 0:
+                raise SystemExit(f"Editor exited with code {result.returncode}")
 
         await self._run_suspended(work, success_msg=f"Instructions updated for {pid}")
 
