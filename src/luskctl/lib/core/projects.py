@@ -1,5 +1,6 @@
 """Project discovery, loading, and preset management."""
 
+import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -19,6 +20,8 @@ from .config import (
     state_root,
     user_projects_root,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_global_git_config(key: str) -> str | None:
@@ -299,6 +302,7 @@ def list_projects() -> list[Project]:
         except (SystemExit, Exception):
             # if a project is broken (malformed YAML, missing fields, etc.),
             # skip it rather than crashing the listing or the TUI
+            logger.debug("Skipping broken project '%s'", pid, exc_info=True)
             continue
     return projects
 
@@ -310,7 +314,7 @@ def load_project(project_id: str) -> Project:
     if not cfg_path.is_file():
         raise SystemExit(f"Missing project.yml in {root}")
     try:
-        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         raise SystemExit(f"Failed to parse {cfg_path}: {exc}")
 
