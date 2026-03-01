@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared argcomplete completers and helpers for CLI commands."""
 
 from __future__ import annotations

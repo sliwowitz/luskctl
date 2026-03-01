@@ -1,0 +1,7 @@
+version = 1
+
+[[annotation]]
+path = ["src/**", "tests/**", "examples/**", "docs/**", "*.py", "*.md", "*.yml", "*.yaml", "*.toml", "*.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Jiri Vyskocil"
+SPDX-License-Identifier = "Apache-2.0"

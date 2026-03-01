@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Container image tag conventions for the luskctl layer system (L0/L1/L2)."""
 
 import hashlib

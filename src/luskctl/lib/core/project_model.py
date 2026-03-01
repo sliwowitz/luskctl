@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Project and preset data models.
 
 Pure data types with no filesystem or subprocess I/O.  The companion

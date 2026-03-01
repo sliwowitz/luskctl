@@ -1,5 +1,7 @@
 # luskctl
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Version and branch information for luskctl.
 
 This module provides a single source of truth for version and branch information,
@@ -185,6 +188,9 @@ def format_version_string(version: str, branch: str | None) -> str:
     Returns:
         Formatted string like "0.3.1" or "0.3.1 [feature-branch]"
     """
+    base_version = version
     if branch:
-        return f"{version} [{branch}]"
-    return version
+        base_version = f"{version} [{branch}]"
+    
+    # Add license information
+    return f"{base_version}\nLicense: Apache-2.0"

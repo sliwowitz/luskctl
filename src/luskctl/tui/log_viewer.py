@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """In-app log viewer screen for the TUI.
 
 Provides a full-page ``LogViewerScreen`` backed by Textual's ``RichLog``

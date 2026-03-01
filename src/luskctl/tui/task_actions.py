@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """TaskActionsMixin — task lifecycle operations for LuskTUI.
 
 Handles task creation, deletion, renaming, running (CLI/web/autopilot),

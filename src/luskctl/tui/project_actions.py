@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """ProjectActionsMixin — project infrastructure actions for LuskTUI.
 
 Handles project setup (generate, build, ssh-init, gate-sync), authentication,

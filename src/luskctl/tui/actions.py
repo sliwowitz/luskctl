@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """ActionsMixin — combined mixin re-exported from focused submodules.
 
 This module provides backward-compatible access to the ``ActionsMixin``

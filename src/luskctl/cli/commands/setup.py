@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Infrastructure setup commands: generate, build, ssh-init, gate-sync, auth."""
 
 from __future__ import annotations

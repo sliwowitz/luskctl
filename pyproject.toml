@@ -7,12 +7,12 @@ name = "luskctl"
 version = "0.3.5"
 description = "Manage containerized projects and per-run tasks with Podman"
 readme = "README.md"
-license = "Apache-2.0 OR MIT"
+license = "Apache-2.0"
 authors = ["luskctl maintainers"]
 keywords = ["podman", "containers", "tasks", "developer-tools", "cli"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
   "Environment :: Console",
   "Operating System :: POSIX :: Linux",
   "Topic :: System :: Systems Administration",

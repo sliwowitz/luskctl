@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure ANSI color utilities for service-layer modules.
 
 This module provides the low-level color functions that service-layer code

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Task log viewing and streaming.
 
 Provides the ``task_logs`` function for viewing formatted container logs.

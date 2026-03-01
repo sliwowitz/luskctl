@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Task management commands: new, list, run-cli, run-web, start, etc."""
 
 from __future__ import annotations

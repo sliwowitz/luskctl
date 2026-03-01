@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Agent configuration: parsing, filtering, and wrapper generation.
 
 Handles .md frontmatter parsing, sub-agent JSON conversion for Claude's

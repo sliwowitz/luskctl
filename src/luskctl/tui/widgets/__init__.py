@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
 """Reusable Textual widgets for the luskctl TUI.
 
 This package re-exports all widget classes and render helpers from
