@@ -156,24 +156,28 @@ class TestTaskNewWithName(unittest.TestCase):
             self.assertRegex(tasks[0].name, r"^[a-z]+-[a-z]+$")
 
     def test_task_new_invalid_name_raises(self) -> None:
-        """task_new with all-special-char name raises SystemExit."""
+        """task_new with all-special-char name raises SystemExit and leaves no artifacts."""
         project_id = "proj_name_inv"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
-        ):
+        ) as ctx:
             with self.assertRaises(SystemExit):
                 task_new(project_id, name="@#$")
+            meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
+            self.assertFalse(meta_path.exists())
 
     def test_task_new_leading_hyphen_raises(self) -> None:
-        """task_new with a name that sanitizes to leading hyphen raises SystemExit."""
+        """task_new with a leading hyphen raises SystemExit and leaves no artifacts."""
         project_id = "proj_name_hyp"
         with project_env(
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
-        ):
+        ) as ctx:
             with self.assertRaises(SystemExit):
                 task_new(project_id, name="-my-task")
+            meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
+            self.assertFalse(meta_path.exists())
 
     def test_task_new_prints_name(self) -> None:
         """task_new output includes the task name."""

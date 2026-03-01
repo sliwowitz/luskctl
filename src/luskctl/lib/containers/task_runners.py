@@ -392,8 +392,10 @@ def task_run_headless(
     that runs init-ssh-and-repo.sh followed by the claude command.
 
     Args:
-        name: Optional human-readable name (slug-style).  If ``None``, a
-            random name is generated via :func:`generate_task_name`.
+        name: Optional human-readable name.  Allowed characters are
+            lowercase letters, digits, hyphens, and underscores.
+            If ``None``, a random name is generated via
+            :func:`generate_task_name`.
 
     Returns the task_id.
     """

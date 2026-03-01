@@ -319,8 +319,10 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
 
     Args:
         project_id: The project to create the task under.
-        name: Optional human-readable name (slug-style).  If ``None``, a
-            random name is generated via :func:`generate_task_name`.
+        name: Optional human-readable name.  Allowed characters are
+            lowercase letters, digits, hyphens, and underscores.
+            If ``None``, a random slug-style name is generated via
+            :func:`generate_task_name`.
 
     Workspace Initialization Protocol:
     ----------------------------------
@@ -344,6 +346,17 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
     - Stale workspace from incompletely deleted previous task with same ID
     - Ensuring new tasks always start with latest code
     """
+    # Validate name early (before creating any artifacts on disk)
+    if name is not None:
+        task_name = sanitize_task_name(name)
+        if task_name is None:
+            raise SystemExit(f"Invalid task name: {name!r}")
+        err = validate_task_name(task_name)
+        if err:
+            raise SystemExit(f"Invalid task name: {err}")
+    else:
+        task_name = generate_task_name(project_id)
+
     project = load_project(project_id)
     tasks_root = project.tasks_root
     ensure_dir(tasks_root)
@@ -370,17 +383,6 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         encoding="utf-8",
     )
 
-    # Resolve task name: sanitize if provided, generate if not
-    if name is not None:
-        task_name = sanitize_task_name(name)
-        if task_name is None:
-            raise SystemExit(f"Invalid task name: {name!r}")
-        err = validate_task_name(task_name)
-        if err:
-            raise SystemExit(f"Invalid task name: {err}")
-    else:
-        task_name = generate_task_name(project_id)
-
     meta = {
         "task_id": next_id,
         "name": task_name,
@@ -399,7 +401,8 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     Sanitizes *new_name* and writes the result to the task's metadata file.
     Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
     """
-    meta_dir = _tasks_meta_dir(project_id)
+    project = load_project(project_id)
+    meta_dir = _tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
