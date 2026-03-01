@@ -1,11 +1,17 @@
 """Project management commands: list, derive, wizard, presets."""
 
+from __future__ import annotations
+
+import argparse
+
 from ...lib.core.projects import derive_project, list_presets, list_projects
 from ...lib.wizards.new_project import run_wizard
 from .setup import cmd_project_init
 
 
-def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+def _complete_project_ids(
+    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
+) -> list[str]:  # pragma: no cover
     """Return project IDs matching *prefix* for argcomplete."""
     try:
         ids = [p.id for p in list_projects()]
@@ -16,7 +22,7 @@ def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
     return ids
 
 
-def register(subparsers) -> None:
+def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register project management subcommands."""
     # projects
     subparsers.add_parser("projects", help="List all known projects")
@@ -50,7 +56,7 @@ def register(subparsers) -> None:
         pass
 
 
-def dispatch(args) -> bool:
+def dispatch(args: argparse.Namespace) -> bool:
     """Handle project management commands.  Returns True if handled."""
     if args.cmd == "projects":
         projs = list_projects()

@@ -1,5 +1,9 @@
 """Task management commands: new, list, run-cli, run-web, start, etc."""
 
+from __future__ import annotations
+
+import argparse
+
 from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
 from ...lib.core.projects import list_projects
 from ...lib.facade import (
@@ -21,7 +25,9 @@ from ...lib.facade import (
 )
 
 
-def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+def _complete_project_ids(
+    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
+) -> list[str]:  # pragma: no cover
     """Return project IDs matching *prefix* for argcomplete."""
     try:
         ids = [p.id for p in list_projects()]
@@ -32,7 +38,9 @@ def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
     return ids
 
 
-def _complete_task_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+def _complete_task_ids(
+    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
+) -> list[str]:  # pragma: no cover
     """Return task IDs matching *prefix* for argcomplete."""
     project_id = getattr(parsed_args, "project_id", None)
     if not project_id:
@@ -46,7 +54,7 @@ def _complete_task_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
     return tids
 
 
-def register(subparsers) -> None:
+def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register task-related subcommands."""
     # login (top-level shortcut)
     p_login = subparsers.add_parser("login", help="Open interactive shell in a running container")
@@ -165,6 +173,7 @@ def register(subparsers) -> None:
     t_run_ui.add_argument(
         "--backend",
         dest="ui_backend",
+        choices=list(WEB_BACKENDS),
         help=f"Web backend ({known_backends})",
     )
     t_run_ui.add_argument(
@@ -258,9 +267,11 @@ def register(subparsers) -> None:
         action="store_true",
         help="Start in web mode instead of CLI",
     )
+    start_backends = ", ".join(WEB_BACKENDS)
     t_start.add_argument(
         "--backend",
-        help="Web backend (default from project config or 'codex')",
+        choices=list(WEB_BACKENDS),
+        help=f"Web backend ({start_backends}; default from project config)",
     )
     t_start.add_argument(
         "--agent",
@@ -328,7 +339,7 @@ def register(subparsers) -> None:
     )
 
 
-def dispatch(args) -> bool:
+def dispatch(args: argparse.Namespace) -> bool:
     """Handle task-related commands.  Returns True if handled."""
     if args.cmd == "login":
         task_login(args.project_id, args.task_id)
@@ -352,7 +363,7 @@ def dispatch(args) -> bool:
     return False
 
 
-def _dispatch_task_sub(args) -> bool:
+def _dispatch_task_sub(args: argparse.Namespace) -> bool:
     """Dispatch ``task <subcommand>`` to the right handler."""
     if args.task_cmd == "new":
         task_new(args.project_id, name=getattr(args, "name", None))

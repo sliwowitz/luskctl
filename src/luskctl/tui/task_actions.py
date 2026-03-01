@@ -6,7 +6,7 @@ login, restart, follow-up, log viewing, and diff copying.
 
 from ..lib.containers.agents import parse_md_agent
 from ..lib.containers.autopilot import wait_for_container_exit
-from ..lib.containers.runtime import container_name
+from ..lib.containers.runtime import container_name, get_container_state
 from ..lib.containers.task_display import effective_status
 from ..lib.containers.tasks import (
     generate_task_name,
@@ -37,6 +37,8 @@ class TaskActionsMixin:
     operations.  The host class must provide the standard Textual ``App``
     interface plus the instance attributes initialised by ``LuskTUI.__init__``.
     """
+
+    _autopilot_pending_name: str | None = None
 
     # ---------- Helpers ----------
 
@@ -335,8 +337,6 @@ class TaskActionsMixin:
             self.notify("Follow-up is only available for completed/failed autopilot tasks.")
             return
 
-        from .screens import AutopilotPromptScreen
-
         await self.push_screen(
             AutopilotPromptScreen(),
             self._on_followup_prompt_result,
@@ -382,8 +382,6 @@ class TaskActionsMixin:
         pid = self.current_project_id
         tid = task.task_id
         cname = container_name(pid, task.mode, tid)
-
-        from ..lib.containers.runtime import get_container_state
 
         state = get_container_state(cname)
         if state is None:

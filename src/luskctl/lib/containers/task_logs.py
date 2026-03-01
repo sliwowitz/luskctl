@@ -13,7 +13,7 @@ import yaml
 from ..core.projects import load_project
 from .log_format import auto_detect_formatter
 from .runtime import container_name, get_container_state
-from .tasks import _tasks_meta_dir
+from .tasks import tasks_meta_dir
 
 
 def task_logs(
@@ -41,7 +41,7 @@ def task_logs(
     import signal
 
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")

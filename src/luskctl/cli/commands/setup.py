@@ -1,5 +1,9 @@
 """Infrastructure setup commands: generate, build, ssh-init, gate-sync, auth."""
 
+from __future__ import annotations
+
+import argparse
+
 from ...lib.core.projects import list_projects
 from ...lib.facade import (
     AUTH_PROVIDERS,
@@ -12,7 +16,9 @@ from ...lib.facade import (
 )
 
 
-def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+def _complete_project_ids(
+    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
+) -> list[str]:  # pragma: no cover
     """Return project IDs matching *prefix* for argcomplete."""
     try:
         ids = [p.id for p in list_projects()]
@@ -23,7 +29,7 @@ def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
     return ids
 
 
-def register(subparsers) -> None:
+def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register infrastructure setup subcommands."""
     # generate
     p_gen = subparsers.add_parser("generate", help="Generate Dockerfiles for a project")
@@ -126,7 +132,7 @@ def register(subparsers) -> None:
         pass
 
 
-def dispatch(args) -> bool:
+def dispatch(args: argparse.Namespace) -> bool:
     """Handle infrastructure setup commands.  Returns True if handled."""
     if args.cmd == "generate":
         generate_dockerfiles(args.project_id)

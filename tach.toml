@@ -423,7 +423,7 @@ expose = [
     "generate_task_name",
     "TASK_NAME_MAX_LEN",
     "TaskMeta",
-    "_tasks_meta_dir",
+    "tasks_meta_dir",
 ]
 from = ["luskctl.lib.containers.tasks"]
 

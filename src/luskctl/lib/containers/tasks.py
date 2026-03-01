@@ -194,7 +194,7 @@ def get_workspace_git_diff(project_id: str, task_id: str, against: str = "HEAD")
 # ---------- Tasks ----------
 
 
-def _tasks_meta_dir(project_id: str) -> Path:
+def tasks_meta_dir(project_id: str) -> Path:
     """Return the directory containing task metadata YAML files for *project_id*."""
     return state_root() / "projects" / project_id / "tasks"
 
@@ -207,7 +207,7 @@ def update_task_exit_code(project_id: str, task_id: str, exit_code: int | None) 
         task_id: The task ID
         exit_code: The exit code from the task, or None if unknown/failed
     """
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         return
@@ -262,7 +262,7 @@ def task_new(project_id: str, *, name: str | None = None) -> str:
         task_name = generate_task_name(project.id)
     tasks_root = project.tasks_root
     ensure_dir(tasks_root)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     ensure_dir(meta_dir)
 
     # Simple ID: numeric increment
@@ -304,7 +304,7 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
     Raises ``SystemExit`` if the task is unknown or the sanitized name is invalid.
     """
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -322,7 +322,7 @@ def task_rename(project_id: str, task_id: str, new_name: str) -> None:
 
 def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
     """Return all task metadata for *project_id*, sorted by task ID."""
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     tasks: list[TaskMeta] = []
     if not meta_dir.is_dir():
         return tasks
@@ -442,7 +442,7 @@ def load_task_meta(
     Returns (meta, meta_path). Raises SystemExit if task is unknown or mode
     conflicts with *expected_mode*.
     """
-    meta_dir = _tasks_meta_dir(project_id)
+    meta_dir = tasks_meta_dir(project_id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -455,7 +455,7 @@ def load_task_meta(
 def mark_task_deleting(project_id: str, task_id: str) -> None:
     """Persist ``deleting: true`` to the task's YAML metadata file."""
     try:
-        meta_dir = _tasks_meta_dir(project_id)
+        meta_dir = tasks_meta_dir(project_id)
         meta_path = meta_dir / f"{task_id}.yml"
         if not meta_path.is_file():
             return
@@ -483,7 +483,7 @@ def task_delete(project_id: str, task_id: str) -> None:
     workspace = project.tasks_root / str(task_id)
 
     # Metadata lives in the per-project tasks state dir.
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     _log_debug(f"task_delete: workspace={workspace} meta_path={meta_path}")
 
@@ -513,7 +513,7 @@ def _validate_login(project_id: str, task_id: str) -> tuple[str, str, Project]:
     Raises SystemExit with actionable messages on failure.
     """
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -591,7 +591,7 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
     """
     project = load_project(project_id)
     effective_timeout = timeout if timeout is not None else project.shutdown_timeout
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")
@@ -629,7 +629,7 @@ def task_stop(project_id: str, task_id: str, *, timeout: int | None = None) -> N
 def task_status(project_id: str, task_id: str) -> None:
     """Show live task status with container state diagnostics."""
     project = load_project(project_id)
-    meta_dir = _tasks_meta_dir(project.id)
+    meta_dir = tasks_meta_dir(project.id)
     meta_path = meta_dir / f"{task_id}.yml"
     if not meta_path.is_file():
         raise SystemExit(f"Unknown task {task_id}")

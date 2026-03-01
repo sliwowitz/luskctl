@@ -147,13 +147,13 @@ class TaskStartTests(unittest.TestCase):
 
         with unittest.mock.patch(
             "sys.argv",
-            ["luskctl", "task", "start", "proj3", "--web", "--backend", "gradio"],
+            ["luskctl", "task", "start", "proj3", "--web", "--backend", "codex"],
         ):
             main()
 
         mock_new.assert_called_once_with("proj3", name=None)
         mock_run_web.assert_called_once_with(
-            "proj3", "3", backend="gradio", agents=None, preset=None
+            "proj3", "3", backend="codex", agents=None, preset=None
         )
 
     @unittest.mock.patch("luskctl.cli.commands.setup.cmd_project_init")

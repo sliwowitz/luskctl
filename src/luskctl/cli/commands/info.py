@@ -1,5 +1,8 @@
 """Informational CLI commands: config overview and resolved agent config."""
 
+from __future__ import annotations
+
+import argparse
 import os
 from importlib import resources
 from pathlib import Path
@@ -25,7 +28,9 @@ from ...ui_utils.terminal import (
 )
 
 
-def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
+def _complete_project_ids(
+    prefix: str, parsed_args: argparse.Namespace, **kwargs: object
+) -> list[str]:  # pragma: no cover
     """Return project IDs matching *prefix* for argcomplete."""
     try:
         ids = [p.id for p in list_projects()]
@@ -36,7 +41,7 @@ def _complete_project_ids(prefix, parsed_args, **kwargs):  # pragma: no cover
     return ids
 
 
-def register(subparsers) -> None:
+def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register informational subcommands (config, config-show)."""
     # config overview
     subparsers.add_parser("config", help="Show configuration, template and output paths")
@@ -54,7 +59,7 @@ def register(subparsers) -> None:
     p_config_show.add_argument("--preset", help="Apply a preset before showing resolved config")
 
 
-def dispatch(args) -> bool:
+def dispatch(args: argparse.Namespace) -> bool:
     """Handle config and config-show commands.  Returns True if handled."""
     if args.cmd == "config":
         _print_config()
