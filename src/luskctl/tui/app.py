@@ -40,7 +40,7 @@ if _HAS_TEXTUAL:
 
     from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import get_tui_default_tmux
-    from ..lib.core.projects import Project as CodexProject, list_projects, load_project
+    from ..lib.core.projects import Project, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
     from ..lib.core.version import get_version_info as _get_version_info
@@ -181,7 +181,7 @@ if _HAS_TEXTUAL:
 
             self.current_project_id: str | None = None
             self.current_task: TaskMeta | None = None
-            self._projects_by_id: dict[str, CodexProject] = {}
+            self._projects_by_id: dict[str, Project] = {}
             self._last_task_count: int | None = None
             # Upstream polling state
             self._staleness_info: GateStalenessInfo | None = None
@@ -481,7 +481,7 @@ if _HAS_TEXTUAL:
 
         def _load_project_state(
             self, project_id: str
-        ) -> tuple[str, CodexProject | None, dict | None, GateStalenessInfo | None, str | None]:
+        ) -> tuple[str, Project | None, dict | None, GateStalenessInfo | None, str | None]:
             """Load project infrastructure state in a background thread."""
             try:
                 project = load_project(project_id)

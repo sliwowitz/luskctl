@@ -173,8 +173,3 @@ def copy_to_clipboard_detailed(text: str) -> ClipboardCopyResult:
     return ClipboardCopyResult(
         ok=False, error=errors[-1] if errors else "Clipboard copy failed.", hint=hint or None
     )
-
-
-def copy_to_clipboard(text: str) -> bool:
-    """Backward-compatible clipboard copy helper returning only success."""
-    return copy_to_clipboard_detailed(text).ok

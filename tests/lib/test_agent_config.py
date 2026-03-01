@@ -169,21 +169,21 @@ class ResolveAgentConfigTests(unittest.TestCase):
             names = [s["name"] for s in result["subagents"] if isinstance(s, dict)]
             self.assertEqual(names, ["base-agent", "extra-agent"])
 
-    def test_legacy_compat_no_preset(self) -> None:
-        """Existing project.yml works unchanged without preset."""
+    def test_project_config_without_preset(self) -> None:
+        """Project agent config resolves correctly without a preset."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_root = base / "config"
             write_project(
                 config_root,
-                "legacy",
-                "project:\n  id: legacy\nagent:\n  model: sonnet\n"
+                "proj2",
+                "project:\n  id: proj2\nagent:\n  model: sonnet\n"
                 "  subagents:\n    - name: sa1\n      default: true\n",
             )
 
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
-                    result = resolve_agent_config("legacy")
+                    result = resolve_agent_config("proj2")
             self.assertEqual(result["model"], "sonnet")
             self.assertEqual(result["subagents"][0]["name"], "sa1")
 

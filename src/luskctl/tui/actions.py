@@ -98,10 +98,7 @@ class ActionsMixin:
     def _prompt_ui_backend(self) -> str:
         """Prompt the user to select a web UI backend and return the choice."""
         backends = list(WEB_BACKENDS)
-        # Check DEFAULT_AGENT first, fall back to LUSKUI_BACKEND
         default = os.environ.get("DEFAULT_AGENT", "").strip().lower()
-        if not default:
-            default = os.environ.get("LUSKUI_BACKEND", "").strip().lower()
         if not default:
             default = backends[0] if backends else "codex"
 

@@ -19,7 +19,6 @@ from luskctl.lib.containers.tasks import (
 )
 from luskctl.lib.core.projects import load_project
 from luskctl.tui.clipboard import (
-    copy_to_clipboard,
     copy_to_clipboard_detailed,
     get_clipboard_helper_status,
 )
@@ -906,12 +905,12 @@ class TaskTests(unittest.TestCase):
                 self.assertIsNone(result)
 
     def test_copy_to_clipboard_empty_text(self) -> None:
-        """Test copy_to_clipboard returns False for empty text."""
-        result = copy_to_clipboard("")
-        self.assertFalse(result)
+        """Test copy_to_clipboard_detailed returns failure for empty text."""
+        result = copy_to_clipboard_detailed("")
+        self.assertFalse(result.ok)
 
     def test_copy_to_clipboard_success_wl_copy(self) -> None:
-        """Test copy_to_clipboard succeeds with wl-copy."""
+        """Test copy_to_clipboard_detailed succeeds with wl-copy."""
         with unittest.mock.patch.dict(
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
@@ -921,8 +920,8 @@ class TaskTests(unittest.TestCase):
                 with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-                    result = copy_to_clipboard("test content")
-                    self.assertTrue(result)
+                    result = copy_to_clipboard_detailed("test content")
+                    self.assertTrue(result.ok)
 
                     run_mock.assert_called_once()
                     args, kwargs = run_mock.call_args
@@ -933,7 +932,7 @@ class TaskTests(unittest.TestCase):
                     self.assertTrue(kwargs["capture_output"])
 
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
-        """Test copy_to_clipboard uses xclip on X11 when available."""
+        """Test copy_to_clipboard_detailed uses xclip on X11 when available."""
         # Ensure Wayland environment variables are not set to force X11 detection
         env = {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0", "WAYLAND_DISPLAY": ""}
 
@@ -944,8 +943,8 @@ class TaskTests(unittest.TestCase):
                 with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
-                    result = copy_to_clipboard("test content")
-                    self.assertTrue(result)
+                    result = copy_to_clipboard_detailed("test content")
+                    self.assertTrue(result.ok)
 
                     run_mock.assert_called_once()
                     args, _kwargs = run_mock.call_args
