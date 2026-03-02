@@ -423,7 +423,20 @@ expose = [
 from = ["luskctl.lib.containers.task_display"]
 
 [[interfaces]]
-expose = ["read_work_status", "WORK_STATUSES", "WORK_STATUS_DISPLAY", "WorkStatus", "WorkStatusInfo", "STATUS_FILE_NAME"]
+expose = [
+    "read_work_status",
+    "write_work_status",
+    "WORK_STATUSES",
+    "WORK_STATUS_DISPLAY",
+    "WorkStatus",
+    "WorkStatusInfo",
+    "STATUS_FILE_NAME",
+    "PENDING_PHASE_FILE",
+    "PendingPhase",
+    "read_pending_phase",
+    "write_pending_phase",
+    "clear_pending_phase",
+]
 from = ["luskctl.lib.containers.work_status"]
 
 [[interfaces]]

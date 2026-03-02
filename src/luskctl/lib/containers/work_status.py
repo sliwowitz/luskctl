@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Agent work-status reporting: read ``work-status.yml`` from agent-config dirs.
+"""Agent work-status reporting: read/write ``work-status.yml`` from agent-config dirs.
 
 Agents report their current work phase by writing a small YAML file inside the
 container at ``/home/dev/.luskctl/work-status.yml``.  On the host this maps to
@@ -11,6 +11,10 @@ container at ``/home/dev/.luskctl/work-status.yml``.  On the host this maps to
 The file can be a dict (``status: coding``, ``message: ...``) or a bare string
 (``coding``).  Unknown status values are preserved so callers can decide how to
 handle them.
+
+This module also handles **pending-phase** files (``pending-phase.yml``), used
+by external tools (e.g. kanban-tui) to queue deferred phase transitions on
+running tasks.
 """
 
 from __future__ import annotations
@@ -22,6 +26,9 @@ import yaml
 
 STATUS_FILE_NAME = "work-status.yml"
 """Filename agents write inside their agent-config directory."""
+
+PENDING_PHASE_FILE = "pending-phase.yml"
+"""Filename for deferred phase transitions on running tasks."""
 
 WORK_STATUSES: dict[str, str] = {
     "planning": "Planning approach",
@@ -91,3 +98,66 @@ def read_work_status(agent_config_dir: Path) -> WorkStatus:
             message=raw.get("message"),
         )
     return WorkStatus()
+
+
+def write_work_status(
+    agent_config_dir: Path, status: str | None, message: str | None = None
+) -> None:
+    """Write ``work-status.yml`` into *agent_config_dir*.
+
+    When *status* is ``None`` the file is removed (clearing the status).
+    """
+    agent_config_dir.mkdir(parents=True, exist_ok=True)
+    path = agent_config_dir / STATUS_FILE_NAME
+    if status is None:
+        path.unlink(missing_ok=True)
+        return
+    data: dict[str, str] = {"status": status}
+    if message:
+        data["message"] = message
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+
+# ---------- Pending phase I/O ----------
+
+
+@dataclass(frozen=True)
+class PendingPhase:
+    """A queued phase transition for a running task."""
+
+    phase: str
+    prompt: str
+
+
+def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
+    """Read ``pending-phase.yml`` from *agent_config_dir*.
+
+    Returns ``None`` if the file is missing, empty, or malformed.
+    """
+    phase_path = agent_config_dir / PENDING_PHASE_FILE
+    if not phase_path.is_file():
+        return None
+    try:
+        raw = yaml.safe_load(phase_path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    phase = raw.get("phase")
+    prompt = raw.get("prompt", "")
+    if not phase:
+        return None
+    return PendingPhase(phase=str(phase), prompt=str(prompt))
+
+
+def write_pending_phase(agent_config_dir: Path, phase: str, prompt: str) -> None:
+    """Write ``pending-phase.yml`` into *agent_config_dir*."""
+    agent_config_dir.mkdir(parents=True, exist_ok=True)
+    phase_path = agent_config_dir / PENDING_PHASE_FILE
+    phase_path.write_text(yaml.safe_dump({"phase": phase, "prompt": prompt}), encoding="utf-8")
+
+
+def clear_pending_phase(agent_config_dir: Path) -> None:
+    """Delete ``pending-phase.yml`` from *agent_config_dir* if it exists."""
+    phase_path = agent_config_dir / PENDING_PHASE_FILE
+    phase_path.unlink(missing_ok=True)

@@ -12,11 +12,17 @@ from pathlib import Path
 import yaml
 
 from luskctl.lib.containers.work_status import (
+    PENDING_PHASE_FILE,
     STATUS_FILE_NAME,
     WORK_STATUS_DISPLAY,
     WORK_STATUSES,
+    PendingPhase,
     WorkStatus,
+    clear_pending_phase,
+    read_pending_phase,
     read_work_status,
+    write_pending_phase,
+    write_work_status,
 )
 
 
@@ -135,3 +141,118 @@ class TestWorkStatusDataclass(unittest.TestCase):
         ws = WorkStatus(status="coding")
         with self.assertRaises(AttributeError):
             ws.status = "testing"  # type: ignore[misc]
+
+
+class TestWriteWorkStatus(unittest.TestCase):
+    """Tests for write_work_status()."""
+
+    def setUp(self):
+        """Create a temporary directory for each test."""
+        self.tmp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        """Remove the temporary directory after each test."""
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_creates_file(self):
+        write_work_status(self.tmp_dir, "testing")
+        ws = read_work_status(self.tmp_dir)
+        self.assertEqual(ws.status, "testing")
+        self.assertIsNone(ws.message)
+
+    def test_creates_file_with_message(self):
+        write_work_status(self.tmp_dir, "coding", message="Writing auth")
+        ws = read_work_status(self.tmp_dir)
+        self.assertEqual(ws.status, "coding")
+        self.assertEqual(ws.message, "Writing auth")
+
+    def test_overwrites_existing(self):
+        write_work_status(self.tmp_dir, "coding")
+        write_work_status(self.tmp_dir, "testing")
+        ws = read_work_status(self.tmp_dir)
+        self.assertEqual(ws.status, "testing")
+
+    def test_clears_on_none(self):
+        write_work_status(self.tmp_dir, "coding")
+        write_work_status(self.tmp_dir, None)
+        ws = read_work_status(self.tmp_dir)
+        self.assertIsNone(ws.status)
+        self.assertFalse((self.tmp_dir / STATUS_FILE_NAME).exists())
+
+    def test_clears_missing_file_is_noop(self):
+        write_work_status(self.tmp_dir, None)
+        self.assertFalse((self.tmp_dir / STATUS_FILE_NAME).exists())
+
+    def test_creates_parent_dirs(self):
+        nested = self.tmp_dir / "a" / "b" / "c"
+        write_work_status(nested, "done")
+        ws = read_work_status(nested)
+        self.assertEqual(ws.status, "done")
+
+
+class TestPendingPhase(unittest.TestCase):
+    """Tests for pending-phase I/O."""
+
+    def setUp(self):
+        """Create a temporary directory for each test."""
+        self.tmp_dir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        """Remove the temporary directory after each test."""
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_read_valid(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text(
+            yaml.safe_dump({"phase": "testing", "prompt": "Run tests"})
+        )
+        pp = read_pending_phase(self.tmp_dir)
+        self.assertIsNotNone(pp)
+        self.assertEqual(pp.phase, "testing")
+        self.assertEqual(pp.prompt, "Run tests")
+
+    def test_read_missing(self):
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_read_missing_dir(self):
+        self.assertIsNone(read_pending_phase(self.tmp_dir / "nonexistent"))
+
+    def test_read_malformed(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text("{{broken")
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_read_no_phase_key(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text(yaml.safe_dump({"prompt": "just a prompt"}))
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_read_non_dict(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text("bare string\n")
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_write_and_read(self):
+        write_pending_phase(self.tmp_dir, "reviewing", "Review changes")
+        pp = read_pending_phase(self.tmp_dir)
+        self.assertIsNotNone(pp)
+        self.assertEqual(pp.phase, "reviewing")
+        self.assertEqual(pp.prompt, "Review changes")
+
+    def test_write_creates_parent_dirs(self):
+        nested = self.tmp_dir / "a" / "b"
+        write_pending_phase(nested, "testing", "Run tests")
+        pp = read_pending_phase(nested)
+        self.assertIsNotNone(pp)
+        self.assertEqual(pp.phase, "testing")
+
+    def test_clear(self):
+        write_pending_phase(self.tmp_dir, "testing", "Run tests")
+        clear_pending_phase(self.tmp_dir)
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+        self.assertFalse((self.tmp_dir / PENDING_PHASE_FILE).exists())
+
+    def test_clear_missing_is_noop(self):
+        clear_pending_phase(self.tmp_dir)
+        self.assertFalse((self.tmp_dir / PENDING_PHASE_FILE).exists())
+
+    def test_frozen(self):
+        pp = PendingPhase(phase="testing", prompt="Run tests")
+        with self.assertRaises(AttributeError):
+            pp.phase = "coding"  # type: ignore[misc]
