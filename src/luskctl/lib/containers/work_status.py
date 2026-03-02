@@ -93,9 +93,11 @@ def read_work_status(agent_config_dir: Path) -> WorkStatus:
     if isinstance(raw, str):
         return WorkStatus(status=raw)
     if isinstance(raw, dict):
+        status = raw.get("status")
+        message = raw.get("message")
         return WorkStatus(
-            status=raw.get("status"),
-            message=raw.get("message"),
+            status=status if isinstance(status, str) else None,
+            message=message if isinstance(message, str) else None,
         )
     return WorkStatus()
 

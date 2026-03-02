@@ -97,6 +97,14 @@ class TestReadWorkStatus(unittest.TestCase):
         ws = read_work_status(self.tmp_dir)
         self.assertIsNone(ws.status)
 
+    def test_non_string_status_and_message_normalized(self):
+        (self.tmp_dir / STATUS_FILE_NAME).write_text(
+            yaml.safe_dump({"status": 123, "message": ["a", "b"]})
+        )
+        ws = read_work_status(self.tmp_dir)
+        self.assertIsNone(ws.status)
+        self.assertIsNone(ws.message)
+
 
 class TestWorkStatusVocabulary(unittest.TestCase):
     """Tests for WORK_STATUSES and WORK_STATUS_DISPLAY consistency."""
