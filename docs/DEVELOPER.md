@@ -1,10 +1,10 @@
 # Developer Guide
 
-This document covers internal architecture and implementation details for contributors and maintainers of luskctl.
+This document covers internal architecture and implementation details for contributors and maintainers of terok.
 
 ## Container Readiness and Log Streaming
 
-luskctl shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met. This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.
+terok shows the initial container logs to the user when starting task containers and then automatically detaches once a "ready" condition is met. This improves UX but introduces dependencies that developers must be aware of when changing entry scripts or server behavior.
 
 ### CLI Mode (task run-cli)
 
@@ -14,7 +14,7 @@ Readiness is determined from log output. The container initialization script emi
 
 The host follows logs and detaches when either of these markers appears, or after 60 seconds timeout.
 
-**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/luskctl/lib/containers/task_runners.py` (`task_run_cli`) and `src/luskctl/lib/containers/runtime.py` (`stream_initial_logs`).
+**If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/terok/lib/containers/task_runners.py` (`task_run_cli`) and `src/terok/lib/containers/runtime.py` (`stream_initial_logs`).
 
 ### UI Mode (task run-ui)
 
@@ -22,11 +22,11 @@ Readiness is determined by log markers, not port probing. The host follows conta
 - Primary marker: `"Codex UI ("` (the main startup banner when HTTP server is ready)
 - Secondary marker: `"Logging Codex UI activity"` (log redirection message)
 
-This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/luskui-entry.sh` which runs the pre-installed CodexUI distribution (downloaded into the L1 UI image at build time) and only fetches it at runtime if it is missing.
+This approach avoids false positives from port binding before actual server readiness. The default entry script is `resources/scripts/terok-ui-entry.sh` which runs the pre-installed CodexUI distribution (downloaded into the L1 UI image at build time) and only fetches it at runtime if it is missing.
 
 **If the UI server changes its startup behavior or output format**, you may need to adjust:
-- The readiness markers in `src/luskctl/lib/containers/runtime.py` (`stream_initial_logs`)
-- The exposed/internal port and host port mapping in `src/luskctl/lib/containers/task_runners.py` (`task_run_web`)
+- The readiness markers in `src/terok/lib/containers/runtime.py` (`stream_initial_logs`)
+- The exposed/internal port and host port mapping in `src/terok/lib/containers/task_runners.py` (`task_run_web`)
 
 ### Timeout Behavior
 
@@ -38,24 +38,24 @@ This approach avoids false positives from port binding before actual server read
 
 | File | Purpose |
 |------|---------|
-| `src/luskctl/lib/containers/task_runners.py` | Host-side logic: `task_run_cli`, `task_run_web`, `task_run_headless` |
-| `src/luskctl/lib/containers/runtime.py` | Container state, log streaming: `stream_initial_logs`, `wait_for_exit` |
-| `src/luskctl/resources/scripts/init-ssh-and-repo.sh` | CLI init marker, SSH setup, repo sync |
-| `src/luskctl/resources/scripts/luskui-entry.sh` | UI entry script (runs the UI server) |
+| `src/terok/lib/containers/task_runners.py` | Host-side logic: `task_run_cli`, `task_run_web`, `task_run_headless` |
+| `src/terok/lib/containers/runtime.py` | Container state, log streaming: `stream_initial_logs`, `wait_for_exit` |
+| `src/terok/resources/scripts/init-ssh-and-repo.sh` | CLI init marker, SSH setup, repo sync |
+| `src/terok/resources/scripts/terok-ui-entry.sh` | UI entry script (runs the UI server) |
 
-**Important**: Changes to startup output or listening ports can affect readiness detection. Keep the readiness semantics stable or adjust luskctl's detection accordingly.
+**Important**: Changes to startup output or listening ports can affect readiness detection. Keep the readiness semantics stable or adjust terok's detection accordingly.
 
 ---
 
 ## Container Layer Architecture
 
-luskctl builds project containers in three logical layers:
+terok builds project containers in three logical layers:
 
 | Layer | Image Name | Purpose |
 |-------|------------|---------|
-| L0 | `luskctl-l0:<base-tag>` | Development base (Ubuntu 24.04, git, ssh, dev user) |
-| L1-CLI | `luskctl-l1-cli:<base-tag>` | Agent tools (Codex, Claude Code, Mistral Vibe) |
-| L1-UI | `luskctl-l1-ui:<base-tag>` | UI dependencies and entry script |
+| L0 | `terok-l0:<base-tag>` | Development base (Ubuntu 24.04, git, ssh, dev user) |
+| L1-CLI | `terok-l1-cli:<base-tag>` | Agent tools (Codex, Claude Code, Mistral Vibe) |
+| L1-UI | `terok-l1-ui:<base-tag>` | UI dependencies and entry script |
 | L2 | `<project>:l2-cli`, `<project>:l2-ui` | Project-specific config and user snippets |
 
 L0 and L1 are project-agnostic and cache well; L2 is project-specific.
@@ -66,7 +66,7 @@ See [CONTAINER_LAYERS.md](CONTAINER_LAYERS.md) for detailed documentation.
 
 ## Volume Mounts at Runtime
 
-When a task container starts, luskctl mounts:
+When a task container starts, terok mounts:
 
 | Container Path | Host Source | Purpose |
 |----------------|-------------|---------|
@@ -86,7 +86,7 @@ See [SHARED_DIRS.md](SHARED_DIRS.md) for detailed documentation.
 
 ---
 
-## Environment Variables Set by luskctl
+## Environment Variables Set by terok
 
 ### Core Variables (always set)
 
@@ -133,8 +133,8 @@ See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md) for detai
 
 ```bash
 # Clone the repository
-git clone git@github.com:sliwowitz/luskctl.git
-cd luskctl
+git clone git@github.com:terok-ops/terok.git
+cd terok
 
 # Install all development dependencies
 make install-dev
@@ -191,17 +191,17 @@ make check     # Runs lint + test + tach
 
 ```bash
 # Set up environment to use example projects
-export LUSKCTL_CONFIG_DIR=$PWD/examples
-export LUSKCTL_STATE_DIR=$PWD/tmp/dev-runtime/var-lib-luskctl
+export TEROK_CONFIG_DIR=$PWD/examples
+export TEROK_STATE_DIR=$PWD/tmp/dev-runtime/var-lib-terok
 
 # Run CLI commands
-python -m luskctl.cli projects
-python -m luskctl.cli task new uc
-python -m luskctl.cli generate uc
-python -m luskctl.cli build uc
+python -m terok.cli projects
+python -m terok.cli task new uc
+python -m terok.cli generate uc
+python -m terok.cli build uc
 
 # Run TUI
-python -m luskctl.tui
+python -m terok.tui
 ```
 
 ### TUI Notes
@@ -218,14 +218,14 @@ panel edges misalign — and **cannot be fixed by padding alone**.
 1. All emojis must be **natively wide** (`East_Asian_Width=W`,
    `Emoji_Presentation=Yes`).  No VS16 (U+FE0F) sequences.
 2. Verify candidates: `python3 -c "import unicodedata; print(unicodedata.east_asian_width('🟢'))"` → must print `W`.
-3. Use `draw_emoji()` from `luskctl.lib.util.emoji` when rendering emojis in
+3. Use `draw_emoji()` from `terok.lib.util.emoji` when rendering emojis in
    list labels or aligned output (both TUI and CLI).
-4. Emoji definitions live in `luskctl.lib.containers.tasks` (`STATUS_DISPLAY`,
+4. Emoji definitions live in `terok.lib.containers.tasks` (`STATUS_DISPLAY`,
    `MODE_DISPLAY`, `WEB_BACKEND_EMOJI`).
 5. Guard tests in `tests/lib/test_emoji.py` verify all project emojis are
    natively 2 cells wide — adding a VS16 emoji will fail CI.
 
-See `src/luskctl/lib/util/emoji.py` module docstring for full background,
+See `src/terok/lib/util/emoji.py` module docstring for full background,
 references, and future terminal developments to watch (Kitty text sizing
 protocol, Mode 2027, terminal convergence).
 
@@ -233,11 +233,11 @@ protocol, Mode 2027, terminal convergence).
 
 1. Open the repo and set up a Python 3.12+ interpreter
 2. Set environment variables:
-   - `LUSKCTL_CONFIG_DIR` = `/path/to/this/repo/examples`
-   - Optional: `LUSKCTL_STATE_DIR` = writable path
+   - `TEROK_CONFIG_DIR` = `/path/to/this/repo/examples`
+   - Optional: `TEROK_STATE_DIR` = writable path
 3. For PyCharm Run/Debug configuration:
-   - CLI: Module name = `luskctl.cli`, Parameters = `projects` (or other subcommands)
-   - TUI: Module name = `luskctl.tui` (no args)
+   - CLI: Module name = `terok.cli`, Parameters = `projects` (or other subcommands)
+   - TUI: Module name = `terok.tui` (no args)
 
 ### Building Wheels
 

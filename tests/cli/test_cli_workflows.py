@@ -12,13 +12,13 @@ def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
 
     Mock args are injected as: mock_ssh, mock_pause, mock_gen, mock_build, mock_gate.
     """
-    func = unittest.mock.patch("luskctl.cli.commands.setup.init_project_ssh")(func)
-    func = unittest.mock.patch("luskctl.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
+    func = unittest.mock.patch("terok.cli.commands.setup.init_project_ssh")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
         func
     )
-    func = unittest.mock.patch("luskctl.cli.commands.setup.generate_dockerfiles")(func)
-    func = unittest.mock.patch("luskctl.cli.commands.setup.build_images")(func)
-    func = unittest.mock.patch("luskctl.cli.commands.setup.sync_project_gate")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.generate_dockerfiles")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.build_images")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.sync_project_gate")(func)
     return func
 
 
@@ -31,7 +31,7 @@ class ProjectInitTests(unittest.TestCase):
     ) -> None:
         mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
 
-        from luskctl.cli.commands.setup import cmd_project_init
+        from terok.cli.commands.setup import cmd_project_init
 
         cmd_project_init("myproj")
 
@@ -55,7 +55,7 @@ class ProjectInitTests(unittest.TestCase):
             {"success": True, "path": "/tmp/gate"},
         )[-1]
 
-        from luskctl.cli.commands.setup import cmd_project_init
+        from terok.cli.commands.setup import cmd_project_init
 
         cmd_project_init("proj1")
 
@@ -67,7 +67,7 @@ class ProjectInitTests(unittest.TestCase):
     ) -> None:
         mock_gate.return_value = {"success": False, "errors": ["no upstream_url"]}
 
-        from luskctl.cli.commands.setup import cmd_project_init
+        from terok.cli.commands.setup import cmd_project_init
 
         with self.assertRaises(SystemExit) as ctx:
             cmd_project_init("badproj")
@@ -77,10 +77,10 @@ class ProjectInitTests(unittest.TestCase):
 class SshPauseTests(unittest.TestCase):
     """Tests for the SSH key registration pause in maybe_pause_for_ssh_key_registration."""
 
-    @unittest.mock.patch("luskctl.lib.facade.load_project")
+    @unittest.mock.patch("terok.lib.facade.load_project")
     @unittest.mock.patch("builtins.input", return_value="")
     def test_pauses_for_ssh_upstream(self, mock_input, mock_load) -> None:
-        from luskctl.lib.facade import maybe_pause_for_ssh_key_registration
+        from terok.lib.facade import maybe_pause_for_ssh_key_registration
 
         for upstream in ("git@github.com:org/repo.git", "ssh://github.com/org/repo.git"):
             mock_input.reset_mock()
@@ -90,10 +90,10 @@ class SshPauseTests(unittest.TestCase):
 
             mock_input.assert_called_once_with("Press Enter once the key is registered... ")
 
-    @unittest.mock.patch("luskctl.lib.facade.load_project")
+    @unittest.mock.patch("terok.lib.facade.load_project")
     @unittest.mock.patch("builtins.input", return_value="")
     def test_no_pause_for_https_upstream(self, mock_input, mock_load) -> None:
-        from luskctl.lib.facade import maybe_pause_for_ssh_key_registration
+        from terok.lib.facade import maybe_pause_for_ssh_key_registration
 
         mock_load.return_value = unittest.mock.Mock(upstream_url="https://github.com/org/repo.git")
 
@@ -108,7 +108,7 @@ class SshPauseTests(unittest.TestCase):
         """Verify generate/build/gate-sync all proceed after the pause step."""
         mock_gate.return_value = {"success": True, "path": "/tmp/gate"}
 
-        from luskctl.cli.commands.setup import cmd_project_init
+        from terok.cli.commands.setup import cmd_project_init
 
         cmd_project_init("sshproj")
 
@@ -122,36 +122,36 @@ class SshPauseTests(unittest.TestCase):
 class TaskStartTests(unittest.TestCase):
     """Tests for the 'task start' convenience command."""
 
-    @unittest.mock.patch("luskctl.cli.commands.task.task_run_cli")
-    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="42")
+    @unittest.mock.patch("terok.cli.commands.task.task_run_cli")
+    @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="42")
     def test_task_start_cli_mode(self, mock_new, mock_run_cli) -> None:
-        from luskctl.cli.main import main
+        from terok.cli.main import main
 
-        with unittest.mock.patch("sys.argv", ["luskctl", "task", "start", "proj1"]):
+        with unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1"]):
             main()
 
         mock_new.assert_called_once_with("proj1", name=None)
         mock_run_cli.assert_called_once_with("proj1", "42", agents=None, preset=None)
 
-    @unittest.mock.patch("luskctl.cli.commands.task.task_run_web")
-    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="7")
+    @unittest.mock.patch("terok.cli.commands.task.task_run_web")
+    @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="7")
     def test_task_start_web_mode(self, mock_new, mock_run_web) -> None:
-        from luskctl.cli.main import main
+        from terok.cli.main import main
 
-        with unittest.mock.patch("sys.argv", ["luskctl", "task", "start", "proj2", "--web"]):
+        with unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj2", "--web"]):
             main()
 
         mock_new.assert_called_once_with("proj2", name=None)
         mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None, preset=None)
 
-    @unittest.mock.patch("luskctl.cli.commands.task.task_run_web")
-    @unittest.mock.patch("luskctl.cli.commands.task.task_new", return_value="3")
+    @unittest.mock.patch("terok.cli.commands.task.task_run_web")
+    @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="3")
     def test_task_start_web_with_backend(self, mock_new, mock_run_web) -> None:
-        from luskctl.cli.main import main
+        from terok.cli.main import main
 
         with unittest.mock.patch(
             "sys.argv",
-            ["luskctl", "task", "start", "proj3", "--web", "--backend", "codex"],
+            ["terok", "task", "start", "proj3", "--web", "--backend", "codex"],
         ):
             main()
 
@@ -160,20 +160,20 @@ class TaskStartTests(unittest.TestCase):
             "proj3", "3", backend="codex", agents=None, preset=None
         )
 
-    @unittest.mock.patch("luskctl.cli.commands.setup.cmd_project_init")
+    @unittest.mock.patch("terok.cli.commands.setup.cmd_project_init")
     def test_project_init_dispatch(self, mock_init) -> None:
-        from luskctl.cli.main import main
+        from terok.cli.main import main
 
-        with unittest.mock.patch("sys.argv", ["luskctl", "project-init", "myproj"]):
+        with unittest.mock.patch("sys.argv", ["terok", "project-init", "myproj"]):
             main()
 
         mock_init.assert_called_once_with("myproj")
 
-    @unittest.mock.patch("luskctl.cli.commands.task.task_login")
+    @unittest.mock.patch("terok.cli.commands.task.task_login")
     def test_login_dispatch(self, mock_login) -> None:
-        from luskctl.cli.main import main
+        from terok.cli.main import main
 
-        with unittest.mock.patch("sys.argv", ["luskctl", "login", "proj1", "1"]):
+        with unittest.mock.patch("sys.argv", ["terok", "login", "proj1", "1"]):
             main()
 
         mock_login.assert_called_once_with("proj1", "1")

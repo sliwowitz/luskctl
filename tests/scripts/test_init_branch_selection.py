@@ -23,7 +23,7 @@ def get_init_script_path() -> Path:
     return (
         Path(__file__).parent.parent.parent
         / "src"
-        / "luskctl"
+        / "terok"
         / "resources"
         / "scripts"
         / "init-ssh-and-repo.sh"
@@ -442,7 +442,7 @@ class InitScriptBranchSelectionTests(unittest.TestCase):
             # Verify we're on master initially
             self.assertEqual(get_current_branch(workspace_path), "master")
 
-            # Create the new task marker (simulates luskctl task new)
+            # Create the new task marker (simulates terokctl task new)
             marker_path = workspace_path / ".new-task-marker"
             marker_path.write_text("marker")
 

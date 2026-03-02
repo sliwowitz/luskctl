@@ -1,6 +1,6 @@
-# luskctl
+# terok
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terok`) and a Textual TUI (`terok`).
 
 ## Features
 
@@ -23,8 +23,8 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:sliwowitz/luskctl.git
-cd luskctl
+git clone git@github.com:terok-ops/terok.git
+cd terok
 pip install .
 
 # With TUI support
@@ -35,10 +35,10 @@ pip install '.[tui]'
 
 ```bash
 # 1. Create project directory
-mkdir -p ~/.config/luskctl/projects/myproj
+mkdir -p ~/.config/terok/projects/myproj
 
 # 2. Create project.yml
-cat > ~/.config/luskctl/projects/myproj/project.yml << 'EOF'
+cat > ~/.config/terok/projects/myproj/project.yml << 'EOF'
 project:
   id: myproj
   security_class: online
@@ -48,12 +48,12 @@ git:
 EOF
 
 # 3. Generate and build images
-luskctl generate myproj
-luskctl build myproj
+terokctl generate myproj
+terokctl build myproj
 
 # 4. Create and run a task
-luskctl task new myproj
-luskctl task run-cli myproj 1
+terokctl task new myproj
+terokctl task run-cli myproj 1
 ```
 
 ## Documentation
@@ -64,4 +64,4 @@ luskctl task run-cli myproj 1
 
 ## License
 
-See [LICENSE](https://github.com/sliwowitz/luskctl/blob/master/LICENSE) file.
+See [LICENSE](https://github.com/terok-ops/terok/blob/master/LICENSE) file.

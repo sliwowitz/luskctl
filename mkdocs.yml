@@ -1,8 +1,8 @@
-site_name: luskctl
+site_name: terok
 site_description: A tool for managing containerized AI coding agent projects using Podman
-site_url: https://sliwowitz.github.io/luskctl
-repo_url: https://github.com/sliwowitz/luskctl
-repo_name: sliwowitz/luskctl
+site_url: https://terok-ops.github.io/terok
+repo_url: https://github.com/terok-ops/terok
+repo_name: terok-ops/terok
 
 theme:
   name: material
@@ -95,7 +95,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/sliwowitz/luskctl
+      link: https://github.com/terok-ops/terok
 
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap

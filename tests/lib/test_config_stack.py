@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from luskctl.lib.util.config_stack import (
+from terok.lib.util.config_stack import (
     ConfigScope,
     ConfigStack,
     deep_merge,

@@ -9,7 +9,7 @@ import sys
 import unittest
 from io import StringIO
 
-from luskctl.lib.containers.log_format import (
+from terok.lib.containers.log_format import (
     ClaudeStreamJsonFormatter,
     PlainTextFormatter,
     auto_detect_formatter,

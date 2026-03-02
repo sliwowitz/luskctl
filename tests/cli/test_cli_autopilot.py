@@ -2,21 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot CLI commands: luskctl run (replaces run-claude)."""
+"""Tests for autopilot CLI commands: terokctl run (replaces run-claude)."""
 
 import unittest
 import unittest.mock
 
-from luskctl.cli.main import main
+from terok.cli.main import main
 
 
 class RunCliTests(unittest.TestCase):
-    """Tests for luskctl run argument parsing."""
+    """Tests for terokctl run argument parsing."""
 
     def test_run_requires_project_and_prompt(self) -> None:
         """run requires project_id and prompt arguments."""
         with (
-            unittest.mock.patch("sys.argv", ["luskctl", "run"]),
+            unittest.mock.patch("sys.argv", ["terok", "run"]),
             self.assertRaises(SystemExit) as ctx,
         ):
             main()
@@ -29,7 +29,7 @@ class RunCliTests(unittest.TestCase):
             unittest.mock.patch(
                 "sys.argv",
                 [
-                    "luskctl",
+                    "terok",
                     "run",
                     "myproject",
                     "Fix the auth bug",
@@ -41,7 +41,7 @@ class RunCliTests(unittest.TestCase):
                     "3600",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(
@@ -64,9 +64,9 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "run", "myproject", "test", "--no-follow"],
+                ["terok", "run", "myproject", "test", "--no-follow"],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -80,7 +80,7 @@ class RunCliTests(unittest.TestCase):
             unittest.mock.patch(
                 "sys.argv",
                 [
-                    "luskctl",
+                    "terok",
                     "run",
                     "myproject",
                     "test",
@@ -88,7 +88,7 @@ class RunCliTests(unittest.TestCase):
                     "/path/to/agent.yml",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -101,7 +101,7 @@ class RunCliTests(unittest.TestCase):
             unittest.mock.patch(
                 "sys.argv",
                 [
-                    "luskctl",
+                    "terok",
                     "run",
                     "myproject",
                     "test",
@@ -111,7 +111,7 @@ class RunCliTests(unittest.TestCase):
                     "planner",
                 ],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -123,9 +123,9 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "run", "myproject", "test", "--provider", "codex"],
+                ["terok", "run", "myproject", "test", "--provider", "codex"],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -137,7 +137,7 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "run", "myproject", "test", "--provider", "invalid"],
+                ["terok", "run", "myproject", "test", "--provider", "invalid"],
             ),
             self.assertRaises(SystemExit) as ctx,
         ):
@@ -149,9 +149,9 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "run", "myproject", "test"],
+                ["terok", "run", "myproject", "test"],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
             mock_run.assert_called_once()
@@ -172,9 +172,9 @@ class RunCliTests(unittest.TestCase):
             with (
                 unittest.mock.patch(
                     "sys.argv",
-                    ["luskctl", "run", "myproject", "test", "--instructions", instr_path],
+                    ["terok", "run", "myproject", "test", "--instructions", instr_path],
                 ),
-                unittest.mock.patch("luskctl.cli.commands.task.task_run_headless") as mock_run,
+                unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
             ):
                 main()
                 mock_run.assert_called_once()
@@ -189,7 +189,7 @@ class RunCliTests(unittest.TestCase):
             unittest.mock.patch(
                 "sys.argv",
                 [
-                    "luskctl",
+                    "terok",
                     "run",
                     "myproject",
                     "test",
@@ -207,9 +207,9 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "task", "run-cli", "myproject", "1", "--agent", "debugger"],
+                ["terok", "task", "run-cli", "myproject", "1", "--agent", "debugger"],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_cli") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_cli") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(
@@ -224,9 +224,9 @@ class RunCliTests(unittest.TestCase):
         with (
             unittest.mock.patch(
                 "sys.argv",
-                ["luskctl", "task", "run-web", "myproject", "1", "--agent", "reviewer"],
+                ["terok", "task", "run-web", "myproject", "1", "--agent", "reviewer"],
             ),
-            unittest.mock.patch("luskctl.cli.commands.task.task_run_web") as mock_run,
+            unittest.mock.patch("terok.cli.commands.task.task_run_web") as mock_run,
         ):
             main()
             mock_run.assert_called_once_with(

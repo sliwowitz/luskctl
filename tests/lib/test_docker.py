@@ -5,9 +5,9 @@
 import unittest
 import unittest.mock
 
-from luskctl.lib.containers.docker import build_images, generate_dockerfiles
-from luskctl.lib.core.config import build_root
-from luskctl.lib.core.images import base_dev_image
+from terok.lib.containers.docker import build_images, generate_dockerfiles
+from terok.lib.core.config import build_root
+from terok.lib.core.images import base_dev_image
 from test_utils import project_env
 
 
@@ -117,9 +117,9 @@ git:
 
         with (
             unittest.mock.patch("subprocess.run", side_effect=mock_run),
-            unittest.mock.patch("luskctl.lib.containers.docker._check_podman_available"),
+            unittest.mock.patch("terok.lib.containers.docker._check_podman_available"),
             unittest.mock.patch(
-                "luskctl.lib.containers.docker._image_exists",
+                "terok.lib.containers.docker._image_exists",
                 return_value=image_exists,
             ),
         ):
@@ -242,9 +242,9 @@ git:
 
             with (
                 unittest.mock.patch("subprocess.run", side_effect=mock_run),
-                unittest.mock.patch("luskctl.lib.containers.docker._check_podman_available"),
+                unittest.mock.patch("terok.lib.containers.docker._check_podman_available"),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.docker._image_exists",
+                    "terok.lib.containers.docker._image_exists",
                     side_effect=l0_exists_only,
                 ),
             ):

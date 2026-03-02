@@ -1,9 +1,9 @@
-# luskctl
+# terok
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![REUSE compliant](https://api.reuse.software/badge/github.com/sliwowitz/luskctl)](https://api.reuse.software/info/github.com/sliwowitz/luskctl)
+[![REUSE compliant](https://api.reuse.software/badge/github.com/terok-ops/terok)](https://api.reuse.software/info/github.com/terok-ops/terok)
 
-A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
+A tool for managing containerized AI coding agent projects using Podman. Provides both a CLI (`terok`) and a Textual TUI (`terok`).
 
 > **Future plans and design documents** are in [`docs/brainstorming/`](docs/brainstorming/).
 
@@ -32,8 +32,8 @@ A tool for managing containerized AI coding agent projects using Podman. Provide
 
 ```bash
 # Clone and install
-git clone git@github.com:sliwowitz/luskctl.git
-cd luskctl
+git clone git@github.com:terok-ops/terok.git
+cd terok
 pip install .
 
 # With TUI support
@@ -44,10 +44,10 @@ pip install '.[tui]'
 
 ```bash
 # 1. Create project directory
-mkdir -p ~/.config/luskctl/projects/myproj
+mkdir -p ~/.config/terok/projects/myproj
 
 # 2. Create project.yml (see docs/USAGE.md for full schema)
-cat > ~/.config/luskctl/projects/myproj/project.yml << 'EOF'
+cat > ~/.config/terok/projects/myproj/project.yml << 'EOF'
 project:
   id: myproj
   security_class: online
@@ -57,30 +57,30 @@ git:
 EOF
 
 # 3. Generate and build images
-luskctl generate myproj
-luskctl build myproj
+terokctl generate myproj
+terokctl build myproj
 
 # 4. (Optional) Set up SSH for private repos
-luskctl ssh-init myproj
+terokctl ssh-init myproj
 
 # 5. Create and run a task
-luskctl task new myproj
-luskctl task run-cli myproj 1    # CLI mode
+terokctl task new myproj
+terokctl task run-cli myproj 1    # CLI mode
 # or
-luskctl task run-ui myproj 1     # Web UI mode
+terokctl task run-ui myproj 1     # Web UI mode
 ```
 
 ### Headless Agent Runs (Autopilot)
 
 ```bash
 # Run an agent headlessly with a prompt (uses default_agent config; falls back to claude)
-luskctl run myproj "Fix the authentication bug"
+terokctl run myproj "Fix the authentication bug"
 
 # With model override and timeout
-luskctl run myproj "Add tests" --model opus --timeout 3600
+terokctl run myproj "Add tests" --model opus --timeout 3600
 
 # Use a specific provider
-luskctl run myproj "Fix the bug" --provider codex
+terokctl run myproj "Fix the bug" --provider codex
 ```
 
 ### Presets
@@ -88,37 +88,37 @@ luskctl run myproj "Fix the bug" --provider codex
 Three presets work out of the box — no config needed:
 
 ```bash
-luskctl run myproj "Fix the typo" --preset solo          # single fast agent
-luskctl run myproj "Review auth module" --preset review   # read-only analysis
-luskctl run myproj "Add pagination" --preset team         # multi-agent team
+terokctl run myproj "Fix the typo" --preset solo          # single fast agent
+terokctl run myproj "Review auth module" --preset review   # read-only analysis
+terokctl run myproj "Add pagination" --preset team         # multi-agent team
 ```
 
-Create your own in `~/.config/luskctl/presets/` (shared across projects) or
+Create your own in `~/.config/terok/presets/` (shared across projects) or
 per-project in `<project>/presets/`. See the
 [Presets Guide](docs/USAGE.md#presets) for details.
 
 ### Common Commands
 
 ```bash
-luskctl projects              # List projects
-luskctl config                # Show resolved paths
-luskctl task list <project>   # List tasks
-luskctl task delete <project> <task_id>  # Delete a task
+terokctl projects              # List projects
+terokctl config                # Show resolved paths
+terokctl task list <project>   # List tasks
+terokctl task delete <project> <task_id>  # Delete a task
 ```
 
 ## Configuration
 
 ### Global Config
 
-Location: `~/.config/luskctl/config.yml`
+Location: `~/.config/terok/config.yml`
 
 ```yaml
 ui:
   base_port: 7860
 
 paths:
-  user_projects_root: ~/.config/luskctl/projects
-  state_root: ~/.local/share/luskctl
+  user_projects_root: ~/.config/terok/projects
+  state_root: ~/.local/share/terok
 
 git:
   human_name: "Your Name"
@@ -129,20 +129,20 @@ git:
 
 | Variable | Purpose |
 |----------|---------|
-| `LUSKCTL_CONFIG_DIR` | Projects directory |
-| `LUSKCTL_STATE_DIR` | Writable state root |
-| `LUSKCTL_CONFIG_FILE` | Global config file path |
+| `TEROK_CONFIG_DIR` | Projects directory |
+| `TEROK_STATE_DIR` | Writable state root |
+| `TEROK_CONFIG_FILE` | Global config file path |
 
 ## Requirements
 
 - **Podman** is required for build/run commands
-- **TUI** is optional: `pip install 'luskctl[tui]'`
+- **TUI** is optional: `pip install 'terok[tui]'`
 
 ## Contributing
 
 ```bash
 # Setup
-git clone git@github.com:sliwowitz/luskctl.git && cd luskctl
+git clone git@github.com:terok-ops/terok.git && cd terok
 make install-dev
 
 # Before committing

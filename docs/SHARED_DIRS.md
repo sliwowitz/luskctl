@@ -1,7 +1,7 @@
-# Shared directories and mounts used by luskctl tasks
+# Shared directories and mounts used by terok tasks
 
 ## Overview
-- When you run a task (CLI or UI), luskctl starts a container and mounts a small set of host directories into it. This enables:
+- When you run a task (CLI or UI), terok starts a container and mounts a small set of host directories into it. This enables:
   - A host-visible workspace where the project repository is cloned (`/workspace`)
   - Shared credentials/config for Codex under `/home/dev/.codex`
   - Shared credentials/config for Claude Code under `/home/dev/.claude`
@@ -14,13 +14,13 @@
 
 ## Per-task workspace (required)
 - Host path: `<state_root>/tasks/<project_id>/<task_id>/workspace`
-  - Created automatically by luskctl when the task runs
+  - Created automatically by terok when the task runs
   - Mounted as: `<host_dir>:/workspace:Z`
 - Purpose: The project repository is cloned or synced here by `init-ssh-and-repo.sh`. Because this path lives under the task's directory on the host, you can inspect, edit, or back it up from the host.
 
 ## Shared envs base directory (configurable)
-- Base dir (default): `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if running as root)
-  - Can be overridden in the global config file (`luskctl-config.yml`):
+- Base dir (default): `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if running as root)
+  - Can be overridden in the global config file (`terok-config.yml`):
 
 ```yaml
 envs:
@@ -34,7 +34,7 @@ envs:
   2. `_claude-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_claude-config:/home/dev/.claude:z` (read-write)
      - Purpose: Shared credentials/config used by Claude Code in CLI mode.
-     - Note: luskctl sets `CLAUDE_CONFIG_DIR=/home/dev/.claude` inside containers.
+     - Note: terok sets `CLAUDE_CONFIG_DIR=/home/dev/.claude` inside containers.
   3. `_vibe-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_vibe-config:/home/dev/.vibe:z` (read-write)
      - Purpose: Shared credentials/config used by Mistral Vibe (CLI + UI).
@@ -66,7 +66,7 @@ envs:
 - Use the helper command:
 
 ```bash
-luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--force]
+terokctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--force]
 ```
 
 - What it does:
@@ -83,16 +83,16 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
     - A host section for `github.com` with `User git` (inherits `IdentityFile` from `Host *`).
   - The SSH config is rendered from a template. You can provide your own template via `project.yml` -> `ssh.config_template`.
     - Supported tokens in the template: `{{IDENTITY_FILE}}`, `{{KEY_NAME}}`, `{{PROJECT_ID}}`
-    - If not provided, a built-in template is used (see `src/luskctl/resources/templates/ssh_config.template`).
+    - If not provided, a built-in template is used (see `src/terok/resources/templates/ssh_config.template`).
   - Prints the resulting paths. Use the `.pub` key to register a deploy key or add it to your Git host.
 
 ## SELinux and mount flags
-- luskctl uses SELinux mount flags to ensure correct labeling:
+- terok uses SELinux mount flags to ensure correct labeling:
   - `:Z` for the workspace mount (container-specific, private labeling)
   - `:z` for all shared directories (shared labeling across containers)
 
 ## Git identity configuration
-- luskctl automatically configures git author and committer identities inside containers to identify AI-generated commits.
+- terok automatically configures git author and committer identities inside containers to identify AI-generated commits.
 - **Git Author**: Set to the AI agent that created the commit (Codex, Claude, or Mistral Vibe).
 - **Git Committer**: Set to human credentials (configurable per project).
 - **For CLI mode**: Git identity is set via environment variables in the command aliases for each agent:
@@ -107,7 +107,7 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
   - Unknown backends default to Author: `AI Agent <ai-agent@localhost>`, Committer: human credentials
 - **Human credentials configuration** (checked in order):
   1. Per-project: `human_name` and `human_email` in the `git:` section of `project.yml`
-  2. Global luskctl config: `human_name` and `human_email` in the `git:` section of `~/.config/luskctl/config.yml`
+  2. Global terokctl config: `human_name` and `human_email` in the `git:` section of `~/.config/terok/config.yml`
   3. Global git config: `git config --global user.name` and `git config --global user.email`
   4. Defaults: `Nobody <nobody@localhost>`
 - Email addresses for Codex, Claude, and Mistral are GitHub-recognized and will display with avatars in commit history.
@@ -124,37 +124,37 @@ luskctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--forc
 - `/home/dev/.local/state` <- `<envs_base>/_opencode-state:z`
 - `/home/dev/.ssh` (optional) <- `<envs_base>/_ssh-config-<project>:z`
 
-## How luskctl discovers these paths
-- `state_root`: Determined by `LUSKCTL_STATE_DIR` or defaults (root: `/var/lib/luskctl`; user: `${XDG_DATA_HOME:-~/.local/share}/luskctl`).
-- `envs_base`: Set in `luskctl-config.yml` under `envs.base_dir`; defaults to `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if root) if unspecified.
+## How terok discovers these paths
+- `state_root`: Determined by `TEROK_STATE_DIR` or defaults (root: `/var/lib/terok`; user: `${XDG_DATA_HOME:-~/.local/share}/terok`).
+- `envs_base`: Set in `terok-config.yml` under `envs.base_dir`; defaults to `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if root) if unspecified.
 
 ## Minimal setup to run tasks
-1. Ensure luskctl can write to the state root (or set `LUSKCTL_STATE_DIR` accordingly).
-2. Optionally create the envs base dir (luskctl will create these directories automatically if missing):
+1. Ensure terok can write to the state root (or set `TEROK_STATE_DIR` accordingly).
+2. Optionally create the envs base dir (terok will create these directories automatically if missing):
 
 ```bash
 # For non-root users (default location):
-mkdir -p ~/.local/share/luskctl/envs/_codex-config
-mkdir -p ~/.local/share/luskctl/envs/_claude-config
-mkdir -p ~/.local/share/luskctl/envs/_vibe-config
-mkdir -p ~/.local/share/luskctl/envs/_blablador-config
-mkdir -p ~/.local/share/luskctl/envs/_opencode-config
-mkdir -p ~/.local/share/luskctl/envs/_opencode-data
-mkdir -p ~/.local/share/luskctl/envs/_opencode-state
+mkdir -p ~/.local/share/terok/envs/_codex-config
+mkdir -p ~/.local/share/terok/envs/_claude-config
+mkdir -p ~/.local/share/terok/envs/_vibe-config
+mkdir -p ~/.local/share/terok/envs/_blablador-config
+mkdir -p ~/.local/share/terok/envs/_opencode-config
+mkdir -p ~/.local/share/terok/envs/_opencode-data
+mkdir -p ~/.local/share/terok/envs/_opencode-state
 
 # For root users or system-wide installs:
-sudo mkdir -p /var/lib/luskctl/envs/_codex-config
-sudo mkdir -p /var/lib/luskctl/envs/_claude-config
-sudo mkdir -p /var/lib/luskctl/envs/_vibe-config
-sudo mkdir -p /var/lib/luskctl/envs/_blablador-config
-sudo mkdir -p /var/lib/luskctl/envs/_opencode-config
-sudo mkdir -p /var/lib/luskctl/envs/_opencode-data
-sudo mkdir -p /var/lib/luskctl/envs/_opencode-state
+sudo mkdir -p /var/lib/terok/envs/_codex-config
+sudo mkdir -p /var/lib/terok/envs/_claude-config
+sudo mkdir -p /var/lib/terok/envs/_vibe-config
+sudo mkdir -p /var/lib/terok/envs/_blablador-config
+sudo mkdir -p /var/lib/terok/envs/_opencode-config
+sudo mkdir -p /var/lib/terok/envs/_opencode-data
+sudo mkdir -p /var/lib/terok/envs/_opencode-state
 ```
 
 3. If using private git repositories for a project `<proj>`:
-   - For non-root: `mkdir -p ~/.local/share/luskctl/envs/_ssh-config-<proj>`
-   - For root: `sudo mkdir -p /var/lib/luskctl/envs/_ssh-config-<proj>`
+   - For non-root: `mkdir -p ~/.local/share/terok/envs/_ssh-config-<proj>`
+   - For root: `sudo mkdir -p /var/lib/terok/envs/_ssh-config-<proj>`
    - Place SSH keys and config there (see above). Keys must match your repo host.
 
 ## Notes
@@ -166,4 +166,4 @@ sudo mkdir -p /var/lib/luskctl/envs/_opencode-state
 - Both CLI and UI containers mount the same paths and start with the working directory set to `/workspace`.
 
 ## See also
-- Run `luskctl config` to see the resolved envs base dir and other important paths.
+- Run `terokctl config` to see the resolved envs base dir and other important paths.

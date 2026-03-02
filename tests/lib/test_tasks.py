@@ -12,17 +12,17 @@ from pathlib import Path
 
 import yaml
 
-from luskctl.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
-from luskctl.lib.containers.task_logs import task_logs
-from luskctl.lib.containers.task_runners import task_run_cli, task_run_web
-from luskctl.lib.containers.tasks import (
+from terok.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
+from terok.lib.containers.task_logs import task_logs
+from terok.lib.containers.task_runners import task_run_cli, task_run_web
+from terok.lib.containers.tasks import (
     get_workspace_git_diff,
     task_delete,
     task_list,
     task_new,
 )
-from luskctl.lib.core.projects import load_project
-from luskctl.tui.clipboard import (
+from terok.lib.core.projects import load_project
+from terok.tui.clipboard import (
     copy_to_clipboard_detailed,
     get_clipboard_helper_status,
 )
@@ -61,7 +61,7 @@ def _assert_volume_mount(volumes: list[str], expected_base: str, expected_suffix
 class TaskTests(unittest.TestCase):
     def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
+            with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 result = copy_to_clipboard_detailed("hello")
         self.assertFalse(result.ok)
         self.assertIsNotNone(result.hint)
@@ -73,9 +73,9 @@ class TaskTests(unittest.TestCase):
 
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", side_effect=which_side_effect
+                "terok.tui.clipboard.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                     result = copy_to_clipboard_detailed("hello")
 
@@ -107,7 +107,7 @@ class TaskTests(unittest.TestCase):
             second_id = task_new(project_id)
             self.assertEqual(second_id, "2")
 
-            with unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock:
+            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
                 run_mock.return_value.returncode = 0
                 task_delete(project_id, "1")
 
@@ -161,7 +161,7 @@ class TaskTests(unittest.TestCase):
 
             # Mock container states: task 1 running, task 2 exited (→ stopped)
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"1": "running", "2": "exited"},
             ):
                 buf = StringIO()
@@ -189,7 +189,7 @@ class TaskTests(unittest.TestCase):
 
             # Mock: task 1 running, task 2 exited (→ stopped)
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"1": "running", "2": "exited"},
             ):
                 buf = StringIO()
@@ -215,7 +215,7 @@ class TaskTests(unittest.TestCase):
             self._patch_task_meta(ctx, project_id, "2", mode="web")
 
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"2": None},
             ):
                 buf = StringIO()
@@ -239,7 +239,7 @@ class TaskTests(unittest.TestCase):
             self._patch_task_meta(ctx, project_id, "2", preset="codex")
 
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"1": None, "2": None},
             ):
                 buf = StringIO()
@@ -270,7 +270,7 @@ class TaskTests(unittest.TestCase):
             # Mock: tasks 1,2 running, task 3 exited (→ stopped)
             # mode filter narrows to cli first, then status=running keeps only task 1
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"1": "running", "3": "exited"},
             ):
                 buf = StringIO()
@@ -292,7 +292,7 @@ class TaskTests(unittest.TestCase):
 
             # New task has no mode → effective status is "created", not "running"
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_all_task_states",
+                "terok.lib.containers.tasks.get_all_task_states",
                 return_value={"1": None},
             ):
                 buf = StringIO()
@@ -373,12 +373,12 @@ class TaskTests(unittest.TestCase):
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
-        # Host env uses LUSKUI_* prefix for passthrough to containers
+        # Host env uses TEROK_UI_* prefix for passthrough to containers
         with unittest.mock.patch.dict(
             os.environ,
             {
-                "LUSKUI_TOKEN": "token-123",
-                "LUSKUI_MISTRAL_API_KEY": "mistral-xyz",
+                "TEROK_UI_TOKEN": "token-123",
+                "TEROK_UI_MISTRAL_API_KEY": "mistral-xyz",
                 "ANTHROPIC_API_KEY": "anthropic-456",
                 "CLAUDE_API_KEY": "from-env",
                 "MISTRAL_API_KEY": "mistral-456",
@@ -387,10 +387,10 @@ class TaskTests(unittest.TestCase):
         ):
             merged = apply_web_env_overrides(base_env, "CLAUDE")
 
-        # Container receives LUSKUI_* passthrough
-        self.assertEqual(merged["LUSKUI_BACKEND"], "claude")
-        self.assertEqual(merged["LUSKUI_TOKEN"], "token-123")
-        self.assertEqual(merged["LUSKUI_MISTRAL_API_KEY"], "mistral-xyz")
+        # Container receives TEROK_UI_* passthrough
+        self.assertEqual(merged["TEROK_UI_BACKEND"], "claude")
+        self.assertEqual(merged["TEROK_UI_TOKEN"], "token-123")
+        self.assertEqual(merged["TEROK_UI_MISTRAL_API_KEY"], "mistral-xyz")
         self.assertEqual(merged["ANTHROPIC_API_KEY"], "anthropic-456")
         self.assertEqual(merged["CLAUDE_API_KEY"], "override")
         self.assertEqual(merged["MISTRAL_API_KEY"], "mistral-456")
@@ -403,35 +403,33 @@ class TaskTests(unittest.TestCase):
             with_config_file=True,
             clear_env=True,
             extra_env={
-                "LUSKUI_TOKEN": "token-xyz",
-                "LUSKUI_MISTRAL_API_KEY": "mistral-xyz",
+                "TEROK_UI_TOKEN": "token-xyz",
+                "TEROK_UI_MISTRAL_API_KEY": "mistral-xyz",
                 "ANTHROPIC_API_KEY": "anthropic-abc",
                 "MISTRAL_API_KEY": "mistral-abc",
             },
         ):
-            # Host env uses LUSKUI_* prefix for passthrough to containers
+            # Host env uses TEROK_UI_* prefix for passthrough to containers
             task_new(project_id)
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.containers.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     return_value=None,  # No existing container
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.is_container_running",
+                    "terok.lib.containers.task_runners.is_container_running",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.assign_web_port",
+                    "terok.lib.containers.task_runners.assign_web_port",
                     return_value=7788,
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_web(project_id, "1", backend="CLAUDE")
@@ -439,10 +437,10 @@ class TaskTests(unittest.TestCase):
             cmd = run_mock.call_args[0][0]
             env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
 
-            # Container receives LUSKUI_* passthrough
-            self.assertIn("LUSKUI_BACKEND=claude", env_entries)
-            self.assertIn("LUSKUI_TOKEN=token-xyz", env_entries)
-            self.assertIn("LUSKUI_MISTRAL_API_KEY=mistral-xyz", env_entries)
+            # Container receives TEROK_UI_* passthrough
+            self.assertIn("TEROK_UI_BACKEND=claude", env_entries)
+            self.assertIn("TEROK_UI_TOKEN=token-xyz", env_entries)
+            self.assertIn("TEROK_UI_MISTRAL_API_KEY=mistral-xyz", env_entries)
             self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
             self.assertIn("MISTRAL_API_KEY=mistral-abc", env_entries)
 
@@ -458,18 +456,16 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.containers.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=[None, "running"],  # No existing container, then alive
                 ),
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners._supports_color",
+                    "terok.lib.containers.task_runners._supports_color",
                     return_value=True,
                 ),
             ):
@@ -504,16 +500,14 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.containers.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=[None, "running"],
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_cli(project_id, "1")
@@ -536,26 +530,24 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.containers.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     return_value=None,  # No existing container
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.is_container_running",
+                    "terok.lib.containers.task_runners.is_container_running",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.assign_web_port",
+                    "terok.lib.containers.task_runners.assign_web_port",
                     return_value=7788,
                 ),
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners._supports_color",
+                    "terok.lib.containers.task_runners._supports_color",
                     return_value=True,
                 ),
             ):
@@ -592,24 +584,22 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.containers.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     return_value=None,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.is_container_running",
+                    "terok.lib.containers.task_runners.is_container_running",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.assign_web_port",
+                    "terok.lib.containers.task_runners.assign_web_port",
                     return_value=7788,
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_web(project_id, "1")
@@ -631,12 +621,10 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 buffer = StringIO()
                 with redirect_stdout(buffer):
@@ -668,12 +656,10 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=["exited", "running"],  # Stopped, then alive after start
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 buffer = StringIO()
@@ -711,12 +697,10 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 buffer = StringIO()
                 with redirect_stdout(buffer):
@@ -751,12 +735,10 @@ class TaskTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=["exited", "running"],  # Stopped, then alive after start
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 buffer = StringIO()
@@ -801,7 +783,7 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
 
             # Mock subprocess.run to simulate clean git repository
-            with unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock:
+            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
                 mock_result.stdout = ""
@@ -828,7 +810,7 @@ class TaskTests(unittest.TestCase):
 
             with (
                 mock_git_config(),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
             ):
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
@@ -863,7 +845,7 @@ class TaskTests(unittest.TestCase):
 
             with (
                 mock_git_config(),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
             ):
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 0
@@ -895,7 +877,7 @@ class TaskTests(unittest.TestCase):
         ) as ctx:
             task_new(project_id)
 
-            with unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock:
+            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
                 # Simulate git command failure
                 mock_result = unittest.mock.Mock()
                 mock_result.returncode = 1
@@ -919,9 +901,9 @@ class TaskTests(unittest.TestCase):
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/wl-copy"
+                "terok.tui.clipboard.shutil.which", return_value="/usr/bin/wl-copy"
             ):
-                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -942,9 +924,9 @@ class TaskTests(unittest.TestCase):
 
         with unittest.mock.patch.dict(os.environ, env, clear=False):
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/xclip"
+                "terok.tui.clipboard.shutil.which", return_value="/usr/bin/xclip"
             ):
-                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -956,11 +938,11 @@ class TaskTests(unittest.TestCase):
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
-        with unittest.mock.patch("luskctl.tui.clipboard.sys.platform", "darwin"):
+        with unittest.mock.patch("terok.tui.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
+                "terok.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
-                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
@@ -981,9 +963,9 @@ class TaskTests(unittest.TestCase):
                 return None
 
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", side_effect=which_side_effect
+                "terok.tui.clipboard.shutil.which", side_effect=which_side_effect
             ):
-                with unittest.mock.patch("luskctl.tui.clipboard.subprocess.run") as run_mock:
+                with unittest.mock.patch("terok.tui.clipboard.subprocess.run") as run_mock:
                     run_mock.side_effect = subprocess.CalledProcessError(
                         1, ["xclip"], stderr="boom"
                     )
@@ -997,9 +979,9 @@ class TaskTests(unittest.TestCase):
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
-        with unittest.mock.patch("luskctl.tui.clipboard.sys.platform", "darwin"):
+        with unittest.mock.patch("terok.tui.clipboard.sys.platform", "darwin"):
             with unittest.mock.patch(
-                "luskctl.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
+                "terok.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
                 status = get_clipboard_helper_status()
                 self.assertTrue(status.available)
@@ -1011,7 +993,7 @@ class TaskTests(unittest.TestCase):
         with unittest.mock.patch.dict(
             os.environ, {"XDG_SESSION_TYPE": "wayland", "WAYLAND_DISPLAY": "wayland-0"}
         ):
-            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
+            with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -1020,7 +1002,7 @@ class TaskTests(unittest.TestCase):
     def test_get_clipboard_helper_status_no_helpers_x11(self) -> None:
         """Test get_clipboard_helper_status returns hint for X11 when no helpers available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
-            with unittest.mock.patch("luskctl.tui.clipboard.shutil.which", return_value=None):
+            with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
                 self.assertEqual(status.available, ())
                 self.assertIsNotNone(status.hint)
@@ -1096,7 +1078,7 @@ class TaskLogsTests(unittest.TestCase):
         """Create a task and set its mode in metadata."""
         task_id = task_new(project_id)
         # Manually update metadata to set mode (normally done by task runners)
-        from luskctl.lib.core.config import state_root
+        from terok.lib.core.config import state_root
 
         meta_dir = state_root() / "projects" / project_id / "tasks"
         meta_path = meta_dir / f"{task_id}.yml"
@@ -1137,7 +1119,7 @@ class TaskLogsTests(unittest.TestCase):
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs3", "run")
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.task_logs.get_container_state", return_value=None
+                    "terok.lib.containers.task_logs.get_container_state", return_value=None
                 ):
                     with self.assertRaises(SystemExit) as cm:
                         task_logs("proj_logs3", task_id)
@@ -1152,7 +1134,7 @@ class TaskLogsTests(unittest.TestCase):
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs4", "run")
                 with unittest.mock.patch(
-                    "luskctl.lib.containers.task_logs.get_container_state",
+                    "terok.lib.containers.task_logs.get_container_state",
                     return_value="running",
                 ):
                     with self.assertRaises(SystemExit) as cm:
@@ -1177,11 +1159,11 @@ class TaskLogsTests(unittest.TestCase):
 
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.get_container_state",
+                        "terok.lib.containers.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.os.execvp", side_effect=fake_execvp
+                        "terok.lib.containers.task_logs.os.execvp", side_effect=fake_execvp
                     ),
                 ):
                     with self.assertRaises(SystemExit):
@@ -1200,11 +1182,11 @@ class TaskLogsTests(unittest.TestCase):
                 task_id = self._setup_task_with_mode("proj_logs6", "cli")
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.get_container_state",
+                        "terok.lib.containers.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.os.execvp",
+                        "terok.lib.containers.task_logs.os.execvp",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
@@ -1240,15 +1222,15 @@ class TaskLogsTests(unittest.TestCase):
 
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.get_container_state",
+                        "terok.lib.containers.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.subprocess.Popen",
+                        "terok.lib.containers.task_logs.subprocess.Popen",
                         return_value=mock_proc,
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.auto_detect_formatter",
+                        "terok.lib.containers.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                     unittest.mock.patch("select.select") as mock_select,
@@ -1271,11 +1253,11 @@ class TaskLogsTests(unittest.TestCase):
                 task_id = self._setup_task_with_mode("proj_logs8", "run")
                 with (
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.get_container_state",
+                        "terok.lib.containers.task_logs.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_logs.subprocess.Popen",
+                        "terok.lib.containers.task_logs.subprocess.Popen",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):

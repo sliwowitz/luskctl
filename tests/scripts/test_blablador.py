@@ -19,8 +19,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.containers.docker import generate_dockerfiles
-from luskctl.lib.core.config import build_root
+from terok.lib.containers.docker import generate_dockerfiles
+from terok.lib.core.config import build_root
 from test_utils import make_mock_http_response, project_env
 
 
@@ -29,7 +29,7 @@ def get_blablador_script_path() -> Path:
     return (
         Path(__file__).parent.parent.parent
         / "src"
-        / "luskctl"
+        / "terok"
         / "resources"
         / "scripts"
         / "blablador"
@@ -209,7 +209,7 @@ class BlabladorDockerfileTests(unittest.TestCase):
 
             content = l1_cli.read_text(encoding="utf-8")
 
-            # Verify blablador binary is installed (wrapper function is in zz-luskctl-project.sh)
+            # Verify blablador binary is installed (wrapper function is in zz-terok-project.sh)
             self.assertIn("COPY scripts/blablador /usr/local/bin/blablador", content)
 
     def test_l1_cli_blablador_in_agents_list(self) -> None:

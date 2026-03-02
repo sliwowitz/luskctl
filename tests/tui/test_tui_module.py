@@ -63,7 +63,7 @@ sys.modules["textual.message"] = mock.MagicMock()
 _widgets_mock = mock.MagicMock()
 _widgets_mock.ProjectList = MockProjectList
 _widgets_mock.TaskList = MockTaskList
-sys.modules["luskctl.tui.widgets"] = _widgets_mock
+sys.modules["terok.tui.widgets"] = _widgets_mock
 
 
 class TuiModuleTests(unittest.TestCase):
@@ -71,18 +71,18 @@ class TuiModuleTests(unittest.TestCase):
         import importlib
 
         # Need to reload if already imported
-        if "luskctl.tui.app" in sys.modules:
-            del sys.modules["luskctl.tui.app"]
-        if "luskctl.tui" in sys.modules:
-            del sys.modules["luskctl.tui"]
+        if "terok.tui.app" in sys.modules:
+            del sys.modules["terok.tui.app"]
+        if "terok.tui" in sys.modules:
+            del sys.modules["terok.tui"]
 
-        module = importlib.import_module("luskctl.tui.app")
+        module = importlib.import_module("terok.tui.app")
         self.assertTrue(callable(getattr(module, "main", None)))
 
     def test_tmux_configuration_integration(self) -> None:
         """Test that the TUI module can import and use the tmux configuration function."""
         # Test that we can import the configuration function
-        from luskctl.lib.core.config import get_tui_default_tmux
+        from terok.lib.core.config import get_tui_default_tmux
 
         # Test that it returns False by default
         self.assertFalse(get_tui_default_tmux())
@@ -96,5 +96,5 @@ class TuiModuleTests(unittest.TestCase):
             cfg_path = Path(td) / "config.yml"
             cfg_path.write_text("tui:\n  default_tmux: true\n", encoding="utf-8")
 
-            with unittest.mock.patch.dict(os.environ, {"LUSKCTL_CONFIG_FILE": str(cfg_path)}):
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
                 self.assertTrue(get_tui_default_tmux())

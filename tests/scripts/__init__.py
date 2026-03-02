@@ -2,4 +2,4 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Tests for shell scripts in luskctl resources
+# Tests for shell scripts in terok resources

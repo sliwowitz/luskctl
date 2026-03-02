@@ -18,7 +18,7 @@ path = [
   "Makefile",
   "completions/**",
   "vulture_whitelist.py",
-  "src/luskctl/resources/scripts/blablador",
+  "src/terok/resources/scripts/blablador",
 ]
 SPDX-FileCopyrightText = "2025-2026 Jiri Vyskocil <jiri@vyskocil.com>"
 SPDX-License-Identifier = "Apache-2.0"

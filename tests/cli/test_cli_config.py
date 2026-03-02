@@ -51,54 +51,54 @@ class CliConfigOutputTests(unittest.TestCase):
             with (
                 unittest.mock.patch.dict(
                     os.environ,
-                    {"LUSKCTL_CONFIG_FILE": str(global_cfg)},
+                    {"TEROK_CONFIG_FILE": str(global_cfg)},
                     clear=True,
                 ),
-                unittest.mock.patch.object(sys, "argv", ["luskctl", "config"]),
-                unittest.mock.patch("luskctl.cli.commands.info._supports_color", return_value=True),
+                unittest.mock.patch.object(sys, "argv", ["terok", "config"]),
+                unittest.mock.patch("terok.cli.commands.info._supports_color", return_value=True),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._global_config_path",
+                    "terok.cli.commands.info._global_config_path",
                     return_value=global_cfg,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._global_config_search_paths",
+                    "terok.cli.commands.info._global_config_search_paths",
                     return_value=[global_cfg],
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._get_ui_base_port",
+                    "terok.cli.commands.info._get_ui_base_port",
                     return_value=7777,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._get_envs_base_dir",
+                    "terok.cli.commands.info._get_envs_base_dir",
                     return_value=envs_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._user_projects_root",
+                    "terok.cli.commands.info._user_projects_root",
                     return_value=user_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._config_root",
+                    "terok.cli.commands.info._config_root",
                     return_value=system_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._state_root",
+                    "terok.cli.commands.info._state_root",
                     return_value=state_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info._build_root",
+                    "terok.cli.commands.info._build_root",
                     return_value=build_root,
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info.list_projects",
+                    "terok.cli.commands.info.list_projects",
                     return_value=[SimpleNamespace(id="alpha", root=project_root)],
                 ),
                 unittest.mock.patch(
-                    "luskctl.cli.commands.info.resources.files",
+                    "terok.cli.commands.info.resources.files",
                     return_value=resources_root,
                 ),
                 redirect_stdout(buffer),
             ):
-                importlib.import_module("luskctl.cli.main").main()
+                importlib.import_module("terok.cli.main").main()
 
             output = buffer.getvalue()
             self.assertIn("\x1b[32myes\x1b[0m", output)
@@ -107,7 +107,7 @@ class CliConfigOutputTests(unittest.TestCase):
             self.assertIn(f"\x1b[90m{templates_dir}\x1b[0m", output)
             self.assertIn("\x1b[90mscript.sh\x1b[0m", output)
             self.assertIn(
-                f"- LUSKCTL_CONFIG_FILE=\x1b[90m{global_cfg}\x1b[0m",
+                f"- TEROK_CONFIG_FILE=\x1b[90m{global_cfg}\x1b[0m",
                 output,
             )
             self.assertIn(

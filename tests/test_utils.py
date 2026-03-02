@@ -12,14 +12,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from luskctl.lib.security.git_gate import GateStalenessInfo
+from terok.lib.security.git_gate import GateStalenessInfo
 
 
 def mock_git_config():
     """Return a mock for _get_global_git_config that returns None (no global git config)."""
-    return unittest.mock.patch(
-        "luskctl.lib.core.projects._get_global_git_config", return_value=None
-    )
+    return unittest.mock.patch("terok.lib.core.projects._get_global_git_config", return_value=None)
 
 
 def write_project(root: Path, project_id: str, yaml_text: str) -> Path:
@@ -61,15 +59,15 @@ def project_env(
         write_project(config_root, project_id, yaml_text)
 
         env_vars: dict[str, str] = {
-            "LUSKCTL_CONFIG_DIR": str(config_root),
-            "LUSKCTL_STATE_DIR": str(state_dir),
+            "TEROK_CONFIG_DIR": str(config_root),
+            "TEROK_STATE_DIR": str(state_dir),
         }
 
         config_file = None
         if with_config_file:
             config_file = base / "config.yml"
             config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
-            env_vars["LUSKCTL_CONFIG_FILE"] = str(config_file)
+            env_vars["TEROK_CONFIG_FILE"] = str(config_file)
 
         gate_dir = None
         if with_gate:

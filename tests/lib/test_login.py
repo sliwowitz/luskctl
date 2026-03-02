@@ -8,7 +8,7 @@ import unittest.mock
 
 import yaml
 
-from luskctl.lib.containers.tasks import get_login_command, task_login, task_new
+from terok.lib.containers.tasks import get_login_command, task_login, task_new
 from test_utils import mock_git_config, project_env
 
 
@@ -51,7 +51,7 @@ class LoginTests(unittest.TestCase):
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             self._setup_task_with_mode(ctx, project_id, mode="cli")
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_container_state", return_value=None
+                "terok.lib.containers.tasks.get_container_state", return_value=None
             ):
                 with self.assertRaises(SystemExit) as exc_ctx:
                     task_login(project_id, "1")
@@ -63,7 +63,7 @@ class LoginTests(unittest.TestCase):
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             self._setup_task_with_mode(ctx, project_id, mode="cli")
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                "terok.lib.containers.tasks.get_container_state", return_value="exited"
             ):
                 with self.assertRaises(SystemExit) as exc_ctx:
                     task_login(project_id, "1")
@@ -76,10 +76,10 @@ class LoginTests(unittest.TestCase):
             self._setup_task_with_mode(ctx, project_id, mode="cli")
             with (
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state",
+                    "terok.lib.containers.tasks.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch("luskctl.lib.containers.tasks.os.execvp") as mock_exec,
+                unittest.mock.patch("terok.lib.containers.tasks.os.execvp") as mock_exec,
             ):
                 task_login(project_id, "1")
 
@@ -104,7 +104,7 @@ class LoginTests(unittest.TestCase):
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             self._setup_task_with_mode(ctx, project_id, mode="cli")
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_container_state",
+                "terok.lib.containers.tasks.get_container_state",
                 return_value="running",
             ):
                 cmd = get_login_command(project_id, "1")
@@ -129,7 +129,7 @@ class LoginTests(unittest.TestCase):
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             self._setup_task_with_mode(ctx, project_id, mode="web")
             with unittest.mock.patch(
-                "luskctl.lib.containers.tasks.get_container_state",
+                "terok.lib.containers.tasks.get_container_state",
                 return_value="running",
             ):
                 cmd = get_login_command(project_id, "1")
@@ -143,11 +143,11 @@ class LoginTests(unittest.TestCase):
             self._setup_task_with_mode(ctx, project_id, mode="cli")
             with (
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state",
+                    "terok.lib.containers.tasks.get_container_state",
                     return_value="running",
                 ),
                 mock_git_config(),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as mock_run,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as mock_run,
             ):
                 cmd = get_login_command(project_id, "1")
 

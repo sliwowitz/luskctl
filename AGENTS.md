@@ -1,8 +1,8 @@
-# Agent Guide (luskctl)
+# Agent Guide (terok)
 
 ## Purpose
 
-`luskctl` manages containerized AI coding agent projects and per-run tasks using Podman. It ships both a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
+`terok` manages containerized AI coding agent projects and per-run tasks using Podman. It ships both a CLI (`terokctl`) and a Textual TUI (`terok`).
 
 ## Technology Stack
 
@@ -17,7 +17,7 @@
 
 ## Repo layout
 
-- `src/luskctl/`: Python package (CLI in `src/luskctl/cli/`, TUI in `src/luskctl/tui/`)
+- `src/terok/`: Python package (CLI in `src/terok/cli/`, TUI in `src/terok/tui/`)
 - `tests/`: `pytest` test suite
 - `docs/`: user + developer documentation
 - `examples/`, `completions/`: sample configs and shell completions
@@ -62,11 +62,11 @@ make clean        # Remove build artifacts
 - **Type hints**: Use Python 3.12+ type hints
 - **Docstrings**: Required for all public functions, classes, and modules (enforced by `docstr-coverage` at 95% minimum in CI)
 - **Testing**: Add tests for new functionality; maintain coverage
-- **Emojis**: Must be natively wide (`East_Asian_Width=W`) — no VS16 (U+FE0F) sequences. Use `draw_emoji()` from `luskctl.lib.util.emoji` for aligned output. See `docs/DEVELOPER.md` → "Emoji width constraints" for details
+- **Emojis**: Must be natively wide (`East_Asian_Width=W`) — no VS16 (U+FE0F) sequences. Use `draw_emoji()` from `terok.lib.util.emoji` for aligned output. See `docs/DEVELOPER.md` → "Emoji width constraints" for details
 
 ## Development Workflow
 
-1. Make changes in appropriate module (`src/luskctl/`)
+1. Make changes in appropriate module (`src/terok/`)
 2. Run `make lint` frequently during development
 3. Add/update tests in `tests/` directory
 4. Run `make test` to verify changes
@@ -78,7 +78,7 @@ make clean        # Remove build artifacts
 
 - **Container Readiness**: When modifying init scripts or server startup, preserve readiness markers (see `docs/DEVELOPER.md`)
 - **Security Modes**: Understand online vs gatekeeping modes when working with git operations
-- **Agent Instructions**: When modifying container setup (Dockerfile templates, init scripts, installed tools), check if `src/luskctl/resources/instructions/default.md` needs updating
+- **Agent Instructions**: When modifying container setup (Dockerfile templates, init scripts, installed tools), check if `src/terok/resources/instructions/default.md` needs updating
 - **Minimal Changes**: Make surgical, focused changes
 - **Existing Tests**: Never remove or modify unrelated tests
 - **Dependencies**: Use Poetry for dependency management; avoid adding unnecessary dependencies

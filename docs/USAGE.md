@@ -1,6 +1,6 @@
-# luskctl User Guide
+# terok User Guide
 
-A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`luskctl`) and a Textual TUI (`luskctl-tui`).
+A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman. Provides a CLI (`terok`) and a Textual TUI (`terok`).
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ A prefix-/XDG-aware tool to manage containerized AI agent projects using Podman.
 # Build from source
 python -m pip install --upgrade build
 python -m build
-pip install dist/luskctl-*.whl
+pip install dist/terok-*.whl
 
 # Or install directly (editable for development)
 pip install -e .
@@ -33,7 +33,7 @@ pip install -e .
 pip install '.[tui]'
 ```
 
-After install, you should have console scripts: `luskctl`, `luskctl-tui`
+After install, you should have console scripts: `terok`, `terok`
 
 ### Bash Completion
 
@@ -42,12 +42,12 @@ Bash completion is powered by argcomplete.
 - If your system has bash-completion installed (common on most distros), completion is enabled automatically
 - Manual setup:
   - One-time system-wide: `sudo activate-global-python-argcomplete`
-  - Per-shell: `eval "$(register-python-argcomplete luskctl)"`
-  - Per-user: add to `~/.bashrc`: `eval "$(register-python-argcomplete luskctl)"`
+  - Per-shell: `eval "$(register-python-argcomplete terok)"`
+  - Per-user: add to `~/.bashrc`: `eval "$(register-python-argcomplete terok)"`
 - Zsh users:
   ```bash
   autoload -U bashcompinit && bashcompinit
-  eval "$(register-python-argcomplete --shell zsh luskctl)"
+  eval "$(register-python-argcomplete --shell zsh terok)"
   ```
 
 ### Custom Install Paths
@@ -65,11 +65,11 @@ On Debian/Ubuntu, pip uses the `posix_local` scheme which inserts `/local` under
 ```bash
 # Correct - let pip add /local:
 pip install --prefix=/virt/podman .
-# Result: /virt/podman/local/bin/luskctl
+# Result: /virt/podman/local/bin/terok
 
 # Wrong - don't add /local yourself:
 pip install --prefix=/virt/podman/local .
-# Result: /virt/podman/local/local/bin/luskctl
+# Result: /virt/podman/local/local/bin/terok
 ```
 
 **Virtual environment (recommended):**
@@ -85,17 +85,17 @@ python -m venv .venv && . .venv/bin/activate && pip install .
 
 | Install Type | Path |
 |--------------|------|
-| Root | `/etc/luskctl/projects` |
-| User | `~/.config/luskctl/projects` |
-| Override | `LUSKCTL_CONFIG_DIR=/path/to/config` |
+| Root | `/etc/terok/projects` |
+| User | `~/.config/terok/projects` |
+| Override | `TEROK_CONFIG_DIR=/path/to/config` |
 
 ### State (writable: tasks, build, gate)
 
 | Install Type | Path |
 |--------------|------|
-| Root | `/var/lib/luskctl` |
-| User | `${XDG_DATA_HOME:-~/.local/share}/luskctl` |
-| Override | `LUSKCTL_STATE_DIR=/path/to/state` |
+| Root | `/var/lib/terok` |
+| User | `${XDG_DATA_HOME:-~/.local/share}/terok` |
+| Override | `TEROK_STATE_DIR=/path/to/state` |
 
 ---
 
@@ -103,16 +103,16 @@ python -m venv .venv && . .venv/bin/activate && pip install .
 
 The tool looks for a global config file in this order (first found wins):
 
-1. `${XDG_CONFIG_HOME:-~/.config}/luskctl/config.yml` (user override)
-2. `sys.prefix/etc/luskctl/config.yml` (pip/venv installs)
-3. `/etc/luskctl/config.yml` (system default)
+1. `${XDG_CONFIG_HOME:-~/.config}/terok/config.yml` (user override)
+2. `sys.prefix/etc/terok/config.yml` (pip/venv installs)
+3. `/etc/terok/config.yml` (system default)
 
 ### Example Config
 
-Copy from `examples/luskctl-config.yml`:
+Copy from `examples/terok-config.yml`:
 ```bash
-mkdir -p ~/.config/luskctl
-cp examples/luskctl-config.yml ~/.config/luskctl/config.yml
+mkdir -p ~/.config/terok
+cp examples/terok-config.yml ~/.config/terok/config.yml
 ```
 
 ### Minimum Settings
@@ -122,9 +122,9 @@ ui:
   base_port: 7860           # Default port for UI mode
 
 paths:
-  user_projects_root: ~/.config/luskctl/projects
-  state_root: ~/.local/share/luskctl
-  build_root: ~/.local/share/luskctl/build
+  user_projects_root: ~/.config/terok/projects
+  state_root: ~/.local/share/terok
+  build_root: ~/.local/share/terok/build
 
 git:
   human_name: "Your Name"
@@ -139,19 +139,19 @@ git:
 
 - Podman installed and working
 - OpenSSH client tools (ssh, ssh-keygen) for private Git over SSH
-- tmux (optional, for `luskctl-tui --tmux` and persistent container sessions)
+- tmux (optional, for `terokctl --tmux` and persistent container sessions)
 - ttyd (optional, for web-mode terminal access)
 
 ### Step 1: Create Project Directory
 
 ```bash
-mkdir -p ~/.config/luskctl/projects/myproj
+mkdir -p ~/.config/terok/projects/myproj
 ```
 
 ### Step 2: Create project.yml
 
 ```yaml
-# ~/.config/luskctl/projects/myproj/project.yml
+# ~/.config/terok/projects/myproj/project.yml
 project:
   id: myproj
   security_class: online    # or "gatekeeping" for restricted mode
@@ -171,7 +171,7 @@ docker:
 
 ### Step 3: (Optional) Docker Include Snippet
 
-Create `~/.config/luskctl/projects/myproj/user.dockerinclude`:
+Create `~/.config/terok/projects/myproj/user.dockerinclude`:
 ```dockerfile
 RUN apt-get update && apt-get install -y ripgrep jq && rm -rf /var/lib/apt/lists/*
 ```
@@ -181,24 +181,24 @@ This text is pasted near the end of your project image (L2) Dockerfile.
 ### Step 4: Generate Dockerfiles
 
 ```bash
-luskctl generate myproj
+terokctl generate myproj
 ```
 
 ### Step 5: Build Images
 
 ```bash
 # Build only L2 project images (fast, reuses existing L0/L1 layers)
-luskctl build myproj
+terokctl build myproj
 
 # Rebuild L0+L1+L2 with fresh agent installs (codex, claude, opencode, vibe)
-luskctl build --agents myproj
+terokctl build --agents myproj
 
 # Full rebuild with no cache (includes base image pull and apt packages)
-luskctl build --full-rebuild myproj
+terokctl build --full-rebuild myproj
 
 # Optional: build a dev image from L0 as well
-luskctl build myproj --dev
-luskctl build --agents myproj --dev
+terokctl build myproj --dev
+terokctl build --agents myproj --dev
 ```
 
 Build modes:
@@ -209,7 +209,7 @@ Build modes:
 ### Step 6: Initialize SSH (for private repos)
 
 ```bash
-luskctl ssh-init myproj
+terokctl ssh-init myproj
 ```
 
 This creates:
@@ -233,28 +233,28 @@ Supported tokens: `{{IDENTITY_FILE}}`, `{{KEY_NAME}}`, `{{PROJECT_ID}}`
 
 ```bash
 # Create a new task
-luskctl task new myproj
+terokctl task new myproj
 # Output: Created task 1 for project myproj
 
 # List tasks
-luskctl task list myproj
+terokctl task list myproj
 
 # Run in CLI mode (headless agent)
-luskctl task run-cli myproj 1
+terokctl task run-cli myproj 1
 
 # Or run in UI mode (web interface)
-luskctl task run-ui myproj 1 --backend codex
+terokctl task run-ui myproj 1 --backend codex
 ```
 
 ### Step 8: Log into a Running Container
 
 ```bash
 # Open a shell in a running task container (persistent tmux session)
-luskctl login myproj 1
+terokctl login myproj 1
 ```
 
 This opens a tmux session inside the container. The session persists across
-disconnects — re-running `luskctl login` reattaches to the same session.
+disconnects — re-running `terokctl login` reattaches to the same session.
 
 #### From the TUI
 
@@ -271,7 +271,7 @@ method automatically:
 #### Running the TUI under tmux (recommended)
 
 ```bash
-luskctl-tui --tmux
+terokctl --tmux
 ```
 
 This wraps the TUI in a managed tmux session with a blue status bar showing
@@ -301,17 +301,17 @@ Supported providers: `claude`, `codex`, `copilot`, `vibe`, `blablador`, `opencod
 
 ```bash
 # Run with a prompt (uses default provider — claude unless configured otherwise)
-luskctl run myproj "Fix the authentication bug in login.py"
+terokctl run myproj "Fix the authentication bug in login.py"
 
 # Override model and set a timeout
-luskctl run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
+terokctl run myproj "Add unit tests for utils.py" --model opus --max-turns 50 --timeout 3600
 
 # Detach immediately (don't stream output)
-luskctl run myproj "Refactor the database layer" --no-follow
+terokctl run myproj "Refactor the database layer" --no-follow
 
 # Use a specific provider
-luskctl run myproj "Fix the auth bug" --provider codex
-luskctl run myproj "Add tests" --provider copilot
+terokctl run myproj "Fix the auth bug" --provider codex
+terokctl run myproj "Add tests" --provider copilot
 ```
 
 The command creates a new task, starts a container, runs the agent with the given
@@ -376,7 +376,7 @@ default.  CLI flags (`--model`, `--max-turns`, `--timeout`) always override
 config values.
 
 **Best-effort feature mapping**: When a provider doesn't support a configured
-feature, luskctl applies an analogue where possible.  For example, `max_turns`
+feature, terok applies an analogue where possible.  For example, `max_turns`
 for providers without `--max-turns` support is injected as guidance text in the
 prompt.  Features with no analogue produce a warning but don't block the run.
 
@@ -387,7 +387,7 @@ sub-agent gets a `default` flag — default agents are always included, others
 are available on demand via `--agent`.
 
 ```yaml
-# ~/.config/luskctl/projects/myproj/project.yml
+# ~/.config/terok/projects/myproj/project.yml
 project:
   id: myproj
   security_class: online
@@ -425,18 +425,18 @@ agent:
 
 ```bash
 # Include the debugger agent for this run (sub-agents require --provider claude)
-luskctl run myproj "Find and fix the memory leak" --provider claude --agent debugger
+terokctl run myproj "Find and fix the memory leak" --provider claude --agent debugger
 
 # Include multiple non-default agents
-luskctl run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
+terokctl run myproj "Debug and plan a fix" --provider claude --agent debugger --agent planner
 ```
 
 The `--agent` flag also works with interactive modes:
 
 ```bash
-luskctl task run-cli myproj 1 --agent debugger
-luskctl task run-web myproj 1 --agent debugger
-luskctl task start myproj --agent debugger
+terokctl task run-cli myproj 1 --agent debugger
+terokctl task run-web myproj 1 --agent debugger
+terokctl task start myproj --agent debugger
 ```
 
 #### Agent .md File Format
@@ -461,14 +461,14 @@ Reference them in `project.yml` with `file:` (paths relative to project root).
 Pass an additional YAML file with `--config` to add more sub-agents at runtime:
 
 ```bash
-luskctl run myproj "Review the PR" --config /path/to/extra-agents.yml
+terokctl run myproj "Review the PR" --config /path/to/extra-agents.yml
 ```
 
 The file should contain a `subagents:` list in the same format as `project.yml`.
 
 ### Global Agents and MCPs
 
-Global agents and MCP servers are managed natively by Claude — luskctl does not
+Global agents and MCP servers are managed natively by Claude — terok does not
 interfere with them:
 
 | What | Where |
@@ -481,7 +481,7 @@ interfere with them:
 Per-sub-agent MCPs can be defined inline using the `mcpServers` field in the
 agent definition (same format as Claude's native agent JSON).
 
-Run `luskctl config` to see the actual paths on your system.
+Run `terokctl config` to see the actual paths on your system.
 
 ---
 
@@ -490,14 +490,14 @@ Run `luskctl config` to see the actual paths on your system.
 | Backend | API Key Environment Variable | Optional Model Variable |
 |---------|------------------------------|------------------------|
 | codex | (uses OpenAI from codex config) | - |
-| claude | `LUSKUI_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | `LUSKUI_CLAUDE_MODEL` |
-| mistral | `LUSKUI_MISTRAL_API_KEY` or `MISTRAL_API_KEY` | `LUSKUI_MISTRAL_MODEL` |
+| claude | `TEROK_UI_CLAUDE_API_KEY` or `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | `TEROK_UI_CLAUDE_MODEL` |
+| mistral | `TEROK_UI_MISTRAL_API_KEY` or `MISTRAL_API_KEY` | `TEROK_UI_MISTRAL_MODEL` |
 
 ---
 
 ## Agent Instructions
 
-luskctl provides layered agent instructions that describe the container environment to AI agents. Instructions are delivered automatically — no setup required.
+terok provides layered agent instructions that describe the container environment to AI agents. Instructions are delivered automatically — no setup required.
 
 ### How It Works
 
@@ -583,7 +583,7 @@ agent:
 Override all config-stack instructions with a file:
 
 ```bash
-luskctl run myproj "Fix the bug" --instructions path/to/instructions.md
+terokctl run myproj "Fix the bug" --instructions path/to/instructions.md
 ```
 
 ### TUI
@@ -618,7 +618,7 @@ Three are bundled and work immediately — no setup needed.
 
 ### Bundled Presets
 
-The current bundled set is a starting point — run `luskctl presets list <project>`
+The current bundled set is a starting point — run `terokctl presets list <project>`
 to see what's available. The names and contents may change in future versions;
 global presets you create will shadow them automatically.
 
@@ -630,34 +630,34 @@ global presets you create will shadow them automatically.
 
 ```bash
 # Quick fix — single fast agent
-luskctl run myproj "Fix the typo in login.py" --preset solo
+terokctl run myproj "Fix the typo in login.py" --preset solo
 
 # Code review — read-only analysis
-luskctl run myproj "Review the auth module for security issues" --preset review
+terokctl run myproj "Review the auth module for security issues" --preset review
 
 # Full dev team — architect plans, engineers implement, testers verify
-luskctl run myproj "Add pagination to the /users endpoint" --preset team
+terokctl run myproj "Add pagination to the /users endpoint" --preset team
 
 # Team preset with an on-demand agent enabled
-luskctl run myproj "Update the CLI help text" --preset team --agent cli-engineer
+terokctl run myproj "Update the CLI help text" --preset team --agent cli-engineer
 ```
 
 Presets work with all task modes:
 
 ```bash
-luskctl task start myproj --preset review
-luskctl task run-cli myproj 1 --preset team
-luskctl task run-web myproj 1 --preset solo
+terokctl task start myproj --preset review
+terokctl task run-cli myproj 1 --preset team
+terokctl task run-web myproj 1 --preset solo
 ```
 
 ### See What's Available
 
 ```bash
 # List all presets (bundled + global + project)
-luskctl presets list myproj
+terokctl presets list myproj
 
 # Show what a preset resolves to
-luskctl config-show myproj --preset team
+terokctl config-show myproj --preset team
 ```
 
 ### Customize: Global Presets
@@ -667,18 +667,18 @@ global presets directory. It's shared across all projects.
 
 ```bash
 # Create the directory (first time only)
-mkdir -p ~/.config/luskctl/presets
+mkdir -p ~/.config/terok/presets
 
 # Copy a bundled preset and customize it
-luskctl config | grep "Bundled presets"   # find the path
-cp <bundled-path>/solo.yml ~/.config/luskctl/presets/solo.yml
+terokctl config | grep "Bundled presets"   # find the path
+cp <bundled-path>/solo.yml ~/.config/terok/presets/solo.yml
 # Edit to taste — your version now shadows the bundled one
 ```
 
 Or create one from scratch:
 
 ```bash
-cat > ~/.config/luskctl/presets/quick-review.yml << 'EOF'
+cat > ~/.config/terok/presets/quick-review.yml << 'EOF'
 model: sonnet
 max_turns: 10
 subagents:
@@ -692,15 +692,15 @@ subagents:
 EOF
 ```
 
-Now use it anywhere: `luskctl run anyproject "Review PR #42" --preset quick-review`
+Now use it anywhere: `terokctl run anyproject "Review PR #42" --preset quick-review`
 
 ### Preset Search Order
 
-When you use `--preset fast`, luskctl searches:
+When you use `--preset fast`, terok searches:
 
 1. **Project** — `<project>/presets/fast.yml` (per-project override)
-2. **Global** — `~/.config/luskctl/presets/fast.yml` (shared across projects)
-3. **Bundled** — shipped with luskctl (always available)
+2. **Global** — `~/.config/terok/presets/fast.yml` (shared across projects)
+3. **Bundled** — shipped with terok (always available)
 
 First match wins. This means a global preset shadows a bundled one with the
 same name, and a project preset shadows both.
@@ -711,14 +711,14 @@ Run multiple tasks in the same project, each with a different preset:
 
 ```bash
 # Task 1: architect reviews the codebase
-luskctl task start myproj --preset review
+terokctl task start myproj --preset review
 # Task 2: team implements the feature
-luskctl task start myproj --preset team
+terokctl task start myproj --preset team
 # Task 3: solo agent writes docs
-luskctl task start myproj --preset solo
+terokctl task start myproj --preset solo
 ```
 
-Each task remembers its preset — `luskctl task restart` reuses it automatically.
+Each task remembers its preset — `terokctl task restart` reuses it automatically.
 
 ---
 
@@ -745,7 +745,7 @@ docker:
   base_image: nvcr.io/nvidia/nvhpc:25.9-devel-cuda13.0-ubuntu24.04
 ```
 
-When enabled, luskctl adds:
+When enabled, terok adds:
 - `--device nvidia.com/gpu=all`
 - `NVIDIA_VISIBLE_DEVICES=all`
 - `NVIDIA_DRIVER_CAPABILITIES=all`
@@ -754,8 +754,8 @@ When enabled, luskctl adds:
 
 ## Tips
 
-- **Show resolved paths:** `luskctl config`
-- **Where envs live:** `~/.local/share/luskctl/envs` (or `/var/lib/luskctl/envs` if root, or as configured under `envs.base_dir`)
+- **Show resolved paths:** `terokctl config`
+- **Where envs live:** `~/.local/share/terok/envs` (or `/var/lib/terok/envs` if root, or as configured under `envs.base_dir`)
 - **Shared directories:** See [SHARED_DIRS.md](SHARED_DIRS.md)
 - **Security modes:** See [GIT_CACHE_AND_SECURITY_MODES.md](GIT_CACHE_AND_SECURITY_MODES.md)
 
@@ -769,15 +769,15 @@ See [Custom Install Paths](#custom-install-paths) above.
 
 ### Where are templates and scripts stored?
 
-Loaded from Python package resources bundled with the wheel (under `luskctl/resources/`). The application never reads from `/usr/share`.
+Loaded from Python package resources bundled with the wheel (under `terok/resources/`). The application never reads from `/usr/share`.
 
 ### How do I enable the TUI?
 
 ```bash
-pip install 'luskctl[tui]'
+pip install 'terok[tui]'
 ```
 
-Then run: `luskctl-tui`
+Then run: `terok`
 
 ### How do I package for Debian/RPM?
 

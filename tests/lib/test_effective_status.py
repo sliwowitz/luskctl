@@ -8,14 +8,14 @@ import subprocess
 import unittest
 import unittest.mock
 
-from luskctl.lib.containers.runtime import get_project_container_states
-from luskctl.lib.containers.task_display import (
+from terok.lib.containers.runtime import get_project_container_states
+from terok.lib.containers.task_display import (
     STATUS_DISPLAY,
     WEB_BACKEND_EMOJI,
     effective_status,
     mode_emoji,
 )
-from luskctl.lib.containers.tasks import TaskMeta, get_all_task_states
+from terok.lib.containers.tasks import TaskMeta, get_all_task_states
 
 
 def _task(**kwargs) -> TaskMeta:
@@ -147,7 +147,7 @@ class BatchContainerStateTests(unittest.TestCase):
     def test_get_project_container_states_parses_output(self) -> None:
         output = "proj-cli-1 running\nproj-web-2 exited\nproj-run-3 stopped\n"
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             return_value=output,
         ):
             result = get_project_container_states("proj")
@@ -162,7 +162,7 @@ class BatchContainerStateTests(unittest.TestCase):
 
     def test_get_project_container_states_empty(self) -> None:
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             return_value="",
         ):
             result = get_project_container_states("proj")
@@ -170,7 +170,7 @@ class BatchContainerStateTests(unittest.TestCase):
 
     def test_get_project_container_states_podman_missing(self) -> None:
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             side_effect=FileNotFoundError,
         ):
             result = get_project_container_states("proj")
@@ -178,7 +178,7 @@ class BatchContainerStateTests(unittest.TestCase):
 
     def test_get_project_container_states_podman_error(self) -> None:
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
             result = get_project_container_states("proj")
@@ -195,7 +195,7 @@ class BatchContainerStateTests(unittest.TestCase):
             "proj-web-2": "exited",
         }
         with unittest.mock.patch(
-            "luskctl.lib.containers.tasks.get_project_container_states",
+            "terok.lib.containers.tasks.get_project_container_states",
             return_value=container_states,
         ):
             result = get_all_task_states("proj", tasks)
@@ -204,7 +204,7 @@ class BatchContainerStateTests(unittest.TestCase):
     def test_get_all_task_states_missing_container(self) -> None:
         tasks = [_task(task_id="1", mode="cli")]
         with unittest.mock.patch(
-            "luskctl.lib.containers.tasks.get_project_container_states",
+            "terok.lib.containers.tasks.get_project_container_states",
             return_value={},
         ):
             result = get_all_task_states("proj", tasks)

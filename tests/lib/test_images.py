@@ -4,7 +4,7 @@
 
 import unittest
 
-from luskctl.lib.core import images
+from terok.lib.core import images
 
 
 class ImagesTests(unittest.TestCase):
@@ -88,8 +88,8 @@ class ImagesTests(unittest.TestCase):
     def test_base_dev_image(self) -> None:
         """base_dev_image should return correct L0 image name and sanitize input."""
         cases = [
-            ("ubuntu-22.04", "luskctl-l0:ubuntu-22.04", "normal input"),
-            ("ubuntu@22.04", "luskctl-l0:ubuntu-22.04", "special chars sanitized"),
+            ("ubuntu-22.04", "terok-l0:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "terok-l0:ubuntu-22.04", "special chars sanitized"),
         ]
         for input_val, expected, description in cases:
             with self.subTest(input=input_val, expected=expected, msg=description):
@@ -99,8 +99,8 @@ class ImagesTests(unittest.TestCase):
     def test_agent_cli_image(self) -> None:
         """agent_cli_image should return correct L1 CLI image name and sanitize input."""
         cases = [
-            ("ubuntu-22.04", "luskctl-l1-cli:ubuntu-22.04", "normal input"),
-            ("ubuntu@22.04", "luskctl-l1-cli:ubuntu-22.04", "special chars sanitized"),
+            ("ubuntu-22.04", "terok-l1-cli:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "terok-l1-cli:ubuntu-22.04", "special chars sanitized"),
         ]
         for input_val, expected, description in cases:
             with self.subTest(input=input_val, expected=expected, msg=description):
@@ -110,8 +110,8 @@ class ImagesTests(unittest.TestCase):
     def test_agent_ui_image(self) -> None:
         """agent_ui_image should return correct L1 UI image name and sanitize input."""
         cases = [
-            ("ubuntu-22.04", "luskctl-l1-ui:ubuntu-22.04", "normal input"),
-            ("ubuntu@22.04", "luskctl-l1-ui:ubuntu-22.04", "special chars sanitized"),
+            ("ubuntu-22.04", "terok-l1-ui:ubuntu-22.04", "normal input"),
+            ("ubuntu@22.04", "terok-l1-ui:ubuntu-22.04", "special chars sanitized"),
         ]
         for input_val, expected, description in cases:
             with self.subTest(input=input_val, expected=expected, msg=description):
@@ -132,9 +132,9 @@ class ImagesTests(unittest.TestCase):
 
     def test_all_functions_with_empty_base_image(self) -> None:
         """All base_image functions should handle empty string."""
-        self.assertEqual(images.base_dev_image(""), "luskctl-l0:ubuntu-24.04")
-        self.assertEqual(images.agent_cli_image(""), "luskctl-l1-cli:ubuntu-24.04")
-        self.assertEqual(images.agent_ui_image(""), "luskctl-l1-ui:ubuntu-24.04")
+        self.assertEqual(images.base_dev_image(""), "terok-l0:ubuntu-24.04")
+        self.assertEqual(images.agent_cli_image(""), "terok-l1-cli:ubuntu-24.04")
+        self.assertEqual(images.agent_ui_image(""), "terok-l1-ui:ubuntu-24.04")
 
     def test_all_functions_with_long_base_image(self) -> None:
         """All base_image functions should handle long names."""

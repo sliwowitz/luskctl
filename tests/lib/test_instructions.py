@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from luskctl.lib.containers.instructions import (
+from terok.lib.containers.instructions import (
     bundled_default_instructions,
     has_custom_instructions,
     resolve_instructions,
@@ -23,7 +23,7 @@ class BundledDefaultTests(unittest.TestCase):
         text = bundled_default_instructions()
         self.assertIsInstance(text, str)
         self.assertTrue(len(text) > 100)
-        self.assertIn("luskctl", text)
+        self.assertIn("terok", text)
 
     def test_bundled_default_contains_key_sections(self) -> None:
         """Bundled default mentions workspace, git, and sudo."""
@@ -85,19 +85,19 @@ class ResolveInstructionsTests(unittest.TestCase):
         config = {"instructions": {"claude": "Claude only"}}
         result = resolve_instructions(config, "codex")
         # Should fall back to bundled default
-        self.assertIn("luskctl", result)
+        self.assertIn("terok", result)
 
     def test_fallback_to_default(self) -> None:
         """Absent key returns bundled default."""
         config = {}
         result = resolve_instructions(config, "claude")
-        self.assertIn("luskctl", result)
+        self.assertIn("terok", result)
 
     def test_null_uses_default(self) -> None:
         """Explicit None value returns bundled default."""
         config = {"instructions": None}
         result = resolve_instructions(config, "claude")
-        self.assertIn("luskctl", result)
+        self.assertIn("terok", result)
 
     def test_list_joined(self) -> None:
         """List of strings is joined with double newlines."""
@@ -124,7 +124,7 @@ class ResolveInstructionsTests(unittest.TestCase):
         config = {"instructions": ["Custom only."]}
         result = resolve_instructions(config, "claude")
         self.assertEqual(result, "Custom only.")
-        self.assertNotIn("luskctl", result)
+        self.assertNotIn("terok", result)
 
     def test_bare_inherit_string_returns_default(self) -> None:
         """Bare _inherit string is treated as absent (returns bundled default)."""
@@ -147,7 +147,7 @@ class FileAppendTests(unittest.TestCase):
         """No YAML + no file = bundled default."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = resolve_instructions({}, "claude", project_root=Path(tmpdir))
-            self.assertIn("luskctl", result)
+            self.assertIn("terok", result)
 
     def test_absent_yaml_with_file_appends(self) -> None:
         """No YAML + file = bundled default + file."""

@@ -29,7 +29,7 @@ class ProjectStateStalenessTests(TestCase):
                         with mock.patch.object(
                             app, "compare_gate_vs_upstream", return_value=staleness
                         ) as compare:
-                            result = app.LuskTUI._load_project_state(mock.Mock(), "proj1")
+                            result = app.TerokTUI._load_project_state(mock.Mock(), "proj1")
                             compare.assert_called_once_with("proj1")
 
                 self.assertEqual(

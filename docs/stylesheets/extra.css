@@ -1,17 +1,17 @@
 /* Black/Red/Gold palette with subdued neutrals. */
 :root {
-  --lusk-black: #0b0b0b;
-  --lusk-red: #a31219;
-  --lusk-red-dark: #7f0f14;
-  --lusk-red-pure: #c00000;
-  --lusk-red-bright: #e04b3f;
-  --lusk-gold: #c79a22;
-  --lusk-gold-bright: #d8b454;
+  --terok-black: #0b0b0b;
+  --terok-red: #a31219;
+  --terok-red-dark: #7f0f14;
+  --terok-red-pure: #c00000;
+  --terok-red-bright: #e04b3f;
+  --terok-gold: #c79a22;
+  --terok-gold-bright: #d8b454;
 
   --md-text-font: "Ubuntu", sans-serif;
   --md-code-font: "Ubuntu Mono", monospace;
 
-  --md-primary-fg-color: var(--lusk-red-dark);
+  --md-primary-fg-color: var(--terok-red-dark);
   --md-primary-fg-color--light: #8f1117;
   --md-primary-fg-color--dark: #650b10;
 
@@ -19,11 +19,11 @@
   --md-primary-bg-color--light: #f7f2e8;
   --md-primary-bg-color--dark: #e7decc;
 
-  --md-accent-fg-color: var(--lusk-gold);
+  --md-accent-fg-color: var(--terok-gold);
   --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
 
-  --md-typeset-a-color: var(--lusk-gold);
-  --md-typeset-mark-color: var(--lusk-gold-bright);
+  --md-typeset-a-color: var(--terok-gold);
+  --md-typeset-mark-color: var(--terok-gold-bright);
 }
 
 body,
@@ -46,34 +46,34 @@ samp {
 .md-tabs,
 .md-header__inner,
 .md-tabs__inner {
-  background-color: var(--lusk-red-dark) !important;
+  background-color: var(--terok-red-dark) !important;
 }
 
 .md-typeset a,
 .md-typeset a:visited {
-  color: var(--lusk-gold);
+  color: var(--terok-gold);
 }
 
 .md-typeset a:hover,
 .md-nav__link:hover,
 .md-tabs__link:hover,
 .md-header__button:hover {
-  color: var(--lusk-red-pure) !important;
+  color: var(--terok-red-pure) !important;
 }
 
 .md-nav__item--active > .md-nav__link,
 .md-nav__link--active,
 .md-nav--secondary .md-nav__link--active {
-  color: var(--lusk-gold-bright) !important;
+  color: var(--terok-gold-bright) !important;
 }
 
 .md-nav--secondary .md-nav__link--active::before,
 .md-nav--secondary .md-nav__link--active::after {
-  background-color: var(--lusk-gold-bright);
+  background-color: var(--terok-gold-bright);
 }
 
 .md-nav--secondary .md-nav__link--active {
-  border-left-color: var(--lusk-gold-bright);
+  border-left-color: var(--terok-gold-bright);
 }
 
 .md-tabs__link--active {
@@ -82,7 +82,7 @@ samp {
 }
 
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: var(--lusk-red-dark);
+  --md-primary-fg-color: var(--terok-red-dark);
   --md-primary-fg-color--light: #8f1117;
   --md-primary-fg-color--dark: #650b10;
   --md-default-bg-color: #f7f2e8;
@@ -97,13 +97,13 @@ samp {
   --md-footer-fg-color--light: #d9cfbd;
   --md-footer-fg-color--lighter: #bdb39f;
   --md-footer-fg-color--lightest: #a79c87;
-  --md-accent-fg-color: var(--lusk-gold);
+  --md-accent-fg-color: var(--terok-gold);
   --md-accent-fg-color--transparent: rgba(199, 154, 34, 0.12);
-  --md-typeset-a-color: var(--lusk-gold);
+  --md-typeset-a-color: var(--terok-gold);
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: var(--lusk-red-dark);
+  --md-primary-fg-color: var(--terok-red-dark);
   --md-primary-fg-color--light: #8f1117;
   --md-primary-fg-color--dark: #650b10;
   --md-default-bg-color: #0b0b0b;
@@ -123,7 +123,7 @@ samp {
   --md-primary-bg-color--light: #f2ead9;
   --md-primary-bg-color--dark: #d8cfbf;
 
-  --md-accent-fg-color: var(--lusk-gold-bright);
+  --md-accent-fg-color: var(--terok-gold-bright);
   --md-accent-fg-color--transparent: rgba(216, 180, 84, 0.14);
-  --md-typeset-a-color: var(--lusk-gold);
+  --md-typeset-a-color: var(--terok-gold);
 }

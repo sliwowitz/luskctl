@@ -2,7 +2,7 @@
 
 ## Problem
 
-luskctl manages containerized AI coding agent tasks. Users need to open interactive
+terok manages containerized AI coding agent tasks. Users need to open interactive
 shells inside running containers — to debug, inspect, or interact with the agent
 directly. Currently this requires manually typing `podman exec -it <name> bash`,
 the container name must be remembered or copied, and sessions are lost on disconnect.
@@ -11,8 +11,8 @@ the container name must be remembered or copied, and sessions are lost on discon
 
 ### R1: One-command login
 
-A single command (`luskctl login <project> <task>`) should open an interactive shell.
-No container name needed — luskctl resolves it from project/task metadata.
+A single command (`terokctl login <project> <task>`) should open an interactive shell.
+No container name needed — terok resolves it from project/task metadata.
 
 ### R2: Persistent sessions
 
@@ -26,7 +26,7 @@ session should open in a separate window/tab so the TUI remains usable.
 
 ### R4: Work across environments
 
-Users run luskctl in diverse environments. Login should work well in all of them:
+Users run terok in diverse environments. Login should work well in all of them:
 terminal (bare), terminal (under tmux), desktop (GNOME, KDE), and browser (web-served TUI).
 
 ### R5: Minimize cognitive load for nested tmux
@@ -76,7 +76,7 @@ always knows how to switch context. Color provides instant visual identification
 
 ### CLI: top-level command (R1)
 
-`luskctl login <project> <task>` replaces the current process with
+`terokctl login <project> <task>` replaces the current process with
 `podman exec -it <container> tmux new-session -A -s main` via `os.execvp()`.
 Validation (task exists, has been run, container is running) happens before exec.
 
@@ -95,7 +95,7 @@ The user gets a real terminal in the new tab while the TUI remains in the origin
 
 ### `--tmux` opt-in wrapper (R3, R5)
 
-`luskctl-tui --tmux` wraps the TUI in a managed tmux session with the host config
+`terokctl --tmux` wraps the TUI in a managed tmux session with the host config
 (blue status bar, usage hints). Login sessions become additional tmux windows.
 This is opt-in — without the flag, the TUI runs directly in the terminal as before.
 

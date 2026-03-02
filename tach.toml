@@ -34,53 +34,53 @@ exclude = ["pydevd_pycharm", "pydevd"]
 
 # CLI frontend
 [[modules]]
-path = "luskctl.cli"
+path = "terok.cli"
 layer = "presentation"
 depends_on = [
-    "luskctl.lib.containers.agent_config",
-    "luskctl.lib.containers.headless_providers",
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.core.version",
-    "luskctl.lib.facade",
-    "luskctl.lib.wizards.new_project",
-    "luskctl.ui_utils.terminal",
+    "terok.lib.containers.agent_config",
+    "terok.lib.containers.headless_providers",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+    "terok.lib.core.version",
+    "terok.lib.facade",
+    "terok.lib.wizards.new_project",
+    "terok.ui_utils.terminal",
 ]
 
 # TUI frontend
 [[modules]]
-path = "luskctl.tui"
+path = "terok.tui"
 layer = "presentation"
 depends_on = [
-    "luskctl.lib.containers.agents",
-    "luskctl.lib.containers.autopilot",
-    "luskctl.lib.containers.headless_providers",
-    "luskctl.lib.containers.instructions",
-    "luskctl.lib.containers.runtime",
-    "luskctl.lib.containers.task_display",
-    "luskctl.lib.containers.tasks",
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.core.version",
-    "luskctl.lib.facade",
-    "luskctl.lib.util.emoji",
+    "terok.lib.containers.agents",
+    "terok.lib.containers.autopilot",
+    "terok.lib.containers.headless_providers",
+    "terok.lib.containers.instructions",
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.task_display",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+    "terok.lib.core.version",
+    "terok.lib.facade",
+    "terok.lib.util.emoji",
 ]
 
 # Service facade (aggregates shared cross-cutting operations)
 [[modules]]
-path = "luskctl.lib.facade"
+path = "terok.lib.facade"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.docker",
-    "luskctl.lib.containers.environment",
-    "luskctl.lib.containers.project_state",
-    "luskctl.lib.containers.task_logs",
-    "luskctl.lib.containers.task_runners",
-    "luskctl.lib.containers.tasks",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.security.auth",
-    "luskctl.lib.security.git_gate",
-    "luskctl.lib.security.ssh",
+    "terok.lib.containers.docker",
+    "terok.lib.containers.environment",
+    "terok.lib.containers.project_state",
+    "terok.lib.containers.task_logs",
+    "terok.lib.containers.task_runners",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.projects",
+    "terok.lib.security.auth",
+    "terok.lib.security.git_gate",
+    "terok.lib.security.ssh",
 ]
 
 # ── SERVICES LAYER ──────────────────────────────────────────────────
@@ -90,131 +90,131 @@ depends_on = [
 
 # Agent configuration (parsing, filtering, wrapper generation)
 [[modules]]
-path = "luskctl.lib.containers.agents"
+path = "terok.lib.containers.agents"
 layer = "services"
-depends_on = ["luskctl.lib.containers.headless_providers", "luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+depends_on = ["terok.lib.containers.headless_providers", "terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs"]
 
 # Headless provider registry (multi-agent autopilot support)
 [[modules]]
-path = "luskctl.lib.containers.headless_providers"
+path = "terok.lib.containers.headless_providers"
 layer = "services"
-depends_on = ["luskctl.lib.containers.agent_config", "luskctl.lib.core.projects"]
+depends_on = ["terok.lib.containers.agent_config", "terok.lib.core.projects"]
 
 # Agent config resolution (layered merging across scopes)
 [[modules]]
-path = "luskctl.lib.containers.agent_config"
+path = "terok.lib.containers.agent_config"
 layer = "services"
-depends_on = ["luskctl.lib.util.config_stack", "luskctl.lib.core.config", "luskctl.lib.core.projects"]
+depends_on = ["terok.lib.util.config_stack", "terok.lib.core.config", "terok.lib.core.projects"]
 
 # Agent instruction resolution (layered merging with bundled defaults)
 [[modules]]
-path = "luskctl.lib.containers.instructions"
+path = "terok.lib.containers.instructions"
 layer = "services"
-depends_on = ["luskctl.lib.containers.agent_config"]
+depends_on = ["terok.lib.containers.agent_config"]
 
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
-path = "luskctl.lib.containers.autopilot"
+path = "terok.lib.containers.autopilot"
 layer = "services"
-depends_on = ["luskctl.lib.containers.tasks"]
+depends_on = ["terok.lib.containers.tasks"]
 
 # Agent log formatters (Claude stream-json, plain text)
 [[modules]]
-path = "luskctl.lib.containers.log_format"
+path = "terok.lib.containers.log_format"
 layer = "services"
-depends_on = ["luskctl.lib.util.ansi"]
+depends_on = ["terok.lib.util.ansi"]
 
 # Task display types and status computation
 [[modules]]
-path = "luskctl.lib.containers.task_display"
+path = "terok.lib.containers.task_display"
 layer = "services"
 depends_on = []
 
 # Agent work status reading
 [[modules]]
-path = "luskctl.lib.containers.work_status"
+path = "terok.lib.containers.work_status"
 layer = "services"
 depends_on = []
 
 # Task log viewing and streaming
 [[modules]]
-path = "luskctl.lib.containers.task_logs"
+path = "terok.lib.containers.task_logs"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.log_format",
-    "luskctl.lib.containers.runtime",
-    "luskctl.lib.containers.tasks",
-    "luskctl.lib.core.projects",
+    "terok.lib.containers.log_format",
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.projects",
 ]
 
 # Task metadata, lifecycle, and queries
 [[modules]]
-path = "luskctl.lib.containers.tasks"
+path = "terok.lib.containers.tasks"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.runtime",
-    "luskctl.lib.containers.task_display",
-    "luskctl.lib.containers.work_status",
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.util.ansi",
-    "luskctl.lib.util.emoji",
-    "luskctl.lib.util.fs",
-    "luskctl.lib.util.logging_utils",
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.task_display",
+    "terok.lib.containers.work_status",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+    "terok.lib.util.ansi",
+    "terok.lib.util.emoji",
+    "terok.lib.util.fs",
+    "terok.lib.util.logging_utils",
 ]
 
 # Task container runners (CLI, web, headless, restart)
 [[modules]]
-path = "luskctl.lib.containers.task_runners"
+path = "terok.lib.containers.task_runners"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.agent_config",
-    "luskctl.lib.containers.agents",
-    "luskctl.lib.containers.environment",
-    "luskctl.lib.containers.headless_providers",
-    "luskctl.lib.containers.instructions",
-    "luskctl.lib.containers.ports",
-    "luskctl.lib.containers.runtime",
-    "luskctl.lib.containers.tasks",
-    "luskctl.lib.core.images",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.util.ansi",
-    "luskctl.lib.util.podman",
+    "terok.lib.containers.agent_config",
+    "terok.lib.containers.agents",
+    "terok.lib.containers.environment",
+    "terok.lib.containers.headless_providers",
+    "terok.lib.containers.instructions",
+    "terok.lib.containers.ports",
+    "terok.lib.containers.runtime",
+    "terok.lib.containers.tasks",
+    "terok.lib.core.images",
+    "terok.lib.core.projects",
+    "terok.lib.util.ansi",
+    "terok.lib.util.podman",
 ]
 
 # Container state, GPU args, log streaming
 [[modules]]
-path = "luskctl.lib.containers.runtime"
+path = "terok.lib.containers.runtime"
 layer = "services"
-depends_on = ["luskctl.lib.core.projects", "luskctl.lib.util.logging_utils"]
+depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils"]
 
 # Task environment & volume mounts
 [[modules]]
-path = "luskctl.lib.containers.environment"
+path = "terok.lib.containers.environment"
 layer = "services"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs"]
 
 # Task port allocation
 [[modules]]
-path = "luskctl.lib.containers.ports"
+path = "terok.lib.containers.ports"
 layer = "services"
-depends_on = ["luskctl.lib.core.config"]
+depends_on = ["terok.lib.core.config"]
 
 # Dockerfile generation & image building
 [[modules]]
-path = "luskctl.lib.containers.docker"
+path = "terok.lib.containers.docker"
 layer = "services"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.images", "luskctl.lib.core.projects", "luskctl.lib.util.fs"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.images", "terok.lib.core.projects", "terok.lib.util.fs"]
 
 # Project infrastructure state (queries podman & filesystem)
 [[modules]]
-path = "luskctl.lib.containers.project_state"
+path = "terok.lib.containers.project_state"
 layer = "services"
 depends_on = [
-    "luskctl.lib.containers.docker",
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.images",
-    "luskctl.lib.core.projects",
+    "terok.lib.containers.docker",
+    "terok.lib.core.config",
+    "terok.lib.core.images",
+    "terok.lib.core.projects",
 ]
 
 #
@@ -223,32 +223,32 @@ depends_on = [
 
 # API key authentication workflows
 [[modules]]
-path = "luskctl.lib.security.auth"
+path = "terok.lib.security.auth"
 layer = "services"
 depends_on = [
-    "luskctl.lib.util.podman",
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.images",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.util.fs",
+    "terok.lib.util.podman",
+    "terok.lib.core.config",
+    "terok.lib.core.images",
+    "terok.lib.core.projects",
+    "terok.lib.util.fs",
 ]
 
 # SSH key management
 [[modules]]
-path = "luskctl.lib.security.ssh"
+path = "terok.lib.security.ssh"
 layer = "services"
 depends_on = [
-    "luskctl.lib.core.config",
-    "luskctl.lib.core.projects",
-    "luskctl.lib.util.fs",
-    "luskctl.lib.util.template_utils",
+    "terok.lib.core.config",
+    "terok.lib.core.projects",
+    "terok.lib.util.fs",
+    "terok.lib.util.template_utils",
 ]
 
 # Git gate sync & validation
 [[modules]]
-path = "luskctl.lib.security.git_gate"
+path = "terok.lib.security.git_gate"
 layer = "services"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
 
 #
 # ·· wizards ··  Interactive workflows
@@ -256,13 +256,13 @@ depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.projects"]
 
 # Interactive project creation
 [[modules]]
-path = "luskctl.lib.wizards.new_project"
+path = "terok.lib.wizards.new_project"
 layer = "services"
 depends_on = [
-    "luskctl.lib.core.config",
-    "luskctl.ui_utils.editor",
-    "luskctl.lib.util.fs",
-    "luskctl.lib.util.template_utils",
+    "terok.lib.core.config",
+    "terok.ui_utils.editor",
+    "terok.lib.util.fs",
+    "terok.lib.util.template_utils",
 ]
 
 # ── CORE LAYER ──────────────────────────────────────────────────────
@@ -272,43 +272,43 @@ depends_on = [
 
 # Top-level package (version metadata only)
 [[modules]]
-path = "luskctl"
+path = "terok"
 layer = "core"
 depends_on = []
 
 # Version info
 [[modules]]
-path = "luskctl.lib.core.version"
+path = "terok.lib.core.version"
 layer = "core"
-depends_on = ["luskctl"]
+depends_on = ["terok"]
 
 # Path resolution (FHS/XDG)
 [[modules]]
-path = "luskctl.lib.core.paths"
+path = "terok.lib.core.paths"
 layer = "core"
 depends_on = []
 
 # Configuration management
 [[modules]]
-path = "luskctl.lib.core.config"
+path = "terok.lib.core.config"
 layer = "core"
-depends_on = ["luskctl.lib.core.paths"]
+depends_on = ["terok.lib.core.paths"]
 
 # Project and preset data models (pure types, no I/O)
 [[modules]]
-path = "luskctl.lib.core.project_model"
+path = "terok.lib.core.project_model"
 layer = "core"
 depends_on = []
 
 # Project discovery, loading, and preset management
 [[modules]]
-path = "luskctl.lib.core.projects"
+path = "terok.lib.core.projects"
 layer = "core"
-depends_on = ["luskctl.lib.core.config", "luskctl.lib.core.project_model", "luskctl.lib.util.config_stack"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.project_model", "terok.lib.util.config_stack"]
 
 # Image naming conventions
 [[modules]]
-path = "luskctl.lib.core.images"
+path = "terok.lib.core.images"
 layer = "core"
 depends_on = []
 
@@ -318,14 +318,14 @@ depends_on = []
 
 # Terminal ANSI formatting
 [[modules]]
-path = "luskctl.ui_utils.terminal"
+path = "terok.ui_utils.terminal"
 layer = "core"
-depends_on = ["luskctl.lib.util.ansi"]
+depends_on = ["terok.lib.util.ansi"]
 utility = true
 
 # $EDITOR launching
 [[modules]]
-path = "luskctl.ui_utils.editor"
+path = "terok.ui_utils.editor"
 layer = "core"
 depends_on = []
 utility = true
@@ -336,49 +336,49 @@ utility = true
 
 # Podman user namespace handling
 [[modules]]
-path = "luskctl.lib.util.podman"
+path = "terok.lib.util.podman"
 layer = "core"
 depends_on = []
 utility = true
 
 # Filesystem helpers (mkdir, writable check)
 [[modules]]
-path = "luskctl.lib.util.fs"
+path = "terok.lib.util.fs"
 layer = "core"
 depends_on = []
 utility = true
 
 # Simple {{VAR}} template rendering
 [[modules]]
-path = "luskctl.lib.util.template_utils"
+path = "terok.lib.util.template_utils"
 layer = "core"
 depends_on = []
 utility = true
 
 # ANSI color utilities (used by services layer)
 [[modules]]
-path = "luskctl.lib.util.ansi"
+path = "terok.lib.util.ansi"
 layer = "core"
 depends_on = []
 utility = true
 
 # Debug logging stub
 [[modules]]
-path = "luskctl.lib.util.logging_utils"
+path = "terok.lib.util.logging_utils"
 layer = "core"
-depends_on = ["luskctl.lib.core.paths"]
+depends_on = ["terok.lib.core.paths"]
 utility = true
 
 # Emoji display-width utilities
 [[modules]]
-path = "luskctl.lib.util.emoji"
+path = "terok.lib.util.emoji"
 layer = "core"
 depends_on = []
 utility = true
 
 # Generic layered config resolution
 [[modules]]
-path = "luskctl.lib.util.config_stack"
+path = "terok.lib.util.config_stack"
 layer = "core"
 depends_on = []
 utility = true
@@ -392,7 +392,7 @@ expose = [
     "effective_ssh_key_name",
     "validate_project_id",
 ]
-from = ["luskctl.lib.core.project_model"]
+from = ["terok.lib.core.project_model"]
 
 [[interfaces]]
 expose = [
@@ -407,7 +407,7 @@ expose = [
     "effective_ssh_key_name",
     "validate_project_id",
 ]
-from = ["luskctl.lib.core.projects"]
+from = ["terok.lib.core.projects"]
 
 [[interfaces]]
 expose = [
@@ -420,7 +420,7 @@ expose = [
     "effective_status",
     "mode_emoji",
 ]
-from = ["luskctl.lib.containers.task_display"]
+from = ["terok.lib.containers.task_display"]
 
 [[interfaces]]
 expose = [
@@ -437,11 +437,11 @@ expose = [
     "write_pending_phase",
     "clear_pending_phase",
 ]
-from = ["luskctl.lib.containers.work_status"]
+from = ["terok.lib.containers.work_status"]
 
 [[interfaces]]
 expose = ["task_logs"]
-from = ["luskctl.lib.containers.task_logs"]
+from = ["terok.lib.containers.task_logs"]
 
 [[interfaces]]
 expose = [
@@ -466,31 +466,31 @@ expose = [
     "TaskMeta",
     "tasks_meta_dir",
 ]
-from = ["luskctl.lib.containers.tasks"]
+from = ["terok.lib.containers.tasks"]
 
 [[interfaces]]
 expose = ["task_run_cli", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless"]
-from = ["luskctl.lib.containers.task_runners"]
+from = ["terok.lib.containers.task_runners"]
 
 [[interfaces]]
 expose = ["parse_md_agent", "prepare_agent_config_dir"]
-from = ["luskctl.lib.containers.agents"]
+from = ["terok.lib.containers.agents"]
 
 [[interfaces]]
 expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
-from = ["luskctl.lib.containers.headless_providers"]
+from = ["terok.lib.containers.headless_providers"]
 
 [[interfaces]]
 expose = ["build_agent_config_stack", "resolve_agent_config", "resolve_provider_value"]
-from = ["luskctl.lib.containers.agent_config"]
+from = ["terok.lib.containers.agent_config"]
 
 [[interfaces]]
 expose = ["resolve_instructions", "bundled_default_instructions", "has_custom_instructions"]
-from = ["luskctl.lib.containers.instructions"]
+from = ["terok.lib.containers.instructions"]
 
 [[interfaces]]
 expose = ["AUTH_PROVIDERS", "AuthProvider", "authenticate"]
-from = ["luskctl.lib.security.auth"]
+from = ["terok.lib.security.auth"]
 
 [[interfaces]]
 expose = [
@@ -499,11 +499,11 @@ expose = [
     "build_context_hash",
     "dockerfiles_match_templates",
 ]
-from = ["luskctl.lib.containers.docker"]
+from = ["terok.lib.containers.docker"]
 
 [[interfaces]]
 expose = ["init_project_ssh"]
-from = ["luskctl.lib.security.ssh"]
+from = ["terok.lib.security.ssh"]
 
 [[interfaces]]
 expose = [
@@ -514,11 +514,11 @@ expose = [
     "find_projects_sharing_gate",
     "get_gate_last_commit",
 ]
-from = ["luskctl.lib.security.git_gate"]
+from = ["terok.lib.security.git_gate"]
 
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
-from = ["luskctl.lib.containers.project_state"]
+from = ["terok.lib.containers.project_state"]
 
 # Core module interfaces
 
@@ -545,7 +545,7 @@ expose = [
     "get_task_name_categories",
     "get_prefix",
 ]
-from = ["luskctl.lib.core.config"]
+from = ["terok.lib.core.config"]
 
 [[interfaces]]
 expose = [
@@ -556,7 +556,7 @@ expose = [
     "project_web_image",
     "project_dev_image",
 ]
-from = ["luskctl.lib.core.images"]
+from = ["terok.lib.core.images"]
 
 # Service module interfaces
 
@@ -568,7 +568,7 @@ expose = [
     "build_task_env_and_volumes",
     "apply_web_env_overrides",
 ]
-from = ["luskctl.lib.containers.environment"]
+from = ["terok.lib.containers.environment"]
 
 [[interfaces]]
 expose = [
@@ -582,19 +582,19 @@ expose = [
     "wait_for_exit",
     "get_project_container_states",
 ]
-from = ["luskctl.lib.containers.runtime"]
+from = ["terok.lib.containers.runtime"]
 
 [[interfaces]]
 expose = ["auto_detect_formatter", "ClaudeStreamJsonFormatter", "PlainTextFormatter"]
-from = ["luskctl.lib.containers.log_format"]
+from = ["terok.lib.containers.log_format"]
 
 [[interfaces]]
 expose = ["wait_for_container_exit", "follow_container_logs_cmd"]
-from = ["luskctl.lib.containers.autopilot"]
+from = ["terok.lib.containers.autopilot"]
 
 [[interfaces]]
 expose = ["run_wizard", "collect_wizard_inputs", "generate_config"]
-from = ["luskctl.lib.wizards.new_project"]
+from = ["terok.lib.wizards.new_project"]
 
 [[interfaces]]
 expose = [
@@ -629,34 +629,34 @@ expose = [
     "is_task_image_old",
     "maybe_pause_for_ssh_key_registration",
 ]
-from = ["luskctl.lib.facade"]
+from = ["terok.lib.facade"]
 
 # Config stack utility interface
 [[interfaces]]
 expose = ["deep_merge", "ConfigScope", "ConfigStack", "load_yaml_scope", "load_json_scope"]
-from = ["luskctl.lib.util.config_stack"]
+from = ["terok.lib.util.config_stack"]
 
 # Emoji utility interface
 [[interfaces]]
 expose = ["draw_emoji"]
-from = ["luskctl.lib.util.emoji"]
+from = ["terok.lib.util.emoji"]
 
 # Filesystem utility interface
 [[interfaces]]
 expose = ["ensure_dir", "ensure_dir_writable"]
-from = ["luskctl.lib.util.fs"]
+from = ["terok.lib.util.fs"]
 
 # Port allocation interface
 [[interfaces]]
 expose = ["assign_web_port"]
-from = ["luskctl.lib.containers.ports"]
+from = ["terok.lib.containers.ports"]
 
 # Core path resolution interface
 [[interfaces]]
 expose = ["config_root", "state_root", "runtime_root"]
-from = ["luskctl.lib.core.paths"]
+from = ["terok.lib.core.paths"]
 
 # Core version interface
 [[interfaces]]
 expose = ["get_version_info", "format_version_string"]
-from = ["luskctl.lib.core.version"]
+from = ["terok.lib.core.version"]

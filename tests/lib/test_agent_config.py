@@ -10,8 +10,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.containers.agent_config import build_agent_config_stack, resolve_agent_config
-from luskctl.lib.core.projects import list_presets, load_preset, load_project
+from terok.lib.containers.agent_config import build_agent_config_stack, resolve_agent_config
+from terok.lib.core.projects import list_presets, load_preset, load_project
 from test_utils import mock_git_config, write_project
 
 
@@ -27,12 +27,12 @@ def _env(
     (which would let real user presets pollute test results).
     """
     env: dict[str, str] = {
-        "LUSKCTL_CONFIG_DIR": str(config_root),
-        "LUSKCTL_STATE_DIR": str(state_root),
+        "TEROK_CONFIG_DIR": str(config_root),
+        "TEROK_STATE_DIR": str(state_root),
         "XDG_CONFIG_HOME": str(xdg_config_home or config_root.parent / "xdg"),
     }
     if global_config:
-        env["LUSKCTL_CONFIG_FILE"] = str(global_config)
+        env["TEROK_CONFIG_FILE"] = str(global_config)
     return env
 
 
@@ -323,7 +323,7 @@ class PresetFileRefTests(unittest.TestCase):
 
             # Create global preset via XDG_CONFIG_HOME
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "shared.yml").write_text(
                 "model: haiku\nmax_turns: 2\n", encoding="utf-8"
@@ -345,7 +345,7 @@ class PresetFileRefTests(unittest.TestCase):
 
             # Create global preset
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "fast.yml").write_text("model: haiku\n", encoding="utf-8")
 
@@ -369,7 +369,7 @@ class PresetFileRefTests(unittest.TestCase):
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "with-file.yml").write_text(
                 "subagents:\n  - name: sa\n    file: ./agents/custom.md\n",
@@ -397,7 +397,7 @@ class GlobalPresetListTests(unittest.TestCase):
 
             # Global preset
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "shared.yml").write_text("model: haiku\n", encoding="utf-8")
 
@@ -421,7 +421,7 @@ class GlobalPresetListTests(unittest.TestCase):
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "fast.yml").write_text("model: haiku\n", encoding="utf-8")
 
@@ -450,7 +450,7 @@ class GlobalPresetProvenanceTests(unittest.TestCase):
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / "shared.yml").write_text("model: haiku\n", encoding="utf-8")
 
@@ -481,7 +481,7 @@ class GlobalPresetProvenanceTests(unittest.TestCase):
 
 def _any_bundled_name() -> str:
     """Return the name of any bundled preset (for tests that need a concrete name)."""
-    from luskctl.lib.core.config import bundled_presets_dir
+    from terok.lib.core.config import bundled_presets_dir
 
     bdir = bundled_presets_dir()
     for p in bdir.iterdir():
@@ -534,7 +534,7 @@ class BundledPresetTests(unittest.TestCase):
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / f"{name}.yml").write_text(
                 "model: opus\nmax_turns: 99\n", encoding="utf-8"
@@ -590,7 +590,7 @@ class BundledPresetTests(unittest.TestCase):
             write_project(config_root, "proj", "project:\n  id: proj\n")
 
             xdg = base / "xdg"
-            global_presets = xdg / "luskctl" / "presets"
+            global_presets = xdg / "terok" / "presets"
             global_presets.mkdir(parents=True, exist_ok=True)
             (global_presets / f"{name}.yml").write_text("model: opus\n", encoding="utf-8")
 
@@ -610,7 +610,7 @@ class ValidateProjectIdTests(unittest.TestCase):
 
     def test_error_message_mentions_first_char(self) -> None:
         """Error message describes the first-character requirement."""
-        from luskctl.lib.core.project_model import validate_project_id
+        from terok.lib.core.project_model import validate_project_id
 
         with self.assertRaises(SystemExit) as ctx:
             validate_project_id("-bad")

@@ -243,7 +243,7 @@ def _import_with_stubs(
     stubs: dict[str, types.ModuleType] | None,
     *module_names: str,
 ) -> list[types.ModuleType]:
-    """Clear luskctl.tui modules and import the given modules with Textual stubs."""
+    """Clear terok.tui modules and import the given modules with Textual stubs."""
     if stubs is None:
         stubs = build_textual_stubs()
     real_find_spec = importlib.util.find_spec
@@ -256,7 +256,7 @@ def _import_with_stubs(
     with mock.patch("importlib.util.find_spec", side_effect=_find_spec):
         with mock.patch.dict(sys.modules, stubs):
             for mod_name in list(sys.modules):
-                if mod_name.startswith("luskctl.tui"):
+                if mod_name.startswith("terok.tui"):
                     sys.modules.pop(mod_name, None)
             return [importlib.import_module(name) for name in module_names]
 
@@ -264,12 +264,12 @@ def _import_with_stubs(
 def import_fresh(
     stubs: dict[str, types.ModuleType] | None = None,
 ) -> tuple[types.ModuleType, types.ModuleType, types.ModuleType]:
-    """Clear luskctl.tui modules and reimport with stubs.
+    """Clear terok.tui modules and reimport with stubs.
 
     Returns (screens, widgets, app) module tuple.
     """
     screens, widgets, app = _import_with_stubs(
-        stubs, "luskctl.tui.screens", "luskctl.tui.widgets", "luskctl.tui.app"
+        stubs, "terok.tui.screens", "terok.tui.widgets", "terok.tui.app"
     )
     return screens, widgets, app
 
@@ -295,14 +295,14 @@ def import_app(
 ) -> tuple[types.ModuleType, type]:
     """Import app module with stubs and return (app_mod, AppClass)."""
     _, _, app_mod = import_fresh(stubs)
-    return app_mod, app_mod.LuskTUI
+    return app_mod, app_mod.TerokTUI
 
 
 def import_log_viewer(
     stubs: dict[str, types.ModuleType] | None = None,
 ) -> types.ModuleType:
     """Import log_viewer module with stubs."""
-    return _import_with_stubs(stubs, "luskctl.tui.log_viewer")[0]
+    return _import_with_stubs(stubs, "terok.tui.log_viewer")[0]
 
 
 def make_key_event(key_str: str) -> mock.Mock:

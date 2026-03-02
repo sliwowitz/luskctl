@@ -59,7 +59,7 @@ jobs:
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check docstring coverage
-        run: docstr-coverage src/luskctl/ --fail-under=95
+        run: docstr-coverage src/terok/ --fail-under=95
 
   dead-code:
     runs-on: ubuntu-latest
@@ -75,7 +75,7 @@ jobs:
         run: pip install -r .github/requirements-ci.txt
 
       - name: Check for dead code
-        run: vulture src/luskctl/ vulture_whitelist.py --min-confidence 80
+        run: vulture src/terok/ vulture_whitelist.py --min-confidence 80
 
   test:
     runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
         run: poetry install --with test --no-interaction
 
       - name: Run tests
-        run: poetry run pytest --cov=luskctl --cov-report=xml --cov-report=term-missing
+        run: poetry run pytest --cov=terok --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

@@ -8,8 +8,8 @@ import unittest
 import unittest.mock
 from dataclasses import FrozenInstanceError
 
-from luskctl.lib.containers.agent_config import resolve_provider_value
-from luskctl.lib.containers.headless_providers import (
+from terok.lib.containers.agent_config import resolve_provider_value
+from terok.lib.containers.headless_providers import (
     HEADLESS_PROVIDERS,
     PROVIDER_NAMES,
     apply_provider_config,
@@ -18,7 +18,7 @@ from luskctl.lib.containers.headless_providers import (
     generate_all_wrappers,
     get_provider,
 )
-from luskctl.lib.core.project_model import Project
+from terok.lib.core.project_model import Project
 
 
 def _make_project(**kwargs: object) -> Project:
@@ -146,10 +146,10 @@ class BuildHeadlessCommandTests(unittest.TestCase):
     """Tests for build_headless_command() per provider."""
 
     def test_claude_command_uses_wrapper(self) -> None:
-        """Claude command uses the wrapper function with --luskctl-timeout."""
+        """Claude command uses the wrapper function with --terok-timeout."""
         p = HEADLESS_PROVIDERS["claude"]
         cmd = build_headless_command(p, timeout=1800)
-        self.assertIn("claude --luskctl-timeout 1800", cmd)
+        self.assertIn("claude --terok-timeout 1800", cmd)
         self.assertIn("-p", cmd)
         self.assertIn("--output-format stream-json", cmd)
         self.assertIn("--verbose", cmd)
@@ -166,7 +166,7 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         """Codex command uses exec subcommand and --full-auto via wrapper."""
         p = HEADLESS_PROVIDERS["codex"]
         cmd = build_headless_command(p, timeout=1800)
-        self.assertIn("codex --luskctl-timeout 1800", cmd)
+        self.assertIn("codex --terok-timeout 1800", cmd)
         self.assertIn("exec", cmd)
         self.assertIn("--full-auto", cmd)
         self.assertIn("prompt.txt", cmd)
@@ -181,7 +181,7 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         """Copilot command uses -p flag and --allow-all-tools via wrapper."""
         p = HEADLESS_PROVIDERS["copilot"]
         cmd = build_headless_command(p, timeout=900)
-        self.assertIn("copilot --luskctl-timeout 900", cmd)
+        self.assertIn("copilot --terok-timeout 900", cmd)
         self.assertIn("--allow-all-tools", cmd)
         self.assertIn("-p", cmd)
 
@@ -203,7 +203,7 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         """OpenCode command uses run subcommand via wrapper."""
         p = HEADLESS_PROVIDERS["opencode"]
         cmd = build_headless_command(p, timeout=1800)
-        self.assertIn("opencode --luskctl-timeout 1800", cmd)
+        self.assertIn("opencode --terok-timeout 1800", cmd)
         self.assertIn("run", cmd)
         self.assertIn("prompt.txt", cmd)
 
@@ -227,7 +227,7 @@ class GenerateAgentWrapperTests(unittest.TestCase):
     @staticmethod
     def _claude_wrapper_fn(has_agents: bool, project: object, skip_permissions: bool) -> str:
         """Stub for agents._generate_claude_wrapper used in tests."""
-        from luskctl.lib.containers.agents import _generate_claude_wrapper
+        from terok.lib.containers.agents import _generate_claude_wrapper
 
         return _generate_claude_wrapper(has_agents, project, skip_permissions)
 
@@ -269,13 +269,13 @@ class GenerateAgentWrapperTests(unittest.TestCase):
         self.assertNotIn("--add-dir", wrapper)
 
     def test_generic_wrapper_has_timeout_support(self) -> None:
-        """All non-Claude wrappers support --luskctl-timeout."""
+        """All non-Claude wrappers support --terok-timeout."""
         project = _make_project()
         for name, p in HEADLESS_PROVIDERS.items():
             if name == "claude":
                 continue
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            self.assertIn("--luskctl-timeout", wrapper, f"{name} missing timeout support")
+            self.assertIn("--terok-timeout", wrapper, f"{name} missing timeout support")
 
     def test_generic_wrapper_has_git_committer(self) -> None:
         """All wrappers set GIT_COMMITTER_NAME from project human_name."""
@@ -312,7 +312,7 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             # --continue should appear standalone, not followed by a session ID read
             self.assertIn(f"_resume_args+=({p.continue_flag})", wrapper, f"{name}")
             self.assertNotIn(
-                "cat /home/dev/.luskctl/session-id.txt",
+                "cat /home/dev/.terok/session-id.txt",
                 wrapper,
                 f"{name} should not read session ID file",
             )
@@ -324,7 +324,7 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
             self.assertIn(
-                "touch /home/dev/.luskctl/session-id.txt", wrapper, f"{name} missing marker write"
+                "touch /home/dev/.terok/session-id.txt", wrapper, f"{name} missing marker write"
             )
 
     def test_continue_providers_preserve_exit_code(self) -> None:
@@ -508,7 +508,7 @@ class GenerateAllWrappersTests(unittest.TestCase):
     @staticmethod
     def _claude_wrapper_fn(has_agents: bool, project: object, skip_permissions: bool) -> str:
         """Stub for agents._generate_claude_wrapper used in tests."""
-        from luskctl.lib.containers.agents import _generate_claude_wrapper
+        from terok.lib.containers.agents import _generate_claude_wrapper
 
         return _generate_claude_wrapper(has_agents, project, skip_permissions)
 

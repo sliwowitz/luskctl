@@ -11,7 +11,7 @@ from io import StringIO
 
 import yaml
 
-from luskctl.lib.containers.tasks import (
+from terok.lib.containers.tasks import (
     TASK_NAME_MAX_LEN,
     _default_categories_for_project,
     _resolve_name_categories,
@@ -322,7 +322,7 @@ class TestResolveNameCategories(unittest.TestCase):
             cats = _resolve_name_categories(project_id)
             self.assertEqual(cats, ["animals", "food"])
 
-    @unittest.mock.patch("luskctl.lib.core.config.get_task_name_categories")
+    @unittest.mock.patch("terok.lib.core.config.get_task_name_categories")
     def test_global_config_fallback(self, mock_global: unittest.mock.Mock) -> None:
         """Global config is used when project has no override."""
         mock_global.return_value = ["music", "sports"]
@@ -332,7 +332,7 @@ class TestResolveNameCategories(unittest.TestCase):
             cats = _resolve_name_categories(project_id)
             self.assertEqual(cats, ["music", "sports"])
 
-    @unittest.mock.patch("luskctl.lib.core.config.get_task_name_categories")
+    @unittest.mock.patch("terok.lib.core.config.get_task_name_categories")
     def test_hash_default_fallback(self, mock_global: unittest.mock.Mock) -> None:
         """Hash-based default is used when neither project nor global config is set."""
         mock_global.return_value = None

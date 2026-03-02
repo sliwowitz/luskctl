@@ -20,7 +20,7 @@ from pathlib import Path
 import mkdocs_gen_files
 
 ROOT = Path(__file__).parent.parent
-SRC = ROOT / "src" / "luskctl"
+SRC = ROOT / "src" / "terok"
 COMPLEXITY_THRESHOLD = 15
 
 

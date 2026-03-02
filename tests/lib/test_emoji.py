@@ -6,7 +6,7 @@
 
 import unittest
 
-from luskctl.lib.util.emoji import draw_emoji
+from terok.lib.util.emoji import draw_emoji
 
 
 class TestDrawEmoji(unittest.TestCase):
@@ -38,7 +38,7 @@ class TestDrawEmoji(unittest.TestCase):
 
     def test_all_status_emojis_are_exactly_width_2(self):
         """All status emojis used by the project are exactly 2 cells wide."""
-        from luskctl.lib.containers.task_display import STATUS_DISPLAY
+        from terok.lib.containers.task_display import STATUS_DISPLAY
 
         for status, info in STATUS_DISPLAY.items():
             self.assertEqual(
@@ -54,7 +54,7 @@ class TestDrawEmoji(unittest.TestCase):
 
     def test_all_mode_emojis_are_exactly_width_2(self):
         """All mode emojis used by the project are exactly 2 cells wide."""
-        from luskctl.lib.containers.task_display import MODE_DISPLAY
+        from terok.lib.containers.task_display import MODE_DISPLAY
 
         for mode, info in MODE_DISPLAY.items():
             self.assertEqual(
@@ -70,7 +70,7 @@ class TestDrawEmoji(unittest.TestCase):
 
     def test_all_backend_emojis_are_exactly_width_2(self):
         """All web backend emojis are exactly 2 cells wide."""
-        from luskctl.lib.containers.task_display import (
+        from terok.lib.containers.task_display import (
             WEB_BACKEND_DEFAULT_EMOJI,
             WEB_BACKEND_EMOJI,
         )

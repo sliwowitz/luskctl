@@ -16,7 +16,7 @@ sys.modules["textual.containers"] = mock.MagicMock()
 sys.modules["textual.message"] = mock.MagicMock()
 sys.modules["yaml"] = mock.MagicMock()
 
-from luskctl.lib.security.git_gate import GateStalenessInfo
+from terok.lib.security.git_gate import GateStalenessInfo
 from test_utils import make_staleness_info
 
 

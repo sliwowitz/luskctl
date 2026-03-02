@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for autopilot (Level 1+2) features: luskctl run and agent config."""
+"""Tests for autopilot (Level 1+2) features: terokctl run and agent config."""
 
 from __future__ import annotations
 
@@ -21,16 +21,16 @@ from typing import TYPE_CHECKING
 import yaml
 
 if TYPE_CHECKING:
-    from luskctl.lib.core.projects import Project
+    from terok.lib.core.projects import Project
 
-from luskctl.lib.containers.agents import (
+from terok.lib.containers.agents import (
     _generate_claude_wrapper,
     _subagents_to_json,
     _write_session_hook,
     parse_md_agent,
 )
-from luskctl.lib.containers.task_runners import task_followup_headless, task_run_headless
-from luskctl.lib.core.projects import load_project
+from terok.lib.containers.task_runners import task_followup_headless, task_run_headless
+from terok.lib.core.projects import load_project
 from test_utils import mock_git_config, write_project
 
 
@@ -46,7 +46,7 @@ class AgentConfigProjectTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(
                 os.environ,
-                {"LUSKCTL_CONFIG_DIR": str(config_root), "LUSKCTL_STATE_DIR": str(base / "s")},
+                {"TEROK_CONFIG_DIR": str(config_root), "TEROK_STATE_DIR": str(base / "s")},
             ):
                 with mock_git_config():
                     p = load_project("proj_noagent")
@@ -70,7 +70,7 @@ class AgentConfigProjectTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(
                 os.environ,
-                {"LUSKCTL_CONFIG_DIR": str(config_root), "LUSKCTL_STATE_DIR": str(base / "s")},
+                {"TEROK_CONFIG_DIR": str(config_root), "TEROK_STATE_DIR": str(base / "s")},
             ):
                 with mock_git_config():
                     p = load_project("proj_agent")
@@ -91,7 +91,7 @@ class AgentConfigProjectTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(
                 os.environ,
-                {"LUSKCTL_CONFIG_DIR": str(config_root), "LUSKCTL_STATE_DIR": str(base / "s")},
+                {"TEROK_CONFIG_DIR": str(config_root), "TEROK_STATE_DIR": str(base / "s")},
             ):
                 with mock_git_config():
                     p = load_project("proj_sa")
@@ -239,7 +239,7 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
     """Tests for _generate_claude_wrapper."""
 
     def _make_project(self) -> Project:
-        from luskctl.lib.core.projects import Project
+        from terok.lib.core.projects import Project
 
         return Project(
             id="testproj",
@@ -305,11 +305,11 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         self.assertIn("instructions.md", wrapper)
 
     def test_wrapper_timeout_support(self) -> None:
-        """Wrapper parses --luskctl-timeout and wraps claude with timeout."""
+        """Wrapper parses --terok-timeout and wraps claude with timeout."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(has_agents=False, project=project)
         # Wrapper should contain timeout flag parsing
-        self.assertIn("--luskctl-timeout", wrapper)
+        self.assertIn("--terok-timeout", wrapper)
         self.assertIn("_timeout", wrapper)
         # Wrapper should use timeout command when _timeout is set
         self.assertIn('timeout "$_timeout" claude', wrapper)
@@ -373,7 +373,7 @@ class WriteSessionHookTests(unittest.TestCase):
             settings_path = Path(td) / "settings.json"
             original = (
                 '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"python3 -c \\"import json,sys; '
-                "print(json.load(sys.stdin)['session_id'])\\\" > /home/dev/.luskctl/claude-session.txt\"}]}]}}"
+                "print(json.load(sys.stdin)['session_id'])\\\" > /home/dev/.terok/claude-session.txt\"}]}]}}"
             )
             settings_path.write_text(original, encoding="utf-8")
 
@@ -414,7 +414,7 @@ class PrepareAgentConfigDirTests(unittest.TestCase):
     """Tests for prepare_agent_config_dir."""
 
     def _make_project(self) -> Project:
-        from luskctl.lib.core.projects import Project
+        from terok.lib.core.projects import Project
 
         return Project(
             id="test-proj",
@@ -432,10 +432,10 @@ class PrepareAgentConfigDirTests(unittest.TestCase):
             human_email="test@example.com",
         )
 
-    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_prepare_agent_config_writes_instructions(self, _mock_hook: object) -> None:
         """Instructions text is written to instructions.md in agent-config dir."""
-        from luskctl.lib.containers.agents import prepare_agent_config_dir
+        from terok.lib.containers.agents import prepare_agent_config_dir
 
         project = self._make_project()
         task_id = "test-task-1"
@@ -448,10 +448,10 @@ class PrepareAgentConfigDirTests(unittest.TestCase):
         self.assertTrue(instr_path.is_file())
         self.assertEqual(instr_path.read_text(encoding="utf-8"), "Custom instructions here.")
 
-    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_prepare_agent_config_no_instructions_file_when_none(self, _mock_hook: object) -> None:
         """No instructions.md when instructions is None."""
-        from luskctl.lib.containers.agents import prepare_agent_config_dir
+        from terok.lib.containers.agents import prepare_agent_config_dir
 
         project = self._make_project()
         task_id = "test-task-2"
@@ -461,10 +461,10 @@ class PrepareAgentConfigDirTests(unittest.TestCase):
         instr_path = agent_config_dir / "instructions.md"
         self.assertFalse(instr_path.is_file())
 
-    @unittest.mock.patch("luskctl.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_wrapper_has_append_system_prompt_when_instructions(self, _mock_hook: object) -> None:
         """Claude wrapper includes --append-system-prompt when instructions are provided."""
-        from luskctl.lib.containers.agents import prepare_agent_config_dir
+        from terok.lib.containers.agents import prepare_agent_config_dir
 
         project = self._make_project()
         task_id = "test-task-3"
@@ -473,7 +473,7 @@ class PrepareAgentConfigDirTests(unittest.TestCase):
         agent_config_dir = prepare_agent_config_dir(
             project, task_id, subagents=[], instructions="Test instructions."
         )
-        wrapper = (agent_config_dir / "luskctl-agent.sh").read_text(encoding="utf-8")
+        wrapper = (agent_config_dir / "terok-agent.sh").read_text(encoding="utf-8")
         self.assertIn("--append-system-prompt", wrapper)
         self.assertIn("instructions.md", wrapper)
 
@@ -504,21 +504,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -535,7 +535,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertEqual(prompt_file.read_text(), "Fix the auth bug")
 
     def test_headless_mounts_agent_config_dir(self) -> None:
-        """task_run_headless mounts agent-config dir to /home/dev/.luskctl."""
+        """task_run_headless mounts agent-config dir to /home/dev/.terok."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_mount")
@@ -544,21 +544,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -568,10 +568,10 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     # Check the podman run command has the agent-config mount
                     cmd = run_mock.call_args[0][0]
                     cmd_str = " ".join(cmd)
-                    self.assertIn("/home/dev/.luskctl:Z", cmd_str)
+                    self.assertIn("/home/dev/.terok:Z", cmd_str)
 
     def test_headless_generates_agent_wrapper(self) -> None:
-        """task_run_headless generates luskctl-agent.sh in agent-config dir."""
+        """task_run_headless generates terok-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_wrap")
@@ -580,21 +580,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -603,12 +603,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
 
                     # Verify wrapper was written
                     wrapper = (
-                        state_dir
-                        / "tasks"
-                        / "proj_wrap"
-                        / "1"
-                        / "agent-config"
-                        / "luskctl-agent.sh"
+                        state_dir / "tasks" / "proj_wrap" / "1" / "agent-config" / "terok-agent.sh"
                     )
                     self.assertTrue(wrapper.is_file())
                     content = wrapper.read_text()
@@ -625,21 +620,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -674,21 +669,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -730,21 +725,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -770,21 +765,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -801,23 +796,18 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     bash_cmd = cmd[-1]
                     self.assertIn("--model opus", bash_cmd)
                     self.assertIn("--max-turns 100", bash_cmd)
-                    # Timeout is delegated to the wrapper via --luskctl-timeout
-                    self.assertIn("--luskctl-timeout", bash_cmd)
+                    # Timeout is delegated to the wrapper via --terok-timeout
+                    self.assertIn("--terok-timeout", bash_cmd)
 
                     # But per-run flags are NOT in the wrapper
                     wrapper = (
-                        state_dir
-                        / "tasks"
-                        / "proj_flags"
-                        / "1"
-                        / "agent-config"
-                        / "luskctl-agent.sh"
+                        state_dir / "tasks" / "proj_flags" / "1" / "agent-config" / "terok-agent.sh"
                     )
                     content = wrapper.read_text()
                     self.assertNotIn("--model", content)
                     self.assertNotIn("--max-turns", content)
                     # Wrapper DOES have timeout support
-                    self.assertIn("--luskctl-timeout", content)
+                    self.assertIn("--terok-timeout", content)
 
     def test_headless_container_name_uses_run_prefix(self) -> None:
         """task_run_headless names the container <project>-run-<task_id>."""
@@ -829,21 +819,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -864,21 +854,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -900,19 +890,19 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit"
+                        "terok.lib.containers.task_runners.wait_for_exit"
                     ) as stream_mock,
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
@@ -928,7 +918,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertIn("proj_nf-run-1", output)
 
     def test_headless_uses_claude_function_in_command(self) -> None:
-        """task_run_headless uses claude wrapper via --luskctl-timeout."""
+        """task_run_headless uses claude wrapper via --terok-timeout."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_file = self._make_project(base, "proj_cmd")
@@ -937,21 +927,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -962,7 +952,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     bash_cmd = cmd[-1]
                     self.assertIn("init-ssh-and-repo.sh", bash_cmd)
                     self.assertNotIn("start-claude.sh", bash_cmd)
-                    self.assertIn("--luskctl-timeout", bash_cmd)
+                    self.assertIn("--terok-timeout", bash_cmd)
                     self.assertIn("--output-format stream-json", bash_cmd)
                     self.assertIn("-p", bash_cmd)
                     # Flags are now in the wrapper, not duplicated in the command
@@ -990,21 +980,21 @@ class TaskRunHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -1045,21 +1035,19 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
         with unittest.mock.patch.dict(
             os.environ,
             {
-                "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                "LUSKCTL_STATE_DIR": str(state_dir),
-                "LUSKCTL_CONFIG_FILE": str(config_file),
+                "TEROK_CONFIG_DIR": str(base / "config"),
+                "TEROK_STATE_DIR": str(state_dir),
+                "TEROK_CONFIG_FILE": str(config_file),
             },
             clear=True,
         ):
             with (
                 mock_git_config(),
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                    "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                 ),
-                unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 buffer = StringIO()
@@ -1077,25 +1065,25 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -1123,25 +1111,25 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -1160,14 +1148,14 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             state_dir = base / "state"
 
             # Create a task manually with mode=cli
-            from luskctl.lib.containers.tasks import task_new
+            from terok.lib.containers.tasks import task_new
 
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
@@ -1189,14 +1177,14 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             config_file = self._make_project(base, "proj_run")
             state_dir = base / "state"
 
-            from luskctl.lib.containers.tasks import task_new
+            from terok.lib.containers.tasks import task_new
 
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(config_file),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(config_file),
                 },
                 clear=True,
             ):
@@ -1210,7 +1198,7 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     # Container is running → follow-up should be rejected
                     with (
                         unittest.mock.patch(
-                            "luskctl.lib.containers.task_runners.get_container_state",
+                            "terok.lib.containers.task_runners.get_container_state",
                             return_value="running",
                         ),
                         self.assertRaises(SystemExit) as ctx,
@@ -1228,16 +1216,16 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         return_value="running",
                     ),
                 ):
@@ -1255,25 +1243,25 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit", return_value=0
+                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
                     ),
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -1294,25 +1282,25 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         side_effect=["exited", "running"],
                     ),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.wait_for_exit"
+                        "terok.lib.containers.task_runners.wait_for_exit"
                     ) as wait_mock,
-                    unittest.mock.patch("luskctl.lib.containers.task_runners._print_run_summary"),
+                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
                     buffer = StringIO()
@@ -1340,16 +1328,16 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         return_value=None,
                     ),
                 ):
@@ -1367,19 +1355,19 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(base / "config"),
-                    "LUSKCTL_STATE_DIR": str(state_dir),
-                    "LUSKCTL_CONFIG_FILE": str(base / "config.yml"),
+                    "TEROK_CONFIG_DIR": str(base / "config"),
+                    "TEROK_STATE_DIR": str(state_dir),
+                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
                 },
                 clear=True,
             ):
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.containers.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "luskctl.lib.containers.task_runners.get_container_state",
+                        "terok.lib.containers.task_runners.get_container_state",
                         # first call: pre-start check (exited); second call: post-start check (still exited)
                         side_effect=["exited", "exited"],
                     ),

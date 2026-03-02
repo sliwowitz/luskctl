@@ -8,9 +8,9 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from luskctl.lib.containers.project_state import get_project_state
-from luskctl.lib.core.config import build_root, state_root
-from luskctl.lib.core.projects import list_projects, load_project
+from terok.lib.containers.project_state import get_project_state
+from terok.lib.core.config import build_root, state_root
+from terok.lib.core.projects import list_projects, load_project
 from test_utils import project_env, write_project
 
 
@@ -40,7 +40,7 @@ git:
             system_root = base / "system"
             user_root = base / "user"
             system_root.mkdir(parents=True, exist_ok=True)
-            user_projects = user_root / "luskctl" / "projects"
+            user_projects = user_root / "terok" / "projects"
 
             project_id = "proj2"
             write_project(
@@ -57,7 +57,7 @@ git:
             with unittest.mock.patch.dict(
                 os.environ,
                 {
-                    "LUSKCTL_CONFIG_DIR": str(system_root),
+                    "TEROK_CONFIG_DIR": str(system_root),
                     "XDG_CONFIG_HOME": str(user_root),
                 },
             ):
@@ -92,7 +92,7 @@ git:
 
             with unittest.mock.patch.dict(
                 os.environ,
-                {"LUSKCTL_CONFIG_DIR": str(config_dir), "XDG_CONFIG_HOME": str(base / "empty")},
+                {"TEROK_CONFIG_DIR": str(config_dir), "XDG_CONFIG_HOME": str(base / "empty")},
             ):
                 projects = list_projects()
                 # The malformed project should be skipped, only the good one returned
@@ -126,7 +126,7 @@ git:
             gate_dir.mkdir(parents=True, exist_ok=True)
 
             with unittest.mock.patch(
-                "luskctl.lib.containers.project_state.subprocess.run"
+                "terok.lib.containers.project_state.subprocess.run"
             ) as run_mock:
                 run_mock.return_value.returncode = 0
                 state = get_project_state(project_id, gate_commit_provider=lambda pid: None)

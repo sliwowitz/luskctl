@@ -105,7 +105,7 @@ class RenderHelpersTests(TestCase):
         self.assertIsInstance(result, Text)
         text_str = str(result)
         self.assertIn("Autopilot", text_str)
-        self.assertIn("luskctl task logs", text_str)
+        self.assertIn("terokctl task logs", text_str)
 
     def test_render_task_details_autopilot_with_exit_code(self) -> None:
         widgets = import_widgets()
@@ -450,7 +450,7 @@ class ActionDispatchTests(TestCase):
 
     def test_project_action_dispatch_auth_providers(self) -> None:
         """Auth dispatch extracts the provider name from the action string."""
-        from luskctl.lib.security.auth import AUTH_PROVIDERS
+        from terok.lib.security.auth import AUTH_PROVIDERS
 
         app_mod, AppClass = import_app()
 

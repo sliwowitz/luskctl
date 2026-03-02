@@ -10,9 +10,9 @@ from io import StringIO
 
 import yaml
 
-from luskctl.lib.containers.runtime import get_container_state, get_task_container_state
-from luskctl.lib.containers.task_runners import task_restart
-from luskctl.lib.containers.tasks import task_new, task_status, task_stop
+from terok.lib.containers.runtime import get_container_state, get_task_container_state
+from terok.lib.containers.task_runners import task_restart
+from terok.lib.containers.tasks import task_new, task_status, task_stop
 from test_utils import mock_git_config, project_env
 
 
@@ -22,7 +22,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_running(self) -> None:
         """_get_container_state returns 'running' for running container."""
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output", return_value="running\n"
+            "terok.lib.containers.runtime.subprocess.check_output", return_value="running\n"
         ):
             state = get_container_state("test-container")
             self.assertEqual(state, "running")
@@ -30,7 +30,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_exited(self) -> None:
         """_get_container_state returns 'exited' for stopped container."""
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output", return_value="exited\n"
+            "terok.lib.containers.runtime.subprocess.check_output", return_value="exited\n"
         ):
             state = get_container_state("test-container")
             self.assertEqual(state, "exited")
@@ -38,7 +38,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_not_found(self) -> None:
         """_get_container_state returns None if container doesn't exist."""
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
             state = get_container_state("test-container")
@@ -47,7 +47,7 @@ class ContainerLifecycleTests(unittest.TestCase):
     def test_get_container_state_podman_not_found(self) -> None:
         """_get_container_state returns None if podman is not installed."""
         with unittest.mock.patch(
-            "luskctl.lib.containers.runtime.subprocess.check_output",
+            "terok.lib.containers.runtime.subprocess.check_output",
             side_effect=FileNotFoundError("podman"),
         ):
             state = get_container_state("test-container")
@@ -71,9 +71,9 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                    "terok.lib.containers.tasks.get_container_state", return_value="running"
                 ),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 with redirect_stdout(StringIO()):
@@ -102,9 +102,9 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                    "terok.lib.containers.tasks.get_container_state", return_value="running"
                 ),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 with redirect_stdout(StringIO()):
@@ -131,9 +131,9 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value="running"
+                    "terok.lib.containers.tasks.get_container_state", return_value="running"
                 ),
-                unittest.mock.patch("luskctl.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 with redirect_stdout(StringIO()):
@@ -170,12 +170,10 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=["exited", "running"],  # Stopped, then alive after start
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 with redirect_stdout(StringIO()):
@@ -204,12 +202,10 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.get_container_state",
+                    "terok.lib.containers.task_runners.get_container_state",
                     side_effect=["running", "running"],
                 ),
-                unittest.mock.patch(
-                    "luskctl.lib.containers.task_runners.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 output = StringIO()
@@ -242,7 +238,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.tasks.get_container_state", return_value="exited"
+                    "terok.lib.containers.tasks.get_container_state", return_value="exited"
                 ),
             ):
                 output = StringIO()
@@ -265,7 +261,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "luskctl.lib.containers.runtime.get_container_state",
+                    "terok.lib.containers.runtime.get_container_state",
                     return_value="running",
                 ) as mock_state,
             ):

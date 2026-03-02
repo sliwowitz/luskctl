@@ -2,7 +2,7 @@
 
 ## Overview
 
-luskctl manages two types of resources:
+terok manages two types of resources:
 - **Images** — immutable, built once, shared across tasks
 - **Containers** — mutable instances of images, one per task
 
@@ -35,15 +35,15 @@ A task consists of three persistent components:
 
 ```
 Task #1
-├── Workspace    ~/.local/share/luskctl/tasks/<project>/1/workspace/
-├── Metadata     ~/.local/share/luskctl/projects/<project>/tasks/1.yml
+├── Workspace    ~/.local/share/terok/tasks/<project>/1/workspace/
+├── Metadata     ~/.local/share/terok/projects/<project>/tasks/1.yml
 └── Container    <project>-cli-1  (or <project>-web-1)
 ```
 
 All three persist independently and survive:
 - Container stops
 - Machine reboots
-- luskctl restarts
+- terok restarts
 
 ### Container States
 
@@ -124,7 +124,7 @@ Auth containers are ephemeral because:
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ L0: luskctl-l0:<base-tag>                                         │
+│ L0: terok-l0:<base-tag>                                         │
 │ ┌───────────────────────────────────────────────────────────────┐ │
 │ │ Ubuntu 24.04 + common tools (git, ssh, vim, ripgrep, ...)     │ │
 │ │ + dev user + /workspace                                       │ │
@@ -133,11 +133,11 @@ Auth containers are ephemeral because:
                 │                               │
                 ▼                               ▼
 ┌───────────────────────────────┐ ┌───────────────────────────────┐
-│ L1: luskctl-l1-cli:<base-tag> │ │ L1: luskctl-l1-ui:<base-tag>  │
+│ L1: terok-l1-cli:<base-tag> │ │ L1: terok-l1-ui:<base-tag>  │
 │ ┌───────────────────────────┐ │ │ ┌───────────────────────────┐ │
-│ │ + Codex CLI               │ │ │ │ + LuskUI distribution     │ │
+│ │ + Codex CLI               │ │ │ │ + Terok Web UI distribution     │ │
 │ │ + Claude Code             │ │ │ │ + Node.js runtime         │ │
-│ │ + Mistral Vibe            │ │ │ │ + luskui-entry.sh         │ │
+│ │ + Mistral Vibe            │ │ │ │ + terok-ui-entry.sh         │ │
 │ │ + OpenCode (blablador)    │ │ │ └───────────────────────────┘ │
 │ └───────────────────────────┘ │ └───────────────────────────────┘
 └───────────────────────────────┘ └───────────────────────────────┘
@@ -158,10 +158,10 @@ Auth containers are ephemeral because:
 
 | Command | What it builds | When to use |
 |---------|---------------|-------------|
-| `luskctl build <project>` | L2 only | Normal use (reuses L0/L1) |
-| `luskctl build --agents <project>` | L0 + L1 + L2 | Update agents (Codex, Claude, etc.) |
-| `luskctl build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Update base image / apt packages |
-| `luskctl build --dev <project>` | + L2-dev image | Manual debugging container |
+| `terokctl build <project>` | L2 only | Normal use (reuses L0/L1) |
+| `terokctl build --agents <project>` | L0 + L1 + L2 | Update agents (Codex, Claude, etc.) |
+| `terokctl build --full-rebuild <project>` | L0 + L1 + L2 (no cache) | Update base image / apt packages |
+| `terokctl build --dev <project>` | + L2-dev image | Manual debugging container |
 
 ### Image Staleness Detection
 
@@ -174,7 +174,7 @@ Container image hash ≠ Current project build hash
   "Image: old" warning in TUI
         │
         ▼
-  User should: luskctl build <project>
+  User should: terokctl build <project>
                then: task delete + task run-*
                or:   task stop + podman rm <container> + task run-*
 ```
@@ -187,31 +187,31 @@ Container image hash ≠ Current project build hash
 
 ```bash
 # First time (creates container)
-luskctl task new myproject        # Create task metadata + workspace
-luskctl task run-cli myproject 1  # Create and start container
+terokctl task new myproject        # Create task metadata + workspace
+terokctl task run-cli myproject 1  # Create and start container
 
 # Subsequent times (reuses container)
-luskctl task run-cli myproject 1  # Starts existing container
+terokctl task run-cli myproject 1  # Starts existing container
 ```
 
 ### Stopping and Restarting
 
 ```bash
-luskctl task stop myproject 1     # Graceful stop (container persists)
-luskctl task restart myproject 1  # Fast restart (podman start)
+terokctl task stop myproject 1     # Graceful stop (container persists)
+terokctl task restart myproject 1  # Fast restart (podman start)
 ```
 
 ### Checking Status
 
 ```bash
-luskctl task status myproject 1   # Shows metadata vs actual container state
-luskctl task list myproject       # Lists all tasks with status
+terokctl task status myproject 1   # Shows metadata vs actual container state
+terokctl task list myproject       # Lists all tasks with status
 ```
 
 ### Cleaning Up
 
 ```bash
-luskctl task delete myproject 1   # Removes container + workspace + metadata
+terokctl task delete myproject 1   # Removes container + workspace + metadata
 ```
 
 ### Manual Container Management

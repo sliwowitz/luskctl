@@ -14,7 +14,7 @@ format:
 
 # Run tests with coverage
 test:
-	poetry run pytest --cov=luskctl --cov-report=term-missing
+	poetry run pytest --cov=terok --cov-report=term-missing
 
 # Check module boundary rules (tach.toml)
 tach:
@@ -22,15 +22,15 @@ tach:
 
 # Check docstring coverage (minimum 95%)
 docstrings:
-	poetry run docstr-coverage src/luskctl/ --fail-under=95
+	poetry run docstr-coverage src/terok/ --fail-under=95
 
 # Check cognitive complexity (advisory — lists functions exceeding threshold)
 complexity:
-	poetry run complexipy src/luskctl/ --max-complexity-allowed 15 --failed; true
+	poetry run complexipy src/terok/ --max-complexity-allowed 15 --failed; true
 
 # Find dead code (cross-file, min 80% confidence)
 deadcode:
-	poetry run vulture src/luskctl/ vulture_whitelist.py --min-confidence 80
+	poetry run vulture src/terok/ vulture_whitelist.py --min-confidence 80
 
 # Check REUSE (SPDX license/copyright) compliance
 reuse:
