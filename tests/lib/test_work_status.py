@@ -236,6 +236,18 @@ class TestPendingPhase(unittest.TestCase):
         (self.tmp_dir / PENDING_PHASE_FILE).write_text("bare string\n")
         self.assertIsNone(read_pending_phase(self.tmp_dir))
 
+    def test_read_non_string_phase_and_prompt(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text(
+            yaml.safe_dump({"phase": 123, "prompt": ["x"]})
+        )
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
+    def test_read_non_string_prompt_only(self):
+        (self.tmp_dir / PENDING_PHASE_FILE).write_text(
+            yaml.safe_dump({"phase": "coding", "prompt": {"nested": True}})
+        )
+        self.assertIsNone(read_pending_phase(self.tmp_dir))
+
     def test_write_and_read(self):
         write_pending_phase(self.tmp_dir, "reviewing", "Review changes")
         pp = read_pending_phase(self.tmp_dir)

@@ -109,11 +109,11 @@ def write_work_status(
 
     When *status* is ``None`` the file is removed (clearing the status).
     """
-    agent_config_dir.mkdir(parents=True, exist_ok=True)
     path = agent_config_dir / STATUS_FILE_NAME
     if status is None:
         path.unlink(missing_ok=True)
         return
+    agent_config_dir.mkdir(parents=True, exist_ok=True)
     data: dict[str, str] = {"status": status}
     if message:
         data["message"] = message
@@ -147,9 +147,11 @@ def read_pending_phase(agent_config_dir: Path) -> PendingPhase | None:
         return None
     phase = raw.get("phase")
     prompt = raw.get("prompt", "")
-    if not phase:
+    if not isinstance(phase, str) or not phase:
         return None
-    return PendingPhase(phase=str(phase), prompt=str(prompt))
+    if not isinstance(prompt, str):
+        return None
+    return PendingPhase(phase=phase, prompt=prompt)
 
 
 def write_pending_phase(agent_config_dir: Path, phase: str, prompt: str) -> None:
