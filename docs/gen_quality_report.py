@@ -52,9 +52,7 @@ def _section_complexity() -> str:
     # Run complexipy to populate the cache (use CLI entry point, not -m).
     # Note: --quiet is omitted because it causes a spurious non-zero exit code
     # in complexipy >=5.x.  capture_output=True suppresses stdout anyway.
-    run_result = _run(
-        str(_VENV_BIN / "complexipy"), str(SRC), "--ignore-complexity"
-    )
+    run_result = _run(str(_VENV_BIN / "complexipy"), str(SRC), "--ignore-complexity")
     if run_result.returncode != 0:
         output = (run_result.stdout + run_result.stderr).strip()
         return f"!!! warning\n    complexipy failed; skipping complexity report.\n\n```\n{output}\n```\n"
