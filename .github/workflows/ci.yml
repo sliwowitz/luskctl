@@ -98,7 +98,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+          key: venv-${{ runner.os }}-test-${{ hashFiles('**/pyproject.toml', '**/poetry.lock') }}
 
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
