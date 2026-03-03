@@ -85,15 +85,14 @@ _CDI_HINT = (
     "See: https://podman-desktop.io/docs/podman/gpu"
 )
 
-_CDI_ERROR_PATTERNS = ("cdi.k8s.io", "nvidia.com/gpu", "cdi")
+_CDI_ERROR_PATTERNS = ("cdi.k8s.io", "nvidia.com/gpu", "CDI")
 
 
 def _enrich_run_error(prefix: str, exc: subprocess.CalledProcessError) -> str:
     """Return an enriched error message, adding a CDI hint when applicable."""
     stderr = (exc.stderr or b"").decode(errors="replace")
     msg = f"{prefix}: {exc}" if not stderr else f"{prefix}:\n{stderr.strip()}"
-    stderr_folded = stderr.casefold()
-    if any(pat in stderr_folded for pat in _CDI_ERROR_PATTERNS):
+    if any(pat in stderr for pat in _CDI_ERROR_PATTERNS):
         msg += f"\n\n{_CDI_HINT}"
     return msg
 

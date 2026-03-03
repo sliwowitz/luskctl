@@ -32,8 +32,8 @@ class CdiHintTests(unittest.TestCase):
         msg = _enrich_run_error("Run failed", exc)
         self.assertIn(_CDI_HINT, msg)
 
-    def test_cdi_hint_on_generic_cdi_error(self) -> None:
-        """CDI hint is shown when stderr mentions CDI."""
+    def test_cdi_hint_on_uppercase_cdi_error(self) -> None:
+        """CDI hint is shown when stderr mentions uppercase CDI."""
         exc = self._make_error("Error: CDI device injection failed")
         msg = _enrich_run_error("Run failed", exc)
         self.assertIn(_CDI_HINT, msg)
@@ -44,6 +44,12 @@ class CdiHintTests(unittest.TestCase):
         msg = _enrich_run_error("Run failed", exc)
         self.assertNotIn(_CDI_HINT, msg)
         self.assertIn("image not found", msg)
+
+    def test_no_cdi_hint_on_lowercase_cdi_substring(self) -> None:
+        """CDI hint is NOT shown when stderr only contains 'cdi' as a lowercase substring."""
+        exc = self._make_error("Error: encoding failed")
+        msg = _enrich_run_error("Run failed", exc)
+        self.assertNotIn(_CDI_HINT, msg)
 
     def test_empty_stderr_no_hint(self) -> None:
         """No CDI hint when stderr is empty."""
@@ -59,12 +65,15 @@ class CdiHintTests(unittest.TestCase):
         msg = _enrich_run_error("Run failed", exc)
         self.assertNotIn(_CDI_HINT, msg)
 
-    def test_cdi_hint_case_insensitive(self) -> None:
-        """CDI hint is shown regardless of stderr case."""
-        for text in ("Error: cdi device failed", "Error: Cdi device failed", "Error: CDI failed"):
+    def test_cdi_hint_only_on_explicit_patterns(self) -> None:
+        """CDI hint is shown only for explicit patterns, not arbitrary case variants."""
+        for text in ("Error: cdi device failed", "Error: Cdi device failed"):
             exc = self._make_error(text)
             msg = _enrich_run_error("Run failed", exc)
-            self.assertIn(_CDI_HINT, msg, f"CDI hint missing for stderr: {text!r}")
+            self.assertNotIn(_CDI_HINT, msg, f"CDI hint should not match: {text!r}")
+        exc = self._make_error("Error: CDI device failed")
+        msg = _enrich_run_error("Run failed", exc)
+        self.assertIn(_CDI_HINT, msg)
 
     def test_prefix_in_message(self) -> None:
         """The prefix is always included in the error message."""
