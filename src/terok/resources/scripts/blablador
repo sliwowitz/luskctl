@@ -120,8 +120,15 @@ def _merge_blablador_config(existing: dict, update: dict) -> dict:
     """
     merged = dict(existing)
 
-    # Schema — always set
-    merged["$schema"] = update["$schema"]
+    # Schema — warn if the existing value is unexpected, then set
+    existing_schema = merged.get("$schema")
+    expected_schema = update["$schema"]
+    if existing_schema and existing_schema != expected_schema:
+        print(
+            f"Warning: opencode.json has unexpected $schema value "
+            f"{existing_schema!r}, expected {expected_schema!r}. Overwriting."
+        )
+    merged["$schema"] = expected_schema
 
     # Provider — deep-merge: replace blablador, keep others
     existing_providers = merged.get("provider")

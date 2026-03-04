@@ -322,7 +322,7 @@ def _inject_opencode_instructions(config_path: Path) -> None:
 
     Ensures the ``"instructions"`` key is a list containing the container-local
     path ``"/home/dev/.terok/instructions.md"``.  If the file does not exist it
-    is created with ``{}``.  If the instructions entry is already present the
+    is created with the required ``$schema`` key.  If the instructions entry is already present the
     file is left untouched (idempotent).
 
     Uses the same inter-process file lock + atomic-replace pattern as
@@ -334,6 +334,7 @@ def _inject_opencode_instructions(config_path: Path) -> None:
         fcntl = None  # type: ignore[assignment]
 
     instr_path = "/home/dev/.terok/instructions.md"
+    _SCHEMA_URL = "https://opencode.ai/config.json"
 
     lock_path = config_path.with_suffix(config_path.suffix + ".lock")
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -350,6 +351,9 @@ def _inject_opencode_instructions(config_path: Path) -> None:
                     existing = {}
             else:
                 existing = {}
+
+            # Ensure the $schema key is always present for a valid opencode.json.
+            existing.setdefault("$schema", _SCHEMA_URL)
 
             instructions = existing.get("instructions")
             if isinstance(instructions, list) and instr_path in instructions:

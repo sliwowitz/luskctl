@@ -610,7 +610,7 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
     """Tests for _inject_opencode_instructions()."""
 
     def test_creates_file_if_missing(self) -> None:
-        """Creates opencode.json with instructions entry if file does not exist."""
+        """Creates opencode.json with instructions entry and $schema if file does not exist."""
         from terok.lib.containers.agents import _inject_opencode_instructions
 
         with tempfile.TemporaryDirectory() as td:
@@ -620,6 +620,7 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             self.assertTrue(config_path.is_file())
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
+            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
 
     def test_idempotent_when_already_present(self) -> None:
         """Does not duplicate the instructions entry on repeated calls."""
@@ -678,6 +679,7 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             self.assertTrue(config_path.is_file())
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
+            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
 
     def test_handles_invalid_json(self) -> None:
         """Overwrites file with valid config if existing JSON is invalid."""
@@ -690,6 +692,23 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
+            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+
+    def test_preserves_existing_schema(self) -> None:
+        """Does not overwrite $schema if already present in existing config."""
+        from terok.lib.containers.agents import _inject_opencode_instructions
+
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "opencode.json"
+            config_path.write_text(
+                json.dumps({"$schema": "https://opencode.ai/config.json", "model": "x/y"}),
+                encoding="utf-8",
+            )
+            _inject_opencode_instructions(config_path)
+
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+            self.assertEqual(data["model"], "x/y")
 
 
 class ValidateProjectIdTests(unittest.TestCase):

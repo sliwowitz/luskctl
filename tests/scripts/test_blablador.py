@@ -617,6 +617,40 @@ class BlabladorMergeConfigTests(unittest.TestCase):
         self.assertEqual(provider["npm"], "@ai-sdk/openai-compatible")
         self.assertEqual(provider["options"]["apiKey"], "new-key")
 
+    def test_merge_warns_on_schema_mismatch(self) -> None:
+        """Merging warns when existing $schema differs from expected value."""
+        blablador = load_blablador_module()
+
+        existing = {"$schema": "https://example.com/wrong.json"}
+        update = blablador._build_blablador_update(
+            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
+        )
+
+        with unittest.mock.patch("builtins.print") as mock_print:
+            merged = blablador._merge_blablador_config(existing, update)
+
+        # Warning printed about unexpected schema
+        mock_print.assert_called_once()
+        warning_msg = mock_print.call_args[0][0]
+        self.assertIn("unexpected $schema", warning_msg)
+        self.assertIn("https://example.com/wrong.json", warning_msg)
+        # Schema is overwritten to the correct value
+        self.assertEqual(merged["$schema"], "https://opencode.ai/config.json")
+
+    def test_merge_no_warning_on_matching_schema(self) -> None:
+        """Merging does not warn when existing $schema matches expected value."""
+        blablador = load_blablador_module()
+
+        existing = {"$schema": "https://opencode.ai/config.json"}
+        update = blablador._build_blablador_update(
+            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
+        )
+
+        with unittest.mock.patch("builtins.print") as mock_print:
+            blablador._merge_blablador_config(existing, update)
+
+        mock_print.assert_not_called()
+
     def test_main_preserves_instructions_on_update(self) -> None:
         """main() preserves instructions key when updating config."""
         blablador = load_blablador_module()
