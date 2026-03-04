@@ -96,6 +96,8 @@ class ConfigTests(unittest.TestCase):
 
     def test_experimental_roundtrip(self) -> None:
         cfg.set_experimental(True)
-        self.assertTrue(cfg.is_experimental())
-        cfg.set_experimental(False)
+        try:
+            self.assertTrue(cfg.is_experimental())
+        finally:
+            cfg.set_experimental(False)
         self.assertFalse(cfg.is_experimental())

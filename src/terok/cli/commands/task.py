@@ -142,7 +142,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
 
-    t_run_ui = tsub.add_parser("run-web", help="Run task in web mode")
+    t_run_ui = tsub.add_parser("run-web", help=argparse.SUPPRESS)
     _add_project_task_args(t_run_ui)
     t_run_ui.add_argument(
         "--backend",
@@ -198,7 +198,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_start.add_argument(
         "--web",
         action="store_true",
-        help="Start in web mode instead of CLI",
+        help=argparse.SUPPRESS,
     )
     t_start.add_argument(
         "--backend",
@@ -333,12 +333,12 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             follow=not getattr(args, "no_follow", False),
         )
     elif args.task_cmd == "start":
+        if args.web and not _is_experimental():
+            raise SystemExit("--web requires --experimental (feature is incomplete)")
         task_id = task_new(args.project_id, name=getattr(args, "name", None))
         selected = getattr(args, "selected_agents", None)
         preset = getattr(args, "preset", None)
         if args.web:
-            if not _is_experimental():
-                raise SystemExit("--web requires --experimental (feature is incomplete)")
             task_run_web(
                 args.project_id,
                 task_id,

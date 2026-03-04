@@ -167,12 +167,13 @@ class TaskStartTests(unittest.TestCase):
         from terok.cli.main import main
 
         with (
-            unittest.mock.patch("terok.cli.commands.task.task_new", return_value="1"),
+            unittest.mock.patch("terok.cli.commands.task.task_new", return_value="1") as mock_new,
             unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1", "--web"]),
             self.assertRaises(SystemExit) as ctx,
         ):
             main()
         self.assertIn("--experimental", str(ctx.exception))
+        mock_new.assert_not_called()
 
     @unittest.mock.patch("terok.cli.commands.task.task_run_web")
     def test_task_run_web_requires_experimental(self, mock_run_web) -> None:

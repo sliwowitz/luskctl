@@ -305,15 +305,19 @@ class TaskScreenKeyBindingTests(TestCase):
             set_experimental(False)
 
     def test_shift_w_blocked_without_experimental(self) -> None:
-        from terok.lib.core.config import set_experimental
+        from terok.lib.core.config import is_experimental, set_experimental
 
+        previous = is_experimental()
         set_experimental(False)
-        screens, _ = import_screens()
-        screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
-        screen.dismiss = mock.Mock()
-        event = make_key_event("W")
-        screen.on_key(event)
-        screen.dismiss.assert_not_called()
+        try:
+            screens, _ = import_screens()
+            screen = screens.TaskDetailsScreen(task=None, has_tasks=False, project_id="p")
+            screen.dismiss = mock.Mock()
+            event = make_key_event("W")
+            screen.on_key(event)
+            screen.dismiss.assert_not_called()
+        finally:
+            set_experimental(previous)
 
     def test_shift_c_dismisses_new_always(self) -> None:
         screens, _ = import_screens()
@@ -387,15 +391,19 @@ class TaskScreenKeyBindingTests(TestCase):
             set_experimental(False)
 
     def test_lowercase_w_blocked_without_experimental(self) -> None:
-        from terok.lib.core.config import set_experimental
+        from terok.lib.core.config import is_experimental, set_experimental
 
+        previous = is_experimental()
         set_experimental(False)
-        screens, _ = import_screens()
-        screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
-        screen.dismiss = mock.Mock()
-        event = make_key_event("w")
-        screen.on_key(event)
-        screen.dismiss.assert_not_called()
+        try:
+            screens, _ = import_screens()
+            screen = screens.TaskDetailsScreen(task=None, has_tasks=True, project_id="p")
+            screen.dismiss = mock.Mock()
+            event = make_key_event("w")
+            screen.on_key(event)
+            screen.dismiss.assert_not_called()
+        finally:
+            set_experimental(previous)
 
     def test_lowercase_r_works_with_tasks(self) -> None:
         screens, _ = import_screens()
