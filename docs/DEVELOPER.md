@@ -74,10 +74,10 @@ When a task container starts, terok mounts:
 | `/home/dev/.codex` | `<envs_base>/_codex-config` | Codex credentials |
 | `/home/dev/.claude` | `<envs_base>/_claude-config` | Claude Code credentials |
 | `/home/dev/.vibe` | `<envs_base>/_vibe-config` | Mistral Vibe credentials |
-| `/home/dev/.blablador` | `<envs_base>/_blablador-config` | Blablador credentials |
-| `/home/dev/.config/opencode` | `<envs_base>/_opencode-config` | OpenCode config |
-| `/home/dev/.local/share/opencode` | `<envs_base>/_opencode-data` | OpenCode data |
-| `/home/dev/.local/state` | `<envs_base>/_opencode-state` | OpenCode state |
+| `/home/dev/.blablador` | `<envs_base>/_blablador-config` | Blablador credentials + isolated OpenCode config (via `OPENCODE_CONFIG`) |
+| `/home/dev/.config/opencode` | `<envs_base>/_opencode-config` | Plain OpenCode config (use `terokctl config import-opencode`) |
+| `/home/dev/.local/share/opencode` | `<envs_base>/_opencode-data` | OpenCode data (shared by Blablador and plain OpenCode) |
+| `/home/dev/.local/state` | `<envs_base>/_opencode-state` | OpenCode/Bun state (shared by both) |
 | `/home/dev/.config/gh` | `<envs_base>/_gh-config` | GitHub CLI config |
 | `/home/dev/.config/glab-cli` | `<envs_base>/_glab-config` | GitLab CLI config |
 | `/home/dev/.ssh` (optional) | `<envs_base>/_ssh-config-<project>` | SSH keys/config |

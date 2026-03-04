@@ -40,16 +40,16 @@ envs:
      - Purpose: Shared credentials/config used by Mistral Vibe (CLI + UI).
   4. `_blablador-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_blablador-config:/home/dev/.blablador:z` (read-write)
-     - Purpose: Shared credentials/config used by Blablador (OpenCode wrapper) inside the containers.
+     - Purpose: Shared credentials/config used by Blablador (OpenCode wrapper) inside the containers. Also holds Blablador's isolated OpenCode config under `opencode/opencode.json`, which is pointed to via the `OPENCODE_CONFIG` env var so it does not conflict with plain OpenCode's config.
   5. `_opencode-config` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_opencode-config:/home/dev/.config/opencode:z` (read-write)
-     - Purpose: Shared config directory for OpenCode (contains opencode.json with provider settings).
+     - Purpose: Shared config directory exclusively for plain OpenCode (contains opencode.json with provider settings). Use `terokctl config import-opencode <FILE>` to place a config here.
   6. `_opencode-data` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_opencode-data:/home/dev/.local/share/opencode:z` (read-write)
-     - Purpose: Shared data directory used by OpenCode (invoked via the Blablador wrapper) for caches and runtime data.
+     - Purpose: Shared data directory used by OpenCode for caches and runtime data. Shared by both Blablador and plain OpenCode (model selection is config-driven, not stored here).
   7. `_opencode-state` (required; created automatically if missing)
      - Mounted as: `<base_dir>/_opencode-state:/home/dev/.local/state:z` (read-write)
-     - Purpose: Shared state directory used by OpenCode and Bun runtime.
+     - Purpose: Shared state directory used by OpenCode and Bun runtime. Shared by both Blablador and plain OpenCode.
   8. `_ssh-config-<project_id>` (optional)
      - Mounted as: `<base_dir>/_ssh-config-<project_id>:/home/dev/.ssh:z` (read-write)
      - Purpose: If your project uses private git URLs (for example, `git@github.com:...`), provide SSH keys and config here so the container can fetch the repository.

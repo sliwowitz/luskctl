@@ -431,6 +431,19 @@ class ProjectActionsMixin:
 
         await self._run_suspended(work, refresh=None)
 
+    # ---------- OpenCode config import ----------
+
+    async def _action_import_opencode_config(self) -> None:
+        """Push the OpenCode config import modal and handle the result."""
+        from .screens import OpenCodeConfigScreen
+
+        def _on_result(result: str | None) -> None:
+            """Notify the user about the import result."""
+            if result:
+                self.notify(f"OpenCode config imported to {result}")
+
+        await self.push_screen(OpenCodeConfigScreen(), _on_result)
+
     # --- Project wizard ---
 
     async def action_new_project_wizard(self) -> None:

@@ -278,10 +278,18 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         """Build the numbered list of authentication providers."""
         from ..lib.facade import AUTH_PROVIDERS
 
-        options = [
-            Option(f"\\[{i}] {p.label}", id=f"auth_{p.name}")
-            for i, p in enumerate(AUTH_PROVIDERS.values(), 1)
+        providers = list(AUTH_PROVIDERS.values())
+        options: list[Option | None] = [
+            Option(f"\\[{i}] {p.label}", id=f"auth_{p.name}") for i, p in enumerate(providers, 1)
         ]
+        next_num = len(providers) + 1
+        options.append(None)
+        options.append(
+            Option(
+                f"\\[{next_num}] Import OpenCode config",
+                id="import_opencode_config",
+            )
+        )
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(*options, id="auth-actions-list")
         dialog.border_title = "Authenticate agents and tools"
@@ -298,7 +306,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
             self.dismiss(event.option_id)
 
     def on_key(self, event: events.Key) -> None:
-        """Handle number-key shortcuts (1-9) to select a provider."""
+        """Handle number-key shortcuts (1-9) to select a provider or import."""
         from ..lib.facade import AUTH_PROVIDERS
 
         if event.character and event.character.isdigit():
@@ -307,9 +315,132 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
             if 0 <= idx < len(providers):
                 self.dismiss(f"auth_{providers[idx].name}")
                 event.stop()
+            elif idx == len(providers):
+                self.dismiss("import_opencode_config")
+                event.stop()
 
     def action_dismiss(self) -> None:
         """Close the auth modal without selecting a provider."""
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
+# OpenCode Config Import Screen
+# ---------------------------------------------------------------------------
+
+
+class OpenCodeConfigScreen(screen.ModalScreen[str | None]):
+    """Modal for entering a file path to import as OpenCode config.
+
+    Validates that the file exists and contains valid JSON, then copies it
+    to the shared ``_opencode-config`` mount.  Dismisses with the
+    destination path on success, or ``None`` if cancelled.
+    """
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    OpenCodeConfigScreen {
+        align: center middle;
+    }
+
+    #opencode-config-dialog {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        border: heavy $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #opencode-config-input {
+        margin-bottom: 1;
+    }
+
+    #opencode-config-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #opencode-config-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        """Build the file path input and OK/Cancel buttons."""
+        with Vertical(id="opencode-config-dialog") as dialog:
+            yield Input(
+                placeholder="/path/to/opencode.json",
+                id="opencode-config-input",
+            )
+            with Horizontal(id="opencode-config-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+                yield Button("Import", id="btn-import", variant="primary")
+        dialog.border_title = "Import OpenCode Config"
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        """Focus the file path input for immediate typing."""
+        inp = self.query_one("#opencode-config-input", Input)
+        inp.focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Import or Cancel button clicks."""
+        if event.button.id == "btn-import":
+            self._submit()
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: "Input.Submitted") -> None:  # type: ignore[name-defined]
+        """Accept on Enter key press."""
+        self._submit()
+
+    def _submit(self) -> None:
+        """Validate the file path and copy the config to the shared mount."""
+        import json
+        import shutil
+        from pathlib import Path
+
+        from ..lib.core.config import get_envs_base_dir
+
+        inp = self.query_one("#opencode-config-input", Input)
+        raw = inp.value.strip()
+        if not raw:
+            self.notify("File path cannot be empty.")
+            return
+
+        src = Path(raw)
+        if not src.is_file():
+            self.notify(f"File not found: {src}")
+            return
+
+        try:
+            data = json.loads(src.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            self.notify(f"Invalid JSON: {e}")
+            return
+        if not isinstance(data, dict):
+            self.notify("Invalid config: expected a JSON object")
+            return
+
+        try:
+            dest_dir = get_envs_base_dir() / "_opencode-config"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / "opencode.json"
+            shutil.copy2(str(src), str(dest))
+        except OSError as e:
+            self.notify(f"Copy failed: {e}")
+            return
+
+        self.dismiss(str(dest))
+
+    def action_cancel(self) -> None:
+        """Cancel the import and dismiss without a result."""
         self.dismiss(None)
 
 

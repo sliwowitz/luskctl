@@ -436,6 +436,52 @@ class TaskScreenKeyBindingTests(TestCase):
         screen.dismiss.assert_not_called()
 
 
+class AuthScreenOptionsTests(TestCase):
+    """Tests that AuthActionsScreen includes the import option."""
+
+    def test_auth_screen_has_import_opencode_option(self) -> None:
+        """Verify AuthActionsScreen includes import_opencode_config option."""
+        screens, _ = import_screens()
+
+        screen = screens.AuthActionsScreen()
+        screen.dismiss = mock.Mock()
+
+        # Simulate selecting the import option via on_option_list_option_selected
+        event = mock.Mock()
+        event.option_id = "import_opencode_config"
+        screen.on_option_list_option_selected(event)
+        screen.dismiss.assert_called_once_with("import_opencode_config")
+
+    def test_auth_screen_number_key_triggers_import(self) -> None:
+        """Verify the number key after last provider selects import option."""
+        from terok.lib.security.auth import AUTH_PROVIDERS
+
+        screens, _ = import_screens()
+        screen = screens.AuthActionsScreen()
+        screen.dismiss = mock.Mock()
+
+        # The import option is at index = len(AUTH_PROVIDERS)
+        import_num = len(AUTH_PROVIDERS) + 1
+        event = make_key_event(str(import_num))
+        event.character = str(import_num)
+        screen.on_key(event)
+        screen.dismiss.assert_called_once_with("import_opencode_config")
+
+    def test_opencode_config_screen_construction(self) -> None:
+        """Verify OpenCodeConfigScreen can be instantiated."""
+        screens, _ = import_screens()
+        screen = screens.OpenCodeConfigScreen()
+        self.assertIsNotNone(screen)
+
+    def test_opencode_config_screen_cancel(self) -> None:
+        """Verify cancel action dismisses with None."""
+        screens, _ = import_screens()
+        screen = screens.OpenCodeConfigScreen()
+        screen.dismiss = mock.Mock()
+        screen.action_cancel()
+        screen.dismiss.assert_called_once_with(None)
+
+
 class ActionDispatchTests(TestCase):
     """Tests for action dispatch routing in the app."""
 
@@ -460,6 +506,14 @@ class ActionDispatchTests(TestCase):
                 coro = AppClass._handle_project_action(instance, f"auth_{provider}")
                 asyncio.run(coro)
                 instance._action_auth.assert_called_once_with(provider)
+
+    def test_project_action_dispatch_import_opencode(self) -> None:
+        """Import opencode config action routes to the handler."""
+        app_mod, AppClass = import_app()
+        instance = mock.Mock(spec=AppClass)
+        coro = AppClass._handle_project_action(instance, "import_opencode_config")
+        asyncio.run(coro)
+        instance._action_import_opencode_config.assert_called_once()
 
     def test_task_action_dispatch_all(self) -> None:
         """Every entry in TASK_ACTION_HANDLERS routes to its handler."""

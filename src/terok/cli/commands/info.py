@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shutil
 from importlib import resources
 from pathlib import Path
 
@@ -35,8 +37,14 @@ from ._completers import complete_project_ids as _complete_project_ids, set_comp
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register informational subcommands (config, config-show)."""
-    # config overview
-    subparsers.add_parser("config", help="Show configuration, template and output paths")
+    # config overview (with optional import-opencode subcommand)
+    p_config = subparsers.add_parser("config", help="Show configuration, template and output paths")
+    config_sub = p_config.add_subparsers(dest="config_cmd")
+    p_import_oc = config_sub.add_parser(
+        "import-opencode",
+        help="Import an OpenCode config file into the shared opencode mount",
+    )
+    p_import_oc.add_argument("file", help="Path to an opencode.json file to import")
 
     # config-show (resolved agent config with provenance)
     p_config_show = subparsers.add_parser(
@@ -52,7 +60,11 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle config and config-show commands.  Returns True if handled."""
     if args.cmd == "config":
-        _print_config()
+        config_cmd = getattr(args, "config_cmd", None)
+        if config_cmd == "import-opencode":
+            _cmd_import_opencode(args.file)
+        else:
+            _print_config()
         return True
     if args.cmd == "config-show":
         _cmd_config_show(args.project_id, getattr(args, "preset", None))
@@ -88,6 +100,28 @@ def _cmd_config_show(project_id: str, preset: str | None) -> None:
 
     print()
     print(json.dumps(resolved, indent=2, default=str))
+
+
+def _cmd_import_opencode(file_path: str) -> None:
+    """Import an OpenCode config file into the shared opencode mount."""
+    src = Path(file_path)
+    if not src.is_file():
+        raise SystemExit(f"File not found: {src}")
+
+    try:
+        data = json.loads(src.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Invalid JSON: {e}")
+    if not isinstance(data, dict):
+        raise SystemExit("Invalid OpenCode config: expected a JSON object")
+
+    dest_dir = _get_envs_base_dir() / "_opencode-config"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "opencode.json"
+    shutil.copy2(str(src), str(dest))
+    print(f"Imported OpenCode config to: {dest}")
+    print("This config will be used by plain 'opencode' inside task containers.")
+    print(f"To edit further: $EDITOR {dest}")
 
 
 def _print_config() -> None:

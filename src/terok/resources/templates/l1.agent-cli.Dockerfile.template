@@ -77,6 +77,7 @@ RUN set -eux; \
       '  printf "  \\033[36mcopilot\\033[0m   - GitHub Copilot CLI\\n"' \
       '  printf "  \\033[36mvibe\\033[0m      - Mistral Vibe CLI (auto-approve enabled)\\n"' \
       '  printf "  \\033[36mblablador\\033[0m - OpenCode with Helmholtz Blablador (full permissions)\\n"' \
+      '  printf "  \\033[36mopencode\\033[0m  - OpenCode CLI (use terokctl config import-opencode to set up)\\n"' \
       '  printf "\\n"' \
       'fi' \
       '' \

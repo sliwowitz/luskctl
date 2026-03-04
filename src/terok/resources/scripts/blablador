@@ -12,8 +12,7 @@ import os
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
-from urllib import request, error
-
+from urllib import error, request
 
 DEFAULT_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
 # Preferred model - alias-huge provides the largest available model
@@ -105,8 +104,13 @@ def _build_config(base_url: str, api_key: str, model: str, models: list[str] | N
 
 
 def _opencode_config_path() -> Path:
-    """Return the standard OpenCode config path."""
-    return Path.home() / ".config" / "opencode" / "opencode.json"
+    """Return the Blablador-specific OpenCode config path.
+
+    Lives under ~/.blablador/opencode/ so it does not conflict with plain
+    OpenCode's default config at ~/.config/opencode/opencode.json.
+    The OPENCODE_CONFIG env var is used at launch time to point OpenCode here.
+    """
+    return _config_dir() / "opencode" / "opencode.json"
 
 
 def _load_opencode_config() -> dict | None:
@@ -210,8 +214,9 @@ def main() -> int:
         _write_opencode_config(config)
 
     cmd = ["opencode"] + opencode_args
+    env = {**os.environ, "OPENCODE_CONFIG": str(_opencode_config_path())}
     try:
-        return subprocess.call(cmd)
+        return subprocess.call(cmd, env=env)
     except FileNotFoundError:
         raise SystemExit("opencode not found. Rebuild the L1 CLI image to install it.")
 

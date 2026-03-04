@@ -759,6 +759,9 @@ if _HAS_TEXTUAL:
             if action.startswith("auth_"):
                 await self._action_auth(action[5:])
                 return
+            if action == "import_opencode_config":
+                await self._action_import_opencode_config()
+                return
             handler = PROJECT_ACTION_HANDLERS.get(action)
             if handler:
                 await getattr(self, handler)()
