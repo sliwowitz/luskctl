@@ -203,7 +203,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     t_start.add_argument(
         "--backend",
         choices=list(WEB_BACKENDS),
-        help=f"Web backend ({_BACKENDS_HELP}; default from project config)",
+        help=argparse.SUPPRESS,
     )
     t_start.add_argument(
         "--agent",
@@ -335,6 +335,8 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
     elif args.task_cmd == "start":
         if args.web and not _is_experimental():
             raise SystemExit("--web requires --experimental (feature is incomplete)")
+        if getattr(args, "backend", None) and not args.web:
+            raise SystemExit("--backend requires --web")
         task_id = task_new(args.project_id, name=getattr(args, "name", None))
         selected = getattr(args, "selected_agents", None)
         preset = getattr(args, "preset", None)

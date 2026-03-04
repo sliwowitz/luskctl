@@ -41,6 +41,7 @@ def get_project_state(
     """
 
     project = load_project(project_id)
+    experimental = is_experimental()
 
     # Dockerfiles: look in the same location generate_dockerfiles writes to.
     stage_dir = build_root() / project.id
@@ -49,7 +50,7 @@ def get_project_state(
         stage_dir / "L1.cli.Dockerfile",
         stage_dir / "L2.Dockerfile",
     ]
-    if is_experimental():
+    if experimental:
         dockerfiles.append(stage_dir / "L1.ui.Dockerfile")
     has_dockerfiles = all(p.is_file() for p in dockerfiles)
 
@@ -57,7 +58,7 @@ def get_project_state(
     has_images = False
     try:
         required_tags = [project_cli_image(project.id)]
-        if is_experimental():
+        if experimental:
             required_tags.append(project_web_image(project.id))
         ok = True
         for tag in required_tags:
