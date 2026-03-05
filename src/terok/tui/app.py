@@ -37,6 +37,8 @@ except Exception:  # pragma: no cover - textual not installed
 
 if _HAS_TEXTUAL:
     # Import textual and our widgets only when available
+    from dataclasses import dataclass
+
     from textual import on
     from textual.app import App, ComposeResult
     from textual.containers import Horizontal, Vertical
@@ -58,6 +60,17 @@ if _HAS_TEXTUAL:
         get_project_state,
         is_task_image_old,
     )
+
+    @dataclass(frozen=True)
+    class ProjectStateResult:
+        """Result of loading project infrastructure state in a background thread."""
+
+        project_id: str
+        project: Project | None = None
+        state: dict | None = None
+        staleness: GateStalenessInfo | None = None
+        error: str | None = None
+
     from .clipboard import get_clipboard_helper_status
     from .polling import PollingMixin
     from .project_actions import ProjectActionsMixin
@@ -487,9 +500,7 @@ if _HAS_TEXTUAL:
                 exit_on_error=False,
             )
 
-        def _load_project_state(
-            self, project_id: str
-        ) -> tuple[str, Project | None, dict | None, GateStalenessInfo | None, str | None]:
+        def _load_project_state(self, project_id: str) -> ProjectStateResult:
             """Load project infrastructure state in a background thread."""
             try:
                 project = load_project(project_id)
@@ -502,11 +513,11 @@ if _HAS_TEXTUAL:
                         staleness = compare_gate_vs_upstream(project_id)
                     except Exception:
                         staleness = None
-                return project_id, project, state, staleness, None
+                return ProjectStateResult(project_id, project, state, staleness)
             except SystemExit as e:
-                return project_id, None, None, None, str(e)
+                return ProjectStateResult(project_id, error=str(e))
             except Exception as e:
-                return project_id, None, None, None, str(e)
+                return ProjectStateResult(project_id, error=str(e))
 
         def _queue_task_image_status(self, project_id: str | None, task: TaskMeta | None) -> None:
             """Schedule a background check for whether the task's image is outdated."""
@@ -580,20 +591,22 @@ if _HAS_TEXTUAL:
                 result = worker.result
                 if not result:
                     return
-                project_id, project, state, staleness, error = result
-                if project_id != self.current_project_id:
+                psr: ProjectStateResult = result
+                if psr.project_id != self.current_project_id:
                     return
                 state_widget = self.query_one("#project-state", ProjectState)
-                if error:
-                    state_widget.update(f"Project state error: {error}")
+                if psr.error:
+                    state_widget.update(f"Project state error: {psr.error}")
                     return
-                if project is None or state is None:
+                if psr.project is None or psr.state is None:
                     state_widget.set_state(None, None, None)
                     return
-                self._projects_by_id[project_id] = project
-                self._staleness_info = staleness
-                self._last_project_state = state
-                state_widget.set_state(project, state, self._last_task_count, self._staleness_info)
+                self._projects_by_id[psr.project_id] = psr.project
+                self._staleness_info = psr.staleness
+                self._last_project_state = psr.state
+                state_widget.set_state(
+                    psr.project, psr.state, self._last_task_count, self._staleness_info
+                )
                 return
 
             if worker.group == "task-image":

@@ -322,6 +322,16 @@ class CLIOverrides:
     """Resolved instructions text. Delivery is provider-aware."""
 
 
+@dataclass(frozen=True)
+class WrapperConfig:
+    """Groups parameters for generating the Claude shell wrapper."""
+
+    has_agents: bool
+    project: Project
+    skip_permissions: bool = True
+    has_instructions: bool = False
+
+
 def apply_provider_config(
     provider: HeadlessProvider,
     config: dict,
@@ -505,7 +515,7 @@ def generate_agent_wrapper(
     project: Project,
     has_agents: bool,
     *,
-    claude_wrapper_fn: Callable[[bool, Project, bool], str] | None = None,
+    claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
 ) -> str:
     """Generate the shell wrapper function content for a single provider.
 
@@ -521,7 +531,7 @@ def generate_agent_wrapper(
     (Codex), or ``--append-system-prompt`` (Claude) — not via the wrapper.
 
     Args:
-        claude_wrapper_fn: ``(has_agents, project, skip_permissions) -> str``.
+        claude_wrapper_fn: ``(cfg: WrapperConfig) -> str``.
             Required when ``provider.name == "claude"``.
 
     See also :func:`generate_all_wrappers` which produces wrappers for every
@@ -530,7 +540,9 @@ def generate_agent_wrapper(
     if provider.name == "claude":
         if claude_wrapper_fn is None:
             raise ValueError("claude_wrapper_fn is required for Claude provider")
-        return claude_wrapper_fn(has_agents, project, True)
+        return claude_wrapper_fn(
+            WrapperConfig(has_agents=has_agents, project=project, skip_permissions=True)
+        )
 
     return _generate_generic_wrapper(provider, project)
 
@@ -539,7 +551,7 @@ def generate_all_wrappers(
     project: Project,
     has_agents: bool,
     *,
-    claude_wrapper_fn: Callable[[bool, Project, bool], str] | None = None,
+    claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
 ) -> str:
     """Generate shell wrappers for **all** registered providers in one file.
 

@@ -32,10 +32,11 @@ class ProjectStateStalenessTests(TestCase):
                             result = app.TerokTUI._load_project_state(mock.Mock(), "proj1")
                             compare.assert_called_once_with("proj1")
 
-                self.assertEqual(
-                    result,
-                    ("proj1", project, state, staleness, None),
-                )
+                self.assertEqual(result.project_id, "proj1")
+                self.assertEqual(result.project, project)
+                self.assertEqual(result.state, state)
+                self.assertEqual(result.staleness, staleness)
+                self.assertIsNone(result.error)
 
 
 if __name__ == "__main__":

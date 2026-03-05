@@ -230,11 +230,11 @@ class GenerateAgentWrapperTests(unittest.TestCase):
     """Tests for generate_agent_wrapper() per provider."""
 
     @staticmethod
-    def _claude_wrapper_fn(has_agents: bool, project: object, skip_permissions: bool) -> str:
+    def _claude_wrapper_fn(cfg: object) -> str:
         """Stub for agents._generate_claude_wrapper used in tests."""
         from terok.lib.containers.agents import _generate_claude_wrapper
 
-        return _generate_claude_wrapper(has_agents, project, skip_permissions)
+        return _generate_claude_wrapper(cfg)
 
     def test_claude_wrapper_uses_claude_function(self) -> None:
         """Claude wrapper defines a claude() function with --add-dir."""
@@ -564,11 +564,11 @@ class GenerateAllWrappersTests(unittest.TestCase):
     """Tests for generate_all_wrappers() multi-provider file."""
 
     @staticmethod
-    def _claude_wrapper_fn(has_agents: bool, project: object, skip_permissions: bool) -> str:
+    def _claude_wrapper_fn(cfg: object) -> str:
         """Stub for agents._generate_claude_wrapper used in tests."""
         from terok.lib.containers.agents import _generate_claude_wrapper
 
-        return _generate_claude_wrapper(has_agents, project, skip_permissions)
+        return _generate_claude_wrapper(cfg)
 
     def test_all_providers_in_output(self) -> None:
         """Output contains wrapper functions for all six providers."""
