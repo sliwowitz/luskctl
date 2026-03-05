@@ -305,32 +305,41 @@ class ProviderConfig:
     """Warnings about unsupported features (for user display)."""
 
 
+@dataclass(frozen=True)
+class CLIOverrides:
+    """CLI flag overrides for a headless agent run."""
+
+    model: str | None = None
+    """Explicit ``--model`` from CLI (takes precedence over config)."""
+
+    max_turns: int | None = None
+    """Explicit ``--max-turns`` from CLI."""
+
+    timeout: int | None = None
+    """Explicit ``--timeout`` from CLI."""
+
+    instructions: str | None = None
+    """Resolved instructions text. Delivery is provider-aware."""
+
+
 def apply_provider_config(
     provider: HeadlessProvider,
     config: dict,
-    *,
-    model_override: str | None = None,
-    max_turns_override: int | None = None,
-    timeout_override: int | None = None,
-    instructions: str | None = None,
+    overrides: CLIOverrides | None = None,
 ) -> ProviderConfig:
     """Resolve config values for a provider with best-effort feature mapping.
 
-    CLI flag overrides (``model_override``, etc.) take precedence over config
-    values.  When the provider lacks a feature, an analogue is used where
-    possible (e.g. injecting max-turns guidance into the prompt), and a
-    warning is emitted for features that have no analogue.
+    CLI flag overrides take precedence over config values.  When the provider
+    lacks a feature, an analogue is used where possible (e.g. injecting
+    max-turns guidance into the prompt), and a warning is emitted for
+    features that have no analogue.
 
     Args:
         config: Merged agent config dict (from :func:`resolve_agent_config`).
-        model_override: Explicit ``--model`` from CLI (takes precedence).
-        max_turns_override: Explicit ``--max-turns`` from CLI.
-        timeout_override: Explicit ``--timeout`` from CLI.
-        instructions: Resolved instructions text. Delivery is provider-aware
-            (see module docstring for the full matrix).  Only providers not
-            covered by a dedicated channel receive instructions via
-            ``prompt_extra``.
+        overrides: CLI flag overrides (model, max_turns, timeout, instructions).
     """
+    if overrides is None:
+        overrides = CLIOverrides()
     from ..containers.agent_config import resolve_provider_value
 
     warnings: list[str] = []
@@ -338,7 +347,7 @@ def apply_provider_config(
 
     # --- Model ---
     cfg_model = resolve_provider_value("model", config, provider.name)
-    model = model_override or (str(cfg_model) if cfg_model is not None else None)
+    model = overrides.model or (str(cfg_model) if cfg_model is not None else None)
     if model and not provider.model_flag:
         warnings.append(
             f"{provider.label} does not support model selection; ignoring model={model!r}"
@@ -347,7 +356,7 @@ def apply_provider_config(
 
     # --- Max turns ---
     cfg_turns = resolve_provider_value("max_turns", config, provider.name)
-    max_turns_raw = max_turns_override if max_turns_override is not None else cfg_turns
+    max_turns_raw = overrides.max_turns if overrides.max_turns is not None else cfg_turns
     max_turns: int | None = int(max_turns_raw) if max_turns_raw is not None else None
     if max_turns is not None and not provider.max_turns_flag:
         # Best-effort: inject into prompt as guidance
@@ -360,7 +369,7 @@ def apply_provider_config(
 
     # --- Timeout ---
     cfg_timeout = resolve_provider_value("timeout", config, provider.name)
-    timeout = timeout_override or (int(cfg_timeout) if cfg_timeout is not None else 1800)
+    timeout = overrides.timeout or (int(cfg_timeout) if cfg_timeout is not None else 1800)
 
     # --- Subagents (warning only — filtering is handled elsewhere) ---
     subagents = config.get("subagents")
@@ -376,6 +385,7 @@ def apply_provider_config(
     # OpenCode and Blablador receive instructions via opencode.json `instructions`
     # array (injected by prepare_agent_config_dir).
     # Remaining providers get best-effort prompt prepending.
+    instructions = overrides.instructions
     if instructions and provider.name not in {"claude", "codex", "opencode", "blablador"}:
         prompt_parts.insert(0, instructions)
 

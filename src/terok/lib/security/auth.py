@@ -60,33 +60,40 @@ class AuthProvider:
 # ---------------------------------------------------------------------------
 
 
-def _api_key_command(
-    label: str,
-    key_url: str,
-    env_var: str,
-    config_path: str,
-    printf_template: str,
-    tool_name: str,
-) -> list[str]:
-    """Build a bash command that prompts for an API key and writes it to a config file.
+@dataclass(frozen=True)
+class AuthKeyConfig:
+    """Describes how to prompt for and store an API key."""
 
-    Args:
-        label: Human name shown in the prompt (e.g. "Claude").
-        key_url: URL where the user can obtain the key.
-        env_var: Name shown in the ``read -p`` prompt (e.g. "ANTHROPIC_API_KEY").
-        config_path: Destination inside the container (e.g. "~/.claude/config.json").
-        printf_template: ``printf`` format string (e.g. ``'{\"api_key\": \"%s\"}'``).
-        tool_name: Name shown in the success message (e.g. "claude").
-    """
-    config_dir = config_path.rsplit("/", 1)[0]
+    label: str
+    """Human name shown in the prompt (e.g. ``"Claude"``)."""
+
+    key_url: str
+    """URL where the user can obtain the key."""
+
+    env_var: str
+    """Name shown in the ``read -p`` prompt (e.g. ``"ANTHROPIC_API_KEY"``)."""
+
+    config_path: str
+    """Destination inside the container (e.g. ``"~/.claude/config.json"``)."""
+
+    printf_template: str
+    """``printf`` format string (e.g. ``'{\"api_key\": \"%s\"}'``)."""
+
+    tool_name: str
+    """Name shown in the success message (e.g. ``"claude"``)."""
+
+
+def _api_key_command(cfg: AuthKeyConfig) -> list[str]:
+    """Build a bash command that prompts for an API key and writes it to a config file."""
+    config_dir = cfg.config_path.rsplit("/", 1)[0]
     parts = [
-        f"echo 'Enter your {label} API key (get one at {key_url}):'",
-        f"read -r -p '{env_var}=' api_key",
+        f"echo 'Enter your {cfg.label} API key (get one at {cfg.key_url}):'",
+        f"read -r -p '{cfg.env_var}=' api_key",
         f"mkdir -p {config_dir}",
-        f"printf '{printf_template}\\n' \"$api_key\" > {config_path}",
+        f"printf '{cfg.printf_template}\\n' \"$api_key\" > {cfg.config_path}",
         "echo",
-        f"echo 'API key saved to {config_path}'",
-        f"echo 'You can now use {tool_name} in task containers.'",
+        f"echo 'API key saved to {cfg.config_path}'",
+        f"echo 'You can now use {cfg.tool_name} in task containers.'",
     ]
     return ["bash", "-c", " && ".join(parts)]
 
@@ -118,12 +125,14 @@ _ALL_PROVIDERS: list[AuthProvider] = [
         host_dir_name="_claude-config",
         container_mount="/home/dev/.claude",
         command=_api_key_command(
-            label="Claude",
-            key_url="https://console.anthropic.com/settings/keys",
-            env_var="ANTHROPIC_API_KEY",
-            config_path="~/.claude/config.json",
-            printf_template='{"api_key": "%s"}',
-            tool_name="claude",
+            AuthKeyConfig(
+                label="Claude",
+                key_url="https://console.anthropic.com/settings/keys",
+                env_var="ANTHROPIC_API_KEY",
+                config_path="~/.claude/config.json",
+                printf_template='{"api_key": "%s"}',
+                tool_name="claude",
+            )
         ),
         banner_hint=(
             "You will be prompted to enter your Claude API key.\n"
@@ -136,12 +145,14 @@ _ALL_PROVIDERS: list[AuthProvider] = [
         host_dir_name="_vibe-config",
         container_mount="/home/dev/.vibe",
         command=_api_key_command(
-            label="Mistral",
-            key_url="https://console.mistral.ai/api-keys",
-            env_var="MISTRAL_API_KEY",
-            config_path="~/.vibe/.env",
-            printf_template="MISTRAL_API_KEY=%s",
-            tool_name="vibe",
+            AuthKeyConfig(
+                label="Mistral",
+                key_url="https://console.mistral.ai/api-keys",
+                env_var="MISTRAL_API_KEY",
+                config_path="~/.vibe/.env",
+                printf_template="MISTRAL_API_KEY=%s",
+                tool_name="vibe",
+            )
         ),
         banner_hint=(
             "You will be prompted to enter your Mistral API key.\n"
@@ -154,12 +165,14 @@ _ALL_PROVIDERS: list[AuthProvider] = [
         host_dir_name="_blablador-config",
         container_mount="/home/dev/.blablador",
         command=_api_key_command(
-            label="Blablador",
-            key_url="https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens",
-            env_var="BLABLADOR_API_KEY",
-            config_path="~/.blablador/config.json",
-            printf_template='{"api_key": "%s"}',
-            tool_name="blablador",
+            AuthKeyConfig(
+                label="Blablador",
+                key_url="https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens",
+                env_var="BLABLADOR_API_KEY",
+                config_path="~/.blablador/config.json",
+                printf_template='{"api_key": "%s"}',
+                tool_name="blablador",
+            )
         ),
         banner_hint=(
             "You will be prompted to enter your Blablador API key.\n"

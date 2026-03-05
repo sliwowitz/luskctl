@@ -8,6 +8,7 @@ import unittest
 import unittest.mock
 
 from terok.cli.main import main
+from terok.lib.containers.task_runners import HeadlessRunRequest
 
 
 class RunCliTests(unittest.TestCase):
@@ -44,20 +45,21 @@ class RunCliTests(unittest.TestCase):
             unittest.mock.patch("terok.cli.commands.task.task_run_headless") as mock_run,
         ):
             main()
-            mock_run.assert_called_once_with(
-                "myproject",
-                "Fix the auth bug",
-                config_path=None,
-                model="opus",
-                max_turns=50,
-                timeout=3600,
-                follow=True,
-                agents=None,
-                preset=None,
-                name=None,
-                provider=None,
-                instructions=None,
-            )
+            mock_run.assert_called_once()
+            req = mock_run.call_args[0][0]
+            self.assertIsInstance(req, HeadlessRunRequest)
+            self.assertEqual(req.project_id, "myproject")
+            self.assertEqual(req.prompt, "Fix the auth bug")
+            self.assertIsNone(req.config_path)
+            self.assertEqual(req.model, "opus")
+            self.assertEqual(req.max_turns, 50)
+            self.assertEqual(req.timeout, 3600)
+            self.assertTrue(req.follow)
+            self.assertIsNone(req.agents)
+            self.assertIsNone(req.preset)
+            self.assertIsNone(req.name)
+            self.assertIsNone(req.provider)
+            self.assertIsNone(req.instructions)
 
     def test_run_no_follow_flag(self) -> None:
         """run --no-follow passes follow=False."""
@@ -70,9 +72,8 @@ class RunCliTests(unittest.TestCase):
         ):
             main()
             mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args
-            # follow should be False
-            self.assertFalse(call_kwargs[1]["follow"])
+            req = mock_run.call_args[0][0]
+            self.assertFalse(req.follow)
 
     def test_run_with_config(self) -> None:
         """run --config passes config_path."""
@@ -92,8 +93,8 @@ class RunCliTests(unittest.TestCase):
         ):
             main()
             mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args
-            self.assertEqual(call_kwargs[1]["config_path"], "/path/to/agent.yml")
+            req = mock_run.call_args[0][0]
+            self.assertEqual(req.config_path, "/path/to/agent.yml")
 
     def test_run_with_agent_selection(self) -> None:
         """run --agent passes agents list to task_run_headless."""
@@ -115,8 +116,8 @@ class RunCliTests(unittest.TestCase):
         ):
             main()
             mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args
-            self.assertEqual(call_kwargs[1]["agents"], ["debugger", "planner"])
+            req = mock_run.call_args[0][0]
+            self.assertEqual(req.agents, ["debugger", "planner"])
 
     def test_run_with_provider_flag(self) -> None:
         """run --provider passes provider to task_run_headless."""
@@ -129,8 +130,8 @@ class RunCliTests(unittest.TestCase):
         ):
             main()
             mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args
-            self.assertEqual(call_kwargs[1]["provider"], "codex")
+            req = mock_run.call_args[0][0]
+            self.assertEqual(req.provider, "codex")
 
     def test_run_invalid_provider_rejected(self) -> None:
         """run --provider with invalid name is rejected by argparse."""
@@ -155,8 +156,8 @@ class RunCliTests(unittest.TestCase):
         ):
             main()
             mock_run.assert_called_once()
-            call_kwargs = mock_run.call_args
-            self.assertIsNone(call_kwargs[1]["provider"])
+            req = mock_run.call_args[0][0]
+            self.assertIsNone(req.provider)
 
     def test_run_with_instructions_flag(self) -> None:
         """run --instructions FILE reads file and passes instructions."""
@@ -178,8 +179,8 @@ class RunCliTests(unittest.TestCase):
             ):
                 main()
                 mock_run.assert_called_once()
-                call_kwargs = mock_run.call_args
-                self.assertEqual(call_kwargs[1]["instructions"], "Custom agent instructions here.")
+                req = mock_run.call_args[0][0]
+                self.assertEqual(req.instructions, "Custom agent instructions here.")
         finally:
             Path(instr_path).unlink()
 

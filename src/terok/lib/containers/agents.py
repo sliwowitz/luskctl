@@ -13,6 +13,7 @@ import json
 import os
 import shlex
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -383,16 +384,21 @@ def _inject_opencode_instructions(config_path: Path) -> None:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
-def prepare_agent_config_dir(
-    project: Project,
-    task_id: str,
-    subagents: list[dict],
-    selected_agents: list[str] | None = None,
-    prompt: str | None = None,
-    skip_permissions: bool = True,
-    provider: str = "claude",
-    instructions: str | None = None,
-) -> Path:
+@dataclass(frozen=True)
+class AgentConfigSpec:
+    """Groups parameters for preparing an agent-config directory."""
+
+    project: Project
+    task_id: str
+    subagents: list[dict]
+    selected_agents: list[str] | None = None
+    prompt: str | None = None
+    skip_permissions: bool = True
+    provider: str = "claude"
+    instructions: str | None = None
+
+
+def prepare_agent_config_dir(spec: AgentConfigSpec) -> Path:
     """Create and populate the agent-config directory for a task.
 
     Writes:
@@ -405,33 +411,27 @@ def prepare_agent_config_dir(
       OpenCode and Blablador configs
 
     Args:
-        provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
-            Controls which wrapper is generated and which provider-specific
-            files are written.
-        instructions: Custom instructions text. When ``None``, a neutral
-            default is written instead so that ``opencode.json`` references
-            always resolve. See :mod:`~terok.lib.containers.headless_providers`
-            module docstring for the per-provider delivery matrix.
+        spec: All agent-config parameters bundled in an :class:`AgentConfigSpec`.
 
     Returns the agent_config_dir path.
     """
     from .headless_providers import get_provider as _get_provider
 
-    resolved = _get_provider(provider, project)
+    resolved = _get_provider(spec.provider, spec.project)
 
-    task_dir = project.tasks_root / str(task_id)
+    task_dir = spec.project.tasks_root / str(spec.task_id)
     agent_config_dir = task_dir / "agent-config"
     ensure_dir(agent_config_dir)
 
     # Build agents JSON — only for providers that support --agents (Claude)
     has_agents = False
-    if resolved.supports_agents_json and subagents:
-        agents_json = _subagents_to_json(subagents, selected_agents)
+    if resolved.supports_agents_json and spec.subagents:
+        agents_json = _subagents_to_json(spec.subagents, spec.selected_agents)
         agents_dict = json.loads(agents_json)
         if agents_dict:  # non-empty dict
             (agent_config_dir / "agents.json").write_text(agents_json, encoding="utf-8")
             has_agents = True
-    elif subagents or selected_agents:
+    elif spec.subagents or spec.selected_agents:
         import warnings
 
         warnings.warn(
@@ -445,8 +445,8 @@ def prepare_agent_config_dir(
     # are configured, a neutral default is used.
     _DEFAULT_INSTRUCTIONS = "Follow the project's coding conventions and existing patterns."
 
-    has_instructions = bool(instructions)
-    instructions_text = instructions or _DEFAULT_INSTRUCTIONS
+    has_instructions = bool(spec.instructions)
+    instructions_text = spec.instructions or _DEFAULT_INSTRUCTIONS
     (agent_config_dir / "instructions.md").write_text(instructions_text, encoding="utf-8")
 
     # Inject instructions path into opencode.json configs on the host so
@@ -465,7 +465,7 @@ def prepare_agent_config_dir(
         return _generate_claude_wrapper(ha, proj, sp, has_instructions=has_instructions)
 
     wrapper = generate_all_wrappers(
-        project,
+        spec.project,
         has_agents,
         claude_wrapper_fn=_claude_wrapper_with_instructions,
     )
@@ -478,7 +478,7 @@ def prepare_agent_config_dir(
         _write_session_hook(shared_claude_dir / "settings.json")
 
     # Prompt (headless only)
-    if prompt is not None:
-        (agent_config_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    if spec.prompt is not None:
+        (agent_config_dir / "prompt.txt").write_text(spec.prompt, encoding="utf-8")
 
     return agent_config_dir

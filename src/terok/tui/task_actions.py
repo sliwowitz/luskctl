@@ -21,6 +21,7 @@ from ..lib.containers.tasks import (
 from ..lib.core.config import is_experimental
 from ..lib.core.projects import load_project
 from ..lib.facade import (
+    HeadlessRunRequest,
     task_delete,
     task_followup_headless,
     task_new,
@@ -334,7 +335,14 @@ class TaskActionsMixin:
         """Background worker: launch task_run_headless and return result."""
         try:
             task_id = task_run_headless(
-                project_id, prompt, follow=False, agents=agents, name=name, provider=provider
+                HeadlessRunRequest(
+                    project_id=project_id,
+                    prompt=prompt,
+                    follow=False,
+                    agents=agents,
+                    name=name,
+                    provider=provider,
+                )
             )
             return project_id, task_id, None
         except SystemExit as e:
@@ -425,17 +433,19 @@ class TaskActionsMixin:
             return
         follow = state == "running"
 
-        from .log_viewer import LogViewerScreen
+        from .log_viewer import LogViewerScreen, TaskContainerRef
 
         provider = getattr(task, "provider", None)
         await self.push_screen(
             LogViewerScreen(
-                project_id=pid,
-                task_id=tid,
-                mode=task.mode,
-                container_name=cname,
+                TaskContainerRef(
+                    project_id=pid,
+                    task_id=tid,
+                    mode=task.mode,
+                    container_name=cname,
+                    provider=provider,
+                ),
                 follow=follow,
-                provider=provider,
             )
         )
 

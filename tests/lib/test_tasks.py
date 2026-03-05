@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 
 from terok.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
-from terok.lib.containers.task_logs import task_logs
+from terok.lib.containers.task_logs import LogViewOptions, task_logs
 from terok.lib.containers.task_runners import task_run_cli, task_run_web
 from terok.lib.containers.tasks import (
     get_workspace_git_diff,
@@ -1185,7 +1185,7 @@ class TaskLogsTests(unittest.TestCase):
                     return_value="running",
                 ):
                     with self.assertRaises(SystemExit) as cm:
-                        task_logs("proj_logs4", task_id, tail=-1)
+                        task_logs("proj_logs4", task_id, LogViewOptions(tail=-1))
                     self.assertIn("--tail must be >= 0", str(cm.exception))
 
     def test_raw_mode_exec(self) -> None:
@@ -1214,7 +1214,7 @@ class TaskLogsTests(unittest.TestCase):
                     ),
                 ):
                     with self.assertRaises(SystemExit):
-                        task_logs("proj_logs5", task_id, raw=True)
+                        task_logs("proj_logs5", task_id, LogViewOptions(raw=True))
                     self.assertEqual(len(captured_args), 1)
                     self.assertEqual(captured_args[0][0], "podman")
                     self.assertIn("logs", captured_args[0][1])
@@ -1238,7 +1238,7 @@ class TaskLogsTests(unittest.TestCase):
                     ),
                 ):
                     with self.assertRaises(SystemExit) as cm:
-                        task_logs("proj_logs6", task_id, raw=True)
+                        task_logs("proj_logs6", task_id, LogViewOptions(raw=True))
                     self.assertIn("podman not found", str(cm.exception))
 
     def test_formatted_mode_feeds_formatter(self) -> None:

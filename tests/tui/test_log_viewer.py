@@ -341,13 +341,13 @@ class LogViewerScreenConstructionTests(TestCase):
 
     def test_construction_follow_mode(self) -> None:
         mod = import_log_viewer()
-        screen = mod.LogViewerScreen(
+        ref = mod.TaskContainerRef(
             project_id="proj1",
             task_id="42",
             mode="run",
             container_name="proj1-run-42",
-            follow=True,
         )
+        screen = mod.LogViewerScreen(ref, follow=True)
         self.assertEqual(screen.project_id, "proj1")
         self.assertEqual(screen.task_id, "42")
         self.assertEqual(screen.mode, "run")
@@ -356,34 +356,36 @@ class LogViewerScreenConstructionTests(TestCase):
 
     def test_construction_static_mode(self) -> None:
         mod = import_log_viewer()
-        screen = mod.LogViewerScreen(
+        ref = mod.TaskContainerRef(
             project_id="proj1",
             task_id="7",
             mode="cli",
             container_name="proj1-cli-7",
-            follow=False,
         )
+        screen = mod.LogViewerScreen(ref, follow=False)
         self.assertFalse(screen.follow)
         self.assertEqual(screen.mode, "cli")
 
     def test_construction_default_follow(self) -> None:
         mod = import_log_viewer()
-        screen = mod.LogViewerScreen(
+        ref = mod.TaskContainerRef(
             project_id="p",
             task_id="1",
             mode="run",
             container_name="p-run-1",
         )
+        screen = mod.LogViewerScreen(ref)
         self.assertTrue(screen.follow)
 
     def test_stop_event_initialized(self) -> None:
         mod = import_log_viewer()
-        screen = mod.LogViewerScreen(
+        ref = mod.TaskContainerRef(
             project_id="p",
             task_id="1",
             mode="run",
             container_name="p-run-1",
         )
+        screen = mod.LogViewerScreen(ref)
         self.assertFalse(screen._stop_event.is_set())
         self.assertIsNone(screen._process)
 

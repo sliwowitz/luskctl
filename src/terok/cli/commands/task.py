@@ -15,6 +15,8 @@ from ...lib.core.config import (
 )
 from ...lib.facade import (
     WEB_BACKENDS,
+    HeadlessRunRequest,
+    LogViewOptions,
     get_tasks as _get_tasks,
     task_delete,
     task_followup_headless,
@@ -271,18 +273,20 @@ def dispatch(args: argparse.Namespace) -> bool:
                 ) from exc
 
         task_run_headless(
-            args.project_id,
-            args.prompt,
-            config_path=getattr(args, "agent_config", None),
-            model=getattr(args, "model", None),
-            max_turns=getattr(args, "max_turns", None),
-            timeout=getattr(args, "timeout", None),
-            follow=not getattr(args, "no_follow", False),
-            agents=getattr(args, "selected_agents", None),
-            preset=getattr(args, "preset", None),
-            name=getattr(args, "name", None),
-            provider=getattr(args, "provider", None),
-            instructions=instructions_text,
+            HeadlessRunRequest(
+                project_id=args.project_id,
+                prompt=args.prompt,
+                config_path=getattr(args, "agent_config", None),
+                model=getattr(args, "model", None),
+                max_turns=getattr(args, "max_turns", None),
+                timeout=getattr(args, "timeout", None),
+                follow=not getattr(args, "no_follow", False),
+                agents=getattr(args, "selected_agents", None),
+                preset=getattr(args, "preset", None),
+                name=getattr(args, "name", None),
+                provider=getattr(args, "provider", None),
+                instructions=instructions_text,
+            )
         )
         return True
     if args.cmd == "task":
@@ -365,10 +369,12 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         task_logs(
             args.project_id,
             args.task_id,
-            follow=getattr(args, "follow", False),
-            raw=getattr(args, "raw", False),
-            tail=getattr(args, "tail", None),
-            streaming=stream,
+            LogViewOptions(
+                follow=getattr(args, "follow", False),
+                raw=getattr(args, "raw", False),
+                tail=getattr(args, "tail", None),
+                streaming=stream,
+            ),
         )
     else:
         return False

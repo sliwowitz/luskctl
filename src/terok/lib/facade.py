@@ -15,8 +15,9 @@ helpers for multi-step workflows like project initialization.
 from .containers.docker import build_images, generate_dockerfiles
 from .containers.environment import WEB_BACKENDS
 from .containers.project_state import get_project_state, is_task_image_old
-from .containers.task_logs import task_logs  # noqa: F401 — re-exported public API
+from .containers.task_logs import LogViewOptions, task_logs  # noqa: F401 — re-exported public API
 from .containers.task_runners import (  # noqa: F401 — re-exported public API
+    HeadlessRunRequest,
     task_followup_headless,
     task_restart,
     task_run_cli,
@@ -81,10 +82,12 @@ __all__ = [
     "task_run_cli",
     "task_run_web",
     "task_run_headless",
+    "HeadlessRunRequest",
     "task_restart",
     "task_followup_headless",
     # Task logs
     "task_logs",
+    "LogViewOptions",
     # Security setup
     "init_project_ssh",
     "sync_project_gate",

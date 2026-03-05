@@ -9,8 +9,11 @@ Split from ``tasks.py`` to isolate log streaming, signal handling, and
 formatter selection from task metadata management.
 """
 
+from __future__ import annotations
+
 import os
 import subprocess
+from dataclasses import dataclass
 
 import yaml
 
@@ -20,14 +23,27 @@ from .runtime import container_name, get_container_state
 from .tasks import tasks_meta_dir
 
 
+@dataclass(frozen=True)
+class LogViewOptions:
+    """Display options for task log viewing."""
+
+    follow: bool = False
+    """Follow live output (``-f``)."""
+
+    raw: bool = False
+    """Bypass formatting, show raw podman output."""
+
+    tail: int | None = None
+    """Show only the last N lines."""
+
+    streaming: bool = True
+    """Enable partial streaming (typewriter effect) for supported formatters."""
+
+
 def task_logs(
     project_id: str,
     task_id: str,
-    *,
-    follow: bool = False,
-    raw: bool = False,
-    tail: int | None = None,
-    streaming: bool = True,
+    options: LogViewOptions | None = None,
 ) -> None:
     """View formatted logs for a task container.
 
@@ -36,11 +52,10 @@ def task_logs(
     Args:
         project_id: The project ID.
         task_id: The task ID.
-        follow: Follow live output (``-f``).
-        raw: Bypass formatting, show raw podman output.
-        tail: Show only the last N lines.
-        streaming: Enable partial streaming (typewriter effect) for supported formatters.
+        options: Display options (follow, raw, tail, streaming).
     """
+    if options is None:
+        options = LogViewOptions()
     import select
     import signal
 
@@ -70,15 +85,15 @@ def task_logs(
 
     # Build podman logs command
     cmd = ["podman", "logs"]
-    if follow:
+    if options.follow:
         cmd.append("-f")
-    if tail is not None:
-        if tail < 0:
+    if options.tail is not None:
+        if options.tail < 0:
             raise SystemExit("--tail must be >= 0")
-        cmd.extend(["--tail", str(tail)])
+        cmd.extend(["--tail", str(options.tail)])
     cmd.append(cname)
 
-    if raw:
+    if options.raw:
         # Raw mode: exec podman directly, no formatting
         try:
             os.execvp(cmd[0], cmd)
@@ -87,7 +102,7 @@ def task_logs(
 
     # Formatted mode: pipe through formatter
     provider = meta.get("provider")
-    formatter = auto_detect_formatter(mode, streaming=streaming, provider=provider)
+    formatter = auto_detect_formatter(mode, streaming=options.streaming, provider=provider)
 
     try:
         proc = subprocess.Popen(

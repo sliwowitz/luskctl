@@ -12,6 +12,7 @@ retains task metadata, lifecycle, and query operations.
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,7 +29,7 @@ from ..util.ansi import (
 )
 from ..util.podman import _podman_userns_args
 from .agent_config import resolve_agent_config
-from .agents import prepare_agent_config_dir
+from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import (
     apply_web_env_overrides,
     build_task_env_and_volumes,
@@ -53,6 +54,36 @@ if TYPE_CHECKING:
     from ..core.project_model import Project
 
 
+@dataclass(frozen=True)
+class HeadlessRunRequest:
+    """Groups all parameters for a headless (autopilot) agent run."""
+
+    project_id: str
+    prompt: str
+    config_path: str | None = None
+    model: str | None = None
+    max_turns: int | None = None
+    timeout: int | None = None
+    follow: bool = True
+    agents: list[str] | None = None
+    preset: str | None = None
+    name: str | None = None
+    provider: str | None = None
+    instructions: str | None = None
+
+
+@dataclass(frozen=True)
+class DetachedSummary:
+    """Groups all parameters for the detached task summary block."""
+
+    label: str
+    task_id: str
+    cname: str
+    color: bool
+    log_cmd: str
+    stop_cmd: str
+
+
 def _prepare_agent_config(
     project: Project,
     project_id: str,
@@ -75,7 +106,14 @@ def _prepare_agent_config(
     resolved = _get_provider(provider_name, project)
     instr_text = resolve_instructions(effective, resolved.name, project_root=project.root)
     return prepare_agent_config_dir(
-        project, task_id, subagents, agents, provider=resolved.name, instructions=instr_text
+        AgentConfigSpec(
+            project=project,
+            task_id=task_id,
+            subagents=subagents,
+            selected_agents=agents,
+            provider=resolved.name,
+            instructions=instr_text,
+        )
     )
 
 
@@ -130,16 +168,14 @@ def _print_login_instructions(project_id: str, task_id: str, cname: str, color: 
     print(f"  (or:      {_blue(raw_cmd, color)})")
 
 
-def _print_detached_summary(
-    label: str, task_id: str, cname: str, color: bool, *, log_cmd: str, stop_cmd: str
-) -> None:
+def _print_detached_summary(summary: DetachedSummary) -> None:
     """Print the summary block shown after detaching from a headless/follow-up task."""
     print(
-        f"\n{label}"
-        f"\n- Task:  {task_id}"
-        f"\n- Name:  {_green(cname, color)}"
-        f"\n- Logs:  {_blue(log_cmd, color)}"
-        f"\n- Stop:  {_red(stop_cmd, color)}\n"
+        f"\n{summary.label}"
+        f"\n- Task:  {summary.task_id}"
+        f"\n- Name:  {_green(summary.cname, summary.color)}"
+        f"\n- Logs:  {_blue(summary.log_cmd, summary.color)}"
+        f"\n- Stop:  {_red(summary.stop_cmd, summary.color)}\n"
     )
 
 
@@ -430,20 +466,7 @@ def _print_run_summary(workspace: Path) -> None:
         print(f"\n  Workspace: {workspace}")
 
 
-def task_run_headless(
-    project_id: str,
-    prompt: str,
-    config_path: str | None = None,
-    model: str | None = None,
-    max_turns: int | None = None,
-    timeout: int | None = None,
-    follow: bool = True,
-    agents: list[str] | None = None,
-    preset: str | None = None,
-    name: str | None = None,
-    provider: str | None = None,
-    instructions: str | None = None,
-) -> str:
+def task_run_headless(request: HeadlessRunRequest) -> str:
     """Run an agent headlessly (autopilot mode) in a new task container.
 
     Creates a new task, prepares the agent-config directory with the provider's
@@ -451,40 +474,40 @@ def task_run_headless(
     that runs init-ssh-and-repo.sh followed by the agent command.
 
     Args:
-        name: Optional human-readable name.  Allowed characters are
-            lowercase letters, digits, hyphens, and underscores.
-            If ``None``, a random name is generated via
-            :func:`generate_task_name`.
-        provider: Headless provider name (e.g. ``"claude"``, ``"codex"``).
-            Defaults to project/global config, falling back to ``"claude"``.
-        instructions: Explicit instructions text (from ``--instructions`` CLI
-            flag).  Overrides the config stack when provided.
+        request: All per-run options bundled in a :class:`HeadlessRunRequest`.
 
     Returns the task_id.
     """
-    from .headless_providers import apply_provider_config, build_headless_command, get_provider
+    from .headless_providers import (
+        CLIOverrides,
+        apply_provider_config,
+        build_headless_command,
+        get_provider,
+    )
 
-    project = load_project(project_id)
-    resolved = get_provider(provider, project)
+    project = load_project(request.project_id)
+    resolved = get_provider(request.provider, project)
 
     # Build CLI overrides from --config file and explicit flags
     cli_overrides: dict = {}
-    if config_path:
-        config_src = Path(config_path)
+    if request.config_path:
+        config_src = Path(request.config_path)
         if not config_src.is_file():
-            raise SystemExit(f"Agent config file not found: {config_path}")
+            raise SystemExit(f"Agent config file not found: {request.config_path}")
         cli_config = yaml.safe_load(config_src.read_text(encoding="utf-8")) or {}
         cli_overrides = cli_config
 
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(
-        project_id, preset=preset, cli_overrides=cli_overrides if cli_overrides else None
+        request.project_id,
+        preset=request.preset,
+        cli_overrides=cli_overrides if cli_overrides else None,
     )
 
     # Resolve instructions: CLI --instructions overrides config stack
     instr_text = (
-        instructions
-        if instructions is not None
+        request.instructions
+        if request.instructions is not None
         else resolve_instructions(effective, resolved.name, project_root=project.root)
     )
 
@@ -494,10 +517,12 @@ def task_run_headless(
     pcfg = apply_provider_config(
         resolved,
         effective,
-        model_override=model,
-        max_turns_override=max_turns,
-        timeout_override=timeout,
-        instructions=instr_text,
+        CLIOverrides(
+            model=request.model,
+            max_turns=request.max_turns,
+            timeout=request.timeout,
+            instructions=instr_text,
+        ),
     )
 
     # Print warnings about unsupported features
@@ -505,12 +530,12 @@ def task_run_headless(
         print(f"Warning: {warning}")
 
     # Augment prompt with best-effort feature analogues (e.g. max-turns guidance)
-    effective_prompt = prompt
+    effective_prompt = request.prompt
     if pcfg.prompt_extra:
-        effective_prompt = f"{prompt}\n\n{pcfg.prompt_extra}"
+        effective_prompt = f"{request.prompt}\n\n{pcfg.prompt_extra}"
 
     # Create a new task
-    task_id = task_new(project_id, name=name)
+    task_id = task_new(request.project_id, name=request.name)
 
     # Collect subagents from resolved config
     subagents = list(effective.get("subagents") or [])
@@ -518,13 +543,15 @@ def task_run_headless(
     # Prepare agent-config dir with wrapper, agents.json, prompt.txt, instructions.md
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = prepare_agent_config_dir(
-        project,
-        task_id,
-        subagents,
-        agents,
-        prompt=effective_prompt,
-        provider=resolved.name,
-        instructions=instr_text,
+        AgentConfigSpec(
+            project=project,
+            task_id=task_id,
+            subagents=subagents,
+            selected_agents=request.agents,
+            prompt=effective_prompt,
+            provider=resolved.name,
+            instructions=instr_text,
+        )
     )
 
     # Build env and volumes
@@ -557,13 +584,13 @@ def task_run_headless(
     meta, meta_path = load_task_meta(project.id, task_id)
     meta["mode"] = "run"
     meta["provider"] = resolved.name
-    if preset:
-        meta["preset"] = preset
+    if request.preset:
+        meta["preset"] = request.preset
     meta_path.write_text(yaml.safe_dump(meta))
 
     color_enabled = _supports_color()
 
-    if follow:
+    if request.follow:
         exit_code = wait_for_exit(cname)
         _print_run_summary(task_dir / "workspace")
 
@@ -573,12 +600,14 @@ def task_run_headless(
             print(f"\n{resolved.label} exited with code {_red(str(exit_code), color_enabled)}")
     else:
         _print_detached_summary(
-            f"Headless {resolved.label} task started (detached).",
-            task_id,
-            cname,
-            color_enabled,
-            log_cmd=f"podman logs -f {cname}",
-            stop_cmd=f"podman stop {cname}",
+            DetachedSummary(
+                label=f"Headless {resolved.label} task started (detached).",
+                task_id=task_id,
+                cname=cname,
+                color=color_enabled,
+                log_cmd=f"podman logs -f {cname}",
+                stop_cmd=f"podman stop {cname}",
+            )
         )
 
     return task_id
@@ -688,12 +717,14 @@ def task_followup_headless(
             print(f"\n{label} exited with code {_red(str(exit_code), color_enabled)}")
     else:
         _print_detached_summary(
-            "Follow-up started (detached).",
-            task_id,
-            cname,
-            color_enabled,
-            log_cmd=f"podman logs -f {cname}",
-            stop_cmd=f"podman stop {cname}",
+            DetachedSummary(
+                label="Follow-up started (detached).",
+                task_id=task_id,
+                cname=cname,
+                color=color_enabled,
+                log_cmd=f"podman logs -f {cname}",
+                stop_cmd=f"podman stop {cname}",
+            )
         )
 
 

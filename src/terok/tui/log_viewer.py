@@ -19,6 +19,7 @@ import json
 import select
 import subprocess
 import threading
+from dataclasses import dataclass
 from enum import Enum, auto
 
 from rich.style import Style
@@ -323,6 +324,17 @@ class _PlainTextTuiFormatter:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class TaskContainerRef:
+    """Identifies a task's container for log viewing."""
+
+    project_id: str
+    task_id: str
+    mode: str
+    container_name: str
+    provider: str | None = None
+
+
 class LogViewerScreen(screen.Screen[None]):
     """Full-page log viewer with formatted, color-coded output."""
 
@@ -359,32 +371,23 @@ class LogViewerScreen(screen.Screen[None]):
 
     def __init__(
         self,
-        project_id: str,
-        task_id: str,
-        mode: str,
-        container_name: str,
+        ref: TaskContainerRef,
         *,
         follow: bool = True,
-        provider: str | None = None,
     ) -> None:
         """Create a log viewer for a container.
 
         Args:
-            project_id: Parent project identifier.
-            task_id: Task whose logs to display.
-            mode: Agent run mode (``run``, ``chat``, etc.) — controls formatter choice.
-            container_name: Podman container name for ``podman logs``.
+            ref: Task container reference (project, task, mode, container name, provider).
             follow: If True, stream logs in real-time with auto-scroll.
-            provider: Headless provider name (e.g. ``"claude"``).  Controls
-                whether the Claude stream-json formatter or plain text is used.
         """
         super().__init__()
-        self.project_id = project_id
-        self.task_id = task_id
-        self.mode = mode
-        self.container_name = container_name
+        self.project_id = ref.project_id
+        self.task_id = ref.task_id
+        self.mode = ref.mode
+        self.container_name = ref.container_name
         self.follow = follow
-        self.provider = provider
+        self.provider = ref.provider
         self._stop_event = threading.Event()
         self._process: subprocess.Popen | None = None
 

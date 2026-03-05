@@ -440,7 +440,7 @@ expose = [
 from = ["terok.lib.containers.work_status"]
 
 [[interfaces]]
-expose = ["task_logs"]
+expose = ["task_logs", "LogViewOptions"]
 from = ["terok.lib.containers.task_logs"]
 
 [[interfaces]]
@@ -469,15 +469,15 @@ expose = [
 from = ["terok.lib.containers.tasks"]
 
 [[interfaces]]
-expose = ["task_run_cli", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless"]
+expose = ["task_run_cli", "task_run_web", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
 from = ["terok.lib.containers.task_runners"]
 
 [[interfaces]]
-expose = ["parse_md_agent", "prepare_agent_config_dir"]
+expose = ["parse_md_agent", "prepare_agent_config_dir", "AgentConfigSpec"]
 from = ["terok.lib.containers.agents"]
 
 [[interfaces]]
-expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
+expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "CLIOverrides", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers"]
 from = ["terok.lib.containers.headless_providers"]
 
 [[interfaces]]
@@ -614,9 +614,11 @@ expose = [
     "task_run_cli",
     "task_run_web",
     "task_run_headless",
+    "HeadlessRunRequest",
     "task_restart",
     "task_followup_headless",
     "task_logs",
+    "LogViewOptions",
     "init_project_ssh",
     "sync_project_gate",
     "AUTH_PROVIDERS",
