@@ -478,7 +478,7 @@ The `--agent` flag also works with interactive modes:
 
 ```bash
 terokctl task run-cli myproj 1 --agent debugger
-terokctl task run-web myproj 1 --agent debugger
+terokctl --experimental task run-web myproj 1 --agent debugger
 terokctl task start myproj --agent debugger
 ```
 
@@ -692,7 +692,7 @@ Presets work with all task modes:
 ```bash
 terokctl task start myproj --preset review
 terokctl task run-cli myproj 1 --preset team
-terokctl task run-web myproj 1 --preset solo
+terokctl --experimental task run-web myproj 1 --preset solo
 ```
 
 ### See What's Available
