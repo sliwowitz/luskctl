@@ -255,8 +255,8 @@ terokctl task list myproj
 # Run in CLI mode (headless agent)
 terokctl task run-cli myproj 1
 
-# Or run in web mode (web interface, requires --experimental)
-terokctl task run-web myproj 1 --backend codex
+# Or run in web mode (experimental)
+terokctl --experimental task run-web myproj 1 --backend codex
 ```
 
 #### Additional Task Operations

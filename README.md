@@ -65,7 +65,7 @@ terokctl ssh-init myproj
 terokctl task new myproj
 terokctl task run-cli myproj 1    # CLI mode
 # or
-terokctl task run-web myproj 1    # Web UI mode (requires --experimental)
+terokctl --experimental task run-web myproj 1    # Web UI mode
 ```
 
 ### Headless Agent Runs (Autopilot)

@@ -16,7 +16,7 @@ The host follows logs and detaches when either of these markers appears, or afte
 
 **If you modify the init script**, ensure a stable readiness line is preserved, or update the detection in `src/terok/lib/containers/task_runners.py` (`task_run_cli`) and `src/terok/lib/containers/runtime.py` (`stream_initial_logs`).
 
-### UI Mode (task run-ui)
+### UI Mode (task run-web)
 
 Readiness is determined by log markers, not port probing. The host follows container logs and detaches when it sees the startup marker from Terok Web UI:
 - Marker: `"Terok Web UI started"` (emitted when the HTTP server is ready to accept connections)
