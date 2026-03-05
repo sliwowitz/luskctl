@@ -89,6 +89,7 @@ if _HAS_TEXTUAL:
         "toggle_inherit": "_action_toggle_instructions_inherit",
         "show_resolved": "_action_show_resolved_instructions",
         "import_opencode_config": "_action_import_opencode_config",
+        "delete_project": "_action_delete_project",
     }
 
     TASK_ACTION_HANDLERS: dict[str, str] = {

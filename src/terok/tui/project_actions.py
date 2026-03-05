@@ -21,6 +21,8 @@ from ..lib.facade import (
     WEB_BACKENDS,
     authenticate,
     build_images,
+    delete_project,
+    find_projects_sharing_gate,
     generate_dockerfiles,
     init_project_ssh,
     maybe_pause_for_ssh_key_registration,
@@ -461,3 +463,66 @@ class ProjectActionsMixin:
             input("\n[Press Enter to return to TerokTUI] ")
         await self.refresh_projects()
         self.notify("Project list refreshed.")
+
+    # --- Project delete ---
+
+    async def _action_delete_project(self) -> None:
+        """Delete the current project after confirmation."""
+        if not self.current_project_id:
+            self.notify("No project selected.")
+            return
+
+        pid = self.current_project_id
+        try:
+            project = load_project(pid)
+        except Exception as e:
+            self.notify(f"Error loading project: {e}")
+            return
+
+        # Build confirmation message
+        lines = [
+            f"Delete project '{pid}'?\n",
+            f"Config root: {project.root}",
+            f"Security class: {project.security_class}",
+        ]
+        if project.upstream_url:
+            lines.append(f"Upstream: {project.upstream_url}")
+
+        sharing = find_projects_sharing_gate(project.gate_path, exclude_project=pid)
+        if sharing:
+            names = ", ".join(p for p, _ in sharing)
+            lines.append(f"\nNote: gate is shared with: {names} (will NOT be deleted)")
+
+        lines.append("\nThis will permanently delete the project configuration,")
+        lines.append("all task workspaces, metadata, build artifacts, and SSH credentials.")
+        lines.append("This action cannot be undone.")
+
+        from .screens import ConfirmDeleteScreen
+
+        await self.push_screen(
+            ConfirmDeleteScreen(
+                message="\n".join(lines),
+                title=f"Delete Project: {pid}",
+            ),
+            self._on_delete_project_confirmed,
+        )
+
+    async def _on_delete_project_confirmed(self, confirmed: bool) -> None:
+        """Handle the result of the delete confirmation dialog."""
+        if not confirmed or not self.current_project_id:
+            return
+
+        pid = self.current_project_id
+        try:
+            result = delete_project(pid)
+        except Exception as e:
+            self.notify(f"Delete failed: {e}")
+            return
+
+        msg = f"Project '{pid}' deleted."
+        if result.get("skipped"):
+            msg += f" ({len(result['skipped'])} item(s) skipped)"
+        self.notify(msg)
+
+        self.current_project_id = None
+        await self.refresh_projects()

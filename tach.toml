@@ -77,6 +77,7 @@ depends_on = [
     "terok.lib.containers.task_logs",
     "terok.lib.containers.task_runners",
     "terok.lib.containers.tasks",
+    "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.security.auth",
     "terok.lib.security.git_gate",
@@ -600,6 +601,7 @@ from = ["terok.lib.wizards.new_project"]
 
 [[interfaces]]
 expose = [
+    "delete_project",
     "generate_dockerfiles",
     "build_images",
     "WEB_BACKENDS",

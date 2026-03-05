@@ -2,13 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Project management commands: list, derive, wizard, presets."""
+"""Project management commands: list, derive, wizard, presets, delete."""
 
 from __future__ import annotations
 
 import argparse
 
-from ...lib.core.projects import derive_project, list_presets, list_projects
+from ...lib.core.projects import derive_project, list_presets, list_projects, load_project
+from ...lib.facade import delete_project, find_projects_sharing_gate
 from ...lib.wizards.new_project import run_wizard
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 from .setup import cmd_project_init
@@ -35,6 +36,19 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         _complete_project_ids,
     )
     p_derive.add_argument("new_id", help="New project ID")
+
+    # project-delete
+    p_delete = subparsers.add_parser(
+        "project-delete",
+        help="Delete a project and all its associated data (non-recoverable)",
+    )
+    set_completer(
+        p_delete.add_argument("project_id", help="Project ID to delete"),
+        _complete_project_ids,
+    )
+    p_delete.add_argument(
+        "--force", action="store_true", help="Skip confirmation prompt"
+    )
 
     # presets
     p_presets = subparsers.add_parser("presets", help="Manage agent config presets")
@@ -65,6 +79,9 @@ def dispatch(args: argparse.Namespace) -> bool:
         print(f"  2. Initialize: terokctl project-init {args.new_id}")
         print("  Tip: global presets are shared across projects (see terokctl config)")
         return True
+    if args.cmd == "project-delete":
+        _cmd_project_delete(args.project_id, force=args.force)
+        return True
     if args.cmd == "project-wizard":
         run_wizard(init_fn=cmd_project_init)
         return True
@@ -80,3 +97,41 @@ def dispatch(args: argparse.Namespace) -> bool:
             return True
         return False
     return False
+
+
+def _cmd_project_delete(project_id: str, *, force: bool = False) -> None:
+    """Delete a project after confirmation (unless --force)."""
+    project = load_project(project_id)
+
+    print(f"Project: {project_id}")
+    print(f"  Config root: {project.root}")
+    print(f"  Security class: {project.security_class}")
+    if project.upstream_url:
+        print(f"  Upstream: {project.upstream_url}")
+
+    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
+    if sharing:
+        names = ", ".join(pid for pid, _ in sharing)
+        print(f"\n  Note: gate is shared with: {names} (will NOT be deleted)")
+
+    print("\nWARNING: This will permanently delete the project configuration,")
+    print("all task workspaces, metadata, build artifacts, and SSH credentials.")
+    print("This action cannot be undone.")
+
+    if not force:
+        answer = input(f"\nType '{project_id}' to confirm deletion: ").strip()
+        if answer != project_id:
+            print("Deletion cancelled.")
+            return
+
+    result = delete_project(project_id)
+
+    print(f"\nProject '{project_id}' deleted.")
+    if result["deleted"]:
+        print("Removed:")
+        for path in result["deleted"]:
+            print(f"  - {path}")
+    if result["skipped"]:
+        print("Skipped:")
+        for reason in result["skipped"]:
+            print(f"  - {reason}")

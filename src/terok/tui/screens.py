@@ -103,6 +103,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         _modal_binding("I", "edit_instructions", "Edit instructions"),
         _modal_binding("t", "toggle_inherit", "Toggle inherit"),
         _modal_binding("v", "show_resolved", "Show resolved instructions"),
+        _modal_binding("D", "delete_project", "Delete project"),
     ]
 
     CSS = (
@@ -154,6 +155,8 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             Option("edit \\[I]nstructions", id="edit_instructions"),
             Option("\\[t]oggle instructions inherit", id="toggle_inherit"),
             Option("\\[v]iew resolved instructions", id="show_resolved"),
+            None,
+            Option("\\[D]elete project", id="delete_project"),
             id="actions-list",
         )
 
@@ -235,6 +238,10 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
     def action_show_resolved(self) -> None:
         """Show fully resolved instructions."""
         self.dismiss("show_resolved")
+
+    def action_delete_project(self) -> None:
+        """Trigger project deletion."""
+        self.dismiss("delete_project")
 
 
 # ---------------------------------------------------------------------------
@@ -832,6 +839,78 @@ class TaskNameScreen(screen.ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 # Task Details Screen
 # ---------------------------------------------------------------------------
+
+
+class ConfirmDeleteScreen(screen.ModalScreen[bool]):
+    """Modal confirmation dialog for destructive operations.
+
+    Dismisses with ``True`` if the user confirms, ``False`` otherwise.
+    """
+
+    BINDINGS = [
+        _modal_binding("escape", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    ConfirmDeleteScreen {
+        align: center middle;
+    }
+
+    #confirm-dialog {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: heavy $error;
+        border-title-align: right;
+        border-subtitle-align: left;
+        background: $surface;
+        padding: 1;
+    }
+
+    #confirm-message {
+        margin-bottom: 1;
+    }
+
+    #confirm-buttons {
+        height: auto;
+        align-horizontal: right;
+    }
+
+    #confirm-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def __init__(self, message: str, title: str = "Confirm Delete") -> None:
+        """Create a confirmation dialog with a warning message."""
+        super().__init__()
+        self._message = message
+        self._title = title
+
+    def compose(self) -> ComposeResult:
+        """Build the confirmation message and Yes/Cancel buttons."""
+        with Vertical(id="confirm-dialog") as dialog:
+            yield Static(self._message, id="confirm-message", markup=False)
+            with Horizontal(id="confirm-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="default")
+                yield Button("Delete", id="btn-confirm", variant="error")
+        dialog.border_title = self._title
+        dialog.border_subtitle = "Esc to cancel"
+
+    def on_mount(self) -> None:
+        """Focus the cancel button by default (safe choice)."""
+        self.query_one("#btn-cancel", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button clicks."""
+        if event.button.id == "btn-confirm":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        """Cancel and dismiss without confirming."""
+        self.dismiss(False)
 
 
 class TaskDetailsScreen(screen.Screen[str | None]):
