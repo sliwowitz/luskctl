@@ -90,26 +90,59 @@ def _section_complexity() -> str:
 
     # Summary stats
     total = len(functions)
+    scores = [int(f["complexity"]) for f in functions]
     over_threshold = [f for f in functions if f["complexity"] > COMPLEXITY_THRESHOLD]
     max_c = functions[0]["complexity"] if functions else 0
-    avg_c = sum(f["complexity"] for f in functions) / total if total else 0
+    avg_c = sum(scores) / total if total else 0
+    sorted_scores = sorted(scores)
+    if total == 0:
+        median_c = 0
+    elif total % 2 == 1:
+        median_c = sorted_scores[total // 2]
+    else:
+        median_c = (sorted_scores[total // 2 - 1] + sorted_scores[total // 2]) / 2
+    pct_within = (total - len(over_threshold)) / total * 100 if total else 0
 
     lines = [
         f"- **Functions analyzed:** {total}\n",
-        f"- **Average complexity:** {avg_c:.1f}\n",
-        f"- **Max complexity:** {max_c}\n",
-        f"- **Exceeding threshold ({COMPLEXITY_THRESHOLD}):** {len(over_threshold)}\n",
+        f"- **Median complexity:** {median_c} · **Average:** {avg_c:.1f} · **Max:** {max_c}\n",
+        f"- **Within threshold ({COMPLEXITY_THRESHOLD}):** {pct_within:.0f}%"
+        f" ({total - len(over_threshold)}/{total})\n",
         "\n",
     ]
 
+    # Histogram
+    buckets = [(0, 5), (6, 10), (11, 15), (16, 20), (21, 25), (26, 30), (31, 50), (51, 999)]
+    bar_max = 30  # max bar width in characters
+    bucket_counts = []
+    for lo, hi in buckets:
+        count = sum(1 for s in scores if lo <= s <= hi)
+        bucket_counts.append((lo, hi, count))
+
+    peak = max(c for _, _, c in bucket_counts) if bucket_counts else 1
+
+    lines.append("```\n")
+    for lo, hi, count in bucket_counts:
+        if count == 0 and lo > max(scores):
+            continue
+        label = f"{lo:>3d}–{hi:>3d}" if hi < 999 else f"{lo:>3d}+   "
+        bar_len = round(count / peak * bar_max) if peak else 0
+        bar = "█" * bar_len
+        pct = count / total * 100 if total else 0
+        marker = " ◄ threshold" if lo <= COMPLEXITY_THRESHOLD <= hi else ""
+        lines.append(f"  {label} │ {bar:<{bar_max}} {count:>3d} ({pct:4.1f}%){marker}\n")
+    lines.append("```\n\n")
+
     if over_threshold:
+        lines.append(f"**{len(over_threshold)} functions exceeding threshold:**\n\n")
         lines.append("| Complexity | Function | File |\n")
         lines.append("|---:|---|---|\n")
         for f in over_threshold:
             lines.append(f"| {f['complexity']} | `{f['function_name']}` | `{f['path']}` |\n")
     else:
         lines.append(
-            f"All functions are within the cognitive complexity threshold of {COMPLEXITY_THRESHOLD}.\n"
+            f"All functions are within the cognitive complexity threshold of"
+            f" {COMPLEXITY_THRESHOLD}.\n"
         )
 
     return "".join(lines)
@@ -222,19 +255,59 @@ def _section_dependency_diagram() -> str:
 
 
 def _section_dependency_report() -> str:
-    """Generate dependency report from tach."""
-    result = _run(sys.executable, "-m", "tach", "report", str(SRC))
-    if result.returncode != 0:
-        output = (result.stdout + result.stderr).strip() or "no output"
-        return f"!!! warning\n    tach report failed (exit {result.returncode}).\n\n```\n{output}\n```\n"
-    output = result.stdout.strip()
-    if not output:
-        return "No dependency report available.\n"
-    return (
-        "<details>\n<summary>Full dependency report (click to expand)</summary>\n\n"
-        f"```\n{output}\n```\n\n"
-        "</details>\n"
-    )
+    """Generate a module dependency summary from tach.toml.
+
+    Parses the ``[[modules]]`` entries and builds a table showing each module's
+    layer, dependency count, and description (taken from the comment above).
+    """
+    tach_path = ROOT / "tach.toml"
+    if not tach_path.is_file():
+        return "!!! warning\n    `tach.toml` not found — skipping dependency summary.\n"
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return "!!! warning\n    No TOML parser available — skipping dependency summary.\n"
+
+    raw = tach_path.read_text(encoding="utf-8")
+
+    # Extract comments above each [[modules]] block as descriptions.
+    # Each comment line immediately before a [[modules]] line is captured.
+    descriptions: list[str] = []
+    raw_lines = raw.splitlines()
+    for i, line in enumerate(raw_lines):
+        if line.strip() == "[[modules]]":
+            desc = (
+                raw_lines[i - 1].lstrip("# ").strip()
+                if i > 0 and raw_lines[i - 1].startswith("#")
+                else ""
+            )
+            descriptions.append(desc)
+
+    try:
+        data = tomllib.loads(raw)
+    except Exception:
+        return "!!! warning\n    Failed to parse `tach.toml` — skipping dependency summary.\n"
+
+    modules = data.get("modules", [])
+    if not modules:
+        return "No modules defined in `tach.toml`.\n"
+
+    lines = [
+        "| Module | Layer | Deps | Description |\n",
+        "|---|---|---:|---|\n",
+    ]
+    for idx, mod in enumerate(modules):
+        path = mod.get("path", "?")
+        layer = mod.get("layer", "?")
+        deps = len(mod.get("depends_on", []))
+        desc = descriptions[idx] if idx < len(descriptions) else ""
+        lines.append(f"| `{path}` | {layer} | {deps} | {desc} |\n")
+
+    return "".join(lines)
 
 
 def _section_boundary_check() -> str:
@@ -244,6 +317,94 @@ def _section_boundary_check() -> str:
     if result.returncode == 0:
         return "All module boundaries validated.\n"
     return f"```\n{output}\n```\n"
+
+
+def _nbsp_num(n: int) -> str:
+    """Format an integer with non-breaking spaces as thousand separators."""
+    s = f"{n:,}"
+    return s.replace(",", "\u00a0")
+
+
+_EMPTY_TOTALS: dict[str, int] = {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
+
+
+def _scc_totals(path: Path) -> dict[str, int]:
+    """Run scc on *path* and return aggregated totals across all languages."""
+    result = _run("scc", "--format", "json", "--no-cocomo", str(path))
+    if result.returncode != 0 or not result.stdout.strip():
+        return dict(_EMPTY_TOTALS)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return dict(_EMPTY_TOTALS)
+    totals = dict(_EMPTY_TOTALS)
+    for lang in data:
+        if lang.get("Name", "") in ("Total", "SUM"):
+            continue
+        totals["lines"] += lang.get("Lines", 0)
+        totals["code"] += lang.get("Code", 0)
+        totals["comment"] += lang.get("Comment", 0)
+        totals["blank"] += lang.get("Blank", 0)
+        totals["files"] += lang.get("Count", 0)
+    return totals
+
+
+def _walk_subdirs(base: Path, lines: list[str], prefix: str = "") -> None:
+    """Recursively collect LoC table rows for each subdirectory under *base*."""
+    n = _nbsp_num
+    subdirs = sorted(p for p in base.iterdir() if p.is_dir() and p.name != "__pycache__")
+    for subdir in subdirs:
+        t = _scc_totals(subdir)
+        if t["code"] == 0 and t["lines"] == 0:
+            continue
+        label = f"{prefix}{subdir.name}/"
+        lines.append(
+            f"| `{label}` | {t['files']} | {n(t['code'])} | {n(t['comment'])} | {n(t['blank'])} |\n"
+        )
+        _walk_subdirs(subdir, lines, label)
+
+
+def _section_loc() -> str:
+    """Generate lines-of-code statistics using scc."""
+    import shutil
+
+    if not shutil.which("scc"):
+        return "!!! warning\n    `scc` not found — skipping LoC report. Install from https://github.com/boyter/scc\n"
+
+    n = _nbsp_num
+
+    src_totals = _scc_totals(SRC)
+    tests_totals = _scc_totals(ROOT / "tests")
+
+    comment_ratio = (
+        f"{src_totals['comment'] / src_totals['code'] * 100:.0f}%" if src_totals["code"] else "—"
+    )
+    test_ratio = f"{tests_totals['code'] / src_totals['code']:.1%}" if src_totals["code"] else "—"
+
+    lines = [
+        "| | Files | Code | Comment | Blank | Total |\n",
+        "|---|---:|---:|---:|---:|---:|\n",
+        f"| Source (`src/terok/`) | {src_totals['files']} | {n(src_totals['code'])} | {n(src_totals['comment'])} | {n(src_totals['blank'])} | {n(src_totals['lines'])} |\n",
+        f"| Tests (`tests/`) | {tests_totals['files']} | {n(tests_totals['code'])} | {n(tests_totals['comment'])} | {n(tests_totals['blank'])} | {n(tests_totals['lines'])} |\n",
+        f"| **Combined** | **{src_totals['files'] + tests_totals['files']}** | **{n(src_totals['code'] + tests_totals['code'])}** | **{n(src_totals['comment'] + tests_totals['comment'])}** | **{n(src_totals['blank'] + tests_totals['blank'])}** | **{n(src_totals['lines'] + tests_totals['lines'])}** |\n",
+        "\n",
+        f"- **Comment/code ratio:** {comment_ratio}\n",
+        f"- **Test/source ratio:** {test_ratio}\n",
+        "\n",
+    ]
+
+    # Detailed per-module breakdown (collapsible)
+    detail_lines = [
+        "| Module | Files | Code | Comment | Blank |\n",
+        "|---|---:|---:|---:|---:|\n",
+    ]
+    _walk_subdirs(SRC, detail_lines)
+
+    lines.append("<details>\n<summary>Source by module (click to expand)</summary>\n\n")
+    lines.extend(detail_lines)
+    lines.append("\n</details>\n")
+
+    return "".join(lines)
 
 
 def _section_docstring_coverage() -> str:
@@ -272,6 +433,9 @@ def generate_report() -> str:
         "# Code Quality Report\n\n",
         f"*Generated: {now}*\n\n",
         "---\n\n",
+        "## Lines of Code\n\n",
+        _section_loc(),
+        "\n",
         "## Module Dependency Graph\n\n",
         _section_dependency_diagram(),
         "\n",
@@ -288,10 +452,10 @@ def generate_report() -> str:
         "## Docstring Coverage\n\n",
         _section_docstring_coverage(),
         "\n",
-        "## Dependency Report\n\n",
+        "## Module Summary\n\n",
         _section_dependency_report(),
         "\n---\n\n",
-        "*Generated by complexipy, vulture, tach, and docstr-coverage.*\n",
+        "*Generated by scc, complexipy, vulture, tach, and docstr-coverage.*\n",
     ]
 
     return "".join(sections)
