@@ -51,6 +51,7 @@ from .core.projects import load_project
 from .security.auth import AUTH_PROVIDERS, AuthProvider, authenticate
 from .security.gate_server import (  # noqa: F401 — re-exported public API
     GateServerStatus,
+    check_units_outdated,
     get_gate_base_path,
     get_gate_server_port,
     get_server_status,
@@ -280,6 +281,7 @@ __all__ = [
     "authenticate",
     # Gate server
     "GateServerStatus",
+    "check_units_outdated",
     "get_server_status",
     "get_gate_base_path",
     "get_gate_server_port",

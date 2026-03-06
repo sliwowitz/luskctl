@@ -13,6 +13,7 @@ import sys
 
 from ...lib.facade import (
     GateServerStatus,
+    check_units_outdated,
     get_server_status,
     install_systemd_units,
     is_daemon_running,
@@ -110,7 +111,10 @@ def _cmd_status() -> None:
     print(f"Mode:   {status.mode}")
     print(f"Status: {state}")
     print(f"Port:   {status.port}")
-    if not status.running and status.mode == "none" and is_systemd_available():
+    outdated = check_units_outdated()
+    if outdated:
+        print(f"\nWarning: {outdated}")
+    elif not status.running and status.mode == "none" and is_systemd_available():
         print(
             "\nHint: systemd is available — run 'terokctl gate-server install' to set up socket activation."
         )

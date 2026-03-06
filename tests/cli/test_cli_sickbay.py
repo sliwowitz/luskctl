@@ -14,17 +14,37 @@ from terok.lib.security.gate_server import GateServerStatus
 class TestSickbay(unittest.TestCase):
     """Tests for the sickbay health check command."""
 
+    @unittest.mock.patch("terok.cli.commands.sickbay.check_units_outdated", return_value=None)
     @unittest.mock.patch(
         "terok.cli.commands.sickbay.get_server_status",
         return_value=GateServerStatus(mode="systemd", running=True, port=9418),
     )
-    def test_all_ok(self, _mock: unittest.mock.Mock) -> None:
+    def test_all_ok(self, *_mocks: unittest.mock.Mock) -> None:
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_sickbay()
         output = out.getvalue()
         self.assertIn("Gate server", output)
         self.assertIn("ok", output)
         self.assertIn("systemd", output)
+
+    @unittest.mock.patch(
+        "terok.cli.commands.sickbay.check_units_outdated",
+        return_value="Systemd units are outdated (installed v2, expected v3). "
+        "Run 'terokctl gate-server install' to update.",
+    )
+    @unittest.mock.patch(
+        "terok.cli.commands.sickbay.get_server_status",
+        return_value=GateServerStatus(mode="systemd", running=True, port=9418),
+    )
+    def test_warn_units_outdated(self, *_mocks: unittest.mock.Mock) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
+                _cmd_sickbay()
+        self.assertEqual(ctx.exception.code, 1)
+        output = out.getvalue()
+        self.assertIn("WARN", output)
+        self.assertIn("outdated", output)
+        self.assertIn("gate-server install", output)
 
     @unittest.mock.patch("terok.cli.commands.sickbay.is_systemd_available", return_value=True)
     @unittest.mock.patch(

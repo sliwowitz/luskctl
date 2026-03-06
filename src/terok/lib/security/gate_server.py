@@ -315,6 +315,24 @@ def get_server_status() -> GateServerStatus:
     return GateServerStatus(mode="none", running=False, port=port)
 
 
+def check_units_outdated() -> str | None:
+    """Return a warning string if installed systemd units are stale, else ``None``.
+
+    Useful for ``gate-server status`` and ``sickbay`` to surface upgrade hints
+    without blocking task creation (that's ``ensure_server_reachable``'s job).
+    """
+    if not is_socket_installed():
+        return None
+    installed = _installed_unit_version()
+    if installed is not None and installed >= _UNIT_VERSION:
+        return None
+    installed_label = "unversioned" if installed is None else f"v{installed}"
+    return (
+        f"Systemd units are outdated (installed {installed_label}, expected v{_UNIT_VERSION}). "
+        "Run 'terokctl gate-server install' to update."
+    )
+
+
 def get_gate_base_path() -> Path:
     """Return the gate base path (public API)."""
     return _get_gate_base_path()

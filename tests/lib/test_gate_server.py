@@ -16,6 +16,7 @@ from terok.lib.security.gate_server import (
     GateServerStatus,
     _installed_unit_version,
     _is_managed_server,
+    check_units_outdated,
     ensure_server_reachable,
     get_server_status,
     install_systemd_units,
@@ -507,3 +508,36 @@ class TestInstalledUnitVersion(unittest.TestCase):
                 return_value=unit_dir,
             ):
                 self.assertIsNone(_installed_unit_version())
+
+
+class TestCheckUnitsOutdated(unittest.TestCase):
+    """Tests for check_units_outdated."""
+
+    @unittest.mock.patch("terok.lib.security.gate_server.is_socket_installed", return_value=False)
+    def test_no_socket_returns_none(self, _mock: unittest.mock.Mock) -> None:
+        self.assertIsNone(check_units_outdated())
+
+    @unittest.mock.patch(
+        "terok.lib.security.gate_server._installed_unit_version",
+        return_value=_UNIT_VERSION,
+    )
+    @unittest.mock.patch("terok.lib.security.gate_server.is_socket_installed", return_value=True)
+    def test_current_version_returns_none(self, *_mocks: unittest.mock.Mock) -> None:
+        self.assertIsNone(check_units_outdated())
+
+    @unittest.mock.patch("terok.lib.security.gate_server._installed_unit_version", return_value=1)
+    @unittest.mock.patch("terok.lib.security.gate_server.is_socket_installed", return_value=True)
+    def test_old_version_returns_warning(self, *_mocks: unittest.mock.Mock) -> None:
+        result = check_units_outdated()
+        self.assertIsNotNone(result)
+        self.assertIn("outdated", result)
+        self.assertIn("gate-server install", result)
+
+    @unittest.mock.patch(
+        "terok.lib.security.gate_server._installed_unit_version", return_value=None
+    )
+    @unittest.mock.patch("terok.lib.security.gate_server.is_socket_installed", return_value=True)
+    def test_unversioned_returns_warning(self, *_mocks: unittest.mock.Mock) -> None:
+        result = check_units_outdated()
+        self.assertIsNotNone(result)
+        self.assertIn("unversioned", result)

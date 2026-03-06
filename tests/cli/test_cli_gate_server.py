@@ -125,11 +125,12 @@ class TestCmdStop(unittest.TestCase):
 class TestCmdStatus(unittest.TestCase):
     """Tests for gate-server status."""
 
+    @unittest.mock.patch("terok.cli.commands.gate_server.check_units_outdated", return_value=None)
     @unittest.mock.patch(
         "terok.cli.commands.gate_server.get_server_status",
         return_value=GateServerStatus(mode="daemon", running=True, port=9418),
     )
-    def test_status_running(self, _mock: unittest.mock.Mock) -> None:
+    def test_status_running(self, *_mocks: unittest.mock.Mock) -> None:
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_status()
         output = out.getvalue()
@@ -137,6 +138,24 @@ class TestCmdStatus(unittest.TestCase):
         self.assertIn("running", output)
         self.assertIn("9418", output)
 
+    @unittest.mock.patch(
+        "terok.cli.commands.gate_server.check_units_outdated",
+        return_value="Systemd units are outdated (installed v2, expected v3). "
+        "Run 'terokctl gate-server install' to update.",
+    )
+    @unittest.mock.patch(
+        "terok.cli.commands.gate_server.get_server_status",
+        return_value=GateServerStatus(mode="systemd", running=True, port=9418),
+    )
+    def test_status_warns_outdated_units(self, *_mocks: unittest.mock.Mock) -> None:
+        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
+            _cmd_status()
+        output = out.getvalue()
+        self.assertIn("Warning", output)
+        self.assertIn("outdated", output)
+        self.assertIn("gate-server install", output)
+
+    @unittest.mock.patch("terok.cli.commands.gate_server.check_units_outdated", return_value=None)
     @unittest.mock.patch("terok.cli.commands.gate_server.is_systemd_available", return_value=True)
     @unittest.mock.patch(
         "terok.cli.commands.gate_server.get_server_status",
@@ -150,6 +169,7 @@ class TestCmdStatus(unittest.TestCase):
         self.assertIn("stopped", output)
         self.assertIn("gate-server install", output)
 
+    @unittest.mock.patch("terok.cli.commands.gate_server.check_units_outdated", return_value=None)
     @unittest.mock.patch("terok.cli.commands.gate_server.is_systemd_available", return_value=False)
     @unittest.mock.patch(
         "terok.cli.commands.gate_server.get_server_status",

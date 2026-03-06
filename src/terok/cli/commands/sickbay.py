@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ...lib.facade import get_server_status, is_systemd_available
+from ...lib.facade import check_units_outdated, get_server_status, is_systemd_available
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -38,6 +38,9 @@ def _check_gate_server() -> tuple[str, str, str]:
     status = get_server_status()
     label = "Gate server"
     if status.running:
+        outdated = check_units_outdated()
+        if outdated:
+            return ("warn", label, outdated)
         return ("ok", label, f"{status.mode}, port {status.port}")
     if status.mode == "systemd":
         return ("error", label, "socket installed but not active")
