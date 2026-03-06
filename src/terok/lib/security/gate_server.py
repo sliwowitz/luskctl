@@ -5,11 +5,21 @@
 """Gate server lifecycle management.
 
 Replaces the host-writable volume mount of gate repos with a ``git daemon``
-listening on all interfaces.  Containers reach the gate via ``git://`` URLs
+bound to ``127.0.0.1``.  Containers reach the gate via ``git://`` URLs
 through ``host.containers.internal`` — standard git protocol, no bind-mount
-escape vector.  Listens on ``0.0.0.0`` to support both pasta (Podman 5+) and
-slirp4netns (Podman 4.x) networking.  Phase 2 adds HTTP with per-task token
-authentication.
+escape vector.
+
+Networking across Podman versions:
+
+- **pasta** (Podman 5+) routes ``host.containers.internal`` to loopback
+  natively.  No extra flags needed.
+- **slirp4netns** (Podman 4.x) routes the container gateway ``10.0.2.2`` to
+  ``127.0.0.1`` when ``allow_host_loopback=true`` is set.  The task runner
+  injects ``--network slirp4netns:allow_host_loopback=true`` and
+  ``--add-host host.containers.internal:10.0.2.2`` automatically (see
+  ``_podman_network_args`` in ``terok.lib.util.podman``).
+
+Phase 2 adds HTTP with per-task token authentication.
 
 **Deployment modes (ordered by preference):**
 
@@ -172,7 +182,7 @@ def start_daemon(port: int | None = None) -> None:
         [
             "git",
             "daemon",
-            "--listen=0.0.0.0",
+            "--listen=127.0.0.1",
             f"--port={effective_port}",
             f"--base-path={gate_base}",
             "--export-all",

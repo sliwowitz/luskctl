@@ -27,7 +27,7 @@ from ..util.ansi import (
     supports_color as _supports_color,
     yellow as _yellow,
 )
-from ..util.podman import _podman_userns_args
+from ..util.podman import _podman_network_args, _podman_userns_args
 from .agent_config import resolve_agent_config
 from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .environment import (
@@ -207,6 +207,7 @@ def _run_container(
     """
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
+    cmd += _podman_network_args()
     cmd += gpu_run_args(project)
     if extra_args:
         cmd += extra_args

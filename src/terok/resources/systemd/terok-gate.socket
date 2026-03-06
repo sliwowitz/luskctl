@@ -6,7 +6,7 @@
 Description=terok git gate socket
 
 [Socket]
-ListenStream=0.0.0.0:{{PORT}}
+ListenStream=127.0.0.1:{{PORT}}
 Accept=yes
 
 [Install]

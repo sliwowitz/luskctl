@@ -115,7 +115,7 @@ class TestInstallUninstall(unittest.TestCase):
             self.assertTrue((unit_dir / "terok-gate@.service").is_file())
             # Verify socket file contains port
             socket_content = (unit_dir / "terok-gate.socket").read_text()
-            self.assertIn("0.0.0.0:9418", socket_content)
+            self.assertIn("127.0.0.1:9418", socket_content)
             # Verify service file contains base path
             service_content = (unit_dir / "terok-gate@.service").read_text()
             self.assertIn("/tmp/gate", service_content)
@@ -160,7 +160,7 @@ class TestDaemon(unittest.TestCase):
             mock_run.assert_called_once()
             cmd = mock_run.call_args[0][0]
             self.assertIn("--port=9999", cmd)
-            self.assertIn("--listen=0.0.0.0", cmd)
+            self.assertIn("--listen=127.0.0.1", cmd)
 
     @unittest.mock.patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git"))
     def test_start_daemon_failure(self, _mock: unittest.mock.Mock) -> None:
