@@ -222,19 +222,59 @@ def _section_dependency_diagram() -> str:
 
 
 def _section_dependency_report() -> str:
-    """Generate dependency report from tach."""
-    result = _run(sys.executable, "-m", "tach", "report", str(SRC))
-    if result.returncode != 0:
-        output = (result.stdout + result.stderr).strip() or "no output"
-        return f"!!! warning\n    tach report failed (exit {result.returncode}).\n\n```\n{output}\n```\n"
-    output = result.stdout.strip()
-    if not output:
-        return "No dependency report available.\n"
-    return (
-        "<details>\n<summary>Full dependency report (click to expand)</summary>\n\n"
-        f"```\n{output}\n```\n\n"
-        "</details>\n"
-    )
+    """Generate a module dependency summary from tach.toml.
+
+    Parses the ``[[modules]]`` entries and builds a table showing each module's
+    layer, dependency count, and description (taken from the comment above).
+    """
+    tach_path = ROOT / "tach.toml"
+    if not tach_path.is_file():
+        return "!!! warning\n    `tach.toml` not found — skipping dependency summary.\n"
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return "!!! warning\n    No TOML parser available — skipping dependency summary.\n"
+
+    raw = tach_path.read_text(encoding="utf-8")
+
+    # Extract comments above each [[modules]] block as descriptions.
+    # Each comment line immediately before a [[modules]] line is captured.
+    descriptions: list[str] = []
+    raw_lines = raw.splitlines()
+    for i, line in enumerate(raw_lines):
+        if line.strip() == "[[modules]]":
+            desc = ""
+            j = i - 1
+            while j >= 0 and raw_lines[j].startswith("#"):
+                desc = raw_lines[j].lstrip("# ").strip()
+                j -= 1
+            descriptions.append(desc)
+
+    try:
+        data = tomllib.loads(raw)
+    except Exception:
+        return "!!! warning\n    Failed to parse `tach.toml` — skipping dependency summary.\n"
+
+    modules = data.get("modules", [])
+    if not modules:
+        return "No modules defined in `tach.toml`.\n"
+
+    lines = [
+        "| Module | Layer | Deps | Description |\n",
+        "|---|---|---:|---|\n",
+    ]
+    for idx, mod in enumerate(modules):
+        path = mod.get("path", "?")
+        layer = mod.get("layer", "?")
+        deps = len(mod.get("depends_on", []))
+        desc = descriptions[idx] if idx < len(descriptions) else ""
+        lines.append(f"| `{path}` | {layer} | {deps} | {desc} |\n")
+
+    return "".join(lines)
 
 
 def _section_boundary_check() -> str:
@@ -244,6 +284,99 @@ def _section_boundary_check() -> str:
     if result.returncode == 0:
         return "All module boundaries validated.\n"
     return f"```\n{output}\n```\n"
+
+
+def _nbsp_num(n: int) -> str:
+    """Format an integer with non-breaking spaces as thousand separators."""
+    s = f"{n:,}"
+    return s.replace(",", "\u00a0")
+
+
+def _section_loc() -> str:
+    """Generate lines-of-code statistics using scc."""
+    import shutil
+
+    if not shutil.which("scc"):
+        return "!!! warning\n    `scc` not found — skipping LoC report. Install from https://github.com/boyter/scc\n"
+
+    def _scc_totals(path: Path) -> dict[str, int]:
+        """Run scc on *path* and return aggregated totals across all languages."""
+        result = _run("scc", "--format", "json", "--no-cocomo", str(path))
+        if result.returncode != 0 or not result.stdout.strip():
+            return {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
+        totals: dict[str, int] = {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
+        for lang in data:
+            totals["lines"] += lang.get("Lines", 0)
+            totals["code"] += lang.get("Code", 0)
+            totals["comment"] += lang.get("Comment", 0)
+            totals["blank"] += lang.get("Blank", 0)
+            totals["files"] += lang.get("Count", 0)
+        return totals
+
+    n = _nbsp_num  # short alias
+
+    src_dir = SRC
+    tests_dir = ROOT / "tests"
+    src_totals = _scc_totals(src_dir)
+    tests_totals = _scc_totals(tests_dir)
+
+    comment_ratio = (
+        f"{src_totals['comment'] / src_totals['code'] * 100:.0f}%"
+        if src_totals["code"]
+        else "—"
+    )
+    test_ratio = (
+        f"{tests_totals['code'] / src_totals['code']:.1%}"
+        if src_totals["code"]
+        else "—"
+    )
+
+    lines = [
+        "| | Files | Code | Comment | Blank | Total |\n",
+        "|---|---:|---:|---:|---:|---:|\n",
+        f"| Source (`src/terok/`) | {src_totals['files']} | {n(src_totals['code'])} | {n(src_totals['comment'])} | {n(src_totals['blank'])} | {n(src_totals['lines'])} |\n",
+        f"| Tests (`tests/`) | {tests_totals['files']} | {n(tests_totals['code'])} | {n(tests_totals['comment'])} | {n(tests_totals['blank'])} | {n(tests_totals['lines'])} |\n",
+        f"| **Combined** | **{src_totals['files'] + tests_totals['files']}** | **{n(src_totals['code'] + tests_totals['code'])}** | **{n(src_totals['comment'] + tests_totals['comment'])}** | **{n(src_totals['blank'] + tests_totals['blank'])}** | **{n(src_totals['lines'] + tests_totals['lines'])}** |\n",
+        "\n",
+        f"- **Comment/code ratio:** {comment_ratio}\n",
+        f"- **Test/source ratio:** {test_ratio}\n",
+        "\n",
+    ]
+
+    # Detailed per-module breakdown (collapsible)
+    detail_lines = [
+        "| Module | Files | Code | Comment | Blank |\n",
+        "|---|---:|---:|---:|---:|\n",
+    ]
+
+    def _walk_subdirs(base: Path, prefix: str = "") -> None:
+        """Recursively collect rows for each subdirectory under *base*."""
+        subdirs = sorted(
+            p for p in base.iterdir() if p.is_dir() and p.name != "__pycache__"
+        )
+        for subdir in subdirs:
+            t = _scc_totals(subdir)
+            if t["code"] == 0 and t["lines"] == 0:
+                continue
+            label = f"{prefix}{subdir.name}/"
+            detail_lines.append(
+                f"| `{label}` | {t['files']} | {n(t['code'])} | {n(t['comment'])} | {n(t['blank'])} |\n"
+            )
+            _walk_subdirs(subdir, label)
+
+    _walk_subdirs(src_dir)
+
+    lines.append(
+        "<details>\n<summary>Source by module (click to expand)</summary>\n\n"
+    )
+    lines.extend(detail_lines)
+    lines.append("\n</details>\n")
+
+    return "".join(lines)
 
 
 def _section_docstring_coverage() -> str:
@@ -272,6 +405,9 @@ def generate_report() -> str:
         "# Code Quality Report\n\n",
         f"*Generated: {now}*\n\n",
         "---\n\n",
+        "## Lines of Code\n\n",
+        _section_loc(),
+        "\n",
         "## Module Dependency Graph\n\n",
         _section_dependency_diagram(),
         "\n",
@@ -288,10 +424,10 @@ def generate_report() -> str:
         "## Docstring Coverage\n\n",
         _section_docstring_coverage(),
         "\n",
-        "## Dependency Report\n\n",
+        "## Module Summary\n\n",
         _section_dependency_report(),
         "\n---\n\n",
-        "*Generated by complexipy, vulture, tach, and docstr-coverage.*\n",
+        "*Generated by scc, complexipy, vulture, tach, and docstr-coverage.*\n",
     ]
 
     return "".join(sections)

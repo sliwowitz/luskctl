@@ -46,6 +46,11 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --with dev,docs --no-interaction
 
+      - name: Install scc (lines of code counter)
+        run: |
+          curl -sL https://github.com/boyter/scc/releases/download/v3.5.0/scc_Linux_x86_64.tar.gz \
+            | sudo tar xz -C /usr/local/bin scc
+
       - name: Build documentation
         run: poetry run mkdocs build --strict
 
