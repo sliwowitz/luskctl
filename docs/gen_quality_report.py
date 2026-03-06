@@ -292,6 +292,43 @@ def _nbsp_num(n: int) -> str:
     return s.replace(",", "\u00a0")
 
 
+_EMPTY_TOTALS: dict[str, int] = {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
+
+
+def _scc_totals(path: Path) -> dict[str, int]:
+    """Run scc on *path* and return aggregated totals across all languages."""
+    result = _run("scc", "--format", "json", "--no-cocomo", str(path))
+    if result.returncode != 0 or not result.stdout.strip():
+        return dict(_EMPTY_TOTALS)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return dict(_EMPTY_TOTALS)
+    totals = dict(_EMPTY_TOTALS)
+    for lang in data:
+        totals["lines"] += lang.get("Lines", 0)
+        totals["code"] += lang.get("Code", 0)
+        totals["comment"] += lang.get("Comment", 0)
+        totals["blank"] += lang.get("Blank", 0)
+        totals["files"] += lang.get("Count", 0)
+    return totals
+
+
+def _walk_subdirs(base: Path, lines: list[str], prefix: str = "") -> None:
+    """Recursively collect LoC table rows for each subdirectory under *base*."""
+    n = _nbsp_num
+    subdirs = sorted(p for p in base.iterdir() if p.is_dir() and p.name != "__pycache__")
+    for subdir in subdirs:
+        t = _scc_totals(subdir)
+        if t["code"] == 0 and t["lines"] == 0:
+            continue
+        label = f"{prefix}{subdir.name}/"
+        lines.append(
+            f"| `{label}` | {t['files']} | {n(t['code'])} | {n(t['comment'])} | {n(t['blank'])} |\n"
+        )
+        _walk_subdirs(subdir, lines, label)
+
+
 def _section_loc() -> str:
     """Generate lines-of-code statistics using scc."""
     import shutil
@@ -299,41 +336,15 @@ def _section_loc() -> str:
     if not shutil.which("scc"):
         return "!!! warning\n    `scc` not found — skipping LoC report. Install from https://github.com/boyter/scc\n"
 
-    def _scc_totals(path: Path) -> dict[str, int]:
-        """Run scc on *path* and return aggregated totals across all languages."""
-        result = _run("scc", "--format", "json", "--no-cocomo", str(path))
-        if result.returncode != 0 or not result.stdout.strip():
-            return {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
-        try:
-            data = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            return {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
-        totals: dict[str, int] = {"lines": 0, "code": 0, "comment": 0, "blank": 0, "files": 0}
-        for lang in data:
-            totals["lines"] += lang.get("Lines", 0)
-            totals["code"] += lang.get("Code", 0)
-            totals["comment"] += lang.get("Comment", 0)
-            totals["blank"] += lang.get("Blank", 0)
-            totals["files"] += lang.get("Count", 0)
-        return totals
+    n = _nbsp_num
 
-    n = _nbsp_num  # short alias
-
-    src_dir = SRC
-    tests_dir = ROOT / "tests"
-    src_totals = _scc_totals(src_dir)
-    tests_totals = _scc_totals(tests_dir)
+    src_totals = _scc_totals(SRC)
+    tests_totals = _scc_totals(ROOT / "tests")
 
     comment_ratio = (
-        f"{src_totals['comment'] / src_totals['code'] * 100:.0f}%"
-        if src_totals["code"]
-        else "—"
+        f"{src_totals['comment'] / src_totals['code'] * 100:.0f}%" if src_totals["code"] else "—"
     )
-    test_ratio = (
-        f"{tests_totals['code'] / src_totals['code']:.1%}"
-        if src_totals["code"]
-        else "—"
-    )
+    test_ratio = f"{tests_totals['code'] / src_totals['code']:.1%}" if src_totals["code"] else "—"
 
     lines = [
         "| | Files | Code | Comment | Blank | Total |\n",
@@ -352,27 +363,9 @@ def _section_loc() -> str:
         "| Module | Files | Code | Comment | Blank |\n",
         "|---|---:|---:|---:|---:|\n",
     ]
+    _walk_subdirs(SRC, detail_lines)
 
-    def _walk_subdirs(base: Path, prefix: str = "") -> None:
-        """Recursively collect rows for each subdirectory under *base*."""
-        subdirs = sorted(
-            p for p in base.iterdir() if p.is_dir() and p.name != "__pycache__"
-        )
-        for subdir in subdirs:
-            t = _scc_totals(subdir)
-            if t["code"] == 0 and t["lines"] == 0:
-                continue
-            label = f"{prefix}{subdir.name}/"
-            detail_lines.append(
-                f"| `{label}` | {t['files']} | {n(t['code'])} | {n(t['comment'])} | {n(t['blank'])} |\n"
-            )
-            _walk_subdirs(subdir, label)
-
-    _walk_subdirs(src_dir)
-
-    lines.append(
-        "<details>\n<summary>Source by module (click to expand)</summary>\n\n"
-    )
+    lines.append("<details>\n<summary>Source by module (click to expand)</summary>\n\n")
     lines.extend(detail_lines)
     lines.append("\n</details>\n")
 
