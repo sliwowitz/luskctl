@@ -555,8 +555,13 @@ def _archive_task(project: Project, task_id: str, meta: dict) -> Path | None:
 
         archive_root = tasks_archive_dir(project.id)
         ensure_dir(archive_root)
-        archive_dir = unique_archive_path(archive_root, dir_name)
-        archive_dir.mkdir(parents=True, exist_ok=True)
+        while True:
+            archive_dir = unique_archive_path(archive_root, dir_name)
+            try:
+                archive_dir.mkdir(parents=True, exist_ok=False)
+                break
+            except FileExistsError:
+                continue
 
         # Save metadata snapshot
         (archive_dir / "task.yml").write_text(yaml.safe_dump(meta))

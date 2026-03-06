@@ -16,6 +16,7 @@ import logging
 import shutil
 import tarfile
 from pathlib import Path
+from typing import TypedDict
 
 from .containers.docker import build_images, generate_dockerfiles
 from .containers.environment import WEB_BACKENDS
@@ -118,18 +119,32 @@ def _archive_project(project_id: str) -> str | None:
         return None
 
 
-def delete_project(project_id: str) -> dict[str, list[str]]:
+class DeleteProjectResult(TypedDict):
+    """Result of a project deletion."""
+
+    deleted: list[str]
+    skipped: list[str]
+    archive: str | None
+
+
+def delete_project(project_id: str) -> DeleteProjectResult:
     """Delete a project and all its associated data.
 
     Removes task workspaces, task metadata, build artifacts, SSH credentials,
     the git gate (if not shared with other projects), and the project config
     directory.
 
-    Returns a dict with ``deleted`` (list of paths removed) and ``skipped``
-    (list of descriptions for items that were not removed).
+    Returns a ``DeleteProjectResult`` (dict subclass) with:
+    - ``deleted``: list of paths removed
+    - ``skipped``: list of descriptions for items not removed
+    - ``archive``: path to the ``.tar.gz`` archive, or ``None`` if archiving failed
     """
     # Archive project data before any destructive operations
     archive_path = _archive_project(project_id)
+    if archive_path is None:
+        raise SystemExit(
+            f"Project archiving failed for '{project_id}'; aborting deletion to prevent data loss."
+        )
 
     project = load_project(project_id)
     pid = project.id
@@ -188,13 +203,11 @@ def delete_project(project_id: str) -> dict[str, list[str]]:
         shutil.rmtree(project.root)
         deleted.append(str(project.root))
 
-    result: dict[str, list[str] | str | None] = {
-        "deleted": deleted,
-        "skipped": skipped,
-    }
-    if archive_path:
-        result["archive"] = archive_path
-    return result
+    return DeleteProjectResult(
+        deleted=deleted,
+        skipped=skipped,
+        archive=archive_path,
+    )
 
 
 def maybe_pause_for_ssh_key_registration(project_id: str) -> None:
@@ -225,6 +238,7 @@ __all__ = [
     "WEB_BACKENDS",
     # Project lifecycle
     "delete_project",
+    "DeleteProjectResult",
     # Task lifecycle
     "task_new",
     "task_delete",

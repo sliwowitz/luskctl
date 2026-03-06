@@ -24,11 +24,12 @@ class ArchiveTimestampTests(unittest.TestCase):
     def test_unique_values(self) -> None:
         """Successive calls produce different timestamps (microsecond precision)."""
         ts1 = archive_timestamp()
-        ts2 = archive_timestamp()
-        # They *may* collide if called within the same microsecond, but
-        # in practice this is extremely unlikely.
-        self.assertIsInstance(ts1, str)
-        self.assertIsInstance(ts2, str)
+        ts2 = ts1
+        for _ in range(5):
+            ts2 = archive_timestamp()
+            if ts2 != ts1:
+                break
+        self.assertNotEqual(ts1, ts2)
 
 
 class UniqueArchivePathTests(unittest.TestCase):
