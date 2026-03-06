@@ -117,8 +117,8 @@ def _cmd_project_delete(project_id: str, *, force: bool = False) -> None:
 
     archive_dir = deleted_projects_dir()
     print("\nWARNING: All project data will be permanently deleted.")
-    print(f"Project config, task metadata, and build artifacts will be archived at: {archive_dir}")
-    print("SSH credentials and git gate contents are NOT included in the archive.")
+    print("Project config, task data, and build artifacts will be archived at:")
+    print(f"{archive_dir}")
 
     if not force:
         try:
