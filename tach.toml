@@ -681,7 +681,7 @@ from = ["terok.lib.util.emoji"]
 
 # Filesystem utility interface
 [[interfaces]]
-expose = ["ensure_dir", "ensure_dir_writable", "archive_timestamp", "unique_archive_path"]
+expose = ["ensure_dir", "ensure_dir_writable", "archive_timestamp", "unique_archive_path", "create_archive_dir", "create_archive_file"]
 from = ["terok.lib.util.fs"]
 
 # Port allocation interface

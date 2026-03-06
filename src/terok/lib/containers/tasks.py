@@ -28,7 +28,7 @@ from ..util.ansi import (
     yellow as _yellow,
 )
 from ..util.emoji import render_emoji
-from ..util.fs import archive_timestamp, ensure_dir, unique_archive_path
+from ..util.fs import archive_timestamp, create_archive_dir, ensure_dir
 from ..util.logging_utils import _log_debug
 from .runtime import (
     container_name,
@@ -554,14 +554,7 @@ def _archive_task(project: Project, task_id: str, meta: dict) -> Path | None:
             dir_name = f"{dir_name}_{task_name}"
 
         archive_root = tasks_archive_dir(project.id)
-        ensure_dir(archive_root)
-        while True:
-            archive_dir = unique_archive_path(archive_root, dir_name)
-            try:
-                archive_dir.mkdir(parents=True, exist_ok=False)
-                break
-            except FileExistsError:
-                continue
+        archive_dir = create_archive_dir(archive_root, dir_name)
 
         # Save metadata snapshot
         (archive_dir / "task.yml").write_text(yaml.safe_dump(meta))

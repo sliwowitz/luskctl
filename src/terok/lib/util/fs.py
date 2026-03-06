@@ -43,6 +43,9 @@ def unique_archive_path(root: Path, base_name: str, suffix: str = "") -> Path:
     Appends *suffix* (e.g. ``".tar.gz"``) to *base_name*.  If the resulting
     path already exists, appends ``_1``, ``_2``, … before the suffix until a
     free name is found.
+
+    .. note:: This only checks existence; it does **not** create the path.
+       For atomic directory creation, use :func:`create_archive_dir`.
     """
     candidate = root / f"{base_name}{suffix}"
     counter = 0
@@ -50,3 +53,43 @@ def unique_archive_path(root: Path, base_name: str, suffix: str = "") -> Path:
         counter += 1
         candidate = root / f"{base_name}_{counter}{suffix}"
     return candidate
+
+
+def create_archive_dir(root: Path, base_name: str) -> Path:
+    """Atomically create a uniquely-named archive directory under *root*.
+
+    Combines :func:`unique_archive_path` with ``mkdir(exist_ok=False)``
+    in a retry loop to guarantee the returned directory was freshly created
+    by this call — safe against concurrent processes.
+
+    *root* is created (with parents) if it does not already exist.
+    """
+    ensure_dir(root)
+    while True:
+        candidate = unique_archive_path(root, base_name)
+        try:
+            candidate.mkdir(parents=True, exist_ok=False)
+            return candidate
+        except FileExistsError:
+            continue
+
+
+def create_archive_file(root: Path, base_name: str, suffix: str = ".tar.gz") -> Path:
+    """Atomically create a uniquely-named archive file path under *root*.
+
+    Uses ``os.open`` with ``O_CREAT | O_EXCL`` in a retry loop to
+    guarantee the returned path was freshly claimed by this call —
+    safe against concurrent processes.
+
+    *root* is created (with parents) if it does not already exist.
+    The file is created empty; the caller is responsible for writing content.
+    """
+    ensure_dir(root)
+    while True:
+        candidate = unique_archive_path(root, base_name, suffix=suffix)
+        try:
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+            return candidate
+        except FileExistsError:
+            continue

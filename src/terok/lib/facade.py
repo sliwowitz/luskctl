@@ -59,7 +59,7 @@ from .security.git_gate import (
     sync_project_gate,
 )
 from .security.ssh import init_project_ssh
-from .util.fs import archive_timestamp, ensure_dir, unique_archive_path
+from .util.fs import archive_timestamp, create_archive_file
 
 _logger = logging.getLogger(__name__)
 
@@ -78,11 +78,9 @@ def _archive_project(project_id: str) -> str | None:
         pid = project.id
 
         archive_root = deleted_projects_dir()
-        ensure_dir(archive_root)
-
         ts = archive_timestamp()
         base_name = f"{ts}_{pid}"
-        archive_path = unique_archive_path(archive_root, base_name, suffix=".tar.gz")
+        archive_path = create_archive_file(archive_root, base_name)
 
         # Directories to include: (arcname_prefix, source_path)
         sources: list[tuple[str, Path]] = []

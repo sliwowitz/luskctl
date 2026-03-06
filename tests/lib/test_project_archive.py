@@ -3,13 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 
 from terok.lib.core.config import build_root, deleted_projects_dir, state_root
 from terok.lib.core.projects import load_project
 from terok.lib.facade import _archive_project, delete_project
-from terok.lib.util.fs import archive_timestamp, unique_archive_path
+from terok.lib.util.fs import (
+    archive_timestamp,
+    create_archive_dir,
+    create_archive_file,
+    unique_archive_path,
+)
 from test_utils import project_env
 
 
@@ -37,8 +43,6 @@ class UniqueArchivePathTests(unittest.TestCase):
 
     def test_basic_path(self) -> None:
         """Returns root / base_name + suffix when no collision."""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             result = unique_archive_path(root, "test", ".tar.gz")
@@ -46,8 +50,6 @@ class UniqueArchivePathTests(unittest.TestCase):
 
     def test_collision_avoidance(self) -> None:
         """Appends counter when path already exists."""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "test.tar.gz").write_text("existing")
@@ -56,8 +58,6 @@ class UniqueArchivePathTests(unittest.TestCase):
 
     def test_multiple_collisions(self) -> None:
         """Increments counter for multiple collisions."""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "test.tar.gz").write_text("existing")
@@ -67,13 +67,77 @@ class UniqueArchivePathTests(unittest.TestCase):
 
     def test_no_suffix(self) -> None:
         """Works for directory-style paths (no suffix)."""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "mydir").mkdir()
             result = unique_archive_path(root, "mydir")
             self.assertEqual(result, root / "mydir_1")
+
+
+class CreateArchiveDirTests(unittest.TestCase):
+    """Tests for create_archive_dir()."""
+
+    def test_creates_directory(self) -> None:
+        """create_archive_dir creates a new directory and returns its path."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = create_archive_dir(root, "myarchive")
+            self.assertTrue(result.is_dir())
+            self.assertEqual(result, root / "myarchive")
+
+    def test_creates_root_if_missing(self) -> None:
+        """create_archive_dir creates the root directory if it doesn't exist."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "nested" / "root"
+            result = create_archive_dir(root, "test")
+            self.assertTrue(root.is_dir())
+            self.assertTrue(result.is_dir())
+
+    def test_collision_avoidance(self) -> None:
+        """create_archive_dir avoids collisions with existing directories."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "test").mkdir()
+            result = create_archive_dir(root, "test")
+            self.assertTrue(result.is_dir())
+            self.assertEqual(result, root / "test_1")
+
+
+class CreateArchiveFileTests(unittest.TestCase):
+    """Tests for create_archive_file()."""
+
+    def test_creates_file(self) -> None:
+        """create_archive_file creates a new empty file and returns its path."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = create_archive_file(root, "myarchive")
+            self.assertTrue(result.is_file())
+            self.assertEqual(result, root / "myarchive.tar.gz")
+
+    def test_creates_root_if_missing(self) -> None:
+        """create_archive_file creates the root directory if it doesn't exist."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "nested" / "root"
+            result = create_archive_file(root, "test")
+            self.assertTrue(root.is_dir())
+            self.assertTrue(result.is_file())
+
+    def test_collision_avoidance(self) -> None:
+        """create_archive_file avoids collisions with existing files."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "test.tar.gz").write_text("existing")
+            result = create_archive_file(root, "test")
+            self.assertTrue(result.is_file())
+            self.assertEqual(result, root / "test_1.tar.gz")
+
+    def test_custom_suffix(self) -> None:
+        """create_archive_file respects custom suffix."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = create_archive_file(root, "myarchive", suffix=".zip")
+            self.assertTrue(result.is_file())
+            self.assertEqual(result, root / "myarchive.zip")
 
 
 class ArchiveProjectTests(unittest.TestCase):
