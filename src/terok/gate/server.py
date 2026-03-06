@@ -483,6 +483,8 @@ def main() -> None:
     parser.add_argument("--pid-file", default=None, help="PID file path (daemon mode)")
 
     args = parser.parse_args()
+    if args.inetd and args.detach:
+        parser.error("--inetd and --detach are mutually exclusive")
     _configure_logging(daemon=args.detach)
 
     base_path = Path(args.base_path)
