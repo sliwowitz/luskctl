@@ -141,12 +141,13 @@ def _shared_volume_mounts(host_dirs: dict[str, Path]) -> list[str]:
     return [f"{host_dirs[m.key]}:{m.container_path}:z" for m in SHARED_MOUNTS]
 
 
-def _gate_url(gate_repo: Path, gate_base: Path, port: int, project_id: str) -> str:
-    """Build the ``git://`` URL for a gate repo served by ``git daemon``.
+def _gate_url(gate_repo: Path, gate_base: Path, port: int, project_id: str, token: str) -> str:
+    """Build the ``http://`` URL for a gate repo served by ``terok-gate``.
 
-    Derives the path relative to the gate base directory so that custom
-    ``gate.path`` settings produce correct URLs.  Raises ``SystemExit`` if
-    the gate repo is outside the configured gate base path.
+    The token is embedded as the Basic Auth username in the URL so that git
+    handles authentication natively.  Derives the path relative to the gate
+    base directory so that custom ``gate.path`` settings produce correct URLs.
+    Raises ``SystemExit`` if the gate repo is outside the configured gate base path.
     """
     try:
         rel = gate_repo.relative_to(gate_base).as_posix()
@@ -157,13 +158,15 @@ def _gate_url(gate_repo: Path, gate_base: Path, port: int, project_id: str) -> s
             f"Gate base: {gate_base}\n"
             "Adjust gate.path or gate server base path so the repo is servable."
         ) from exc
-    return f"git://host.containers.internal:{port}/{rel}"
+    return f"http://{token}@host.containers.internal:{port}/{rel}"
 
 
 def _security_mode_env_and_volumes(
-    project: Project, ssh_host_dir: Path
+    project: Project, ssh_host_dir: Path, task_id: str
 ) -> tuple[dict[str, str], list[str]]:
     """Return env vars and volumes for the project's security mode."""
+    from ..security.gate_tokens import create_token
+
     env: dict[str, str] = {}
     volumes: list[str] = []
 
@@ -179,7 +182,8 @@ def _security_mode_env_and_volumes(
         ensure_server_reachable()
         port = get_gate_server_port()
         gate_base = get_gate_base_path()
-        gate_url = _gate_url(gate_repo, gate_base, port, project.id)
+        token = create_token(project.id, task_id)
+        gate_url = _gate_url(gate_repo, gate_base, port, project.id, token)
         env["CODE_REPO"] = gate_url
         if project.default_branch:
             env["GIT_BRANCH"] = project.default_branch
@@ -197,7 +201,8 @@ def _security_mode_env_and_volumes(
             else:
                 port = get_gate_server_port()
                 gate_base = get_gate_base_path()
-                gate_url = _gate_url(gate_repo, gate_base, port, project.id)
+                token = create_token(project.id, task_id)
+                gate_url = _gate_url(gate_repo, gate_base, port, project.id, token)
                 env["CLONE_FROM"] = gate_url
         if project.upstream_url:
             env["CODE_REPO"] = project.upstream_url
@@ -242,7 +247,7 @@ def build_task_env_and_volumes(project: Project, task_id: str) -> tuple[dict, li
     volumes: list[str] = [f"{repo_dir}:/workspace:Z"]
     volumes += _shared_volume_mounts(config_dirs)
 
-    sec_env, sec_volumes = _security_mode_env_and_volumes(project, ssh_host_dir)
+    sec_env, sec_volumes = _security_mode_env_and_volumes(project, ssh_host_dir, task_id)
     env.update(sec_env)
     volumes += sec_volumes
 

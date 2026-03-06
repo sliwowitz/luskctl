@@ -162,6 +162,7 @@ depends_on = [
     "terok.lib.containers.work_status",
     "terok.lib.core.config",
     "terok.lib.core.projects",
+    "terok.lib.security.gate_tokens",
     "terok.lib.util.ansi",
     "terok.lib.util.emoji",
     "terok.lib.util.fs",
@@ -198,7 +199,7 @@ depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils"]
 [[modules]]
 path = "terok.lib.containers.environment"
 layer = "services"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.util.fs"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.security.gate_tokens", "terok.lib.util.fs"]
 
 # Task port allocation
 [[modules]]
@@ -260,7 +261,20 @@ depends_on = [
 [[modules]]
 path = "terok.lib.security.gate_server"
 layer = "services"
-depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.util.template_utils"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.security.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
+
+# Gate token CRUD
+[[modules]]
+path = "terok.lib.security.gate_tokens"
+layer = "services"
+depends_on = ["terok.lib.core.config"]
+
+# Standalone HTTP gate server (zero terok imports)
+[[modules]]
+path = "terok.gate"
+layer = "services"
+depends_on = []
+utility = true
 
 # Git gate sync & validation
 [[modules]]
@@ -551,6 +565,10 @@ expose = [
     "ensure_server_reachable",
 ]
 from = ["terok.lib.security.gate_server"]
+
+[[interfaces]]
+expose = ["token_file_path", "create_token", "revoke_token_for_task"]
+from = ["terok.lib.security.gate_tokens"]
 
 [[interfaces]]
 expose = ["init_project_ssh"]

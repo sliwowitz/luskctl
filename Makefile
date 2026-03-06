@@ -34,6 +34,7 @@ deadcode:
 
 # Check REUSE (SPDX license/copyright) compliance
 reuse:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	poetry run reuse lint
 
 # Run all checks (equivalent to CI)

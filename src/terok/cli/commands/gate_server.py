@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Gate server management commands: install, uninstall, start, stop, status."""
+"""Gate server management commands: install, uninstall, start, stop, status.
+
+Manages the ``terok-gate`` HTTP server with per-task token authentication.
+"""
 
 from __future__ import annotations
 
@@ -29,10 +32,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sub.add_parser("install", help="Install and start systemd socket activation")
     sub.add_parser("uninstall", help="Stop and remove systemd units")
 
-    p_start = sub.add_parser("start", help="Start git daemon (non-systemd fallback)")
+    p_start = sub.add_parser("start", help="Start gate server (non-systemd fallback)")
     p_start.add_argument("--port", type=int, default=None, help="Override port")
 
-    sub.add_parser("stop", help="Stop the managed git daemon")
+    sub.add_parser("stop", help="Stop the managed gate server")
     sub.add_parser("status", help="Show gate server status")
 
 
@@ -79,22 +82,22 @@ def _cmd_uninstall() -> None:
 
 
 def _cmd_start(port: int | None) -> None:
-    """Start the managed git daemon."""
+    """Start the managed gate server."""
     status = get_server_status()
     if status.running:
         print(f"Gate server is already running ({status.mode}).")
         sys.exit(1)
     start_daemon(port=port)
-    print("Gate daemon started.")
+    print("Gate server started.")
 
 
 def _cmd_stop() -> None:
-    """Stop the managed git daemon."""
+    """Stop the managed gate server."""
     if not is_daemon_running():
-        print("Gate daemon is not running.")
+        print("Gate server is not running.")
         return
     stop_daemon()
-    print("Gate daemon stopped.")
+    print("Gate server stopped.")
 
 
 def _cmd_status() -> None:

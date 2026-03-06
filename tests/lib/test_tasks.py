@@ -349,6 +349,9 @@ class TaskTests(unittest.TestCase):
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_gatekeeping(self, *_mocks) -> None:
         project_id = "proj9"
         with project_env(
@@ -362,11 +365,9 @@ class TaskTests(unittest.TestCase):
                 task_id="7",
             )
 
-            self.assertEqual(
-                env["CODE_REPO"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
-            # No gate volume mount (served via git daemon)
+            self.assertIn("http://", env["CODE_REPO"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            # No gate volume mount (served via gate server)
             gate_mounts = [v for v in volumes if "gate" in v.split(":")[0]]
             self.assertEqual(gate_mounts, [])
             # Verify SSH is NOT mounted by default in gatekeeping mode
@@ -375,6 +376,9 @@ class TaskTests(unittest.TestCase):
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_gatekeeping_with_ssh(self, *_mocks) -> None:
         """Gatekeeping mode with mount_in_gatekeeping enabled should mount SSH."""
         project_id = "proj_gatekeeping_ssh"
@@ -398,16 +402,17 @@ class TaskTests(unittest.TestCase):
                 task_id="9",
             )
 
-            # Verify gatekeeping behavior: CODE_REPO is git:// URL
-            self.assertEqual(
-                env["CODE_REPO"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
+            # Verify gatekeeping behavior: CODE_REPO is http:// URL with token
+            self.assertIn("http://", env["CODE_REPO"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
             # Verify SSH IS mounted when mount_in_gatekeeping is true
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_online(self, *_mocks) -> None:
         project_id = "proj10"
         with project_env(
@@ -428,10 +433,8 @@ class TaskTests(unittest.TestCase):
             env, volumes = build_task_env_and_volumes(load_project(project_id), task_id="8")
             self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
             self.assertEqual(env["GIT_BRANCH"], "main")
-            self.assertEqual(
-                env["CLONE_FROM"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
+            self.assertIn("http://", env["CLONE_FROM"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CLONE_FROM"])
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
@@ -1073,6 +1076,9 @@ class TaskTests(unittest.TestCase):
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_gatekeeping_expose_external_remote_enabled(self, *_mocks) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_enabled"
@@ -1091,13 +1097,14 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is set when expose_external_remote is enabled
             self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(
-                env["CODE_REPO"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
+            self.assertIn("http://", env["CODE_REPO"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_gatekeeping_expose_external_remote_disabled(self, *_mocks) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_disabled"
@@ -1116,13 +1123,14 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is NOT set when expose_external_remote is false
             self.assertNotIn("EXTERNAL_REMOTE_URL", env)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(
-                env["CODE_REPO"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
+            self.assertIn("http://", env["CODE_REPO"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
+    @unittest.mock.patch(
+        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+    )
     def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self, *_mocks) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
         project_id = "proj_external_remote_no_upstream"
@@ -1140,10 +1148,8 @@ class TaskTests(unittest.TestCase):
             # Verify EXTERNAL_REMOTE_URL is NOT set when upstream_url is missing
             self.assertNotIn("EXTERNAL_REMOTE_URL", env)
             # Verify gatekeeping mode settings are still correct
-            self.assertEqual(
-                env["CODE_REPO"],
-                f"git://host.containers.internal:9418/{project_id}.git",
-            )
+            self.assertIn("http://", env["CODE_REPO"])
+            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
 
 
 class TaskLogsTests(unittest.TestCase):

@@ -70,7 +70,7 @@ class TestCmdStart(unittest.TestCase):
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_start(port=9999)
         mock_start.assert_called_once_with(port=9999)
-        self.assertIn("started", out.getvalue())
+        self.assertIn("Gate server started", out.getvalue())
 
     @unittest.mock.patch(
         "terok.cli.commands.gate_server.get_server_status",
@@ -90,7 +90,7 @@ class TestCmdStop(unittest.TestCase):
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_stop()
         mock_stop.assert_called_once()
-        self.assertIn("stopped", out.getvalue())
+        self.assertIn("Gate server stopped", out.getvalue())
 
     @unittest.mock.patch("terok.cli.commands.gate_server.is_daemon_running", return_value=False)
     def test_stop_not_running(self, _mock: unittest.mock.Mock) -> None:

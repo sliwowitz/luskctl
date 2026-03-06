@@ -4,9 +4,9 @@
 
 """Gate server lifecycle management.
 
-Replaces the host-writable volume mount of gate repos with a ``git daemon``
-bound to ``127.0.0.1``.  Containers reach the gate via ``git://`` URLs
-through ``host.containers.internal`` — standard git protocol, no bind-mount
+Manages the ``terok-gate`` HTTP server that wraps ``git http-backend`` with
+per-task token authentication.  Containers reach the gate via ``http://`` URLs
+through ``host.containers.internal`` — standard HTTP protocol, no bind-mount
 escape vector.
 
 Networking across Podman versions:
@@ -15,22 +15,20 @@ Networking across Podman versions:
   address (``169.254.1.2``) that does *not* reach the host's loopback.
   The task runner injects ``--network pasta:-T,<port>`` (namespace-to-host
   TCP forwarding) and ``--add-host host.containers.internal:127.0.0.1``
-  so the ``git://`` URL is forwarded to the host's loopback.
+  so the ``http://`` URL is forwarded to the host's loopback.
 - **slirp4netns** (Podman 4.x) routes the container gateway ``10.0.2.2`` to
   ``127.0.0.1`` when ``allow_host_loopback=true`` is set.  The task runner
   injects ``--network slirp4netns:allow_host_loopback=true`` and
   ``--add-host host.containers.internal:10.0.2.2`` automatically (see
   ``_podman_network_args`` in ``terok.lib.util.podman``).
 
-Phase 2 adds HTTP with per-task token authentication.
-
 **Deployment modes (ordered by preference):**
 
 1. **Systemd socket activation** — zero-idle-cost, crash resilience, and no
    PID management.  Recommended for any Linux host with ``systemctl --user``.
 
-2. **Managed ``git daemon`` process** — best-effort fallback.  Works correctly
-   but has a simpler lifecycle (manual start/stop, PID file).
+2. **Managed ``terok-gate`` daemon process** — best-effort fallback.  Works
+   correctly but has a simpler lifecycle (manual start/stop, PID file).
 
 **No auto-start.**  Task creation checks reachability and fails with an
 actionable error rather than silently starting a daemon.
@@ -50,7 +48,7 @@ from ..core.paths import runtime_root
 # ---------- Constants ----------
 
 _DEFAULT_PORT = 9418
-_UNIT_VERSION = 1
+_UNIT_VERSION = 2
 """Bump when the systemd unit templates change.  ``ensure_server_reachable``
 checks the installed version and refuses to start tasks if it is stale."""
 
@@ -64,7 +62,7 @@ def _get_port() -> int:
 
 
 def _get_gate_base_path() -> Path:
-    """Return the base path for ``git daemon`` (where gate repos live)."""
+    """Return the base path for the gate server (where gate repos live)."""
     return state_root() / "gate"
 
 
@@ -139,15 +137,19 @@ def _installed_unit_version() -> int | None:
 
 def install_systemd_units() -> None:
     """Render and install systemd socket+service units, then enable+start the socket."""
+    import terok.gate
+
     from ..util.template_utils import render_template
+    from .gate_tokens import token_file_path
 
     unit_dir = _systemd_unit_dir()
     unit_dir.mkdir(parents=True, exist_ok=True)
 
-    resource_dir = Path(__file__).resolve().parent.parent.parent / "resources" / "systemd"
+    resource_dir = Path(terok.gate.__file__).resolve().parent / "resources" / "systemd"
     variables = {
         "PORT": str(_get_port()),
         "GATE_BASE_PATH": str(_get_gate_base_path()),
+        "TOKEN_FILE": str(token_file_path()),
         "UNIT_VERSION": str(_UNIT_VERSION),
     }
 
@@ -189,10 +191,12 @@ def uninstall_systemd_units() -> None:
 
 
 def start_daemon(port: int | None = None) -> None:
-    """Start a ``git daemon`` process (non-systemd fallback).
+    """Start a ``terok-gate`` daemon process (non-systemd fallback).
 
     Writes a PID file to ``runtime_root() / "gate-server.pid"``.
     """
+    from .gate_tokens import token_file_path
+
     effective_port = port or _get_port()
     gate_base = _get_gate_base_path()
     gate_base.mkdir(parents=True, exist_ok=True)
@@ -201,13 +205,10 @@ def start_daemon(port: int | None = None) -> None:
 
     subprocess.run(
         [
-            "git",
-            "daemon",
-            "--listen=127.0.0.1",
-            f"--port={effective_port}",
+            "terok-gate",
             f"--base-path={gate_base}",
-            "--export-all",
-            "--enable=receive-pack",
+            f"--token-file={token_file_path()}",
+            f"--port={effective_port}",
             "--detach",
             f"--pid-file={pidfile}",
         ],
@@ -216,12 +217,12 @@ def start_daemon(port: int | None = None) -> None:
     )
 
 
-def _is_managed_git_daemon(pid: int) -> bool:
-    """Return whether *pid* belongs to the managed git daemon.
+def _is_managed_server(pid: int) -> bool:
+    """Return whether *pid* belongs to the managed gate server.
 
     Reads ``/proc/<pid>/cmdline`` and verifies that the process is a
-    ``git daemon`` launched with *our* PID file, guarding against both
-    PID reuse and unrelated ``git daemon`` processes.
+    ``terok-gate`` launched with *our* PID file, guarding against both
+    PID reuse and unrelated processes.
     """
     cmdline_path = Path(f"/proc/{pid}/cmdline")
     if not cmdline_path.is_file():
@@ -234,11 +235,6 @@ def _is_managed_git_daemon(pid: int) -> bool:
     if len(args) < 2:
         return False
     args_str = [a.decode("utf-8", errors="ignore") for a in args]
-    # argv[0] must be git (possibly a full path like /usr/bin/git)
-    if not args_str[0].endswith("git"):
-        return False
-    if args_str[1] != "daemon":
-        return False
     # Verify our PID file is among the arguments
     expected_pid_flag = f"--pid-file={_pid_file()}"
     return expected_pid_flag in args_str
@@ -251,7 +247,7 @@ def stop_daemon() -> None:
         return
     try:
         pid = int(pidfile.read_text().strip())
-        if _is_managed_git_daemon(pid):
+        if _is_managed_server(pid):
             os.kill(pid, signal.SIGTERM)
     except (ValueError, ProcessLookupError, PermissionError):
         pass
@@ -267,7 +263,7 @@ def is_daemon_running() -> bool:
         return False
     try:
         pid = int(pidfile.read_text().strip())
-        if not _is_managed_git_daemon(pid):
+        if not _is_managed_server(pid):
             return False
         os.kill(pid, 0)  # signal 0 = existence check
         return True

@@ -1,0 +1,351 @@
+# SPDX-FileCopyrightText: 2025-2026 Jiri Vyskocil <jiri@vyskocil.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+"""Standalone HTTP gate server wrapping ``git http-backend`` with token auth.
+
+This module has **zero terok imports**.  It is a self-contained security
+component equivalent to ``git daemon``: a separate process that serves repos.
+
+Token validation:
+    Each request must carry HTTP Basic Auth with the token as the username
+    (password is ignored).  The token is looked up in a JSON file mapping
+    tokens to project IDs.  The requested repo must match the token's project.
+
+Modes:
+    --inetd   Handle one request on an inherited socket (fd 0), then exit.
+              Used by systemd ``Accept=yes`` socket activation.
+    --detach  Bind, fork, accept loop in child.  Daemon fallback.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import os
+import re
+import signal
+import socket
+import subprocess
+import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from socketserver import ThreadingMixIn
+
+# ---------------------------------------------------------------------------
+# Token store — inlined read-only logic (~15 lines), no terok imports
+# ---------------------------------------------------------------------------
+
+_ROUTE = re.compile(
+    r"^/(?P<repo>[A-Za-z0-9._-]+\.git)"
+    r"(?P<path>/info/refs|/git-upload-pack|/git-receive-pack|/HEAD)$"
+)
+
+
+class TokenStore:
+    """Read-only view of ``tokens.json`` with lazy reload on mtime change."""
+
+    def __init__(self, token_file: Path) -> None:
+        """Initialize with the path to the tokens JSON file."""
+        self._path = token_file
+        self._mtime: float = 0
+        self._tokens: dict[str, dict[str, str]] = {}
+
+    def _maybe_reload(self) -> None:
+        """Reload the token file if its mtime has changed."""
+        try:
+            st = self._path.stat()
+        except OSError:
+            self._tokens = {}
+            self._mtime = 0
+            return
+        if st.st_mtime != self._mtime:
+            try:
+                self._tokens = json.loads(self._path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                self._tokens = {}
+            self._mtime = st.st_mtime
+
+    def validate(self, token: str) -> str | None:
+        """Return project_id if *token* is valid, else ``None``.
+
+        Reloads the token file when its mtime changes.
+        """
+        self._maybe_reload()
+        info = self._tokens.get(token)
+        if info is None:
+            return None
+        return info.get("project")
+
+
+# ---------------------------------------------------------------------------
+# HTTP request handler
+# ---------------------------------------------------------------------------
+
+
+def _make_handler_class(base_path: Path, token_store: TokenStore) -> type[BaseHTTPRequestHandler]:
+    """Create a request handler class bound to the given base_path and token_store."""
+
+    class GateRequestHandler(BaseHTTPRequestHandler):
+        """Handle smart-HTTP git requests with token authentication."""
+
+        server_version = "terok-gate/1.0"
+
+        def do_GET(self) -> None:
+            """Handle GET requests (info/refs discovery)."""
+            self._handle()
+
+        def do_POST(self) -> None:
+            """Handle POST requests (upload-pack, receive-pack)."""
+            self._handle()
+
+        def _handle(self) -> None:
+            """Route, authenticate, and delegate to CGI."""
+            # Parse path and query string
+            path = self.path
+            query_string = ""
+            if "?" in path:
+                path, query_string = path.split("?", 1)
+
+            # 1. Route match
+            m = _ROUTE.match(path)
+            if not m:
+                self.send_error(404, "Not Found")
+                return
+
+            repo = m.group("repo")
+            path_info = f"/{repo}{m.group('path')}"
+
+            # 2. Extract token from Basic Auth
+            token = self._extract_token()
+            if token is None:
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Basic realm="terok gate"')
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Authentication required\n")
+                return
+
+            # 3. Validate token → project
+            project_id = token_store.validate(token)
+            if project_id is None:
+                self.send_error(403, "Forbidden")
+                return
+
+            # 4. Check project matches requested repo
+            expected_repo = f"{project_id}.git"
+            if repo != expected_repo:
+                self.send_error(403, "Forbidden")
+                return
+
+            # 5. Delegate to git http-backend
+            self._run_cgi(repo, path_info, query_string)
+
+        def _extract_token(self) -> str | None:
+            """Parse ``Authorization: Basic`` header, return username (token)."""
+            auth = self.headers.get("Authorization")
+            if not auth:
+                return None
+            if not auth.startswith("Basic "):
+                return None
+            try:
+                decoded = base64.b64decode(auth[6:]).decode("utf-8")
+            except Exception:
+                return None
+            # username:password — token is the username
+            if ":" not in decoded:
+                return None
+            username, _password = decoded.split(":", 1)
+            return username or None
+
+        def _run_cgi(self, repo: str, path_info: str, query_string: str) -> None:
+            """Execute ``git http-backend`` and stream the response."""
+            cgi_env = {
+                "GIT_PROJECT_ROOT": str(base_path),
+                "GIT_HTTP_EXPORT_ALL": "1",
+                "PATH_INFO": path_info,
+                "QUERY_STRING": query_string,
+                "REQUEST_METHOD": self.command,
+                "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                "SERVER_PROTOCOL": self.request_version,
+                "REMOTE_USER": "token",
+                # Defense in depth: disable hooks
+                "GIT_CONFIG_KEY_0": "core.hooksPath",
+                "GIT_CONFIG_VALUE_0": "/dev/null",
+                "GIT_CONFIG_COUNT": "1",
+            }
+            content_length = self.headers.get("Content-Length")
+            if content_length:
+                cgi_env["CONTENT_LENGTH"] = content_length
+
+            try:
+                proc = subprocess.Popen(
+                    ["git", "http-backend"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=cgi_env,
+                )
+            except FileNotFoundError:
+                self.send_error(500, "git not found")
+                return
+
+            # Stream request body to CGI stdin
+            if content_length:
+                remaining = int(content_length)
+                while remaining > 0:
+                    chunk = self.rfile.read(min(remaining, 8192))
+                    if not chunk:
+                        break
+                    proc.stdin.write(chunk)
+                    remaining -= len(chunk)
+            proc.stdin.close()
+
+            # Parse CGI response headers
+            stdout = proc.stdout
+            status_code = 200
+            headers: list[tuple[str, str]] = []
+            while True:
+                line = stdout.readline()
+                if not line or line in (b"\r\n", b"\n"):
+                    break
+                header_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                if header_line.startswith("Status:"):
+                    try:
+                        status_code = int(header_line.split(":", 1)[1].strip().split()[0])
+                    except (ValueError, IndexError):
+                        pass
+                elif ":" in header_line:
+                    key, val = header_line.split(":", 1)
+                    headers.append((key.strip(), val.strip()))
+
+            self.send_response(status_code)
+            for key, val in headers:
+                self.send_header(key, val)
+            self.end_headers()
+
+            # Stream CGI body
+            while True:
+                chunk = stdout.read(8192)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
+            proc.wait()
+
+        def log_message(self, _format: str, *args: object) -> None:
+            """Suppress default stderr logging."""
+
+    return GateRequestHandler
+
+
+# ---------------------------------------------------------------------------
+# Threading HTTP server
+# ---------------------------------------------------------------------------
+
+
+class _ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """HTTP server that handles each request in a new thread."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+# ---------------------------------------------------------------------------
+# Inetd mode: handle one request on an inherited socket
+# ---------------------------------------------------------------------------
+
+
+def _serve_inetd(base_path: Path, token_store: TokenStore) -> None:
+    """Handle a single HTTP request on the inherited socket (fd 0), then exit."""
+    handler_class = _make_handler_class(base_path, token_store)
+
+    # systemd Accept=yes passes the connected socket as fd 0 (stdin)
+    conn = socket.fromfd(0, socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        # Wrap in a minimal server context for BaseHTTPRequestHandler
+        rfile = conn.makefile("rb", buffering=0)
+        wfile = conn.makefile("wb", buffering=0)
+
+        handler = handler_class.__new__(handler_class)
+        handler.request = conn
+        handler.client_address = conn.getpeername()
+        handler.server = type("FakeServer", (), {"server_name": "localhost", "server_port": 0})()
+        handler.rfile = rfile
+        handler.wfile = wfile
+        handler.raw_requestline = rfile.readline(65537)
+        if handler.raw_requestline:
+            if handler.parse_request():
+                method = getattr(handler, f"do_{handler.command}", None)
+                if method:
+                    method()
+                else:
+                    handler.send_error(501, "Unsupported method")
+        wfile.flush()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Daemon mode: bind, fork, accept loop
+# ---------------------------------------------------------------------------
+
+
+def _serve_daemon(
+    base_path: Path, token_store: TokenStore, port: int, pid_file: Path | None
+) -> None:
+    """Bind socket, fork, write PID file, run accept loop in child."""
+    handler_class = _make_handler_class(base_path, token_store)
+    server = _ThreadingHTTPServer(("127.0.0.1", port), handler_class)
+
+    pid = os.fork()
+    if pid > 0:
+        # Parent: write child PID and exit
+        if pid_file:
+            pid_file.parent.mkdir(parents=True, exist_ok=True)
+            pid_file.write_text(str(pid))
+        sys.exit(0)
+
+    # Child: detach
+    os.setsid()
+    # Redirect stdio to /dev/null
+    devnull = os.open(os.devnull, os.O_RDWR)
+    os.dup2(devnull, 0)
+    os.dup2(devnull, 1)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    server.serve_forever()
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """Parse CLI args and run the gate server in the selected mode."""
+    parser = argparse.ArgumentParser(
+        prog="terok-gate",
+        description="HTTP gate server for git repos with token authentication",
+    )
+    parser.add_argument("--base-path", required=True, help="Root directory for git repos")
+    parser.add_argument("--token-file", required=True, help="Path to tokens.json")
+    parser.add_argument("--port", type=int, default=9418, help="Listen port (daemon mode)")
+    parser.add_argument("--inetd", action="store_true", help="Handle one request on fd 0, exit")
+    parser.add_argument("--detach", action="store_true", help="Fork and run as daemon")
+    parser.add_argument("--pid-file", default=None, help="PID file path (daemon mode)")
+
+    args = parser.parse_args()
+    base_path = Path(args.base_path)
+    token_store = TokenStore(Path(args.token_file))
+
+    if args.inetd:
+        _serve_inetd(base_path, token_store)
+    elif args.detach:
+        pid_file = Path(args.pid_file) if args.pid_file else None
+        _serve_daemon(base_path, token_store, args.port, pid_file)
+    else:
+        parser.error("One of --inetd or --detach is required")

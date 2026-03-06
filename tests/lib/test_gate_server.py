@@ -16,7 +16,7 @@ from terok.lib.security.gate_server import (
     _UNIT_VERSION,
     GateServerStatus,
     _installed_unit_version,
-    _is_managed_git_daemon,
+    _is_managed_server,
     ensure_server_reachable,
     get_server_status,
     install_systemd_units,
@@ -28,6 +28,13 @@ from terok.lib.security.gate_server import (
     stop_daemon,
     uninstall_systemd_units,
 )
+
+
+class TestUnitVersion(unittest.TestCase):
+    """Tests for _UNIT_VERSION."""
+
+    def test_unit_version_is_2(self) -> None:
+        self.assertEqual(_UNIT_VERSION, 2)
 
 
 class TestSystemdDetection(unittest.TestCase):
@@ -110,6 +117,10 @@ class TestInstallUninstall(unittest.TestCase):
                     "terok.lib.security.gate_server._get_gate_base_path",
                     return_value=Path("/tmp/gate"),
                 ),
+                unittest.mock.patch(
+                    "terok.lib.security.gate_tokens.state_root",
+                    return_value=Path("/tmp/state"),
+                ),
             ):
                 install_systemd_units()
 
@@ -118,12 +129,14 @@ class TestInstallUninstall(unittest.TestCase):
             # Verify socket file contains port
             socket_content = (unit_dir / "terok-gate.socket").read_text()
             self.assertIn("127.0.0.1:9418", socket_content)
-            # Verify service file contains base path
+            # Verify service file contains base path and token file
             service_content = (unit_dir / "terok-gate@.service").read_text()
             self.assertIn("/tmp/gate", service_content)
+            self.assertIn("--token-file=", service_content)
+            self.assertIn("terok-gate", service_content)
             # Verify version stamp is rendered in both files
-            self.assertIn("# terok-gate-version: 1", socket_content)
-            self.assertIn("# terok-gate-version: 1", service_content)
+            self.assertIn("# terok-gate-version: 2", socket_content)
+            self.assertIn("# terok-gate-version: 2", service_content)
 
     @unittest.mock.patch("subprocess.run")
     def test_uninstall_removes_files(self, mock_run: unittest.mock.Mock) -> None:
@@ -159,15 +172,25 @@ class TestDaemon(unittest.TestCase):
                     "terok.lib.security.gate_server._pid_file",
                     return_value=Path(td) / "gate-server.pid",
                 ),
+                unittest.mock.patch(
+                    "terok.lib.security.gate_tokens.state_root",
+                    return_value=Path(td),
+                ),
             ):
                 start_daemon(port=9999)
 
             mock_run.assert_called_once()
             cmd = mock_run.call_args[0][0]
+            self.assertEqual(cmd[0], "terok-gate")
             self.assertIn("--port=9999", cmd)
-            self.assertIn("--listen=127.0.0.1", cmd)
+            self.assertIn("--detach", cmd)
+            # Check --base-path and --token-file are present
+            self.assertTrue(any("--base-path=" in arg for arg in cmd))
+            self.assertTrue(any("--token-file=" in arg for arg in cmd))
 
-    @unittest.mock.patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git"))
+    @unittest.mock.patch(
+        "subprocess.run", side_effect=subprocess.CalledProcessError(1, "terok-gate")
+    )
     def test_start_daemon_failure(self, _mock: unittest.mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as td:
             with (
@@ -178,6 +201,10 @@ class TestDaemon(unittest.TestCase):
                 unittest.mock.patch(
                     "terok.lib.security.gate_server._pid_file",
                     return_value=Path(td) / "gate-server.pid",
+                ),
+                unittest.mock.patch(
+                    "terok.lib.security.gate_tokens.state_root",
+                    return_value=Path(td),
                 ),
             ):
                 with self.assertRaises(subprocess.CalledProcessError):
@@ -190,7 +217,7 @@ class TestDaemon(unittest.TestCase):
         ):
             stop_daemon()  # Should not raise
 
-    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_git_daemon", return_value=True)
+    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_server", return_value=True)
     def test_stop_daemon_with_pidfile(self, _mock_check: unittest.mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as td:
             pidfile = Path(td) / "gate-server.pid"
@@ -206,9 +233,7 @@ class TestDaemon(unittest.TestCase):
                 mock_kill.assert_called_once_with(99999, unittest.mock.ANY)
             self.assertFalse(pidfile.exists())
 
-    @unittest.mock.patch(
-        "terok.lib.security.gate_server._is_managed_git_daemon", return_value=False
-    )
+    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_server", return_value=False)
     def test_stop_daemon_stale_pid_not_killed(self, _mock_check: unittest.mock.Mock) -> None:
         """Stop removes PID file even if the process is not our daemon."""
         with tempfile.TemporaryDirectory() as td:
@@ -236,7 +261,7 @@ class TestIsDaemonRunning(unittest.TestCase):
         ):
             self.assertFalse(is_daemon_running())
 
-    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_git_daemon", return_value=True)
+    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_server", return_value=True)
     def test_stale_pid(self, _mock_check: unittest.mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as td:
             pidfile = Path(td) / "gate-server.pid"
@@ -250,7 +275,7 @@ class TestIsDaemonRunning(unittest.TestCase):
             ):
                 self.assertFalse(is_daemon_running())
 
-    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_git_daemon", return_value=True)
+    @unittest.mock.patch("terok.lib.security.gate_server._is_managed_server", return_value=True)
     def test_valid_pid(self, _mock_check: unittest.mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as td:
             pidfile = Path(td) / "gate-server.pid"
@@ -272,25 +297,25 @@ class TestIsDaemonRunning(unittest.TestCase):
                     return_value=pidfile,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server._is_managed_git_daemon",
+                    "terok.lib.security.gate_server._is_managed_server",
                     return_value=False,
                 ),
             ):
                 self.assertFalse(is_daemon_running())
 
 
-class TestIsManagedGitDaemon(unittest.TestCase):
-    """Tests for _is_managed_git_daemon."""
+class TestIsManagedServer(unittest.TestCase):
+    """Tests for _is_managed_server."""
 
     def test_no_proc_entry(self) -> None:
-        self.assertFalse(_is_managed_git_daemon(999999999))
+        self.assertFalse(_is_managed_server(999999999))
 
-    def test_current_process_is_not_git_daemon(self) -> None:
-        # The current process is python, not git daemon
-        self.assertFalse(_is_managed_git_daemon(os.getpid()))
+    def test_current_process_is_not_gate_server(self) -> None:
+        # The current process is python, not terok-gate
+        self.assertFalse(_is_managed_server(os.getpid()))
 
     def _check_cmdline(self, cmdline: bytes, pid_file: Path | None = None) -> bool:
-        """Write *cmdline* to a temp file and call ``_is_managed_git_daemon``."""
+        """Write *cmdline* to a temp file and call ``_is_managed_server``."""
         with tempfile.TemporaryDirectory() as td:
             fake_cmdline = Path(td) / "cmdline"
             fake_cmdline.write_bytes(cmdline)
@@ -310,29 +335,23 @@ class TestIsManagedGitDaemon(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 for p in patches:
                     stack.enter_context(p)
-                return _is_managed_git_daemon(12345)
+                return _is_managed_server(12345)
 
-    def test_matches_managed_daemon(self) -> None:
-        """Cmdline with git daemon and our PID file returns True."""
+    def test_matches_managed_server(self) -> None:
+        """Cmdline with terok-gate and our PID file returns True."""
         pid_file = Path("/run/user/1000/terok/gate-server.pid")
-        cmdline = b"git\x00daemon\x00--listen=127.0.0.1\x00--pid-file=" + str(pid_file).encode()
+        cmdline = b"terok-gate\x00--base-path=/tmp/gate\x00--pid-file=" + str(pid_file).encode()
         self.assertTrue(self._check_cmdline(cmdline, pid_file))
 
     def test_rejects_different_pid_file(self) -> None:
-        """Git daemon with a different --pid-file is not ours."""
-        cmdline = b"git\x00daemon\x00--listen=127.0.0.1\x00--pid-file=/other/pid"
+        """terok-gate with a different --pid-file is not ours."""
+        cmdline = b"terok-gate\x00--base-path=/tmp/gate\x00--pid-file=/other/pid"
         self.assertFalse(self._check_cmdline(cmdline, Path("/run/user/1000/terok/gate-server.pid")))
 
-    def test_rejects_non_git_process(self) -> None:
-        """Process that is not git at all returns False."""
+    def test_rejects_unrelated_process(self) -> None:
+        """Process without our PID file returns False."""
         cmdline = b"python3\x00-m\x00pytest"
         self.assertFalse(self._check_cmdline(cmdline, Path("/run/user/1000/terok/gate-server.pid")))
-
-    def test_matches_full_path_git(self) -> None:
-        """Cmdline with full path like /usr/bin/git is recognized."""
-        pid_file = Path("/run/user/1000/terok/gate-server.pid")
-        cmdline = b"/usr/bin/git\x00daemon\x00--pid-file=" + str(pid_file).encode()
-        self.assertTrue(self._check_cmdline(cmdline, pid_file))
 
 
 class TestGetServerStatus(unittest.TestCase):
