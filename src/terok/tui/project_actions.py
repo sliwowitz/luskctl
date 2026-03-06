@@ -497,10 +497,8 @@ class ProjectActionsMixin:
 
         archive_dir = deleted_projects_dir()
         lines.append("\nAll project data will be permanently deleted.")
-        lines.append(
-            f"Project config, task metadata, and build artifacts will be archived at: {archive_dir}"
-        )
-        lines.append("SSH credentials and git gate contents are NOT included in the archive.")
+        lines.append("Project config, task data, and build artifacts will be archived at:")
+        lines.append(f"{archive_dir}")
 
         from .screens import ConfirmDeleteScreen
 
