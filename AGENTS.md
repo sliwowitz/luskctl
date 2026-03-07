@@ -98,6 +98,32 @@ The project uses [tach](https://github.com/gauge-sh/tach) to enforce module boun
 - If adding a new dependency between modules, add it to the `depends_on` list and update `[[interfaces]]` as needed
 - Run `make tach` (or `tach check`) to verify; CI will reject boundary violations
 
+## SonarCloud
+
+The project is analyzed by [SonarCloud](https://sonarcloud.io/summary/new_code?id=terok-ops_terok) on every push to master. Unlike CodeRabbit (which posts actionable PR comments), SonarCloud findings often require triage — many are low-priority style issues or false positives rather than real bugs. Treat them as input for decisions, not as a checklist.
+
+**Fetching new issues for a PR** (replace `PR_NUMBER`):
+```bash
+curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ops_terok&pullRequest=PR_NUMBER&issueStatuses=OPEN&ps=100' \
+  | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for i in d.get('issues',[]):
+    sev=i['severity']; rule=i['rule']; msg=i.get('message','')
+    comp=i['component'].split(':',1)[-1]; line=i.get('textRange',{}).get('startLine','?')
+    print(f'[{sev}] {rule}: {msg}')
+    print(f'  {comp}:{line}')
+"
+```
+
+**Fetching recent issues on the main branch** (replace date as needed):
+```bash
+curl -s 'https://sonarcloud.io/api/issues/search?projects=terok-ops_terok&issueStatuses=OPEN&createdAfter=2026-03-01&ps=100&s=CREATION_DATE&asc=false' \
+  | python3 -c "import json,sys; [print(f'[{i[\"severity\"]}] {i[\"rule\"]}: {i.get(\"message\",\"\")}\n  {i[\"component\"].split(\":\",1)[-1]}:{i.get(\"textRange\",{}).get(\"startLine\",\"?\")}') for i in json.load(sys.stdin).get('issues',[])]"
+```
+
+No authentication is needed (public project). The PR number can be found in the GitHub PR URL or from `gh pr view --json number`.
+
 ## Important Files
 
 - `docs/DEVELOPER.md`: Detailed architecture and implementation guide
