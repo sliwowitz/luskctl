@@ -39,10 +39,10 @@ reuse:
 
 # Add SPDX header to files.
 # NAME must be the real name of the person responsible for creating the file (not a project name).
-# Example: make spdx NAME="Jiri Vyskocil" FILES="src/terok/new_file.py"
+# Example: make spdx NAME="Real Human Name" FILES="src/terok/new_file.py"
 spdx:
 ifndef NAME
-	$(error NAME is required — use the real name of the copyright holder, e.g. make spdx NAME="Jiri Vyskocil" FILES="src/terok/new_file.py")
+	$(error NAME is required — use the real name of the copyright holder, e.g. make spdx NAME="Real Human Name" FILES="src/terok/new_file.py")
 endif
 	poetry run reuse annotate --template compact --copyright "$(NAME)" --license Apache-2.0 $(FILES)
 
