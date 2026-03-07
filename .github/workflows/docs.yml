@@ -53,6 +53,10 @@ jobs:
       - name: Build documentation
         run: poetry run mkdocs build --strict
 
+      - name: Setup Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/configure-pages@v5
+
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-pages-artifact@v4
