@@ -46,6 +46,30 @@ def _run(
         return subprocess.CompletedProcess(cmd, returncode=1, stdout="", stderr="timed out")
 
 
+def _load_tach_toml() -> tuple[str, object, list[dict]] | None:
+    """Load and parse tach.toml, returning (raw_text, parsed_data, modules) or None."""
+    tach_path = ROOT / "tach.toml"
+    if not tach_path.is_file():
+        return None
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return None
+
+    raw = tach_path.read_text(encoding="utf-8")
+    try:
+        data = tomllib.loads(raw)
+    except Exception:
+        return None
+
+    modules = data.get("modules", [])
+    return (raw, data, modules)
+
+
 def _section_complexity() -> str:
     """Generate cognitive complexity section from complexipy."""
     # Run complexipy to populate the cache (use CLI entry point, not -m).
@@ -225,6 +249,46 @@ def _coarsen_graph(mermaid_lines: list[str]) -> list[str]:
     return out
 
 
+def _section_layer_overview() -> str:
+    """Generate a high-level layer dependency graph from tach.toml."""
+    loaded = _load_tach_toml()
+    if not loaded:
+        return ""
+    _raw, _data, modules = loaded
+    if not modules:
+        return ""
+
+    layer_of: dict[str, str] = {}
+    layer_counts: dict[str, int] = defaultdict(int)
+    for m in modules:
+        path = m.get("path", "")
+        layer = m.get("layer", "?")
+        layer_of[path] = layer
+        layer_counts[layer] += 1
+
+    # Collect inter-layer dependency edges
+    layer_edges: dict[tuple[str, str], int] = defaultdict(int)
+    for m in modules:
+        src_layer = m.get("layer", "?")
+        for dep_path in m.get("depends_on", []):
+            dst_layer = layer_of.get(dep_path, "?")
+            if src_layer != dst_layer:
+                layer_edges[(src_layer, dst_layer)] += 1
+
+    if not layer_edges and len(layer_counts) < 2:
+        return ""
+
+    lines = ["```mermaid\ngraph TD\n"]
+    for layer in sorted(layer_counts):
+        count = layer_counts[layer]
+        lines.append(f'    {layer}["{layer} ({count} modules)"]\n')
+    for (src, dst), count in sorted(layer_edges.items()):
+        label = f"|{count} deps|" if count > 1 else ""
+        lines.append(f"    {src} -->{label} {dst}\n")
+    lines.append("```\n")
+    return "".join(lines)
+
+
 def _section_dependency_diagram() -> str:
     """Generate module dependency diagram from tach."""
     result = _run(sys.executable, "-m", "tach", "show", "--mermaid", "-o", "-")
@@ -257,25 +321,17 @@ def _section_dependency_diagram() -> str:
 def _section_dependency_report() -> str:
     """Generate a module dependency summary from tach.toml.
 
-    Parses the ``[[modules]]`` entries and builds a table showing each module's
-    layer, dependency count, and description (taken from the comment above).
+    Parses the ``[[modules]]`` entries and builds a collapsible table showing
+    each module's layer, dependency count, and description (from the comment above).
     """
-    tach_path = ROOT / "tach.toml"
-    if not tach_path.is_file():
-        return "!!! warning\n    `tach.toml` not found — skipping dependency summary.\n"
-
-    try:
-        import tomllib
-    except ModuleNotFoundError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ModuleNotFoundError:
-            return "!!! warning\n    No TOML parser available — skipping dependency summary.\n"
-
-    raw = tach_path.read_text(encoding="utf-8")
+    loaded = _load_tach_toml()
+    if not loaded:
+        return "!!! warning\n    `tach.toml` not found or unparseable — skipping module summary.\n"
+    raw, _data, modules = loaded
+    if not modules:
+        return "No modules defined in `tach.toml`.\n"
 
     # Extract comments above each [[modules]] block as descriptions.
-    # Each comment line immediately before a [[modules]] line is captured.
     descriptions: list[str] = []
     raw_lines = raw.splitlines()
     for i, line in enumerate(raw_lines):
@@ -287,35 +343,38 @@ def _section_dependency_report() -> str:
             )
             descriptions.append(desc)
 
-    try:
-        data = tomllib.loads(raw)
-    except Exception:
-        return "!!! warning\n    Failed to parse `tach.toml` — skipping dependency summary.\n"
-
-    modules = data.get("modules", [])
-    if not modules:
-        return "No modules defined in `tach.toml`.\n"
-
+    n_layers = len({m.get("layer", "?") for m in modules})
     lines = [
-        "| Module | Layer | Deps | Description |\n",
-        "|---|---|---:|---|\n",
+        f'??? info "{len(modules)} modules across {n_layers} layers (click to expand)"\n\n',
+        "    | Module | Layer | Deps | Description |\n",
+        "    |---|---|---:|---|\n",
     ]
     for idx, mod in enumerate(modules):
         path = mod.get("path", "?")
         layer = mod.get("layer", "?")
         deps = len(mod.get("depends_on", []))
         desc = descriptions[idx] if idx < len(descriptions) else ""
-        lines.append(f"| `{path}` | {layer} | {deps} | {desc} |\n")
+        lines.append(f"    | `{path}` | {layer} | {deps} | {desc} |\n")
+    lines.append("\n")
 
     return "".join(lines)
 
 
 def _section_boundary_check() -> str:
     """Run tach check and report results."""
+    loaded = _load_tach_toml()
+    mod_count = 0
+    dep_count = 0
+    if loaded:
+        _raw, _data, modules = loaded
+        mod_count = len(modules)
+        dep_count = sum(len(m.get("depends_on", [])) for m in modules)
+
     result = _run(sys.executable, "-m", "tach", "check")
     output = (result.stdout + result.stderr).strip()
     if result.returncode == 0:
-        return "All module boundaries validated.\n"
+        stats = f"{mod_count} modules, {dep_count} dependency edges — " if mod_count else ""
+        return f"{stats}all boundaries validated.\n"
     return f"```\n{output}\n```\n"
 
 
@@ -393,16 +452,16 @@ def _section_loc() -> str:
         "\n",
     ]
 
-    # Detailed per-module breakdown (collapsible)
-    detail_lines = [
-        "| Module | Files | Code | Comment | Blank |\n",
-        "|---|---:|---:|---:|---:|\n",
-    ]
+    # Detailed per-module breakdown (collapsible via pymdownx.details)
+    detail_lines: list[str] = []
     _walk_subdirs(SRC, detail_lines)
 
-    lines.append("<details>\n<summary>Source by module (click to expand)</summary>\n\n")
-    lines.extend(detail_lines)
-    lines.append("\n</details>\n")
+    lines.append('??? info "Source by module (click to expand)"\n\n')
+    lines.append("    | Module | Files | Code | Comment | Blank |\n")
+    lines.append("    |---|---:|---:|---:|---:|\n")
+    for dl in detail_lines:
+        lines.append(f"    {dl}")
+    lines.append("\n")
 
     return "".join(lines)
 
@@ -436,11 +495,18 @@ def generate_report() -> str:
         "## Lines of Code\n\n",
         _section_loc(),
         "\n",
-        "## Module Dependency Graph\n\n",
+        "## Architecture\n\n",
+        "### Layer Overview\n\n",
+        _section_layer_overview(),
+        "\n",
+        "### Module Dependency Graph\n\n",
         _section_dependency_diagram(),
         "\n",
-        "## Module Boundaries\n\n",
+        "### Module Boundaries\n\n",
         _section_boundary_check(),
+        "\n",
+        "### Module Summary\n\n",
+        _section_dependency_report(),
         "\n",
         "## Cognitive Complexity\n\n",
         f"Threshold: **{COMPLEXITY_THRESHOLD}** (functions above this are listed below)\n\n",
@@ -451,9 +517,6 @@ def generate_report() -> str:
         "\n",
         "## Docstring Coverage\n\n",
         _section_docstring_coverage(),
-        "\n",
-        "## Module Summary\n\n",
-        _section_dependency_report(),
         "\n---\n\n",
         "*Generated by scc, complexipy, vulture, tach, and docstr-coverage.*\n",
     ]
