@@ -64,6 +64,16 @@ class TestGetShieldConfig(unittest.TestCase):
         cfg = get_shield_config()
         assert cfg.default_profiles == ("single-profile",)
 
+    @patch(
+        "terok.lib.security.shield.get_global_section",
+        return_value={"profiles": 123},
+    )
+    @patch("terok.lib.security.shield.get_gate_server_port", return_value=9418)
+    def test_invalid_profiles_type(self, _port: MagicMock, _sec: MagicMock) -> None:
+        """Non-string/non-list profiles value raises TypeError."""
+        with self.assertRaises(TypeError):
+            get_shield_config()
+
 
 class TestPreStart(unittest.TestCase):
     """Tests for pre_start() delegation."""

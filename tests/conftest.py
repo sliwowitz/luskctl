@@ -7,13 +7,14 @@ Auto-mocks ``_shield_pre_start`` in task runners so existing tests
 do not require a real OCI hook or root privileges.
 """
 
+from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _mock_shield_pre_start():
+def _mock_shield_pre_start() -> Iterator[None]:
     """Replace shield pre_start with a no-op returning empty args."""
     with patch(
         "terok.lib.containers.task_runners._shield_pre_start",

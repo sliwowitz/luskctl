@@ -39,10 +39,11 @@ class TestCmdStatus(unittest.TestCase):
         "terok.cli.commands.shield.status",
         return_value={"hook_installed": True, "mode": "hook"},
     )
-    def test_status(self, _mock: unittest.mock.Mock) -> None:
+    def test_status(self, mock_status: unittest.mock.Mock) -> None:
         """status() prints key-value pairs."""
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_status()
+        mock_status.assert_called_once()
         output = out.getvalue()
         self.assertIn("hook_installed", output)
         self.assertIn("True", output)
@@ -56,10 +57,11 @@ class TestCmdProfiles(unittest.TestCase):
         "terok.cli.commands.shield.get_profiles",
         return_value=["dev-standard", "dev-strict"],
     )
-    def test_profiles(self, _mock: unittest.mock.Mock) -> None:
+    def test_profiles(self, mock_profiles: unittest.mock.Mock) -> None:
         """profiles() lists each profile on a line."""
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_profiles()
+        mock_profiles.assert_called_once()
         output = out.getvalue()
         self.assertIn("dev-standard", output)
         self.assertIn("dev-strict", output)
@@ -117,10 +119,11 @@ class TestCmdLogs(unittest.TestCase):
         "terok.cli.commands.shield.get_log_containers",
         return_value=["ctr-a", "ctr-b"],
     )
-    def test_logs_list_containers(self, _mock: unittest.mock.Mock) -> None:
+    def test_logs_list_containers(self, mock_containers: unittest.mock.Mock) -> None:
         """logs without container lists available containers."""
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_logs(None, 50)
+        mock_containers.assert_called_once()
         output = out.getvalue()
         self.assertIn("ctr-a", output)
         self.assertIn("ctr-b", output)
@@ -129,10 +132,11 @@ class TestCmdLogs(unittest.TestCase):
         "terok.cli.commands.shield.get_log_containers",
         return_value=[],
     )
-    def test_logs_no_containers(self, _mock: unittest.mock.Mock) -> None:
+    def test_logs_no_containers(self, mock_containers: unittest.mock.Mock) -> None:
         """logs without container and no logs prints message."""
         with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
             _cmd_logs(None, 50)
+        mock_containers.assert_called_once()
         self.assertIn("No audit logs", out.getvalue())
 
     @unittest.mock.patch(
