@@ -22,7 +22,6 @@ from terok.lib.security.shield import (
     status,
 )
 
-
 TEST_IP = "1.2.3.4"
 
 
