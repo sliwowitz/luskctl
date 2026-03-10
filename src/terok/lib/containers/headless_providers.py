@@ -623,7 +623,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         lines.append("    local _approve_args=()")
         lines.append('    if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then')
         for flag in provider.auto_approve_flags:
-            lines.append(f"        _approve_args+=({flag})")
+            lines.append(f"        _approve_args+=({shlex.quote(flag)})")
         for k, v in provider.auto_approve_env.items():
             lines.append(f"        export {k}={shlex.quote(v)}")
         lines.append("    fi")

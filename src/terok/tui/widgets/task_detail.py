@@ -78,9 +78,10 @@ def render_task_details(
                 Text(f"terokctl login {project_id} {task.task_id}", style=accent_style),
             )
         )
-    if task.mode == "run":
+    if task.unrestricted is not None:
         perm_label = "unrestricted" if task.unrestricted else "restricted"
         lines.append(Text(f"Perms:     {perm_label}"))
+    if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))
         if project_id:

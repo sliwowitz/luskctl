@@ -302,6 +302,7 @@ def task_run_cli(
     _assert_running(cname)
 
     meta["mode"] = "cli"
+    meta["unrestricted"] = _unrestricted is None or bool(_unrestricted)
     if preset:
         meta["preset"] = preset
     meta_path.write_text(yaml.safe_dump(meta))
@@ -334,17 +335,13 @@ def task_run_web(
     if mode_updated:
         meta["mode"] = "web"
 
-    preset_updated = False
     if preset and meta.get("preset") != preset:
         meta["preset"] = preset
-        preset_updated = True
 
     port = meta.get("web_port")
-    port_updated = False
     if not isinstance(port, int):
         port = assign_web_port()
         meta["web_port"] = port
-        port_updated = True
 
     env, volumes = build_task_env_and_volumes(project, task_id)
 
@@ -352,17 +349,6 @@ def task_run_web(
     # Note: backend is a web UI name (codex/claude/copilot), not a headless provider
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
-
-    # Resolve unrestricted mode from config (web tasks default to True)
-    from ..containers.agent_config import (
-        resolve_agent_config as _resolve_cfg,
-        resolve_provider_value as _resolve_pv,
-    )
-
-    _effective = _resolve_cfg(project_id, preset=preset)
-    _unrestricted = _resolve_pv("unrestricted", _effective, project.default_agent or "claude")
-    if _unrestricted is None or _unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
 
     env = apply_web_env_overrides(env, backend, project.default_agent)
 
@@ -372,9 +358,20 @@ def task_run_web(
     if backend_updated:
         meta["backend"] = effective_backend
 
-    # Write metadata once if anything was updated
-    if port_updated or backend_updated or mode_updated or preset_updated:
-        meta_path.write_text(yaml.safe_dump(meta))
+    # Resolve unrestricted mode from config using the effective backend
+    from ..containers.agent_config import (
+        resolve_agent_config as _resolve_cfg,
+        resolve_provider_value as _resolve_pv,
+    )
+
+    _effective = _resolve_cfg(project_id, preset=preset)
+    _unrestricted = _resolve_pv("unrestricted", _effective, effective_backend)
+    if _unrestricted is None or _unrestricted:
+        env["TEROK_UNRESTRICTED"] = "1"
+    meta["unrestricted"] = _unrestricted is None or bool(_unrestricted)
+
+    # Write metadata once (unrestricted is always set; other fields are conditional)
+    meta_path.write_text(yaml.safe_dump(meta))
 
     cname = container_name(project.id, "web", task_id)
     container_state = get_container_state(cname)
