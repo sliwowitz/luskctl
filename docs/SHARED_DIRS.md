@@ -104,8 +104,8 @@ terokctl ssh-init <project_id> [--key-type ed25519|rsa] [--key-name NAME] [--for
 - The mapping is configurable via `git.authorship` in `project.yml` or global `config.yml`.
   - `agent-human` (default): author = agent, committer = human
   - `human-agent`: author = human, committer = agent
-  - `human`: author = human, committer left to git defaults
-  - `agent`: author = agent, committer left to git defaults
+  - `human`: author = human, committer = human
+  - `agent`: author = agent, committer = agent
 - **For CLI mode**: Git identity is set by terok's shell wrappers for each agent:
   - `codex` -> Author: `Codex <noreply@openai.com>`, Committer: human credentials
   - `claude` -> Author: `Claude <noreply@anthropic.com>`, Committer: human credentials

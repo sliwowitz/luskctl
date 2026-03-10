@@ -41,10 +41,14 @@ _terok_apply_git_identity() {
     agent)
       export GIT_AUTHOR_NAME="${agent_name}"
       export GIT_AUTHOR_EMAIL="${agent_email}"
+      export GIT_COMMITTER_NAME="${agent_name}"
+      export GIT_COMMITTER_EMAIL="${agent_email}"
       ;;
     human)
       export GIT_AUTHOR_NAME="${human_name}"
       export GIT_AUTHOR_EMAIL="${human_email}"
+      export GIT_COMMITTER_NAME="${human_name}"
+      export GIT_COMMITTER_EMAIL="${human_email}"
       ;;
     *)
       export GIT_AUTHOR_NAME="${agent_name}"
