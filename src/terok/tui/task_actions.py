@@ -490,7 +490,7 @@ class TaskActionsMixin:
         tid = self.current_task.task_id
         tname = self.current_task.name or ""
         pid = self.current_project_id
-        task_label = f"{pid}/{tid}" + (f" ({tname})" if tname else "")
+        task_label = f"{pid} {tid}" + (f" {tname}" if tname else "")
         if self.current_task.deleting:
             self.notify(f"Task {task_label} is already deleting.")
             return
