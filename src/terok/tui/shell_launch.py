@@ -165,10 +165,13 @@ def is_web_mode() -> bool:
     return "web" in driver.lower()
 
 
+_LOCALHOST = "127.0.0.1"
+
+
 def _find_free_port() -> int:
     """Find a free TCP port on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
+        s.bind((_LOCALHOST, 0))
         return s.getsockname()[1]
 
 

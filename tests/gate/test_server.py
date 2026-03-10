@@ -12,6 +12,7 @@ import unittest.mock
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+from constants import GATE_PORT, LOCALHOST_PEER
 from terok.gate.server import (
     _ROUTE,
     TokenStore,
@@ -225,7 +226,7 @@ class _FakeSocket:
 
     def getpeername(self) -> tuple[str, int]:
         """Return a fake peer address."""
-        return ("127.0.0.1", 12345)
+        return LOCALHOST_PEER
 
     def close(self) -> None:
         """No-op close."""
@@ -259,9 +260,9 @@ class TestAuth(unittest.TestCase):
             # Create a mock handler to capture the response
             handler = handler_class.__new__(handler_class)
             handler.request = None
-            handler.client_address = ("127.0.0.1", 12345)
+            handler.client_address = LOCALHOST_PEER
             handler.server = type(
-                "FakeServer", (), {"server_name": "localhost", "server_port": 9418}
+                "FakeServer", (), {"server_name": "localhost", "server_port": GATE_PORT}
             )()
             handler.rfile = io.BytesIO(raw_request)
             handler.wfile = io.BytesIO()

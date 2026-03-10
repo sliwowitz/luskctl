@@ -11,6 +11,7 @@ from pathlib import Path
 
 import yaml
 
+from constants import localhost_url
 from terok.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
 from terok.lib.containers.task_logs import LogViewOptions, task_logs
 from terok.lib.containers.task_runners import task_run_cli, task_run_web
@@ -634,7 +635,7 @@ class TaskTests(unittest.TestCase):
 
             output = buffer.getvalue()
             expected_name = f"\x1b[32m{project_id}-web-1\x1b[0m"
-            expected_url = "\x1b[34mhttp://127.0.0.1:7788/\x1b[0m"
+            expected_url = f"\x1b[34m{localhost_url(7788)}\x1b[0m"
             expected_logs = f"\x1b[33mpodman logs -f {project_id}-web-1\x1b[0m"
             expected_stop = f"\x1b[31mpodman stop {project_id}-web-1\x1b[0m"
             self.assertIn(expected_name, output)

@@ -13,12 +13,14 @@ import yaml
 
 from ..core.config import get_ui_base_port, state_root
 
+_LOCALHOST = "127.0.0.1"
+
 
 def _is_port_free(port: int) -> bool:
     """Return True if *port* can be bound on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.bind(("127.0.0.1", port))
+            s.bind((_LOCALHOST, port))
         except OSError:
             return False
     return True

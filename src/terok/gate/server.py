@@ -45,6 +45,7 @@ _ROUTE = re.compile(
 )
 
 _CGI_WAIT_TIMEOUT = 30
+_LISTEN_ADDR = "127.0.0.1"
 
 
 def _validate_token_data(data: object) -> dict[str, dict[str, str]]:
@@ -423,7 +424,7 @@ def _serve_daemon(
 ) -> None:
     """Bind socket, fork, write PID file, run accept loop in child."""
     handler_class = _make_handler_class(base_path, token_store)
-    server = _ThreadingHTTPServer(("127.0.0.1", port), handler_class)
+    server = _ThreadingHTTPServer((_LISTEN_ADDR, port), handler_class)
 
     pid = os.fork()
     if pid > 0:

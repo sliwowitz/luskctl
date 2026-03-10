@@ -23,6 +23,8 @@ from ..core.projects import load_project
 from ..util.fs import ensure_dir_writable
 from ..util.podman import _podman_userns_args
 
+_LOCALHOST = "127.0.0.1"
+
 # ---------------------------------------------------------------------------
 # Provider descriptor
 # ---------------------------------------------------------------------------
@@ -116,7 +118,7 @@ _ALL_PROVIDERS: list[AuthProvider] = [
             "for authentication.\n"
             "After completing authentication, press Ctrl+C to stop the container."
         ),
-        extra_run_args=("-p", "127.0.0.1:1455:1455"),
+        extra_run_args=("-p", f"{_LOCALHOST}:1455:1455"),
     ),
     AuthProvider(
         name="claude",

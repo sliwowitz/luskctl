@@ -14,6 +14,8 @@ from ...lib.containers.task_display import STATUS_DISPLAY, mode_info
 from ...lib.containers.tasks import TaskMeta
 from ...lib.util.emoji import render_emoji
 
+_LOCALHOST = "127.0.0.1"
+
 
 def _get_css_variables(widget: Static) -> dict[str, str]:
     """Extract CSS theme variables from a widget's parent app."""
@@ -68,7 +70,7 @@ def render_task_details(
         lines.append(
             Text.assemble(
                 "Web URL:   ",
-                Text(f"http://127.0.0.1:{task.web_port}/", style=accent_style),
+                Text(f"http://{_LOCALHOST}:{task.web_port}/", style=accent_style),
             )
         )
     if task.mode == "cli" and project_id:

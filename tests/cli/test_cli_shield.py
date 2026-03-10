@@ -7,6 +7,7 @@ import unittest
 import unittest.mock
 from io import StringIO
 
+from constants import TEST_IP
 from terok.cli.commands.shield import (
     _cmd_allow,
     _cmd_deny,
@@ -16,8 +17,6 @@ from terok.cli.commands.shield import (
     _cmd_setup,
     _cmd_status,
 )
-
-TEST_IP = "1.2.3.4"
 
 
 class TestCmdSetup(unittest.TestCase):

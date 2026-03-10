@@ -11,6 +11,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+from constants import GATE_PORT, LOCALHOST
 from terok.lib.security.gate_server import (
     _UNIT_VERSION,
     GateServerStatus,
@@ -131,7 +132,7 @@ class TestInstallUninstall(unittest.TestCase):
             self.assertTrue((unit_dir / "terok-gate@.service").is_file())
             # Verify socket file contains port
             socket_content = (unit_dir / "terok-gate.socket").read_text()
-            self.assertIn("127.0.0.1:9418", socket_content)
+            self.assertIn(f"{LOCALHOST}:{GATE_PORT}", socket_content)
             # Verify service file contains absolute path in ExecStart and args
             service_content = (unit_dir / "terok-gate@.service").read_text()
             self.assertIn("ExecStart=/usr/local/bin/terok-gate", service_content)

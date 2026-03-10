@@ -74,6 +74,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*", "*Tests"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+  "needs_podman: requires podman on PATH",
+  "needs_root: requires root for nftables",
+]
 
 [tool.poetry.scripts]
 terokctl = "terok.cli.main:main"

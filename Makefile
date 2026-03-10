@@ -1,4 +1,4 @@
-.PHONY: all lint format test tach docstrings complexity deadcode reuse check install install-dev clean spdx
+.PHONY: all lint format test test-integration test-integration-podman tach docstrings complexity deadcode reuse check install install-dev clean spdx
 
 all: check
 
@@ -12,9 +12,17 @@ format:
 	poetry run ruff check --fix .
 	poetry run ruff format .
 
-# Run tests with coverage
+# Run tests with coverage (excludes integration tests)
 test:
-	poetry run pytest --cov=terok --cov-report=term-missing
+	poetry run pytest --ignore=tests/integration --cov=terok --cov-report=term-missing
+
+# Run integration tests (tier 2 auto-skips without podman)
+test-integration:
+	poetry run pytest tests/integration/ -v
+
+# Run only podman integration tests (for local runs with podman)
+test-integration-podman:
+	poetry run pytest tests/integration/ -m "needs_podman" -v
 
 # Check module boundary rules (tach.toml)
 tach:

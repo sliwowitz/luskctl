@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from terok_shield import ShieldConfig, ShieldMode
 
+from constants import GATE_PORT, TEST_IP
 from terok.lib.security.shield import (
     allow,
     deny,
@@ -22,20 +23,18 @@ from terok.lib.security.shield import (
     status,
 )
 
-TEST_IP = "1.2.3.4"
-
 
 class TestGetShieldConfig(unittest.TestCase):
     """Tests for get_shield_config()."""
 
     @patch("terok.lib.security.shield.get_global_section", return_value={})
-    @patch("terok.lib.security.shield.get_gate_server_port", return_value=9418)
+    @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
     def test_defaults(self, _port: MagicMock, _sec: MagicMock) -> None:
         """Default config uses hook mode, dev-standard profile, audit on."""
         cfg = get_shield_config()
         assert cfg.mode == ShieldMode.HOOK
         assert cfg.default_profiles == ("dev-standard",)
-        assert cfg.loopback_ports == (9418,)
+        assert cfg.loopback_ports == (GATE_PORT,)
         assert cfg.audit_enabled is True
         assert cfg.audit_log_allowed is True
 
@@ -60,7 +59,7 @@ class TestGetShieldConfig(unittest.TestCase):
         "terok.lib.security.shield.get_global_section",
         return_value={"profiles": "single-profile"},
     )
-    @patch("terok.lib.security.shield.get_gate_server_port", return_value=9418)
+    @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
     def test_single_profile_string(self, _port: MagicMock, _sec: MagicMock) -> None:
         """A single profile string is normalised to a tuple."""
         cfg = get_shield_config()
@@ -70,7 +69,7 @@ class TestGetShieldConfig(unittest.TestCase):
         "terok.lib.security.shield.get_global_section",
         return_value={"profiles": 123},
     )
-    @patch("terok.lib.security.shield.get_gate_server_port", return_value=9418)
+    @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
     def test_invalid_profiles_type(self, _port: MagicMock, _sec: MagicMock) -> None:
         """Non-string/non-list profiles value raises TypeError."""
         with self.assertRaises(TypeError):
@@ -87,7 +86,7 @@ class TestPreStart(unittest.TestCase):
         cfg = ShieldConfig(
             mode=ShieldMode.HOOK,
             default_profiles=("dev-standard",),
-            loopback_ports=(9418,),
+            loopback_ports=(GATE_PORT,),
         )
         mock_cfg.return_value = cfg
         result = pre_start("my-container")
@@ -117,7 +116,7 @@ class TestManagementWrappers(unittest.TestCase):
         mock_st.assert_called_once_with(config=cfg)
         assert result == {"installed": True}
 
-    @patch("terok.lib.security.shield.shield_allow", return_value=["allowed 1.2.3.4"])
+    @patch("terok.lib.security.shield.shield_allow", return_value=[f"allowed {TEST_IP}"])
     @patch("terok.lib.security.shield.get_shield_config")
     def test_allow(self, mock_cfg: MagicMock, mock_allow: MagicMock) -> None:
         """allow() delegates to shield_allow."""
@@ -125,9 +124,9 @@ class TestManagementWrappers(unittest.TestCase):
         mock_cfg.return_value = cfg
         result = allow("ctr", TEST_IP)
         mock_allow.assert_called_once_with("ctr", TEST_IP, config=cfg)
-        assert result == ["allowed 1.2.3.4"]
+        assert result == [f"allowed {TEST_IP}"]
 
-    @patch("terok.lib.security.shield.shield_deny", return_value=["denied 1.2.3.4"])
+    @patch("terok.lib.security.shield.shield_deny", return_value=[f"denied {TEST_IP}"])
     @patch("terok.lib.security.shield.get_shield_config")
     def test_deny(self, mock_cfg: MagicMock, mock_deny: MagicMock) -> None:
         """deny() delegates to shield_deny."""
@@ -135,7 +134,7 @@ class TestManagementWrappers(unittest.TestCase):
         mock_cfg.return_value = cfg
         result = deny("ctr", TEST_IP)
         mock_deny.assert_called_once_with("ctr", TEST_IP, config=cfg)
-        assert result == ["denied 1.2.3.4"]
+        assert result == [f"denied {TEST_IP}"]
 
     @patch("terok.lib.security.shield.shield_rules", return_value="table inet shield {}")
     @patch("terok.lib.security.shield.get_shield_config")
