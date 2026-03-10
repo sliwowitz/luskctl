@@ -58,6 +58,7 @@ class TaskMeta:
     preset: str | None = None
     name: str = ""
     provider: str | None = None
+    unrestricted: bool | None = None
     work_status: str | None = None
     work_message: str | None = None
 
@@ -395,6 +396,7 @@ def get_tasks(project_id: str, reverse: bool = False) -> list[TaskMeta]:
                     preset=meta.get("preset"),
                     name=meta["name"],
                     provider=meta.get("provider"),
+                    unrestricted=meta.get("unrestricted"),
                     work_status=ws_status,
                     work_message=ws_message,
                 )
@@ -824,6 +826,7 @@ def task_status(project_id: str, task_id: str) -> None:
         container_state=cs,
         name=meta["name"],
         provider=meta.get("provider"),
+        unrestricted=meta.get("unrestricted"),
     )
     status = effective_status(task)
     info = STATUS_DISPLAY.get(status, STATUS_DISPLAY["created"])
@@ -843,6 +846,9 @@ def task_status(project_id: str, task_id: str) -> None:
         print(f"  Container state: {state_color(cs, color_enabled)}")
     elif mode:
         print(f"  Container state: {_red('not found', color_enabled)}")
+    if task.unrestricted is not None:
+        perm_label = "unrestricted" if task.unrestricted else "restricted"
+        print(f"  Permissions:     {perm_label}")
     if exit_code is not None:
         print(f"  Exit code:       {exit_code}")
     if web_port:

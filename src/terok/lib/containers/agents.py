@@ -170,8 +170,11 @@ def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
         "        . /usr/local/share/terok/terok-git-identity.sh",
     ]
 
-    if cfg.skip_permissions:
-        lines.append("    _args+=(--dangerously-skip-permissions)")
+    # Auto-approve: inject --dangerously-skip-permissions when TEROK_UNRESTRICTED=1.
+    # Same env-var mechanism as all other providers (see _generate_generic_wrapper).
+    lines.append('    if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then')
+    lines.append("        _args+=(--dangerously-skip-permissions)")
+    lines.append("    fi")
 
     # Give Claude unrestricted filesystem access inside the container.
     # The Podman container itself provides isolation — no need for an
@@ -396,7 +399,6 @@ class AgentConfigSpec:
     subagents: tuple[dict, ...]
     selected_agents: tuple[str, ...] | None = None
     prompt: str | None = None
-    skip_permissions: bool = True
     provider: str = "claude"
     instructions: str | None = None
 
@@ -476,7 +478,6 @@ def prepare_agent_config_dir(spec: AgentConfigSpec) -> Path:
             WrapperConfig(
                 has_agents=cfg.has_agents,
                 project=cfg.project,
-                skip_permissions=cfg.skip_permissions,
                 has_instructions=has_instructions,
             )
         )

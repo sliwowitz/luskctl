@@ -70,7 +70,10 @@ class HeadlessProvider:
     """
 
     auto_approve_flags: tuple[str, ...]
-    """Flags to enable fully autonomous execution."""
+    """Flags to enable fully autonomous execution (injected when unrestricted)."""
+
+    auto_approve_env: dict[str, str]
+    """Environment variables to set for fully autonomous execution (injected when unrestricted)."""
 
     output_format_flags: tuple[str, ...]
     """Flags for structured output (e.g. ``("--output-format", "stream-json")``)."""
@@ -134,6 +137,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         headless_subcommand=None,
         prompt_flag="-p",
         auto_approve_flags=("--dangerously-skip-permissions",),
+        auto_approve_env={},
         output_format_flags=("--output-format", "stream-json"),
         model_flag="--model",
         max_turns_flag="--max-turns",
@@ -155,7 +159,8 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@openai.com",
         headless_subcommand="exec",
         prompt_flag="",
-        auto_approve_flags=("--full-auto",),
+        auto_approve_flags=("--dangerously-bypass-approvals-and-sandbox",),
+        auto_approve_env={},
         output_format_flags=(),
         model_flag="--model",
         max_turns_flag=None,
@@ -178,6 +183,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         headless_subcommand=None,
         prompt_flag="-p",
         auto_approve_flags=("--allow-all-tools",),
+        auto_approve_env={},
         output_format_flags=(),
         model_flag="--model",
         max_turns_flag=None,
@@ -199,7 +205,8 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@mistral.ai",
         headless_subcommand=None,
         prompt_flag="--prompt",
-        auto_approve_flags=(),
+        auto_approve_flags=("--auto-approve",),
+        auto_approve_env={},
         output_format_flags=(),
         model_flag="--agent",
         max_turns_flag="--max-turns",
@@ -222,6 +229,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         headless_subcommand="run",
         prompt_flag="",
         auto_approve_flags=(),
+        auto_approve_env={"OPENCODE_PERMISSION": '{"*":"allow"}'},
         output_format_flags=(),
         model_flag=None,
         max_turns_flag=None,
@@ -244,6 +252,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         headless_subcommand="run",
         prompt_flag="",
         auto_approve_flags=(),
+        auto_approve_env={"OPENCODE_PERMISSION": '{"*":"allow"}'},
         output_format_flags=(),
         model_flag="--model",
         max_turns_flag=None,
@@ -327,7 +336,6 @@ class WrapperConfig:
 
     has_agents: bool
     project: Project
-    skip_permissions: bool = True
     has_instructions: bool = False
 
 
@@ -483,9 +491,8 @@ def _build_generic_command(
     if provider.headless_subcommand:
         parts.append(provider.headless_subcommand)
 
-    # Auto-approve flags
-    for flag in provider.auto_approve_flags:
-        parts.append(flag)
+    # Auto-approve flags are injected by the wrapper function based on
+    # TEROK_UNRESTRICTED env var — not here.  See _generate_generic_wrapper().
 
     # Model
     if model and provider.model_flag:
@@ -543,9 +550,7 @@ def generate_agent_wrapper(
     if provider.name == "claude":
         if claude_wrapper_fn is None:
             raise ValueError("claude_wrapper_fn is required for Claude provider")
-        return claude_wrapper_fn(
-            WrapperConfig(has_agents=has_agents, project=project, skip_permissions=True)
-        )
+        return claude_wrapper_fn(WrapperConfig(has_agents=has_agents, project=project))
 
     return _generate_generic_wrapper(provider, project)
 
@@ -613,6 +618,16 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
         "        . /usr/local/share/terok/terok-git-identity.sh",
     ]
 
+    # Auto-approve flags and env vars, injected when TEROK_UNRESTRICTED=1.
+    if provider.auto_approve_flags or provider.auto_approve_env:
+        lines.append("    local _approve_args=()")
+        lines.append('    if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then')
+        for flag in provider.auto_approve_flags:
+            lines.append(f"        _approve_args+=({flag})")
+        for k, v in provider.auto_approve_env.items():
+            lines.append(f"        export {k}={shlex.quote(v)}")
+        lines.append("    fi")
+
     # OpenCode session plugin setup for opencode/blablador.
     if provider.session_file and provider.name in {"opencode", "blablador"}:
         plugin_dir = (
@@ -677,13 +692,18 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
     if session_path:
         lines.append(f"            export TEROK_SESSION_FILE={session_path}")
 
+    # Build the extra-args expansions that sit between the binary and "$@".
+    has_approve = bool(provider.auto_approve_flags or provider.auto_approve_env)
+    _extra_expansions: list[str] = []
+    if has_approve:
+        _extra_expansions.append('"${_approve_args[@]}"')
     if session_path and provider.resume_flag:
-        lines.append(f'            timeout "$_timeout" {binary} "${{_resume_args[@]}}" "$@"')
-    elif provider.name == "codex":
-        lines.append(f'            timeout "$_timeout" {binary} "${{_instr_args[@]}}" "$@"')
-    else:
-        lines.append(f'            timeout "$_timeout" {binary} "$@"')
-    lines.append("        )")
+        _extra_expansions.append('"${_resume_args[@]}"')
+    if provider.name == "codex":
+        _extra_expansions.append('"${_instr_args[@]}"')
+    extra = (" " + " ".join(_extra_expansions)) if _extra_expansions else ""
+
+    lines.append(f'        timeout "$_timeout" {binary}{extra} "$@"')
 
     # Post-run: capture vibe session ID
     if provider.name == "vibe" and session_path:
@@ -697,13 +717,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: Project) -> s
     if session_path:
         lines.append(f"            export TEROK_SESSION_FILE={session_path}")
 
-    if session_path and provider.resume_flag:
-        lines.append(f'            command {binary} "${{_resume_args[@]}}" "$@"')
-    elif provider.name == "codex":
-        lines.append(f'            command {binary} "${{_instr_args[@]}}" "$@"')
-    else:
-        lines.append(f'            command {binary} "$@"')
-    lines.append("        )")
+    lines.append(f'        command {binary}{extra} "$@"')
 
     lines.append("    fi")
     lines.append("}")

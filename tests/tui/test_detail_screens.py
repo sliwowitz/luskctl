@@ -165,6 +165,34 @@ class RenderHelpersTests(TestCase):
         text_str = str(result)
         self.assertNotIn("Work:", text_str)
 
+    def test_render_task_details_unrestricted(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="20",
+            mode="run",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            unrestricted=True,
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("unrestricted", text_str)
+
+    def test_render_task_details_restricted(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="21",
+            mode="run",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            unrestricted=False,
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("restricted", text_str)
+
     def test_format_task_label_with_work_status(self) -> None:
         widgets = import_widgets()
         task = widgets.TaskMeta(

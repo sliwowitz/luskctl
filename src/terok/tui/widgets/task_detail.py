@@ -79,6 +79,8 @@ def render_task_details(
             )
         )
     if task.mode == "run":
+        perm_label = "unrestricted" if task.unrestricted else "restricted"
+        lines.append(Text(f"Perms:     {perm_label}"))
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))
         if project_id:

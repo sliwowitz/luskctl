@@ -70,6 +70,7 @@ class HeadlessRunRequest:
     name: str | None = None
     provider: str | None = None
     instructions: str | None = None
+    unrestricted: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -265,6 +266,17 @@ def task_run_cli(
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
 
+    # Resolve unrestricted mode from config (CLI/web tasks default to True)
+    from ..containers.agent_config import (
+        resolve_agent_config as _resolve_cfg,
+        resolve_provider_value as _resolve_pv,
+    )
+
+    _effective = _resolve_cfg(project_id, preset=preset)
+    _unrestricted = _resolve_pv("unrestricted", _effective, project.default_agent or "claude")
+    if _unrestricted is None or _unrestricted:
+        env["TEROK_UNRESTRICTED"] = "1"
+
     # Run detached and keep the container alive so users can exec into it later
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
@@ -340,6 +352,17 @@ def task_run_web(
     # Note: backend is a web UI name (codex/claude/copilot), not a headless provider
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
+
+    # Resolve unrestricted mode from config (web tasks default to True)
+    from ..containers.agent_config import (
+        resolve_agent_config as _resolve_cfg,
+        resolve_provider_value as _resolve_pv,
+    )
+
+    _effective = _resolve_cfg(project_id, preset=preset)
+    _unrestricted = _resolve_pv("unrestricted", _effective, project.default_agent or "claude")
+    if _unrestricted is None or _unrestricted:
+        env["TEROK_UNRESTRICTED"] = "1"
 
     env = apply_web_env_overrides(env, backend, project.default_agent)
 
@@ -555,8 +578,20 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         )
     )
 
+    # Resolve unrestricted mode: CLI flag → config → default (True)
+    from ..containers.agent_config import resolve_provider_value
+
+    unrestricted = request.unrestricted
+    if unrestricted is None:
+        cfg_val = resolve_provider_value("unrestricted", effective, resolved.name)
+        unrestricted = cfg_val if cfg_val is not None else True
+
     # Build env and volumes
     env, volumes = build_task_env_and_volumes(project, task_id)
+
+    # Set TEROK_UNRESTRICTED for the wrapper functions inside the container
+    if unrestricted:
+        env["TEROK_UNRESTRICTED"] = "1"
 
     # Mount agent-config dir to /home/dev/.terok
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
@@ -585,6 +620,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     meta, meta_path = load_task_meta(project.id, task_id)
     meta["mode"] = "run"
     meta["provider"] = resolved.name
+    meta["unrestricted"] = unrestricted
     if request.preset:
         meta["preset"] = request.preset
     meta_path.write_text(yaml.safe_dump(meta))

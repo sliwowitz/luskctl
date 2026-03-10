@@ -107,6 +107,19 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="FILE",
         help="Path to instructions file (overrides config stack)",
     )
+    _restrict_group = p_run.add_mutually_exclusive_group()
+    _restrict_group.add_argument(
+        "--unrestricted",
+        action="store_true",
+        default=None,
+        help="Run agent fully autonomous (skip all approval prompts)",
+    )
+    _restrict_group.add_argument(
+        "--restricted",
+        action="store_true",
+        default=None,
+        help="Run agent with vendor-default permissions (ask before acting)",
+    )
 
     # task subcommand group
     p_task = subparsers.add_parser("task", help="Manage tasks")
@@ -286,6 +299,13 @@ def dispatch(args: argparse.Namespace) -> bool:
                     f"Failed to read instructions file {instructions_path}: {exc}"
                 ) from exc
 
+        # Resolve --unrestricted / --restricted to a tri-state bool
+        unrestricted: bool | None = None
+        if getattr(args, "unrestricted", None):
+            unrestricted = True
+        elif getattr(args, "restricted", None):
+            unrestricted = False
+
         task_run_headless(
             HeadlessRunRequest(
                 project_id=args.project_id,
@@ -300,6 +320,7 @@ def dispatch(args: argparse.Namespace) -> bool:
                 name=getattr(args, "name", None),
                 provider=getattr(args, "provider", None),
                 instructions=instructions_text,
+                unrestricted=unrestricted,
             )
         )
         return True
