@@ -48,7 +48,11 @@ def podman_container(
         args = shield_pre_start(cname, config=config)
 
     cmd = ["podman", "run", "-d", "--name", cname, *args, "alpine:latest", "sleep", "300"]
-    subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+    except BaseException:
+        subprocess.run(["podman", "rm", "-f", cname], capture_output=True)
+        raise
 
     yield cname
 

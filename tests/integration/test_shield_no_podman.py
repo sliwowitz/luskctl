@@ -349,7 +349,7 @@ class TestTaskRunnerShieldIntegration:
             from terok.lib.containers.task_runners import _run_container
             from terok.lib.core.project_model import Project
 
-            project = Project.__new__(Project)
+            project = MagicMock(spec=Project)
 
             with pytest.raises(RuntimeError, match="hook not installed"):
                 _run_container(
