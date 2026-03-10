@@ -394,9 +394,12 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
             if p.auto_approve_flags or p.auto_approve_env:
                 self.assertIn(
-                    "TEROK_UNRESTRICTED", wrapper, f"{name} should check TEROK_UNRESTRICTED"
+                    'if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then',
+                    wrapper,
+                    f"{name} should check TEROK_UNRESTRICTED",
                 )
-                self.assertIn("_approve_args", wrapper, f"{name} should build _approve_args")
+                for flag in p.auto_approve_flags:
+                    self.assertIn(flag, wrapper, f"{name} should render {flag}")
 
     def test_codex_auto_approve_flag(self) -> None:
         """Codex uses --dangerously-bypass-approvals-and-sandbox (not --full-auto)."""
@@ -404,10 +407,15 @@ class GenerateAgentWrapperTests(unittest.TestCase):
         self.assertEqual(p.auto_approve_flags, ("--dangerously-bypass-approvals-and-sandbox",))
 
     def test_opencode_auto_approve_env(self) -> None:
-        """OpenCode and Blablador use OPENCODE_PERMISSION env var."""
+        """OpenCode and Blablador use OPENCODE_PERMISSION env var with correct payload."""
         for name in ("opencode", "blablador"):
             p = HEADLESS_PROVIDERS[name]
             self.assertIn("OPENCODE_PERMISSION", p.auto_approve_env, f"{name}")
+            self.assertEqual(
+                p.auto_approve_env["OPENCODE_PERMISSION"],
+                '{"*":"allow"}',
+                f"{name} should grant all permissions",
+            )
             self.assertEqual(p.auto_approve_flags, (), f"{name} should have no CLI flags")
 
     def test_vibe_auto_approve_flag(self) -> None:
@@ -421,14 +429,20 @@ class GenerateAgentWrapperTests(unittest.TestCase):
         for name in ("opencode", "blablador"):
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            self.assertIn("OPENCODE_PERMISSION", wrapper, f"{name} should set OPENCODE_PERMISSION")
+            self.assertIn(
+                'export OPENCODE_PERMISSION=\'{"*":"allow"}\'',
+                wrapper,
+                f"{name} should export exact OPENCODE_PERMISSION payload",
+            )
 
     def test_auto_approve_not_in_headless_command(self) -> None:
-        """Auto-approve flags are no longer injected by the command builder."""
+        """Auto-approve flags and env vars are not injected by the command builder."""
         for name, p in HEADLESS_PROVIDERS.items():
             cmd = build_headless_command(p, timeout=1800)
             for flag in p.auto_approve_flags:
                 self.assertNotIn(flag, cmd, f"{name}: {flag} should not be in command")
+            for key in p.auto_approve_env:
+                self.assertNotIn(key, cmd, f"{name}: {key} env should stay in wrapper")
 
 
 class ResolveProviderValueTests(unittest.TestCase):

@@ -366,17 +366,16 @@ def task_run_web(
 
     _effective = _resolve_cfg(project_id, preset=preset)
     _unrestricted = _resolve_pv("unrestricted", _effective, effective_backend)
-    if _unrestricted is None or _unrestricted:
+    resolved_unrestricted = _unrestricted is None or bool(_unrestricted)
+    if resolved_unrestricted:
         env["TEROK_UNRESTRICTED"] = "1"
-    meta["unrestricted"] = _unrestricted is None or bool(_unrestricted)
-
-    # Write metadata once (unrestricted is always set; other fields are conditional)
-    meta_path.write_text(yaml.safe_dump(meta))
 
     cname = container_name(project.id, "web", task_id)
     container_state = get_container_state(cname)
 
-    # If container already exists, handle it
+    # If container already exists, handle it — don't overwrite metadata with
+    # a potentially different unrestricted value while the container keeps its
+    # original environment.
     if container_state is not None:
         color_enabled = _supports_color()
         url = f"http://127.0.0.1:{port}/"
@@ -391,6 +390,10 @@ def task_run_web(
         print("Container started.")
         print(f"Web UI: {_blue(url, color_enabled)}")
         return
+
+    # Persist metadata only when a new container is actually being created
+    meta["unrestricted"] = resolved_unrestricted
+    meta_path.write_text(yaml.safe_dump(meta))
 
     # Start UI in background and return terminal when it's reachable
     # Note: We intentionally do NOT use --rm so containers persist after stopping.

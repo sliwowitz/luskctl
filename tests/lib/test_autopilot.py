@@ -283,9 +283,9 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         wrapper = _generate_claude_wrapper(
             WrapperConfig(has_agents=False, project=project)
         )
-        # The flag is gated by the env var, not hardcoded
-        self.assertIn("TEROK_UNRESTRICTED", wrapper)
-        self.assertIn("--dangerously-skip-permissions", wrapper)
+        # The flag is gated by the env var check, not unconditionally injected
+        self.assertIn('if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then', wrapper)
+        self.assertIn("_args+=(--dangerously-skip-permissions)", wrapper)
         # --add-dir / is always present regardless of permission mode
         self.assertIn('--add-dir "/"', wrapper)
 

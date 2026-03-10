@@ -177,7 +177,7 @@ class RenderHelpersTests(TestCase):
         )
         result = widgets.render_task_details(task, project_id="proj1")
         text_str = str(result)
-        self.assertIn("unrestricted", text_str)
+        self.assertIn("Perms:     unrestricted", text_str)
 
     def test_render_task_details_restricted(self) -> None:
         widgets = import_widgets()
@@ -191,7 +191,8 @@ class RenderHelpersTests(TestCase):
         )
         result = widgets.render_task_details(task, project_id="proj1")
         text_str = str(result)
-        self.assertIn("restricted", text_str)
+        self.assertIn("Perms:     restricted", text_str)
+        self.assertNotIn("Perms:     unrestricted", text_str)
 
     def test_format_task_label_with_work_status(self) -> None:
         widgets = import_widgets()
