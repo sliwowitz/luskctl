@@ -1,3 +1,6 @@
+# THE MASTER BRANCH IS UNDREGOING REFACTORING AND IS NOT STABLE
+# DOWNLOAD AND INSTALL [RELEASE 0.5.3](https://github.com/terok-ai/terok/releases/tag/v0.5.3) INSTEAD
+
 # terok
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
