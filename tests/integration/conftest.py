@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Fixtures for shield integration tests.
@@ -127,13 +126,19 @@ def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
     )
 
 
-# ── Shield instance with mock runner ─────────────────────
+# ── Shield instances ──────────────────────────────────────
 
 
 @pytest.fixture()
 def shield(shield_config: ShieldConfig) -> Shield:
-    """Shield instance with a mock runner for unit integration tests."""
+    """Shield with a mock runner — for no-podman integration tests."""
     return Shield(shield_config, runner=MockRunner())
+
+
+@pytest.fixture()
+def real_shield(shield_config: ShieldConfig) -> Shield:
+    """Shield with the real subprocess runner — for Podman integration tests."""
+    return Shield(shield_config)
 
 
 @pytest.fixture()

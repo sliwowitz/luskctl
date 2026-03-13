@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Shield egress firewall management commands.
@@ -119,11 +118,11 @@ def dispatch(args: argparse.Namespace) -> bool:
                 shield = make_shield(Path(tmp))
                 kwargs = _extract_handler_kwargs(args, cmd_def)
                 cmd_def.handler(shield, **kwargs)
-    except ExecError:
-        print(
-            f"Error: container for task {args.task} is not running",
-            file=sys.stderr,
-        )
+    except ExecError as exc:
+        if cmd_def.needs_container:
+            print(f"Error: container for task {args.task} is not running", file=sys.stderr)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
     except (ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

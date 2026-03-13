@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for the terok-shield adapter (terok.lib.security.shield)."""
@@ -67,9 +66,10 @@ class TestProfilesDir(unittest.TestCase):
 class TestMakeShield(unittest.TestCase):
     """Tests for make_shield()."""
 
+    @patch("terok.lib.security.shield.config_root", return_value=MOCK_CONFIG_ROOT)
     @patch("terok.lib.security.shield.get_global_section", return_value={})
     @patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT)
-    def test_defaults(self, _port: MagicMock, _sec: MagicMock) -> None:
+    def test_defaults(self, _port: MagicMock, _sec: MagicMock, _root: MagicMock) -> None:
         """Default config uses hook mode, dev-standard profile, audit on."""
         shield = make_shield(MOCK_TASK_DIR)
         self.assertIsInstance(shield, Shield)
@@ -79,7 +79,7 @@ class TestMakeShield(unittest.TestCase):
         self.assertEqual(cfg.loopback_ports, (GATE_PORT,))
         self.assertTrue(cfg.audit_enabled)
         self.assertEqual(cfg.state_dir, MOCK_TASK_DIR / "shield")
-        self.assertIsNotNone(cfg.profiles_dir)
+        self.assertEqual(cfg.profiles_dir, MOCK_CONFIG_ROOT / "shield" / "profiles")
 
     @patch(
         "terok.lib.security.shield.get_global_section",

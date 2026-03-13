@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tier 2 integration tests: full end-to-end with real Podman.
@@ -28,10 +27,10 @@ pytestmark = pytest.mark.needs_podman
 
 
 @pytest.fixture()
-def podman_container(shield: Shield) -> str:
+def podman_container(real_shield: Shield) -> str:
     """Start a real Podman container with shield args, yield its name, cleanup."""
     cname = f"terok-shield-integ-{uuid.uuid4().hex[:8]}"
-    args = shield.pre_start(cname)
+    args = real_shield.pre_start(cname)
 
     cmd = ["podman", "run", "-d", "--name", cname, *args, "alpine:latest", "sleep", "300"]
     try:
@@ -67,22 +66,22 @@ class TestShieldEndToEnd:
         assert "dev-standard" in annotations["terok.shield.profiles"]
 
     @skip_if_no_root
-    def test_shield_rules_returns_ruleset(self, podman_container: str, shield: Shield) -> None:
+    def test_shield_rules_returns_ruleset(self, podman_container: str, real_shield: Shield) -> None:
         """shield.rules returns a non-empty ruleset containing terok_shield."""
-        output = shield.rules(podman_container)
+        output = real_shield.rules(podman_container)
         assert "terok_shield" in output
 
     @skip_if_no_root
-    def test_allow_then_deny(self, podman_container: str, shield: Shield) -> None:
+    def test_allow_then_deny(self, podman_container: str, real_shield: Shield) -> None:
         """shield.allow adds an IP; shield.deny removes it."""
-        allowed = shield.allow(podman_container, TEST_IP_RFC5737)
+        allowed = real_shield.allow(podman_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in allowed
-        rules_after_allow = shield.rules(podman_container)
+        rules_after_allow = real_shield.rules(podman_container)
         assert TEST_IP_RFC5737 in rules_after_allow
 
-        denied = shield.deny(podman_container, TEST_IP_RFC5737)
+        denied = real_shield.deny(podman_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in denied
-        rules_after_deny = shield.rules(podman_container)
+        rules_after_deny = real_shield.rules(podman_container)
         assert TEST_IP_RFC5737 not in rules_after_deny
 
 
@@ -113,9 +112,9 @@ class TestShieldEgress:
         )
         assert result.returncode != 0
 
-    def test_egress_allowed_after_allow(self, podman_container: str, shield: Shield) -> None:
+    def test_egress_allowed_after_allow(self, podman_container: str, real_shield: Shield) -> None:
         """Container can reach a host after shield.allow."""
-        shield.allow(podman_container, EGRESS_DOMAIN)
+        real_shield.allow(podman_container, EGRESS_DOMAIN)
 
         result = subprocess.run(
             [
