@@ -113,7 +113,12 @@ def dispatch(args: argparse.Namespace) -> bool:
     if cmd_def is None or cmd_def.handler is None:
         return False
 
-    has_task = getattr(args, "project_id", None) and getattr(args, "task_id", None)
+    project_id = getattr(args, "project_id", None)
+    task_id = getattr(args, "task_id", None)
+    if bool(project_id) != bool(task_id):
+        print("Error: provide both <project_id> and <task_id>, or neither", file=sys.stderr)
+        sys.exit(1)
+    has_task = project_id and task_id
 
     try:
         if has_task:

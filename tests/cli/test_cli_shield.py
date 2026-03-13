@@ -105,6 +105,20 @@ class TestDispatch(unittest.TestCase):
         self.assertIn("Mode", output)
         self.assertIn("hook", output)
 
+    def test_partial_task_selector_exits(self) -> None:
+        """Providing project_id without task_id exits with error."""
+        args = argparse.Namespace(
+            cmd="shield", shield_cmd="status", project_id="proj", task_id=None
+        )
+        with (
+            patch("sys.stderr", new_callable=StringIO) as err,
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            dispatch(args)
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("both", err.getvalue())
+
     @patch("terok.cli.commands.shield._resolve_task")
     @patch("terok.cli.commands.shield.make_shield")
     def test_status_with_task(self, mock_make: MagicMock, mock_resolve: MagicMock) -> None:
