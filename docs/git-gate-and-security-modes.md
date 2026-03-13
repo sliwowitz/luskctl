@@ -7,7 +7,7 @@ The **git gate** is a host-side bare mirror of the upstream repository. It serve
 
 ## Three Layers: Upstream → Gate → Tasks
 
-```
+```text
 Upstream (GitHub, GitLab, etc.)
        │
        ▼

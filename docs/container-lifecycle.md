@@ -6,7 +6,7 @@ terok manages two types of resources:
 - **Images** — immutable, built once, shared across tasks
 - **Containers** — mutable instances of images, one per task
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         IMAGES (immutable)                      │
 │  ┌─────────┐    ┌─────────────┐    ┌─────────────────────────┐  │
@@ -33,7 +33,7 @@ terok manages two types of resources:
 
 A task consists of three persistent components:
 
-```
+```text
 Task #1
 ├── Workspace    ~/.local/share/terok/tasks/<project>/1/workspace-dangerous/
 ├── Metadata     ~/.local/share/terok/projects/<project>/tasks/1.yml
@@ -47,7 +47,7 @@ All three persist independently and survive:
 
 ### Container States
 
-```
+```text
                     ┌──────────────────┐
                     │   (not exists)   │
                     └────────┬─────────┘
@@ -90,7 +90,7 @@ All three persist independently and survive:
 
 ### Container Naming
 
-```
+```text
 <project-id>-<mode>-<task-id>
 
 Examples:
@@ -122,7 +122,7 @@ Auth containers are ephemeral because:
 
 ### Build Hierarchy
 
-```
+```text
 ┌───────────────────────────────────────────────────────────────────┐
 │ L0: terok-l0:<base-tag>                                         │
 │ ┌───────────────────────────────────────────────────────────────┐ │
@@ -168,7 +168,7 @@ Auth containers are ephemeral because:
 
 The TUI detects when a task's container uses an outdated image:
 
-```
+```text
 Container image hash ≠ Current project build hash
         │
         ▼

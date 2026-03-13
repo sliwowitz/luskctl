@@ -13,7 +13,7 @@ This document captures a proposed convention for keeping agent-specific project 
 
 The container has a single project repo at `/workspace` and a single agent context root at `/agent`.
 
-```
+```text
 /workspace/                 # Git repo root (what the agent edits)
 /agent/                     # Non-repo agent context (mounted/generated)
   INSTRUCTIONS.md           # Project/container runbook (persistent)

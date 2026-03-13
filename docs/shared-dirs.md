@@ -86,7 +86,7 @@ Agent email addresses are GitHub-recognized and display with avatars in commit h
 
 ## Quick Reference
 
-```
+```text
 /workspace                    ← <state_root>/tasks/<project>/<task>/workspace-dangerous:Z
 /home/dev/.codex              ← <envs_base>/_codex-config:z
 /home/dev/.claude             ← <envs_base>/_claude-config:z

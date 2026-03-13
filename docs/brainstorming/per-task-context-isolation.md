@@ -37,7 +37,7 @@ Create separate config directories per task, with authentication files copied fr
 
 #### Architecture
 
-```
+```text
 ~/.local/share/terok/envs/ (or /var/lib/terok/envs/ if root)
 ├── _claude-config/                    # Global auth (source of truth)
 │   ├── .credentials.json
@@ -127,7 +127,7 @@ Track context file creation from within the container, writing the mapping to a 
 
 #### Architecture
 
-```
+```text
 ~/.local/share/terok/envs/ (or /var/lib/terok/envs/ if root)
 └── _claude-config/                    # Shared (unchanged)
     └── projects/-workspace/           # All sessions live here
