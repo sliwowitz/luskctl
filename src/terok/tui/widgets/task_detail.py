@@ -84,8 +84,11 @@ def render_task_details(
         perm_label = "unrestricted" if task.unrestricted else "restricted"
         lines.append(Text(f"Perms:     {perm_label}"))
     if task.shield_state:
-        shield_colors = {"UP": "green", "DOWN": "red", "INACTIVE": "dim"}
-        shield_color = shield_colors.get(task.shield_state, "yellow")
+        success_color = variables.get("success", "green")
+        error_color = variables.get("error", "red")
+        warning_color = variables.get("warning", "yellow")
+        shield_colors = {"UP": success_color, "DOWN": error_color, "INACTIVE": "dim"}
+        shield_color = shield_colors.get(task.shield_state, warning_color)
         lines.append(
             Text.assemble(
                 "Shield:    ",
