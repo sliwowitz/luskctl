@@ -590,6 +590,8 @@ class TaskActionsMixin:
                 task_dir = load_project(pid).tasks_root / str(tid)
                 shield_fn(cname, task_dir)
                 return pid, tid, None
+            except SystemExit as e:
+                return pid, tid, str(e)
             except Exception as e:
                 return pid, tid, str(e)
 
