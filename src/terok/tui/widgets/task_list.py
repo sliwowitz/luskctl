@@ -43,7 +43,9 @@ class TaskList(ListView):
         ("c", "app.run_cli_from_main", "CLI"),
         ("l", "app.login_from_main", "Login"),
         ("f", "app.follow_logs_from_main", "Logs"),
-        ("d", "app.delete_task_from_main", "Delete"),
+        ("X", "app.delete_task_from_main", "Delete"),
+        ("D", "app.shield_down_from_main", "Shield\u2193"),
+        ("s", "app.shield_up_from_main", "Shield\u2191"),
     ]
 
     class TaskSelected(Message):

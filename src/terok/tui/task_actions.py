@@ -611,7 +611,7 @@ class TaskActionsMixin:
         """Raise the shield (deny-all) for the current task."""
         self._action_shield_toggle("up", shield_up)
 
-    # --- Main-screen task pane shortcuts (c/w/d) ---
+    # --- Main-screen task pane shortcuts (c/w/X/D/s) ---
 
     async def action_run_cli_from_main(self) -> None:
         """Start a new CLI task from the main screen."""
@@ -620,6 +620,14 @@ class TaskActionsMixin:
     async def action_delete_task_from_main(self) -> None:
         """Delete the selected task from the main screen."""
         await self.action_delete_task()
+
+    def action_shield_down_from_main(self) -> None:
+        """Drop the shield from the main screen."""
+        self._action_shield_toggle("down", shield_down)
+
+    def action_shield_up_from_main(self) -> None:
+        """Raise the shield from the main screen."""
+        self._action_shield_toggle("up", shield_up)
 
     async def action_login_from_main(self) -> None:
         """Login to the selected task from the main screen."""

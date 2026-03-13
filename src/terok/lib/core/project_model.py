@@ -72,7 +72,8 @@ class ProjectConfig:
     # Task name categories for unique-namer (from tasks.name_categories in project.yml)
     task_name_categories: list[str] | None = None
     # When True, automatically drop the shield (bypass mode) after task container starts.
-    shield_drop_on_task_start: bool = False
+    # Default True is a temporary measure until the full shield UI is in place.
+    shield_drop_on_task_start: bool = True
 
     @property
     def presets_dir(self) -> Path:

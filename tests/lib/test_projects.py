@@ -146,7 +146,7 @@ git:
                 self.assertEqual(projects[0].id, "good")
 
     def test_load_project_shield_drop_on_task_start_default(self) -> None:
-        """shield_drop_on_task_start defaults to False when not set."""
+        """shield_drop_on_task_start defaults to True when not set."""
         project_id = "proj-shield-default"
         yaml = f"""\
 project:
@@ -156,7 +156,7 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertFalse(proj.shield_drop_on_task_start)
+            self.assertTrue(proj.shield_drop_on_task_start)
 
     def test_load_project_shield_drop_on_task_start_enabled(self) -> None:
         """shield.drop_on_task_start: true is parsed correctly."""

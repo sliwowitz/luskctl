@@ -313,7 +313,7 @@ def load_project(project_id: str) -> ProjectConfig:
 
     # Shield config
     shield_cfg = cfg.get("shield", {}) or {}
-    shield_drop_on_task_start = bool(shield_cfg.get("drop_on_task_start", False))
+    shield_drop_on_task_start = bool(shield_cfg.get("drop_on_task_start", True))
 
     # Agent config section (model, subagents, mcp_servers, etc.)
     agent_cfg = cfg.get("agent", {}) or {}
