@@ -1,22 +1,23 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tier 2 integration tests: full end-to-end with real Podman.
 
 These tests require ``podman`` on PATH and are auto-skipped when it
 is absent.  Some additionally require root for nftables operations.
+
+Uses the per-task Shield class API.
 """
 
 import json
 import subprocess
 import uuid
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-from terok_shield import ShieldConfig, ShieldMode
+from terok_shield import Shield
 
-from constants import EGRESS_DOMAIN, GATE_PORT, TEST_EGRESS_URL, TEST_IP_RFC5737
+from constants import EGRESS_DOMAIN, TEST_EGRESS_URL, TEST_IP_RFC5737
 
 from .conftest import skip_if_no_podman, skip_if_no_root
 
@@ -27,26 +28,10 @@ pytestmark = pytest.mark.needs_podman
 
 
 @pytest.fixture()
-def podman_container(
-    installed_hooks: dict[str, Path],
-) -> str:
+def podman_container(shield: Shield) -> str:
     """Start a real Podman container with shield args, yield its name, cleanup."""
-    from terok_shield import shield_pre_start
-
     cname = f"terok-shield-integ-{uuid.uuid4().hex[:8]}"
-    config = ShieldConfig(
-        mode=ShieldMode.HOOK,
-        default_profiles=("dev-standard",),
-        loopback_ports=(GATE_PORT,),
-        audit_enabled=True,
-        audit_log_allowed=True,
-    )
-
-    with (
-        patch("terok.lib.security.shield.get_global_section", return_value={}),
-        patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT),
-    ):
-        args = shield_pre_start(cname, config=config)
+    args = shield.pre_start(cname)
 
     cmd = ["podman", "run", "-d", "--name", cname, *args, "alpine:latest", "sleep", "300"]
     try:
@@ -82,28 +67,22 @@ class TestShieldEndToEnd:
         assert "dev-standard" in annotations["terok.shield.profiles"]
 
     @skip_if_no_root
-    def test_shield_rules_returns_ruleset(self, podman_container: str) -> None:
-        """shield_rules returns a non-empty ruleset containing terok_shield."""
-        from terok_shield import shield_rules
-
-        config = ShieldConfig(mode=ShieldMode.HOOK, default_profiles=("dev-standard",))
-        output = shield_rules(podman_container, config=config)
+    def test_shield_rules_returns_ruleset(self, podman_container: str, shield: Shield) -> None:
+        """shield.rules returns a non-empty ruleset containing terok_shield."""
+        output = shield.rules(podman_container)
         assert "terok_shield" in output
 
     @skip_if_no_root
-    def test_allow_then_deny(self, podman_container: str) -> None:
-        """shield_allow adds an IP; shield_deny removes it."""
-        from terok_shield import shield_allow, shield_deny, shield_rules
-
-        config = ShieldConfig(mode=ShieldMode.HOOK, default_profiles=("dev-standard",))
-        allowed = shield_allow(podman_container, TEST_IP_RFC5737, config=config)
+    def test_allow_then_deny(self, podman_container: str, shield: Shield) -> None:
+        """shield.allow adds an IP; shield.deny removes it."""
+        allowed = shield.allow(podman_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in allowed
-        rules_after_allow = shield_rules(podman_container, config=config)
+        rules_after_allow = shield.rules(podman_container)
         assert TEST_IP_RFC5737 in rules_after_allow
 
-        denied = shield_deny(podman_container, TEST_IP_RFC5737, config=config)
+        denied = shield.deny(podman_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in denied
-        rules_after_deny = shield_rules(podman_container, config=config)
+        rules_after_deny = shield.rules(podman_container)
         assert TEST_IP_RFC5737 not in rules_after_deny
 
 
@@ -134,12 +113,9 @@ class TestShieldEgress:
         )
         assert result.returncode != 0
 
-    def test_egress_allowed_after_allow(self, podman_container: str) -> None:
-        """Container can reach a host after shield_allow."""
-        from terok_shield import shield_allow
-
-        config = ShieldConfig(mode=ShieldMode.HOOK, default_profiles=("dev-standard",))
-        shield_allow(podman_container, EGRESS_DOMAIN, config=config)
+    def test_egress_allowed_after_allow(self, podman_container: str, shield: Shield) -> None:
+        """Container can reach a host after shield.allow."""
+        shield.allow(podman_container, EGRESS_DOMAIN)
 
         result = subprocess.run(
             [

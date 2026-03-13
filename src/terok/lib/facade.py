@@ -84,8 +84,7 @@ from .security.git_gate import (
     find_projects_sharing_gate,
 )
 from .security.shield import (  # noqa: F401 — re-exported public API
-    get_shield_config,
-    setup as shield_setup,
+    make_shield,
     status as shield_status,
 )
 from .security.ssh import SSHManager
@@ -206,7 +205,6 @@ __all__ = [
     "get_project_state",
     "is_task_image_old",
     # Shield
-    "get_shield_config",
-    "shield_setup",
+    "make_shield",
     "shield_status",
 ]

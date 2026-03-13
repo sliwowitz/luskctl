@@ -15,7 +15,7 @@ import yaml
 
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
-from ..security.shield import pre_start as _shield_pre_start
+from ..security.shield import pre_start as _shield_pre_start_impl
 from ..util.ansi import (
     blue as _blue,
     green as _green,
@@ -203,6 +203,7 @@ def _run_container(
     env: dict[str, str],
     volumes: list[str],
     project: ProjectConfig,
+    task_dir: Path,
     extra_args: list[str] | None = None,
     command: list[str] | None = None,
 ) -> None:
@@ -218,13 +219,14 @@ def _run_container(
         env: Environment variables to pass via ``-e``.
         volumes: Volume mounts to pass via ``-v``.
         project: The resolved :class:`ProjectConfig` (used for GPU args).
+        task_dir: Per-task directory (used for per-task shield state).
         extra_args: Additional ``podman run`` flags inserted after the GPU
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
     """
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
-    cmd += _shield_pre_start(cname)
+    cmd += _shield_pre_start_impl(cname, task_dir)
     cmd += gpu_run_args(project)
     if extra_args:
         cmd += extra_args
@@ -293,12 +295,14 @@ def task_run_cli(
     # Run detached and keep the container alive so users can exec into it later
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
+    task_dir = project.tasks_root / str(task_id)
     _run_container(
         cname=cname,
         image=project_cli_image(project.id),
         env=env,
         volumes=volumes,
         project=project,
+        task_dir=task_dir,
         # Ensure init runs and then keep the container alive even without a TTY
         # init-ssh-and-repo.sh now prints a readiness marker we can watch for
         command=["bash", "-lc", "init-ssh-and-repo.sh && echo __CLI_READY__; tail -f /dev/null"],
@@ -406,12 +410,14 @@ def task_run_web(
     # Start UI in background and return terminal when it's reachable
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
     # This allows `task restart` to quickly resume stopped containers.
+    task_dir = project.tasks_root / str(task_id)
     _run_container(
         cname=cname,
         image=project_web_image(project.id),
         env=env,
         volumes=volumes,
         project=project,
+        task_dir=task_dir,
         extra_args=["-p", f"{_LOCALHOST}:{port}:7860"],
     )
 
@@ -619,6 +625,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
         env=env,
         volumes=volumes,
         project=project,
+        task_dir=task_dir,
         command=["bash", "-lc", headless_cmd],
     )
 

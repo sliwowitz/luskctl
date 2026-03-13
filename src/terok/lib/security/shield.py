@@ -1,114 +1,96 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Adapter for terok-shield egress firewall.
 
-Maps terok global config to :class:`ShieldConfig` and wraps the
-``terok_shield`` public API for use by the task runner and CLI.
+Creates per-task :class:`Shield` instances from the terok global config.
+Each task gets its own ``state_dir`` under ``{task_dir}/shield/``.
 """
 
-from collections.abc import Iterator
+from pathlib import Path
 
-from terok_shield import (
-    ShieldConfig,
-    ShieldMode,
-    list_log_files,
-    list_profiles,
-    shield_allow,
-    shield_deny,
-    shield_pre_start,
-    shield_resolve,
-    shield_rules,
-    shield_setup,
-    shield_status,
-    tail_log,
-)
+from terok_shield import Shield, ShieldConfig, ShieldMode
 
 from ..core.config import get_gate_server_port, get_global_section
+from ..core.paths import config_root
 
 _DEFAULT_PROFILES = ("dev-standard",)
 
 
-def get_shield_config() -> ShieldConfig:
-    """Build a :class:`ShieldConfig` from the terok global ``shield:`` section.
+def _state_dir(task_dir: Path) -> Path:
+    """Return the per-task shield state directory."""
+    return task_dir / "shield"
 
-    Recognised keys::
 
-        shield:
-          profiles: [dev-standard, custom]
-          audit: true
-          audit_log_allowed: true
+def _profiles_dir() -> Path:
+    """Return the terok-managed shield profiles directory.
+
+    Custom ``.txt`` allowlist files placed here are visible to all
+    terok-managed Shield instances.  This is separate from the
+    standalone ``terok-shield`` CLI's own config directory.
     """
-    sec = get_global_section("shield")
-    profiles = sec.get("profiles", _DEFAULT_PROFILES)
-    if isinstance(profiles, str):
-        profiles = (profiles,)
-    elif isinstance(profiles, (list, tuple)):
-        # Ensure it's an iterable of strings, rejecting nested lists/dicts/etc.
-        for item in profiles:
+    return config_root() / "shield" / "profiles"
+
+
+def _normalize_profiles(raw: object) -> tuple[str, ...]:
+    """Normalize a profiles config value to a tuple of strings.
+
+    Raises:
+        TypeError: If *raw* is not a string or list of strings.
+    """
+    if isinstance(raw, str):
+        return (raw,)
+    if isinstance(raw, (list, tuple)):
+        for item in raw:
             if not isinstance(item, str):
                 raise TypeError(
-                    f"shield.profiles must be a list of strings, but found {type(item).__name__}: {item!r}"
+                    f"shield.profiles must be a list of strings, "
+                    f"but found {type(item).__name__}: {item!r}"
                 )
-        profiles = tuple(profiles)
-    else:
-        raise TypeError(
-            f"shield.profiles must be a string or a list of strings, but found {type(profiles).__name__}: {profiles!r}"
-        )
-    return ShieldConfig(
+        return tuple(raw)
+    raise TypeError(
+        f"shield.profiles must be a string or a list of strings, "
+        f"but found {type(raw).__name__}: {raw!r}"
+    )
+
+
+def make_shield(task_dir: Path) -> Shield:
+    """Construct a per-task :class:`Shield` from the terok global config.
+
+    Reads the ``shield:`` section of the global config and builds a
+    :class:`ShieldConfig` with ``state_dir`` scoped to *task_dir*.
+    """
+    sec = get_global_section("shield")
+    profiles = _normalize_profiles(sec.get("profiles", _DEFAULT_PROFILES))
+
+    config = ShieldConfig(
+        state_dir=_state_dir(task_dir),
         mode=ShieldMode.HOOK,
         default_profiles=profiles,
         loopback_ports=(get_gate_server_port(),),
         audit_enabled=bool(sec.get("audit", True)),
-        audit_log_allowed=bool(sec.get("audit_log_allowed", True)),
+        profiles_dir=_profiles_dir(),
     )
+    return Shield(config)
 
 
-def pre_start(container: str) -> list[str]:
+def pre_start(container: str, task_dir: Path) -> list[str]:
     """Return extra ``podman run`` args for egress firewalling."""
-    return shield_pre_start(container, config=get_shield_config())
-
-
-def setup() -> None:
-    """Install the OCI hook for shield."""
-    shield_setup(config=get_shield_config())
+    return make_shield(task_dir).pre_start(container)
 
 
 def status() -> dict:
-    """Return shield status dict."""
-    return shield_status(config=get_shield_config())
+    """Return shield status dict from the global config.
 
-
-def allow(container: str, target: str) -> list[str]:
-    """Dynamically allow *target* for a running container."""
-    return shield_allow(container, target, config=get_shield_config())
-
-
-def deny(container: str, target: str) -> list[str]:
-    """Dynamically deny *target* for a running container."""
-    return shield_deny(container, target, config=get_shield_config())
-
-
-def rules(container: str) -> str:
-    """Return current nft rules for a container."""
-    return shield_rules(container, config=get_shield_config())
-
-
-def resolve(container: str) -> list[str]:
-    """Resolve DNS for a container's allowed domains."""
-    return shield_resolve(container, config=get_shield_config())
-
-
-def logs(container: str, n: int = 50) -> Iterator[dict]:
-    """Tail audit log entries for a container."""
-    return tail_log(container, n=n)
-
-
-def get_log_containers() -> list[str]:
-    """List containers that have audit log files."""
-    return list_log_files()
-
-
-def get_profiles() -> list[str]:
-    """List available shield profiles."""
-    return list_profiles()
+    This reads the terok config directly rather than constructing a
+    :class:`Shield`, because ``Shield.status()`` returns *available*
+    profiles (filesystem scan) while terok needs *configured* profiles.
+    """
+    sec = get_global_section("shield")
+    profiles = _normalize_profiles(sec.get("profiles", _DEFAULT_PROFILES))
+    return {
+        "mode": "hook",
+        "profiles": list(profiles),
+        "audit_enabled": bool(sec.get("audit", True)),
+    }

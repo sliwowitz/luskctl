@@ -3,7 +3,7 @@
 
 """Global test fixtures.
 
-Auto-mocks ``_shield_pre_start`` in task runners so existing tests
+Auto-mocks ``_shield_pre_start_impl`` in task runners so existing tests
 do not require a real OCI hook or root privileges.
 """
 
@@ -17,7 +17,7 @@ import pytest
 def _mock_shield_pre_start() -> Iterator[None]:
     """Replace shield pre_start with a no-op returning empty args."""
     with patch(
-        "terok.lib.containers.task_runners._shield_pre_start",
+        "terok.lib.containers.task_runners._shield_pre_start_impl",
         return_value=[],
     ):
         yield

@@ -1,21 +1,22 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Fixtures for shield integration tests.
 
 Overrides the root autouse ``_mock_shield_pre_start`` so the real
 ``terok_shield`` library is exercised, and provides isolated shield
-environments via environment-variable redirection.
+environments via temporary per-task state directories.
 """
 
 import json
 import os
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from terok_shield import ShieldConfig, ShieldMode
+from terok_shield import Shield, ShieldConfig, ShieldMode
 
 from constants import GATE_PORT, TEST_IP
 
@@ -34,35 +35,80 @@ def _mock_shield_pre_start() -> Iterator[None]:
     yield
 
 
+# ── Mock CommandRunner ────────────────────────────────────
+
+
+class MockRunner:
+    """Fake CommandRunner that handles known commands for testing."""
+
+    def __init__(self, rootless_mode: str = "pasta") -> None:
+        """Create a mock runner with the given rootless network mode."""
+        self._rootless_mode = rootless_mode
+
+    def run(
+        self,
+        cmd: list[str],
+        *,
+        check: bool = True,
+        stdin: str | None = None,
+        timeout: int | None = None,
+    ) -> str:
+        """Handle known commands, return empty string for others."""
+        if cmd[:2] == ["podman", "info"]:
+            return json.dumps({"host": {"rootlessNetworkCmd": self._rootless_mode}})
+        if cmd[0] == "dig":
+            return f"{TEST_IP}\n"
+        if cmd[0] == "nft" or cmd[:2] == ["podman", "inspect"]:
+            return ""
+        if cmd[:2] == ["podman", "unshare"]:
+            return ""
+        return ""
+
+    def has(self, name: str) -> bool:
+        """Return True for nft, False otherwise."""
+        return name == "nft"
+
+    def nft(self, *args: str, stdin: str | None = None, check: bool = True) -> str:
+        """No-op nft command."""
+        return ""
+
+    def nft_via_nsenter(
+        self,
+        container: str,
+        *args: str,
+        pid: str | None = None,
+        stdin: str | None = None,
+        check: bool = True,
+    ) -> str:
+        """No-op nft via nsenter."""
+        return ""
+
+    def podman_inspect(self, container: str, fmt: str) -> str:
+        """Return fake PID."""
+        return "12345"
+
+    def dig_all(self, domain: str, *, timeout: int = 10) -> list[str]:
+        """Return test IP for any domain."""
+        return [TEST_IP]
+
+
 # ── Isolated shield environment ───────────────────────────
 
 
 @pytest.fixture()
-def shield_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
-    """Redirect all shield state/config to a temp directory.
+def shield_env(tmp_path: Path) -> dict[str, Path]:
+    """Create an isolated per-task shield state directory.
 
-    Sets ``TEROK_SHIELD_STATE_DIR`` and ``TEROK_SHIELD_CONFIG_DIR`` so
-    the real shield library writes hooks, logs, and caches into an
-    isolated tree.  Returns a dict of key paths.
+    Returns a dict with the task_dir and state_dir paths.
+    The shield state_dir is ``task_dir / "shield"`` matching the
+    production ``_state_dir()`` layout.
     """
-    state = tmp_path / "state"
-    config = tmp_path / "config"
-    for sub in (
-        state / "hooks",
-        state / "logs",
-        state / "dns",
-        state / "resolved",
-        config / "profiles",
-    ):
-        sub.mkdir(parents=True)
-    monkeypatch.setenv("TEROK_SHIELD_STATE_DIR", str(state))
-    monkeypatch.setenv("TEROK_SHIELD_CONFIG_DIR", str(config))
+    task_dir = tmp_path / "tasks" / "test-task"
+    state_dir = task_dir / "shield"
+    state_dir.mkdir(parents=True)
     return {
-        "state": state,
-        "config": config,
-        "hooks": state / "hooks",
-        "logs": state / "logs",
-        "resolved": state / "resolved",
+        "task_dir": task_dir,
+        "state_dir": state_dir,
     }
 
 
@@ -70,45 +116,27 @@ def shield_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Pat
 
 
 @pytest.fixture()
-def shield_config() -> ShieldConfig:
-    """Standard ShieldConfig for integration tests."""
+def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
+    """Standard ShieldConfig for integration tests with per-task state_dir."""
     return ShieldConfig(
+        state_dir=shield_env["state_dir"],
         mode=ShieldMode.HOOK,
         default_profiles=("dev-standard",),
         loopback_ports=(GATE_PORT,),
         audit_enabled=True,
-        audit_log_allowed=True,
     )
 
 
-# ── Installed hooks ───────────────────────────────────────
+# ── Shield instance with mock runner ─────────────────────
 
 
 @pytest.fixture()
-def installed_hooks(shield_env: dict[str, Path]) -> dict[str, Path]:
-    """Shield environment with OCI hooks already installed."""
-    from terok_shield.mode_hook import install_hooks
-
-    install_hooks()
-    return shield_env
+def shield(shield_config: ShieldConfig) -> Shield:
+    """Shield instance with a mock runner for unit integration tests."""
+    return Shield(shield_config, runner=MockRunner())
 
 
-# ── Mock factory for terok_shield.run.run ─────────────────
-
-
-def mock_run_factory(rootless_mode: str = "pasta") -> Callable[..., str]:
-    """Return a fake ``terok_shield.run.run`` that handles known commands.
-
-    Handles ``podman info``, ``dig``, and silently ignores nft/inspect calls.
-    """
-
-    def mock_run(cmd: list[str], *, check: bool = True, stdin: str | None = None) -> str:
-        if cmd[:2] == ["podman", "info"]:
-            return json.dumps({"host": {"rootlessNetworkCmd": rootless_mode}})
-        if cmd[0] == "dig":
-            return f"{TEST_IP}\n"
-        if cmd[0] == "nft" or cmd[:2] == ["podman", "inspect"]:
-            return ""
-        raise AssertionError(f"Unexpected terok_shield.run.run call: {cmd!r}")
-
-    return mock_run
+@pytest.fixture()
+def mock_runner() -> MockRunner:
+    """Return a MockRunner instance for tests that need to customise it."""
+    return MockRunner()

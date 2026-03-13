@@ -1,152 +1,180 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for shield CLI commands."""
+"""Tests for shield CLI commands (registry-driven dispatch)."""
 
+import argparse
 import unittest
-import unittest.mock
 from io import StringIO
+from unittest.mock import MagicMock, patch
 
-from constants import TEST_IP
-from terok.cli.commands.shield import (
-    _cmd_allow,
-    _cmd_deny,
-    _cmd_logs,
-    _cmd_profiles,
-    _cmd_rules,
-    _cmd_setup,
-    _cmd_status,
-)
+from terok_shield import ExecError
+
+from terok.cli.commands.shield import _resolve_task, dispatch, register
 
 
-class TestCmdSetup(unittest.TestCase):
-    """Tests for shield setup."""
+class TestRegister(unittest.TestCase):
+    """Tests for register() building subparsers from COMMANDS."""
 
-    @unittest.mock.patch("terok.cli.commands.shield.setup")
-    def test_setup(self, mock_setup: unittest.mock.Mock) -> None:
-        """setup() calls shield setup and prints confirmation."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_setup()
-        mock_setup.assert_called_once()
-        self.assertIn("installed", out.getvalue())
+    def setUp(self) -> None:
+        """Create a parser with shield subparsers."""
+        self.parser = argparse.ArgumentParser()
+        subs = self.parser.add_subparsers(dest="cmd")
+        register(subs)
+
+    def test_status_subcommand(self) -> None:
+        """status subcommand parses without errors."""
+        args = self.parser.parse_args(["shield", "status"])
+        self.assertEqual(args.shield_cmd, "status")
+
+    def test_allow_subcommand(self) -> None:
+        """allow requires --project, --task, and target."""
+        args = self.parser.parse_args(
+            ["shield", "allow", "-p", "proj", "-t", "task1", "example.com"]
+        )
+        self.assertEqual(args.shield_cmd, "allow")
+        self.assertEqual(args.project, "proj")
+        self.assertEqual(args.task, "task1")
+        self.assertEqual(args.target, "example.com")
+
+    def test_deny_subcommand(self) -> None:
+        """deny requires --project, --task, and target."""
+        args = self.parser.parse_args(
+            ["shield", "deny", "-p", "proj", "-t", "task1", "example.com"]
+        )
+        self.assertEqual(args.shield_cmd, "deny")
+
+    def test_down_subcommand(self) -> None:
+        """down accepts --project, --task, and optional --all."""
+        args = self.parser.parse_args(["shield", "down", "-p", "proj", "-t", "task1", "--all"])
+        self.assertEqual(args.shield_cmd, "down")
+        self.assertTrue(args.allow_all)
+
+    def test_up_subcommand(self) -> None:
+        """up requires --project and --task."""
+        args = self.parser.parse_args(["shield", "up", "-p", "proj", "-t", "task1"])
+        self.assertEqual(args.shield_cmd, "up")
+
+    def test_rules_subcommand(self) -> None:
+        """rules requires --project and --task."""
+        args = self.parser.parse_args(["shield", "rules", "-p", "proj", "-t", "task1"])
+        self.assertEqual(args.shield_cmd, "rules")
+
+    def test_profiles_subcommand(self) -> None:
+        """profiles subcommand has no container args."""
+        args = self.parser.parse_args(["shield", "profiles"])
+        self.assertEqual(args.shield_cmd, "profiles")
+        self.assertFalse(hasattr(args, "project"))
+
+    def test_standalone_only_excluded(self) -> None:
+        """prepare, run, resolve are not registered (standalone_only)."""
+        for cmd in ("prepare", "run", "resolve"):
+            with self.assertRaises(SystemExit):
+                self.parser.parse_args(["shield", cmd])
 
 
-class TestCmdStatus(unittest.TestCase):
-    """Tests for shield status."""
+class TestDispatch(unittest.TestCase):
+    """Tests for dispatch()."""
 
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.status",
-        return_value={"hook_installed": True, "mode": "hook"},
-    )
-    def test_status(self, mock_status: unittest.mock.Mock) -> None:
-        """status() prints key-value pairs."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_status()
-        mock_status.assert_called_once()
+    def test_wrong_cmd_returns_false(self) -> None:
+        """dispatch returns False for non-shield commands."""
+        args = argparse.Namespace(cmd="project")
+        self.assertFalse(dispatch(args))
+
+    @patch("terok.cli.commands.shield.make_shield")
+    def test_status_dispatch(self, mock_make: MagicMock) -> None:
+        """dispatch handles status command via registry handler."""
+        mock_shield = MagicMock()
+        mock_shield.status.return_value = {
+            "mode": "hook",
+            "profiles": ["dev-standard"],
+            "audit_enabled": True,
+        }
+        mock_make.return_value = mock_shield
+
+        args = argparse.Namespace(cmd="shield", shield_cmd="status")
+        with patch("sys.stdout", new_callable=StringIO) as out:
+            result = dispatch(args)
+
+        self.assertTrue(result)
         output = out.getvalue()
-        self.assertIn("hook_installed", output)
-        self.assertIn("True", output)
+        self.assertIn("Mode", output)
         self.assertIn("hook", output)
 
+    @patch("terok.cli.commands.shield.make_shield")
+    def test_preview_all_without_down_prints_error(self, mock_make: MagicMock) -> None:
+        """preview --all without --down prints clean error to stderr."""
+        mock_shield = MagicMock()
+        mock_shield.preview.side_effect = ValueError("--all requires --down")
+        mock_make.return_value = mock_shield
 
-class TestCmdProfiles(unittest.TestCase):
-    """Tests for shield profiles."""
+        args = argparse.Namespace(cmd="shield", shield_cmd="preview", down=False, allow_all=True)
+        with (
+            patch("sys.stderr", new_callable=StringIO) as err,
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            dispatch(args)
 
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.get_profiles",
-        return_value=["dev-standard", "dev-strict"],
-    )
-    def test_profiles(self, mock_profiles: unittest.mock.Mock) -> None:
-        """profiles() lists each profile on a line."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_profiles()
-        mock_profiles.assert_called_once()
-        output = out.getvalue()
-        self.assertIn("dev-standard", output)
-        self.assertIn("dev-strict", output)
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("--all requires --down", err.getvalue())
 
+    @patch("terok.cli.commands.shield._resolve_task")
+    @patch("terok.cli.commands.shield.make_shield")
+    def test_exec_error_prints_not_running(
+        self, mock_make: MagicMock, mock_resolve: MagicMock
+    ) -> None:
+        """ExecError from nft produces a 'not running' message."""
+        mock_resolve.return_value = ("proj-cli-1", "/tmp/tasks/1")
+        mock_shield = MagicMock()
+        mock_shield.state.side_effect = ExecError(["nft", "list"], 1, "no such process")
+        mock_make.return_value = mock_shield
 
-class TestCmdRules(unittest.TestCase):
-    """Tests for shield rules."""
+        args = argparse.Namespace(cmd="shield", shield_cmd="state", project="proj", task="1")
+        with (
+            patch("sys.stderr", new_callable=StringIO) as err,
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            dispatch(args)
 
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.rules",
-        return_value="table inet shield { chain output { } }",
-    )
-    def test_rules(self, mock_rules: unittest.mock.Mock) -> None:
-        """rules() prints nft output."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_rules("my-container")
-        mock_rules.assert_called_once_with("my-container")
-        self.assertIn("table inet shield", out.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("not running", err.getvalue())
 
+    @patch("terok.cli.commands.shield._resolve_task")
+    @patch("terok.cli.commands.shield.make_shield")
+    def test_runtime_error_prints_message(
+        self, mock_make: MagicMock, mock_resolve: MagicMock
+    ) -> None:
+        """RuntimeError from handler is caught and printed cleanly."""
+        mock_resolve.return_value = ("proj-cli-1", "/tmp/tasks/1")
+        mock_shield = MagicMock()
+        mock_shield.allow.side_effect = RuntimeError("No IPs allowed for proj-cli-1")
+        mock_make.return_value = mock_shield
 
-class TestCmdAllow(unittest.TestCase):
-    """Tests for shield allow."""
+        args = argparse.Namespace(
+            cmd="shield",
+            shield_cmd="allow",
+            project="proj",
+            task="1",
+            target="example.com",
+        )
+        with (
+            patch("sys.stderr", new_callable=StringIO) as err,
+            self.assertRaises(SystemExit) as ctx,
+        ):
+            dispatch(args)
 
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.allow",
-        return_value=["allowed TEST_IP/32"],
-    )
-    def test_allow(self, mock_allow: unittest.mock.Mock) -> None:
-        """allow() prints result lines."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_allow("ctr", TEST_IP)
-        mock_allow.assert_called_once_with("ctr", TEST_IP)
-        self.assertIn("allowed", out.getvalue())
-
-
-class TestCmdDeny(unittest.TestCase):
-    """Tests for shield deny."""
-
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.deny",
-        return_value=["denied TEST_IP/32"],
-    )
-    def test_deny(self, mock_deny: unittest.mock.Mock) -> None:
-        """deny() prints result lines."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_deny("ctr", TEST_IP)
-        mock_deny.assert_called_once_with("ctr", TEST_IP)
-        self.assertIn("denied", out.getvalue())
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("No IPs allowed", err.getvalue())
 
 
-class TestCmdLogs(unittest.TestCase):
-    """Tests for shield logs."""
+class TestResolveTask(unittest.TestCase):
+    """Tests for _resolve_task()."""
 
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.get_log_containers",
-        return_value=["ctr-a", "ctr-b"],
-    )
-    def test_logs_list_containers(self, mock_containers: unittest.mock.Mock) -> None:
-        """logs without container lists available containers."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_logs(None, 50)
-        mock_containers.assert_called_once()
-        output = out.getvalue()
-        self.assertIn("ctr-a", output)
-        self.assertIn("ctr-b", output)
-
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.get_log_containers",
-        return_value=[],
-    )
-    def test_logs_no_containers(self, mock_containers: unittest.mock.Mock) -> None:
-        """logs without container and no logs prints message."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_logs(None, 50)
-        mock_containers.assert_called_once()
-        self.assertIn("No audit logs", out.getvalue())
-
-    @unittest.mock.patch(
-        "terok.cli.commands.shield.logs",
-        return_value=iter([{"action": "allow", "dest": TEST_IP}]),
-    )
-    def test_logs_for_container(self, mock_logs: unittest.mock.Mock) -> None:
-        """logs with container prints JSON entries."""
-        with unittest.mock.patch("sys.stdout", new_callable=StringIO) as out:
-            _cmd_logs("my-ctr", 25)
-        mock_logs.assert_called_once_with("my-ctr", n=25)
-        output = out.getvalue()
-        self.assertIn("allow", output)
-        self.assertIn(TEST_IP, output)
+    @patch("terok.lib.containers.tasks.load_task_meta", return_value=({"mode": None}, None))
+    @patch("terok.lib.core.projects.load_project")
+    def test_never_run_task_raises(self, mock_proj: MagicMock, _meta: MagicMock) -> None:
+        """Task with mode=None raises ValueError."""
+        mock_proj.return_value = MagicMock(id="proj")
+        with self.assertRaises(ValueError, msg="has never been run"):
+            _resolve_task("proj", "1")

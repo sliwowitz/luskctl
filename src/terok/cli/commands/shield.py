@@ -1,52 +1,97 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Shield egress firewall management commands.
 
-Manages the terok-shield OCI hook that provides per-container nftables
-egress filtering: setup, status, profiles, rules, allow/deny, logs.
+Uses the ``terok_shield`` command registry to build subcommands.
+Each command that ``needs_container`` resolves the project + task to
+construct a per-task :class:`Shield` and calls the registry handler.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
+import sys
+from pathlib import Path
 
-from ...lib.security.shield import (
-    allow,
-    deny,
-    get_log_containers,
-    get_profiles,
-    logs,
-    rules,
-    setup,
-    status,
-)
+from terok_shield import COMMANDS, CommandDef, ExecError
+
+from ...lib.facade import make_shield
+
+
+def _add_project_task_args(parser: argparse.ArgumentParser) -> None:
+    """Add --project and --task arguments to a subparser."""
+    parser.add_argument("--project", "-p", required=True, help="Project ID")
+    parser.add_argument("--task", "-t", required=True, help="Task ID")
+
+
+def _add_arg(parser: argparse.ArgumentParser, arg: object) -> None:
+    """Register an :class:`ArgDef` with an argparse parser.
+
+    Local helper mirroring ``ArgDef.add_to()`` (proposed for terok-shield).
+    """
+    kwargs: dict = {}
+    if arg.help:
+        kwargs["help"] = arg.help
+    for field in ("type", "default", "action", "dest", "nargs"):
+        val = getattr(arg, field)
+        if val is not None:
+            kwargs[field] = val
+    parser.add_argument(arg.name, **kwargs)
+
+
+def _resolve_task(project_id: str, task_id: str) -> tuple[str, Path]:
+    """Resolve project+task to (container_name, task_dir).
+
+    Returns:
+        Tuple of (container_name, task_dir) for constructing a Shield.
+
+    Raises:
+        ValueError: If the task has never been run (no container exists).
+    """
+    from ...lib.containers.runtime import container_name
+    from ...lib.containers.tasks import load_task_meta
+    from ...lib.core.projects import load_project
+
+    project = load_project(project_id)
+    meta, _ = load_task_meta(project.id, task_id)
+    mode = meta.get("mode")
+    if mode is None:
+        raise ValueError(
+            f"Task {task_id} in project {project_id!r} has never been run — no container exists"
+        )
+    cname = container_name(project.id, mode, task_id)
+    task_dir = project.tasks_root / str(task_id)
+    return cname, task_dir
+
+
+def _extract_handler_kwargs(args: argparse.Namespace, cmd_def: CommandDef) -> dict:
+    """Extract keyword arguments for a registry handler from parsed args."""
+    kwargs: dict = {}
+    for arg in cmd_def.args:
+        key = arg.dest or arg.name.lstrip("-").replace("-", "_")
+        if hasattr(args, key):
+            kwargs[key] = getattr(args, key)
+    return kwargs
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Register the ``shield`` subcommand group."""
+    """Register the ``shield`` subcommand group from the registry."""
     p = subparsers.add_parser("shield", help="Manage egress firewall (terok-shield)")
     sub = p.add_subparsers(dest="shield_cmd", required=True)
 
-    sub.add_parser("setup", help="Install the OCI hook")
-    sub.add_parser("status", help="Show shield status")
-    sub.add_parser("profiles", help="List available profiles")
+    for cmd in COMMANDS:
+        if cmd.standalone_only:
+            continue
 
-    p_rules = sub.add_parser("rules", help="Show nft rules for a container")
-    p_rules.add_argument("container", help="Container name")
+        sp = sub.add_parser(cmd.name, help=cmd.help)
 
-    p_allow = sub.add_parser("allow", help="Dynamically allow a target")
-    p_allow.add_argument("container", help="Container name")
-    p_allow.add_argument("target", help="IP, CIDR, or domain to allow")
+        if cmd.needs_container:
+            _add_project_task_args(sp)
 
-    p_deny = sub.add_parser("deny", help="Dynamically deny a target")
-    p_deny.add_argument("container", help="Container name")
-    p_deny.add_argument("target", help="IP, CIDR, or domain to deny")
-
-    p_logs = sub.add_parser("logs", help="Show audit log for a container")
-    p_logs.add_argument("container", nargs="?", help="Container name (omit to list containers)")
-    p_logs.add_argument("-n", type=int, default=50, help="Number of entries (default 50)")
+        for arg in cmd.args:
+            _add_arg(sp, arg)
 
 
 def dispatch(args: argparse.Namespace) -> bool:
@@ -54,73 +99,34 @@ def dispatch(args: argparse.Namespace) -> bool:
     if args.cmd != "shield":
         return False
 
-    cmd = args.shield_cmd
-    if cmd == "setup":
-        _cmd_setup()
-    elif cmd == "status":
-        _cmd_status()
-    elif cmd == "profiles":
-        _cmd_profiles()
-    elif cmd == "rules":
-        _cmd_rules(args.container)
-    elif cmd == "allow":
-        _cmd_allow(args.container, args.target)
-    elif cmd == "deny":
-        _cmd_deny(args.container, args.target)
-    elif cmd == "logs":
-        _cmd_logs(args.container, args.n)
-    else:
+    cmd_name = args.shield_cmd
+    cmd_lookup = {cmd.name: cmd for cmd in COMMANDS if not cmd.standalone_only}
+    cmd_def = cmd_lookup.get(cmd_name)
+    if cmd_def is None or cmd_def.handler is None:
         return False
+
+    try:
+        if cmd_def.needs_container:
+            cname, task_dir = _resolve_task(args.project, args.task)
+            shield = make_shield(task_dir)
+            kwargs = _extract_handler_kwargs(args, cmd_def)
+            cmd_def.handler(shield, cname, **kwargs)
+        else:
+            # Non-container commands (status, profiles, preview)
+            import tempfile
+
+            with tempfile.TemporaryDirectory() as tmp:
+                shield = make_shield(Path(tmp))
+                kwargs = _extract_handler_kwargs(args, cmd_def)
+                cmd_def.handler(shield, **kwargs)
+    except ExecError:
+        print(
+            f"Error: container for task {args.task} is not running",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except (ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     return True
-
-
-def _cmd_setup() -> None:
-    """Install the OCI hook."""
-    setup()
-    print("Shield OCI hook installed.")
-
-
-def _cmd_status() -> None:
-    """Show shield status."""
-    st = status()
-    for key, value in st.items():
-        print(f"{key}: {value}")
-
-
-def _cmd_profiles() -> None:
-    """List available shield profiles."""
-    for name in get_profiles():
-        print(name)
-
-
-def _cmd_rules(container: str) -> None:
-    """Show nft rules for a container."""
-    print(rules(container))
-
-
-def _cmd_allow(container: str, target: str) -> None:
-    """Dynamically allow a target."""
-    result = allow(container, target)
-    for line in result:
-        print(line)
-
-
-def _cmd_deny(container: str, target: str) -> None:
-    """Dynamically deny a target."""
-    result = deny(container, target)
-    for line in result:
-        print(line)
-
-
-def _cmd_logs(container: str | None, n: int) -> None:
-    """Show audit log entries."""
-    if container is None:
-        containers = get_log_containers()
-        if not containers:
-            print("No audit logs found.")
-            return
-        for c in containers:
-            print(c)
-        return
-    for entry in logs(container, n=n):
-        print(json.dumps(entry))
