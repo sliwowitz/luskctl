@@ -1,120 +1,143 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import tempfile
-import unittest
-import unittest.mock
+from __future__ import annotations
+
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from terok.lib.core.config import build_root, state_root
 from terok.lib.core.projects import load_project
 from terok.lib.facade import delete_project
 from test_utils import project_env, write_project
 
+EnvSetup = Callable[[SimpleNamespace, str], Path]
 
-class DeleteProjectTests(unittest.TestCase):
-    """Tests for the delete_project facade function."""
 
-    def test_delete_project_removes_config_dir(self) -> None:
-        """delete_project removes the project configuration directory."""
-        project_id = "del-proj"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id, with_config_file=True):
-            project = load_project(project_id)
-            self.assertTrue(project.root.is_dir())
-            delete_project(project_id)
-            self.assertFalse(project.root.is_dir())
+def project_yaml(project_id: str, *, upstream_url: str = "https://example.com/repo.git") -> str:
+    return f"project:\n  id: {project_id}\ngit:\n  upstream_url: {upstream_url}\n"
 
-    def test_delete_project_removes_build_artifacts(self) -> None:
-        """delete_project removes the build directory."""
-        project_id = "del-build"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id, with_config_file=True):
-            bd = build_root() / project_id
-            bd.mkdir(parents=True, exist_ok=True)
-            (bd / "L2.Dockerfile").write_text("FROM scratch", encoding="utf-8")
-            self.assertTrue(bd.is_dir())
-            delete_project(project_id)
-            self.assertFalse(bd.is_dir())
 
-    def test_delete_project_removes_ssh_dir(self) -> None:
-        """delete_project removes SSH credentials directory."""
-        project_id = "del-ssh"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id, with_config_file=True) as env:
-            ssh_dir = env.envs_dir / f"_ssh-config-{project_id}"
-            ssh_dir.mkdir(parents=True, exist_ok=True)
-            (ssh_dir / "config").write_text("# ssh config", encoding="utf-8")
-            self.assertTrue(ssh_dir.is_dir())
-            delete_project(project_id)
-            self.assertFalse(ssh_dir.is_dir())
+def project_root(_env: SimpleNamespace, project_id: str) -> Path:
+    return load_project(project_id).root
 
-    def test_delete_project_removes_task_metadata(self) -> None:
-        """delete_project removes task metadata directory."""
-        project_id = "del-meta"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id):
-            meta_dir = state_root() / "projects" / project_id / "tasks"
-            meta_dir.mkdir(parents=True, exist_ok=True)
-            (meta_dir / "1.yml").write_text("task_id: '1'\n", encoding="utf-8")
-            self.assertTrue(meta_dir.is_dir())
-            delete_project(project_id)
-            self.assertFalse((state_root() / "projects" / project_id).is_dir())
 
-    def test_delete_project_removes_gate(self) -> None:
-        """delete_project removes the gate when not shared."""
-        project_id = "del-gate"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id, with_gate=True) as env:
-            gate_path = env.gate_dir
-            self.assertTrue(gate_path.is_dir())
-            delete_project(project_id)
-            self.assertFalse(gate_path.is_dir())
+def build_dir(_env: SimpleNamespace, project_id: str) -> Path:
+    target = build_root() / project_id
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "L2.Dockerfile").write_text("FROM scratch", encoding="utf-8")
+    return target
 
-    def test_delete_project_skips_shared_gate(self) -> None:
-        """delete_project skips the gate when shared with another project."""
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            config_root = base / "config"
-            state_dir = base / "state"
 
-            # Two projects sharing the same gate path
-            gate_path = state_dir / "gate" / "shared.git"
-            gate_path.mkdir(parents=True, exist_ok=True)
+def ssh_dir(env: SimpleNamespace, project_id: str) -> Path:
+    target = env.envs_dir / f"_ssh-config-{project_id}"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "config").write_text("# ssh config", encoding="utf-8")
+    return target
 
-            proj1_yaml = (
-                "project:\n  id: proj-a\ngit:\n  upstream_url: https://example.com/a.git\n"
-                f"gate:\n  path: {gate_path}\n"
-            )
-            proj2_yaml = (
-                "project:\n  id: proj-b\ngit:\n  upstream_url: https://example.com/b.git\n"
-                f"gate:\n  path: {gate_path}\n"
-            )
-            write_project(config_root, "proj-a", proj1_yaml)
-            write_project(config_root, "proj-b", proj2_yaml)
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(config_root),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "XDG_CONFIG_HOME": str(base / "empty"),
-                },
-            ):
-                result = delete_project("proj-a")
-                # Gate should still exist because proj-b shares it
-                self.assertTrue(gate_path.is_dir())
-                self.assertTrue(len(result["skipped"]) > 0)
-                self.assertIn("proj-b", result["skipped"][0])
+def task_state_dir(_env: SimpleNamespace, project_id: str) -> Path:
+    target = state_root() / "projects" / project_id
+    tasks_dir = target / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    (tasks_dir / "1.yml").write_text("task_id: '1'\n", encoding="utf-8")
+    return target
 
-    def test_delete_project_returns_deleted_paths(self) -> None:
-        """delete_project returns a dict with deleted and skipped lists."""
-        project_id = "del-ret"
-        yaml = f"project:\n  id: {project_id}\ngit:\n  upstream_url: https://example.com/repo.git\n"
-        with project_env(yaml, project_id=project_id):
-            result = delete_project(project_id)
-            self.assertIsInstance(result["deleted"], list)
-            self.assertIsInstance(result["skipped"], list)
-            # At least the config dir should be in deleted
-            self.assertTrue(any(project_id in p for p in result["deleted"]))
+
+def gate_dir(env: SimpleNamespace, _project_id: str) -> Path:
+    assert env.gate_dir is not None
+    return env.gate_dir
+
+
+@pytest.mark.parametrize(
+    ("project_id", "env_kwargs", "setup_target"),
+    [
+        pytest.param(
+            "del-proj",
+            {"with_config_file": True},
+            project_root,
+            id="config-dir",
+        ),
+        pytest.param(
+            "del-build",
+            {"with_config_file": True},
+            build_dir,
+            id="build-dir",
+        ),
+        pytest.param(
+            "del-ssh",
+            {"with_config_file": True},
+            ssh_dir,
+            id="ssh-dir",
+        ),
+        pytest.param(
+            "del-meta",
+            {},
+            task_state_dir,
+            id="task-metadata-dir",
+        ),
+        pytest.param(
+            "del-gate",
+            {"with_gate": True},
+            gate_dir,
+            id="gate-dir",
+        ),
+    ],
+)
+def test_delete_project_removes_managed_directories(
+    project_id: str,
+    env_kwargs: dict[str, bool],
+    setup_target: EnvSetup,
+) -> None:
+    with project_env(project_yaml(project_id), project_id=project_id, **env_kwargs) as env:
+        target = setup_target(env, project_id)
+        assert target.is_dir()
+
+        delete_project(project_id)
+
+        assert not target.exists()
+
+
+def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_root = tmp_path / "config"
+    state_dir = tmp_path / "state"
+    gate_path = state_dir / "gate" / "shared.git"
+    gate_path.mkdir(parents=True, exist_ok=True)
+
+    config_root.mkdir(parents=True, exist_ok=True)
+    write_project(
+        config_root,
+        "proj-a",
+        project_yaml("proj-a", upstream_url="https://example.com/a.git")
+        + f"gate:\n  path: {gate_path}\n",
+    )
+    write_project(
+        config_root,
+        "proj-b",
+        project_yaml("proj-b", upstream_url="https://example.com/b.git")
+        + f"gate:\n  path: {gate_path}\n",
+    )
+
+    monkeypatch.setenv("TEROK_CONFIG_DIR", str(config_root))
+    monkeypatch.setenv("TEROK_STATE_DIR", str(state_dir))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+
+    result = delete_project("proj-a")
+
+    assert gate_path.is_dir()
+    assert any("proj-b" in entry for entry in result["skipped"])
+
+
+def test_delete_project_returns_deleted_paths() -> None:
+    project_id = "del-ret"
+    with project_env(project_yaml(project_id), project_id=project_id):
+        result = delete_project(project_id)
+
+        assert isinstance(result["deleted"], list)
+        assert isinstance(result["skipped"], list)
+        assert result["archive"] is not None
+        assert Path(result["archive"]).is_file()
+        assert any(project_id in path for path in result["deleted"])
