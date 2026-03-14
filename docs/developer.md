@@ -243,22 +243,22 @@ provider-agnostic: it doesn't need to know *which* flags each agent needs.
 | Concern | Where | How |
 |---------|-------|-----|
 | Config resolution | `agent_config.py` → `resolve_provider_value()` | Walks global → project → preset; supports flat values and per-provider dicts |
-| Host-side env injection | `task_runners.py` → `task_run_*()` | Sets `env["TEROK_UNRESTRICTED"] = "1"` before container start |
+| Host-side env injection | `task_runners.py` → `_apply_unrestricted_env()` | Sets `TEROK_UNRESTRICTED=1` + all `auto_approve_env` vars from `collect_all_auto_approve_env()` |
 | Meta persistence | `task_runners.py` | `meta["unrestricted"]` written to `meta.yml` (headless: always; CLI: on start; web: only on new container creation) |
 | CLI flag wiring | `cli/commands/task.py` | Mutually exclusive `--unrestricted` / `--restricted` mapped to tri-state `bool \| None` |
-| Claude wrapper | `agents.py` → `_generate_claude_wrapper()` | `if [ "$TEROK_UNRESTRICTED" = "1" ]; then _args+=(--dangerously-skip-permissions); fi` |
-| Generic wrappers | `headless_providers.py` → `_generate_generic_wrapper()` | Builds `_approve_args` array from `auto_approve_flags`; exports `auto_approve_env` vars |
-| Provider flag registry | `headless_providers.py` → `HeadlessProvider` dataclass | `auto_approve_flags: tuple[str, ...]` + `auto_approve_env: dict[str, str]` |
+| Per-container config files | `init-ssh-and-repo.sh` | Writes `/etc/claude-code/managed-settings.json` and `/etc/codex/requirements.toml` when `TEROK_UNRESTRICTED=1` |
+| Provider env registry | `headless_providers.py` → `HeadlessProvider` dataclass | `auto_approve_env: dict[str, str]` per provider |
 | Status display | `tasks.py` → `task_status()`, `task_detail.py` | Reads `meta["unrestricted"]` and shows "unrestricted" / "restricted" |
 
 ### Adding a new agent
 
 To add permission-mode support for a new agent:
 
-1. Set `auto_approve_flags` (for CLI flags) or `auto_approve_env` (for
-   env-var-based approval) on the `HeadlessProvider` definition.
-2. No other changes needed — the generic wrapper generator and host-side
-   resolution handle everything automatically.
+1. Set `auto_approve_env` (for env-var-based approval) on the
+   `HeadlessProvider` definition, or add a config-file block to
+   `init-ssh-and-repo.sh` (for file-based agents like Claude/Codex).
+2. No other changes needed — `_apply_unrestricted_env()` collects all
+   providers' env vars automatically via `collect_all_auto_approve_env()`.
 
 ---
 
