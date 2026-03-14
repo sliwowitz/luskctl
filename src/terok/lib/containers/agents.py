@@ -134,8 +134,7 @@ def _subagents_to_json(
 def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
     """Generate the terok-agent.sh wrapper function content for Claude.
 
-    Always includes git env vars. Conditionally includes
-    --dangerously-skip-permissions, --add-dir /, and --agents.
+    Always includes git env vars, --add-dir /, and --agents.
 
     The --add-dir / flag gives Claude full filesystem access inside the
     container. The container itself is the security boundary (Podman
@@ -170,11 +169,9 @@ def _generate_claude_wrapper(cfg: WrapperConfig) -> str:
         "        . /usr/local/share/terok/terok-git-identity.sh",
     ]
 
-    # Auto-approve: inject --dangerously-skip-permissions when TEROK_UNRESTRICTED=1.
-    # Same env-var mechanism as all other providers (see _generate_generic_wrapper).
-    lines.append('    if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then')
-    lines.append("        _args+=(--dangerously-skip-permissions)")
-    lines.append("    fi")
+    # Permission mode is handled by /etc/claude-code/managed-settings.json
+    # (written by init-ssh-and-repo.sh when TEROK_UNRESTRICTED=1).
+    # No CLI flags needed in the wrapper.
 
     # Give Claude unrestricted filesystem access inside the container.
     # The Podman container itself provides isolation — no need for an

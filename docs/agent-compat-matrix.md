@@ -12,43 +12,42 @@ local LLM via OpenCode; Tier-3: Copilot.
 
 ## Unrestricted Mode
 
-| Agent | CLI flag | Env var | Config file | ACP adapter | Best per-task ACP mechanism |
-|-------|----------|---------|-------------|-------------|-----------------------------|
+| Agent | CLI flag | Env var | Config file | ACP adapter | terok uses (per-task) |
+|-------|----------|---------|-------------|-------------|----------------------|
 | Claude | `--dangerously-skip-permissions` | — | `permissions.defaultMode: bypassPermissions` in settings.json | `claude-code-acp` (npm) | `/etc/claude-code/managed-settings.json` |
 | Vibe | `--agent auto-approve` | `VIBE_AUTO_APPROVE=true` | `auto_approve = true` in TOML | `vibe-acp` (bundled) | `VIBE_AUTO_APPROVE` env var |
 | Blablador | (inherits OpenCode) | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | needs wrapper (#410) | `OPENCODE_PERMISSION` env var |
 | OpenCode | — | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | `opencode acp` (native) | `OPENCODE_PERMISSION` env var |
-| Codex | `--yolo` | — | `approval_policy` + `sandbox_mode` in config.toml | `codex-acp` (npm) | `~/.codex/config.toml` |
-| Copilot | `--yolo` / `--allow-all` | `COPILOT_ALLOW_ALL=true` | — (unstable) | `copilot --acp` (native) | spawn with `--yolo --acp` |
+| Codex | `--yolo` | — | `approval_policy` + `sandbox_mode` in config.toml | `codex-acp` (npm) | `/etc/codex/requirements.toml` |
+| Copilot | `--yolo` / `--allow-all` | `COPILOT_ALLOW_ALL=true` | — (unstable) | `copilot --acp` (native) | `COPILOT_ALLOW_ALL` env var |
 
-### Current terok status and ACP gap
+### Design constraint: shared volumes
 
-`TEROK_UNRESTRICTED` drives CLI wrappers (works today). ACP adapters launched
-by Toad bypass the wrappers and need separate mechanisms:
+`~/.claude/`, `~/.codex/`, `~/.vibe/`, `~/.config/opencode/` are shared
+volume mounts (for auth and session persistence). Config written there
+affects ALL tasks, not just the current one. Per-task permission mode
+MUST NOT use shared-volume config files.
 
-| Agent | terok `auto_approve_flags` | terok `auto_approve_env` | ACP covered? |
-|-------|---------------------------|-------------------------|--------------|
-| Claude | `--dangerously-skip-permissions` | — | **No** |
-| Vibe | `--auto-approve` (bug: not a valid flag; use `--agent auto-approve`) | — | **No** |
-| Blablador | — | `OPENCODE_PERMISSION` | **Partially** |
-| OpenCode | — | `OPENCODE_PERMISSION` | **Partially** |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` | — | **No** |
-| Copilot | `--allow-all-tools` (bug: should be `--yolo` for full unrestricted) | — | **No** |
+### What terok uses
 
-### Recommended ACP implementation
+Every agent has a mechanism that is (a) per-container and (b) read
+regardless of launch path (CLI wrapper, ACP, or direct invocation):
 
-When `TEROK_UNRESTRICTED=1`, additionally:
+| Agent | Per-container mechanism | Why not the alternative |
+|-------|------------------------|------------------------|
+| Claude | `/etc/claude-code/managed-settings.json` | `~/.claude/` is shared; managed settings have highest precedence |
+| Codex | `/etc/codex/requirements.toml` | `~/.codex/` is shared; requirements have highest precedence |
+| Vibe | `VIBE_AUTO_APPROVE=true` env var | pydantic-settings: env var overrides all config layers |
+| OpenCode | `OPENCODE_PERMISSION` env var | merged on top of all config layers |
+| Blablador | `OPENCODE_PERMISSION` env var | inherits OpenCode's mechanism |
+| Copilot | `COPILOT_ALLOW_ALL=true` env var | no stable config file mechanism |
 
-- **Claude**: write `/etc/claude-code/managed-settings.json` with
-  `{"permissions":{"defaultMode":"bypassPermissions"}}` (highest precedence,
-  per-container)
-- **Vibe**: set `VIBE_AUTO_APPROVE=true` in container env (pydantic-settings)
-- **OpenCode/Blablador**: already handled via `auto_approve_env`
-- **Codex**: write `~/.codex/config.toml` with `approval_policy = "never"`
-  and `sandbox_mode = "danger-full-access"` (per-container via shared home)
-- **Copilot**: spawn Toad's ACP subprocess with `--yolo`
+When `TEROK_UNRESTRICTED` is unset: config files are not written and env
+vars are not set; agents use vendor defaults.
 
-When unset: omit files and env vars; agents use vendor defaults.
+**Invariant**: a container's permission mode is set at creation and never
+changes during its lifetime. Podman container env vars are immutable, and
+the init script re-reads them on every start — no stale state is possible.
 
 ## Instruction Delivery
 
@@ -91,10 +90,10 @@ is needed (#410).
 
 ### Codex
 
-`codex-acp` accepts `-c key=value` overrides (same parser as CLI). Config
-at `~/.codex/config.toml` (user) and `.codex/config.toml` (project) read by
-both CLI and ACP adapter. Enterprise: `requirements.toml` can restrict
-allowed policies.
+`/etc/codex/requirements.toml` has highest precedence (cannot be overridden
+by user config, CLI flags, or `-c` overrides). Read by both CLI and
+`codex-acp`. User config at `~/.codex/config.toml` and project config at
+`.codex/config.toml` are lower precedence.
 
 ### Copilot
 
