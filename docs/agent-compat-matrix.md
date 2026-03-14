@@ -39,7 +39,7 @@ launched by Toad do not see `TEROK_UNRESTRICTED` and use their own defaults.
 | Vibe | `--auto-approve` (bug: should be `--agent auto-approve`) | Yes | — | **No** (env var not set) |
 | Blablador | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
 | OpenCode | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` | Yes | — | **No** |
+| Codex | `--yolo` | Yes | — | **No** |
 | Copilot | `--allow-all-tools` | Yes | — | **No** |
 
 ## Detailed Agent Profiles
