@@ -450,22 +450,26 @@ config (see below), defaulting to unrestricted.
 
 #### Config
 
-Like other config keys, `unrestricted` follows the resolution stack:
+Like other config keys, `unrestricted` lives inside the `agent:` section
+and follows the resolution stack:
 global config → project config → preset → CLI flag.
 
 ```yaml
-# Flat value — same for all providers
-unrestricted: false  # all agents start restricted
+# In project.yml or global config
+agent:
+  # Flat value — same for all providers
+  unrestricted: false  # all agents start restricted
 ```
 
 Per-provider dict syntax is supported:
 
 ```yaml
-# Per-provider values
-unrestricted:
-  claude: true
-  codex: false
-  _default: true
+agent:
+  # Per-provider values
+  unrestricted:
+    claude: true
+    codex: false
+    _default: true
 ```
 
 Providers not listed in the dict (and without `_default`) default to
