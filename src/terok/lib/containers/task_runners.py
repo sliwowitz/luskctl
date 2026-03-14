@@ -112,10 +112,10 @@ def _bypass_network_args(gate_port: int) -> list[str]:
 def _apply_unrestricted_env(env: dict[str, str]) -> None:
     """Set ``TEROK_UNRESTRICTED`` and all agent auto-approve env vars.
 
-    Shell wrappers already export provider-specific env vars when
-    ``TEROK_UNRESTRICTED=1``, but ACP-spawned agents bypass wrappers and
-    inherit the container environment directly.  Setting these vars at the
-    container level ensures both paths behave consistently.
+    Each agent reads its own env var (``VIBE_AUTO_APPROVE``,
+    ``OPENCODE_PERMISSION``, ``COPILOT_ALLOW_ALL``) regardless of how
+    it is launched (CLI wrapper or ACP).  Setting them at the container
+    level provides a single, unified permission mechanism.
     """
     from .headless_providers import collect_all_auto_approve_env
 
