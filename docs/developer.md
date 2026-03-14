@@ -205,20 +205,20 @@ Default: unrestricted (True)
   ▼
 TEROK_UNRESTRICTED=1 env var  ← single decision carrier
   │
-  ├─── Container env vars (set by task_runners.py, inherited by ACP)
-  │    ├─ VIBE_AUTO_APPROVE=true
-  │    ├─ OPENCODE_PERMISSION='{"*":"allow"}'
-  │    └─ COPILOT_ALLOW_ALL=true
+  ▼  (per-container, all launch paths)
+Agent-native env vars and config files:
+  ├─ VIBE_AUTO_APPROVE=true           (container env)
+  ├─ OPENCODE_PERMISSION='{"*":"allow"}'  (container env)
+  ├─ COPILOT_ALLOW_ALL=true           (container env)
+  ├─ /etc/claude-code/managed-settings.json  (init script)
+  └─ /etc/codex/requirements.toml     (init script)
   │
-  ├─── Init script writes /etc/claude-code/managed-settings.json
-  │    (highest-precedence Claude config, per-container)
-  │
-  └─── Shell wrapper functions (CLI path)
-       ├─ claude():   _args+=(--dangerously-skip-permissions)
-       ├─ codex():    _approve_args+=(--dangerously-bypass-approvals-and-sandbox)
-       ├─ copilot():  _approve_args+=(--yolo)
-       ├─ vibe():     _approve_args+=(--agent auto-approve)
-       └─ opencode()/blablador():  export OPENCODE_PERMISSION='{"*":"allow"}'
+  ▼  (CLI path only — redundant reinforcement)
+Shell wrapper functions also inject CLI flags:
+  ├─ claude():   --dangerously-skip-permissions
+  ├─ codex():    --dangerously-bypass-approvals-and-sandbox
+  ├─ copilot():  --yolo
+  └─ vibe():     --agent auto-approve
 ```
 
 ### Key decision points
