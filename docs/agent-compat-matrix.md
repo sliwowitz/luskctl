@@ -12,44 +12,42 @@ local LLM via OpenCode; Tier-3: Copilot.
 
 ## Unrestricted Mode
 
-| Agent | CLI flag | Env var | Config file | ACP adapter | Best per-task ACP mechanism |
-|-------|----------|---------|-------------|-------------|-----------------------------|
+| Agent | CLI flag | Env var | Config file | ACP adapter | terok uses (per-task) |
+|-------|----------|---------|-------------|-------------|----------------------|
 | Claude | `--dangerously-skip-permissions` | — | `permissions.defaultMode: bypassPermissions` in settings.json | `claude-code-acp` (npm) | `/etc/claude-code/managed-settings.json` |
 | Vibe | `--agent auto-approve` | `VIBE_AUTO_APPROVE=true` | `auto_approve = true` in TOML | `vibe-acp` (bundled) | `VIBE_AUTO_APPROVE` env var |
 | Blablador | (inherits OpenCode) | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | needs wrapper (#410) | `OPENCODE_PERMISSION` env var |
 | OpenCode | — | `OPENCODE_PERMISSION='{"*":"allow"}'` | `"permission": {"*":"allow"}` in opencode.json | `opencode acp` (native) | `OPENCODE_PERMISSION` env var |
 | Codex | `--yolo` | — | `approval_policy` + `sandbox_mode` in config.toml | `codex-acp` (npm) | `/etc/codex/requirements.toml` |
-| Copilot | `--yolo` / `--allow-all` | `COPILOT_ALLOW_ALL=true` | — (unstable) | `copilot --acp` (native) | spawn with `--yolo --acp` |
+| Copilot | `--yolo` / `--allow-all` | `COPILOT_ALLOW_ALL=true` | — (unstable) | `copilot --acp` (native) | `COPILOT_ALLOW_ALL` env var |
 
-### Current terok status
+### Design constraint: shared volumes
 
-`TEROK_UNRESTRICTED` drives per-task permission mode. Agent-native env vars
-and config files are set at the container level, so they apply regardless
-of launch path (CLI wrapper or ACP):
+`~/.claude/`, `~/.codex/`, `~/.vibe/`, `~/.config/opencode/` are shared
+volume mounts (for auth and session persistence). Config written there
+affects ALL tasks, not just the current one. Per-task permission mode
+MUST NOT use shared-volume config files.
 
-| Agent | `auto_approve_flags` (CLI) | `auto_approve_env` / config (all paths) |
-|-------|---------------------------|----------------------------------------|
-| Claude | `--dangerously-skip-permissions` | `/etc/claude-code/managed-settings.json` |
-| Vibe | `--agent auto-approve` | `VIBE_AUTO_APPROVE=true` |
-| Blablador | — | `OPENCODE_PERMISSION='{"*":"allow"}'` |
-| OpenCode | — | `OPENCODE_PERMISSION='{"*":"allow"}'` |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` | `/etc/codex/requirements.toml` |
-| Copilot | `--yolo` | `COPILOT_ALLOW_ALL=true` |
+### What terok uses
 
-### Recommended ACP implementation
+Every agent has a mechanism that is (a) per-container and (b) read
+regardless of launch path (CLI wrapper, ACP, or direct invocation):
 
-When `TEROK_UNRESTRICTED=1`, additionally:
+| Agent | Per-container mechanism | Why not the alternative |
+|-------|------------------------|------------------------|
+| Claude | `/etc/claude-code/managed-settings.json` | `~/.claude/` is shared; managed settings have highest precedence |
+| Codex | `/etc/codex/requirements.toml` | `~/.codex/` is shared; requirements have highest precedence |
+| Vibe | `VIBE_AUTO_APPROVE=true` env var | pydantic-settings: env var overrides all config layers |
+| OpenCode | `OPENCODE_PERMISSION` env var | merged on top of all config layers |
+| Blablador | `OPENCODE_PERMISSION` env var | inherits OpenCode's mechanism |
+| Copilot | `COPILOT_ALLOW_ALL=true` env var | no stable config file mechanism |
 
-- **Claude**: write `/etc/claude-code/managed-settings.json` with
-  `{"permissions":{"defaultMode":"bypassPermissions"}}` (highest precedence,
-  per-container)
-- **Vibe**: set `VIBE_AUTO_APPROVE=true` in container env (pydantic-settings)
-- **OpenCode/Blablador**: already handled via `auto_approve_env`
-- **Codex**: write `/etc/codex/requirements.toml` with `approval_policy = "never"`
-  and `sandbox_mode = "danger-full-access"` (highest precedence, per-container)
-- **Copilot**: spawn Toad's ACP subprocess with `--yolo`
+Shell wrappers additionally inject CLI flags (`--dangerously-skip-permissions`,
+`--yolo`, `--agent auto-approve`, etc.) as redundant reinforcement for the
+CLI path. The env vars and config files are the authoritative mechanism.
 
-When unset: omit files and env vars; agents use vendor defaults.
+When `TEROK_UNRESTRICTED` is unset: config files are not written and env
+vars are not set; agents use vendor defaults.
 
 ## Instruction Delivery
 
