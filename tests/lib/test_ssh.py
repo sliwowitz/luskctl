@@ -3,7 +3,6 @@
 
 import os
 import tempfile
-import unittest
 import unittest.mock
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from terok.lib.security.ssh import SSHManager
 from test_utils import mock_git_config, write_project
 
 
-class SshTests(unittest.TestCase):
+class TestSsh:
     def test_init_project_ssh_uses_existing_keys(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
@@ -41,9 +40,9 @@ class SshTests(unittest.TestCase):
 
                 run_mock.assert_not_called()
                 cfg_path = Path(result["config_path"])
-                self.assertTrue(cfg_path.is_file())
+                assert cfg_path.is_file()
                 cfg_text = cfg_path.read_text(encoding="utf-8")
-                self.assertIn(f"IdentityFile ~/.ssh/{key_name}", cfg_text)
+                assert f"IdentityFile ~/.ssh/{key_name}" in cfg_text
 
     def test_init_project_ssh_without_key_name_does_not_print_default_warning(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -76,7 +75,4 @@ class SshTests(unittest.TestCase):
                 printed_lines = [
                     " ".join(str(part) for part in call.args) for call in print_mock.call_args_list
                 ]
-                self.assertFalse(
-                    any("does not define ssh.key_name" in line for line in printed_lines),
-                    "Unexpected default-key warning was printed",
-                )
+                assert not any("does not define ssh.key_name" in line for line in printed_lines)

@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import re
 import subprocess
-import unittest
 import unittest.mock
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
+import pytest
 import yaml
 
 from terok.lib.containers.environment import apply_web_env_overrides, build_task_env_and_volumes
@@ -58,14 +59,14 @@ def _assert_volume_mount(volumes: list[str], expected_base: str, expected_suffix
         )
 
 
-class TaskTests(unittest.TestCase):
+class TestTask:
     def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 result = copy_to_clipboard_detailed("hello")
-        self.assertFalse(result.ok)
-        self.assertIsNotNone(result.hint)
-        self.assertIn("xclip", result.hint or "")
+        assert not result.ok
+        assert result.hint is not None
+        assert "xclip" in result.hint or ""
 
     def test_copy_to_clipboard_uses_xclip_when_available(self) -> None:
         def which_side_effect(name: str):
@@ -79,8 +80,8 @@ class TaskTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                     result = copy_to_clipboard_detailed("hello")
 
-        self.assertTrue(result.ok)
-        self.assertEqual(result.method, "xclip")
+        assert result.ok
+        assert result.method == "xclip"
         run_mock.assert_called()
 
     def test_task_new_and_delete(self) -> None:
@@ -90,22 +91,22 @@ class TaskTests(unittest.TestCase):
             project_id=project_id,
         ) as ctx:
             returned_id = task_new(project_id)
-            self.assertEqual(returned_id, "1")
+            assert returned_id == "1"
             meta_dir = ctx.state_dir / "projects" / project_id / "tasks"
             meta_path = meta_dir / "1.yml"
-            self.assertTrue(meta_path.is_file())
+            assert meta_path.is_file()
 
             meta_text = meta_path.read_text(encoding="utf-8")
-            self.assertEqual(parse_meta_value(meta_text, "task_id"), "1")
+            assert parse_meta_value(meta_text, "task_id") == "1"
             workspace_value = parse_meta_value(meta_text, "workspace")
-            self.assertIsNotNone(workspace_value)
-            self.assertNotEqual(workspace_value, "")
+            assert workspace_value is not None
+            assert workspace_value != ""
             workspace = Path(workspace_value)  # type: ignore[arg-type]
-            self.assertTrue(workspace.is_dir())
+            assert workspace.is_dir()
 
             # Verify second task returns incremented ID
             second_id = task_new(project_id)
-            self.assertEqual(second_id, "2")
+            assert second_id == "2"
 
             with (
                 unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
@@ -114,8 +115,8 @@ class TaskTests(unittest.TestCase):
                 run_mock.return_value.returncode = 0
                 task_delete(project_id, "1")
 
-            self.assertFalse(meta_path.exists())
-            self.assertFalse(workspace.exists())
+            assert not meta_path.exists()
+            assert not workspace.exists()
 
     def test_task_new_creates_marker_file(self) -> None:
         """Verify that task_new() creates the .new-task-marker file.
@@ -134,11 +135,11 @@ class TaskTests(unittest.TestCase):
             # Verify marker file exists in the workspace subdirectory
             workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
             marker_path = workspace_dir / ".new-task-marker"
-            self.assertTrue(marker_path.is_file(), "Marker file should be created by task_new()")
+            assert marker_path.is_file()
 
             # Verify marker content explains its purpose
             marker_content = marker_path.read_text(encoding="utf-8")
-            self.assertIn("reset to the latest remote HEAD", marker_content)
+            assert "reset to the latest remote HEAD" in marker_content
 
     @staticmethod
     def _patch_task_meta(ctx, project_id: str, tid: str, **updates) -> None:
@@ -172,10 +173,10 @@ class TaskTests(unittest.TestCase):
                     task_list(project_id)
             output = buf.getvalue()
             # Task IDs are right-aligned to 3 characters
-            self.assertRegex(output, r"(?m)^- {3}1:")
-            self.assertIn("running", output)
-            self.assertRegex(output, r"(?m)^- {3}2:")
-            self.assertIn("stopped", output)
+            assert re.search(r"(?m)^- {3}1:", output)
+            assert "running" in output
+            assert re.search(r"(?m)^- {3}2:", output)
+            assert "stopped" in output
 
     def test_task_list_filter_by_status(self) -> None:
         """task_list --status filters tasks by effective status."""
@@ -200,9 +201,9 @@ class TaskTests(unittest.TestCase):
                     task_list(project_id, status="running")
             output = buf.getvalue()
             # Task IDs are right-aligned to 3 characters
-            self.assertRegex(output, r"(?m)^- {3}1:")
-            self.assertIn("running", output)
-            self.assertNotRegex(output, r"(?m)^- {3}2:")
+            assert re.search(r"(?m)^- {3}1:", output)
+            assert "running" in output
+            assert not re.search(r"(?m)^- {3}2:", output)
 
     def test_task_list_id_alignment(self) -> None:
         """task_list right-aligns task IDs to 3 characters."""
@@ -246,10 +247,10 @@ class TaskTests(unittest.TestCase):
                     task_list(project_id)
             output = buf.getvalue()
             # 1-digit: 2 leading spaces; 2-digit: 1 leading space; 3-digit: none
-            self.assertRegex(output, r"(?m)^- {3}1:")
-            self.assertRegex(output, r"(?m)^- {3}2:")
-            self.assertRegex(output, r"(?m)^- {2}10:")
-            self.assertRegex(output, r"(?m)^- 100:")
+            assert re.search(r"(?m)^- {3}1:", output)
+            assert re.search(r"(?m)^- {3}2:", output)
+            assert re.search(r"(?m)^- {2}10:", output)
+            assert re.search(r"(?m)^- 100:", output)
 
     def test_task_list_filter_by_mode(self) -> None:
         """task_list --mode filters tasks by their mode field."""
@@ -272,8 +273,8 @@ class TaskTests(unittest.TestCase):
                 with redirect_stdout(buf):
                     task_list(project_id, mode="web")
             output = buf.getvalue()
-            self.assertNotIn("1:", output)
-            self.assertIn("2:", output)
+            assert "1:" not in output
+            assert "2:" in output
 
     def test_task_list_filter_by_agent(self) -> None:
         """task_list --agent filters tasks by their preset field."""
@@ -296,8 +297,8 @@ class TaskTests(unittest.TestCase):
                 with redirect_stdout(buf):
                     task_list(project_id, agent="claude")
             output = buf.getvalue()
-            self.assertIn("1:", output)
-            self.assertNotIn("2:", output)
+            assert "1:" in output
+            assert "2:" not in output
 
     def test_task_list_combined_filters(self) -> None:
         """task_list with multiple filters applies all of them (AND logic)."""
@@ -327,9 +328,9 @@ class TaskTests(unittest.TestCase):
                 with redirect_stdout(buf):
                     task_list(project_id, status="running", mode="cli")
             output = buf.getvalue()
-            self.assertIn("1:", output)
-            self.assertNotIn("2:", output)
-            self.assertNotIn("3:", output)
+            assert "1:" in output
+            assert "2:" not in output
+            assert "3:" not in output
 
     def test_task_list_no_match(self) -> None:
         """task_list prints 'No tasks found' when filters match nothing."""
@@ -348,7 +349,7 @@ class TaskTests(unittest.TestCase):
                 buf = StringIO()
                 with redirect_stdout(buf):
                     task_list(project_id, status="running")
-            self.assertIn("No tasks found", buf.getvalue())
+            assert "No tasks found" in buf.getvalue()
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -368,14 +369,14 @@ class TaskTests(unittest.TestCase):
                 task_id="7",
             )
 
-            self.assertIn("http://", env["CODE_REPO"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            assert "http://" in env["CODE_REPO"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
             # No gate volume mount (served via gate server)
             gate_mounts = [v for v in volumes if "gate" in v.split(":")[0]]
-            self.assertEqual(gate_mounts, [])
+            assert gate_mounts == []
             # Verify SSH is NOT mounted by default in gatekeeping mode
             ssh_mounts = [v for v in volumes if "/home/dev/.ssh" in v]
-            self.assertEqual(ssh_mounts, [])
+            assert ssh_mounts == []
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -406,8 +407,8 @@ class TaskTests(unittest.TestCase):
             )
 
             # Verify gatekeeping behavior: CODE_REPO is http:// URL with token
-            self.assertIn("http://", env["CODE_REPO"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            assert "http://" in env["CODE_REPO"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
             # Verify SSH IS mounted when mount_in_gatekeeping is true
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
@@ -434,11 +435,11 @@ class TaskTests(unittest.TestCase):
             )
 
             env, volumes = build_task_env_and_volumes(load_project(project_id), task_id="8")
-            self.assertEqual(env["CODE_REPO"], "https://example.com/repo.git")
-            self.assertEqual(env["GIT_BRANCH"], "main")
-            self.assertEqual(env["TEROK_GIT_AUTHORSHIP"], "agent-human")
-            self.assertIn("http://", env["CLONE_FROM"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CLONE_FROM"])
+            assert env["CODE_REPO"] == "https://example.com/repo.git"
+            assert env["GIT_BRANCH"] == "main"
+            assert env["TEROK_GIT_AUTHORSHIP"] == "agent-human"
+            assert "http://" in env["CLONE_FROM"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CLONE_FROM"]
             _assert_volume_mount(volumes, f"{ssh_dir}:/home/dev/.ssh", ":z")
 
     def test_build_task_env_uses_configured_git_authorship(self) -> None:
@@ -449,7 +450,7 @@ class TaskTests(unittest.TestCase):
             project_id=project_id,
         ):
             env, _volumes = build_task_env_and_volumes(load_project(project_id), task_id="1")
-            self.assertEqual(env["TEROK_GIT_AUTHORSHIP"], "human-agent")
+            assert env["TEROK_GIT_AUTHORSHIP"] == "human-agent"
 
     def test_apply_ui_env_overrides_passthrough(self) -> None:
         base_env = {"EXISTING": "1", "CLAUDE_API_KEY": "override"}
@@ -468,12 +469,12 @@ class TaskTests(unittest.TestCase):
             merged = apply_web_env_overrides(base_env, "CLAUDE")
 
         # Container receives TEROK_UI_* passthrough
-        self.assertEqual(merged["TEROK_UI_BACKEND"], "claude")
-        self.assertEqual(merged["TEROK_UI_TOKEN"], "token-123")
-        self.assertEqual(merged["TEROK_UI_MISTRAL_API_KEY"], "mistral-xyz")
-        self.assertEqual(merged["ANTHROPIC_API_KEY"], "anthropic-456")
-        self.assertEqual(merged["CLAUDE_API_KEY"], "override")
-        self.assertEqual(merged["MISTRAL_API_KEY"], "mistral-456")
+        assert merged["TEROK_UI_BACKEND"] == "claude"
+        assert merged["TEROK_UI_TOKEN"] == "token-123"
+        assert merged["TEROK_UI_MISTRAL_API_KEY"] == "mistral-xyz"
+        assert merged["ANTHROPIC_API_KEY"] == "anthropic-456"
+        assert merged["CLAUDE_API_KEY"] == "override"
+        assert merged["MISTRAL_API_KEY"] == "mistral-456"
 
     def test_task_run_web_passes_passthrough_env(self) -> None:
         project_id = "proj_ui_env"
@@ -518,11 +519,11 @@ class TaskTests(unittest.TestCase):
             env_entries = {cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-e"}
 
             # Container receives TEROK_UI_* passthrough
-            self.assertIn("TEROK_UI_BACKEND=claude", env_entries)
-            self.assertIn("TEROK_UI_TOKEN=token-xyz", env_entries)
-            self.assertIn("TEROK_UI_MISTRAL_API_KEY=mistral-xyz", env_entries)
-            self.assertIn("ANTHROPIC_API_KEY=anthropic-abc", env_entries)
-            self.assertIn("MISTRAL_API_KEY=mistral-abc", env_entries)
+            assert "TEROK_UI_BACKEND=claude" in env_entries
+            assert "TEROK_UI_TOKEN=token-xyz" in env_entries
+            assert "TEROK_UI_MISTRAL_API_KEY=mistral-xyz" in env_entries
+            assert "ANTHROPIC_API_KEY=anthropic-abc" in env_entries
+            assert "MISTRAL_API_KEY=mistral-abc" in env_entries
 
     def test_task_run_cli_colors_login_lines_when_tty(self) -> None:
         project_id = "proj_cli_color"
@@ -558,9 +559,9 @@ class TaskTests(unittest.TestCase):
             expected_name = f"\x1b[32m{project_id}-cli-1\x1b[0m"
             expected_enter = f"\x1b[34mpodman exec -it {project_id}-cli-1 bash\x1b[0m"
             expected_stop = f"\x1b[31mpodman stop {project_id}-cli-1\x1b[0m"
-            self.assertIn(expected_name, output)
-            self.assertIn(expected_enter, output)
-            self.assertIn(expected_stop, output)
+            assert expected_name in output
+            assert expected_enter in output
+            assert expected_stop in output
 
     def test_task_run_cli_does_not_add_files_before_clone(self) -> None:
         """Interactive CLI startup must not add files to workspace before init clone."""
@@ -573,10 +574,7 @@ class TaskTests(unittest.TestCase):
         ) as ctx:
             task_new(project_id)
             workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-            self.assertEqual(
-                sorted(p.name for p in workspace_dir.iterdir()),
-                [".new-task-marker"],
-            )
+            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
             with (
                 mock_git_config(),
                 unittest.mock.patch(
@@ -592,11 +590,8 @@ class TaskTests(unittest.TestCase):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_cli(project_id, "1")
 
-            self.assertEqual(
-                sorted(p.name for p in workspace_dir.iterdir()),
-                [".new-task-marker"],
-            )
-            self.assertTrue((ctx.envs_dir / "_claude-config" / "settings.json").is_file())
+            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
+            assert (ctx.envs_dir / "_claude-config" / "settings.json").is_file()
 
     def test_task_run_web_colors_url_and_stop_when_tty(self) -> None:
         project_id = "proj_web_color"
@@ -641,10 +636,10 @@ class TaskTests(unittest.TestCase):
             expected_url = f"\x1b[34m{localhost_url(7788)}\x1b[0m"
             expected_logs = f"\x1b[33mpodman logs -f {project_id}-web-1\x1b[0m"
             expected_stop = f"\x1b[31mpodman stop {project_id}-web-1\x1b[0m"
-            self.assertIn(expected_name, output)
-            self.assertIn(expected_url, output)
-            self.assertIn(expected_logs, output)
-            self.assertIn(expected_stop, output)
+            assert expected_name in output
+            assert expected_url in output
+            assert expected_logs in output
+            assert expected_stop in output
 
     def test_task_run_web_does_not_add_files_before_clone(self) -> None:
         """Interactive web startup must not add files to workspace before init clone."""
@@ -657,10 +652,7 @@ class TaskTests(unittest.TestCase):
         ) as ctx:
             task_new(project_id)
             workspace_dir = ctx.state_dir / "tasks" / project_id / "1" / "workspace-dangerous"
-            self.assertEqual(
-                sorted(p.name for p in workspace_dir.iterdir()),
-                [".new-task-marker"],
-            )
+            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
             with (
                 mock_git_config(),
                 unittest.mock.patch(
@@ -684,11 +676,8 @@ class TaskTests(unittest.TestCase):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_web(project_id, "1")
 
-            self.assertEqual(
-                sorted(p.name for p in workspace_dir.iterdir()),
-                [".new-task-marker"],
-            )
-            self.assertTrue((ctx.envs_dir / "_claude-config" / "settings.json").is_file())
+            assert sorted(p.name for p in workspace_dir.iterdir()) == [".new-task-marker"]
+            assert (ctx.envs_dir / "_claude-config" / "settings.json").is_file()
 
     def test_task_run_cli_already_running(self) -> None:
         """task_run_cli prints message and exits when container is already running."""
@@ -715,7 +704,7 @@ class TaskTests(unittest.TestCase):
 
                 # Verify message indicates already running
                 output = buffer.getvalue()
-                self.assertIn("already running", output)
+                assert "already running" in output
 
     def test_task_run_cli_starts_stopped_container(self) -> None:
         """task_run_cli uses 'podman start' for stopped container."""
@@ -749,11 +738,11 @@ class TaskTests(unittest.TestCase):
                 # Verify podman start was called
                 run_mock.assert_called_once()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[:2], ["podman", "start"])
+                assert call_args[:2] == ["podman", "start"]
 
                 # Verify metadata mode is preserved
                 meta = yaml.safe_load(meta_path.read_text())
-                self.assertEqual(meta["mode"], "cli")
+                assert meta["mode"] == "cli"
 
     def test_task_run_web_already_running(self) -> None:
         """task_run_web prints message and exits when container is already running."""
@@ -791,7 +780,7 @@ class TaskTests(unittest.TestCase):
 
                 # Verify message indicates already running
                 output = buffer.getvalue()
-                self.assertIn("already running", output)
+                assert "already running" in output
 
     def test_task_run_web_starts_stopped_container(self) -> None:
         """task_run_web uses 'podman start' for stopped container."""
@@ -828,7 +817,7 @@ class TaskTests(unittest.TestCase):
                 # Verify podman start was called
                 run_mock.assert_called_once()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[:2], ["podman", "start"])
+                assert call_args[:2] == ["podman", "start"]
 
     def test_get_workspace_git_diff_no_workspace(self) -> None:
         """Test get_workspace_git_diff returns None when workspace doesn't exist."""
@@ -839,7 +828,7 @@ class TaskTests(unittest.TestCase):
         ):
             # Try to get diff for non-existent task
             result = get_workspace_git_diff(project_id, "999")
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_workspace_git_diff_no_git_repo(self) -> None:
         """Test get_workspace_git_diff returns None when workspace is not a git repo."""
@@ -851,7 +840,7 @@ class TaskTests(unittest.TestCase):
             task_new(project_id)
             # Workspace exists but .git directory doesn't
             result = get_workspace_git_diff(project_id, "1")
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_workspace_git_diff_clean_working_tree(self) -> None:
         """Test get_workspace_git_diff returns empty string for clean working tree."""
@@ -875,7 +864,7 @@ class TaskTests(unittest.TestCase):
                 git_dir.mkdir(parents=True, exist_ok=True)
 
                 result = get_workspace_git_diff(project_id, "1")
-                self.assertEqual(result, "")
+                assert result == ""
 
     def test_get_workspace_git_diff_with_changes(self) -> None:
         """Test get_workspace_git_diff returns diff output when there are changes."""
@@ -902,15 +891,15 @@ class TaskTests(unittest.TestCase):
                 git_dir.mkdir(parents=True, exist_ok=True)
 
                 result = get_workspace_git_diff(project_id, "1", "HEAD")
-                self.assertEqual(result, expected_diff)
+                assert result == expected_diff
 
                 # Verify git diff command was called correctly
                 run_mock.assert_called_once()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[0], "git")
-                self.assertEqual(call_args[1], "-C")
-                self.assertEqual(call_args[3], "diff")
-                self.assertEqual(call_args[4], "HEAD")
+                assert call_args[0] == "git"
+                assert call_args[1] == "-C"
+                assert call_args[3] == "diff"
+                assert call_args[4] == "HEAD"
 
     def test_get_workspace_git_diff_prev_commit(self) -> None:
         """Test get_workspace_git_diff with PREV option."""
@@ -937,16 +926,16 @@ class TaskTests(unittest.TestCase):
                 git_dir.mkdir(parents=True, exist_ok=True)
 
                 result = get_workspace_git_diff(project_id, "1", "PREV")
-                self.assertEqual(result, expected_diff)
+                assert result == expected_diff
 
                 # Verify git command was called with HEAD~1
                 run_mock.assert_called_once()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[0], "git")
-                self.assertEqual(call_args[1], "-C")
-                self.assertEqual(call_args[3], "diff")
-                self.assertEqual(call_args[4], "HEAD~1")
-                self.assertEqual(call_args[5], "HEAD")
+                assert call_args[0] == "git"
+                assert call_args[1] == "-C"
+                assert call_args[3] == "diff"
+                assert call_args[4] == "HEAD~1"
+                assert call_args[5] == "HEAD"
 
     def test_get_workspace_git_diff_error(self) -> None:
         """Test get_workspace_git_diff returns None when git command fails."""
@@ -968,12 +957,12 @@ class TaskTests(unittest.TestCase):
                 git_dir.mkdir(parents=True, exist_ok=True)
 
                 result = get_workspace_git_diff(project_id, "1")
-                self.assertIsNone(result)
+                assert result is None
 
     def test_copy_to_clipboard_empty_text(self) -> None:
         """Test copy_to_clipboard_detailed returns failure for empty text."""
         result = copy_to_clipboard_detailed("")
-        self.assertFalse(result.ok)
+        assert not result.ok
 
     def test_copy_to_clipboard_success_wl_copy(self) -> None:
         """Test copy_to_clipboard_detailed succeeds with wl-copy."""
@@ -987,15 +976,15 @@ class TaskTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
-                    self.assertTrue(result.ok)
+                    assert result.ok
 
                     run_mock.assert_called_once()
                     args, kwargs = run_mock.call_args
-                    self.assertEqual(args[0][0], "wl-copy")
-                    self.assertEqual(kwargs["input"], "test content")
-                    self.assertTrue(kwargs["check"])
-                    self.assertTrue(kwargs["text"])
-                    self.assertTrue(kwargs["capture_output"])
+                    assert args[0][0] == "wl-copy"
+                    assert kwargs["input"] == "test content"
+                    assert kwargs["check"]
+                    assert kwargs["text"]
+                    assert kwargs["capture_output"]
 
     def test_copy_to_clipboard_fallback_to_xclip(self) -> None:
         """Test copy_to_clipboard_detailed uses xclip on X11 when available."""
@@ -1010,11 +999,11 @@ class TaskTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
-                    self.assertTrue(result.ok)
+                    assert result.ok
 
                     run_mock.assert_called_once()
                     args, _kwargs = run_mock.call_args
-                    self.assertEqual(args[0][0], "xclip")
+                    assert args[0][0] == "xclip"
 
     def test_copy_to_clipboard_fallback_to_pbcopy(self) -> None:
         """Test copy_to_clipboard_detailed uses pbcopy on macOS and sets method field."""
@@ -1026,12 +1015,12 @@ class TaskTests(unittest.TestCase):
                     run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
 
                     result = copy_to_clipboard_detailed("test content")
-                    self.assertTrue(result.ok)
-                    self.assertEqual(result.method, "pbcopy")
+                    assert result.ok
+                    assert result.method == "pbcopy"
 
                     run_mock.assert_called_once()
                     args, _kwargs = run_mock.call_args
-                    self.assertEqual(args[0][0], "pbcopy")
+                    assert args[0][0] == "pbcopy"
 
     def test_copy_to_clipboard_all_fail(self) -> None:
         """Test copy_to_clipboard_detailed returns proper error when all clipboard utilities fail."""
@@ -1051,11 +1040,11 @@ class TaskTests(unittest.TestCase):
                     )
 
                     result = copy_to_clipboard_detailed("test content")
-                    self.assertFalse(result.ok)
-                    self.assertIsNotNone(result.error)
-                    self.assertIn("failed", result.error)
+                    assert not result.ok
+                    assert result.error is not None
+                    assert "failed" in result.error
 
-                    self.assertEqual(run_mock.call_count, 2)
+                    assert run_mock.call_count == 2
 
     def test_get_clipboard_helper_status_with_available_helpers(self) -> None:
         """Test get_clipboard_helper_status returns available helpers on macOS."""
@@ -1064,9 +1053,9 @@ class TaskTests(unittest.TestCase):
                 "terok.tui.clipboard.shutil.which", return_value="/usr/bin/pbcopy"
             ):
                 status = get_clipboard_helper_status()
-                self.assertTrue(status.available)
-                self.assertIn("pbcopy", status.available)
-                self.assertIsNone(status.hint)
+                assert status.available
+                assert "pbcopy" in status.available
+                assert status.hint is None
 
     def test_get_clipboard_helper_status_no_helpers_wayland(self) -> None:
         """Test get_clipboard_helper_status returns hint for Wayland when no helpers available."""
@@ -1075,18 +1064,18 @@ class TaskTests(unittest.TestCase):
         ):
             with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
-                self.assertEqual(status.available, ())
-                self.assertIsNotNone(status.hint)
-                self.assertIn("wl-clipboard", status.hint)
+                assert status.available == ()
+                assert status.hint is not None
+                assert "wl-clipboard" in status.hint
 
     def test_get_clipboard_helper_status_no_helpers_x11(self) -> None:
         """Test get_clipboard_helper_status returns hint for X11 when no helpers available."""
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):
                 status = get_clipboard_helper_status()
-                self.assertEqual(status.available, ())
-                self.assertIsNotNone(status.hint)
-                self.assertIn("xclip", status.hint)
+                assert status.available == ()
+                assert status.hint is not None
+                assert "xclip" in status.hint
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -1109,10 +1098,10 @@ class TaskTests(unittest.TestCase):
             )
 
             # Verify EXTERNAL_REMOTE_URL is set when expose_external_remote is enabled
-            self.assertEqual(env["EXTERNAL_REMOTE_URL"], upstream_url)
+            assert env["EXTERNAL_REMOTE_URL"] == upstream_url
             # Verify gatekeeping mode settings are still correct
-            self.assertIn("http://", env["CODE_REPO"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            assert "http://" in env["CODE_REPO"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -1135,10 +1124,10 @@ class TaskTests(unittest.TestCase):
             )
 
             # Verify EXTERNAL_REMOTE_URL is NOT set when expose_external_remote is false
-            self.assertNotIn("EXTERNAL_REMOTE_URL", env)
+            assert "EXTERNAL_REMOTE_URL" not in env
             # Verify gatekeeping mode settings are still correct
-            self.assertIn("http://", env["CODE_REPO"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            assert "http://" in env["CODE_REPO"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
 
     @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
     @unittest.mock.patch("terok.lib.containers.environment.get_gate_server_port", return_value=9418)
@@ -1160,13 +1149,13 @@ class TaskTests(unittest.TestCase):
             )
 
             # Verify EXTERNAL_REMOTE_URL is NOT set when upstream_url is missing
-            self.assertNotIn("EXTERNAL_REMOTE_URL", env)
+            assert "EXTERNAL_REMOTE_URL" not in env
             # Verify gatekeeping mode settings are still correct
-            self.assertIn("http://", env["CODE_REPO"])
-            self.assertIn(f"@host.containers.internal:9418/{project_id}.git", env["CODE_REPO"])
+            assert "http://" in env["CODE_REPO"]
+            assert f"@host.containers.internal:9418/{project_id}.git" in env["CODE_REPO"]
 
 
-class TaskLogsTests(unittest.TestCase):
+class TestTaskLogs:
     """Tests for task_logs() function."""
 
     def _setup_task_with_mode(self, project_id, mode="run"):
@@ -1189,9 +1178,9 @@ class TaskLogsTests(unittest.TestCase):
             project_id="proj_logs1",
         ):
             with mock_git_config():
-                with self.assertRaises(SystemExit) as cm:
+                with pytest.raises(SystemExit) as cm:
                     task_logs("proj_logs1", "999")
-                self.assertIn("Unknown task", str(cm.exception))
+                assert "Unknown task" in str(cm.value)
 
     def test_no_mode_raises(self) -> None:
         """task_logs raises SystemExit when task has no mode set."""
@@ -1201,9 +1190,9 @@ class TaskLogsTests(unittest.TestCase):
         ):
             with mock_git_config():
                 task_id = task_new("proj_logs2")
-                with self.assertRaises(SystemExit) as cm:
+                with pytest.raises(SystemExit) as cm:
                     task_logs("proj_logs2", task_id)
-                self.assertIn("never been run", str(cm.exception))
+                assert "never been run" in str(cm.value)
 
     def test_container_not_found_raises(self) -> None:
         """task_logs raises SystemExit when container doesn't exist."""
@@ -1216,9 +1205,9 @@ class TaskLogsTests(unittest.TestCase):
                 with unittest.mock.patch(
                     "terok.lib.containers.task_logs.get_container_state", return_value=None
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs3", task_id)
-                    self.assertIn("does not exist", str(cm.exception))
+                    assert "does not exist" in str(cm.value)
 
     def test_negative_tail_raises(self) -> None:
         """task_logs raises SystemExit for negative tail value."""
@@ -1232,9 +1221,9 @@ class TaskLogsTests(unittest.TestCase):
                     "terok.lib.containers.task_logs.get_container_state",
                     return_value="running",
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs4", task_id, LogViewOptions(tail=-1))
-                    self.assertIn("--tail must be >= 0", str(cm.exception))
+                    assert "--tail must be >= 0" in str(cm.value)
 
     def test_raw_mode_exec(self) -> None:
         """task_logs in raw mode calls os.execvp."""
@@ -1261,11 +1250,11 @@ class TaskLogsTests(unittest.TestCase):
                         "terok.lib.containers.task_logs.os.execvp", side_effect=fake_execvp
                     ),
                 ):
-                    with self.assertRaises(SystemExit):
+                    with pytest.raises(SystemExit):
                         task_logs("proj_logs5", task_id, LogViewOptions(raw=True))
-                    self.assertEqual(len(captured_args), 1)
-                    self.assertEqual(captured_args[0][0], "podman")
-                    self.assertIn("logs", captured_args[0][1])
+                    assert len(captured_args) == 1
+                    assert captured_args[0][0] == "podman"
+                    assert "logs" in captured_args[0][1]
 
     def test_raw_mode_podman_not_found(self) -> None:
         """task_logs in raw mode raises SystemExit if podman not found."""
@@ -1285,9 +1274,9 @@ class TaskLogsTests(unittest.TestCase):
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs6", task_id, LogViewOptions(raw=True))
-                    self.assertIn("podman not found", str(cm.exception))
+                    assert "podman not found" in str(cm.value)
 
     def test_formatted_mode_feeds_formatter(self) -> None:
         """task_logs in formatted mode pipes lines through formatter."""
@@ -1356,9 +1345,9 @@ class TaskLogsTests(unittest.TestCase):
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs8", task_id)
-                    self.assertIn("podman not found", str(cm.exception))
+                    assert "podman not found" in str(cm.value)
 
     def test_persisted_logs_fallback(self) -> None:
         """task_logs falls back to persisted log file when container is gone."""
@@ -1395,7 +1384,7 @@ class TaskLogsTests(unittest.TestCase):
                         task_logs("proj_logs_persist", task_id)
 
                     # Formatter should have been fed 3 lines
-                    self.assertEqual(mock_formatter.feed_line.call_count, 3)
+                    assert mock_formatter.feed_line.call_count == 3
                     mock_formatter.finish.assert_called_once()
 
     def test_persisted_logs_fallback_with_tail(self) -> None:
@@ -1428,7 +1417,7 @@ class TaskLogsTests(unittest.TestCase):
                     ),
                 ):
                     task_logs("proj_logs_tail", task_id, LogViewOptions(tail=2))
-                    self.assertEqual(mock_formatter.feed_line.call_count, 2)
+                    assert mock_formatter.feed_line.call_count == 2
 
     def test_no_container_no_logs_raises(self) -> None:
         """task_logs raises when container is gone and no persisted logs exist."""
@@ -1442,9 +1431,9 @@ class TaskLogsTests(unittest.TestCase):
                     "terok.lib.containers.task_logs.get_container_state",
                     return_value=None,
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs_nolog", task_id)
-                    self.assertIn("no persisted logs found", str(cm.exception))
+                    assert "no persisted logs found" in str(cm.value)
 
     def test_negative_tail_persisted_fallback_raises(self) -> None:
         """task_logs raises for negative tail even when falling back to persisted logs."""
@@ -1466,12 +1455,12 @@ class TaskLogsTests(unittest.TestCase):
                     "terok.lib.containers.task_logs.get_container_state",
                     return_value=None,
                 ):
-                    with self.assertRaises(SystemExit) as cm:
+                    with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs_negtail", task_id, LogViewOptions(tail=-1))
-                    self.assertIn("--tail must be >= 0", str(cm.exception))
+                    assert "--tail must be >= 0" in str(cm.value)
 
 
-class TaskArchiveTests(unittest.TestCase):
+class TestTaskArchive:
     """Tests for task archival on deletion."""
 
     def test_task_delete_creates_archive(self) -> None:
@@ -1516,30 +1505,30 @@ class TaskArchiveTests(unittest.TestCase):
                     task_delete(project_id, task_id)
 
                 # Task should be deleted
-                self.assertFalse(meta_path.exists())
+                assert not meta_path.exists()
 
                 # Archive should exist
                 archive_dir = ctx.state_dir / "projects" / project_id / "archive"
-                self.assertTrue(archive_dir.is_dir())
+                assert archive_dir.is_dir()
                 archives = list(archive_dir.iterdir())
-                self.assertEqual(len(archives), 1)
+                assert len(archives) == 1
 
                 archive_entry = archives[0]
                 # Archive dir name contains task_id and name
-                self.assertIn(task_id, archive_entry.name)
-                self.assertIn("test-task", archive_entry.name)
+                assert task_id in archive_entry.name
+                assert "test-task" in archive_entry.name
 
                 # Archive should contain task.yml
                 archived_meta = archive_entry / "task.yml"
-                self.assertTrue(archived_meta.is_file())
+                assert archived_meta.is_file()
                 archived_data = yaml.safe_load(archived_meta.read_text())
-                self.assertEqual(archived_data["task_id"], task_id)
-                self.assertEqual(archived_data["name"], "test-task")
+                assert archived_data["task_id"] == task_id
+                assert archived_data["name"] == "test-task"
 
                 # Archive should contain logs (captured from podman)
                 archived_logs = archive_entry / "logs" / "container.log"
-                self.assertTrue(archived_logs.is_file())
-                self.assertEqual(archived_logs.read_text(), "captured log output\n")
+                assert archived_logs.is_file()
+                assert archived_logs.read_text() == "captured log output\n"
 
     def test_task_delete_archives_without_logs(self) -> None:
         """task_delete still archives metadata even when no logs exist."""
@@ -1564,14 +1553,14 @@ class TaskArchiveTests(unittest.TestCase):
                     task_delete(project_id, task_id)
 
                 archive_dir = ctx.state_dir / "projects" / project_id / "archive"
-                self.assertTrue(archive_dir.is_dir())
+                assert archive_dir.is_dir()
                 archives = list(archive_dir.iterdir())
-                self.assertEqual(len(archives), 1)
+                assert len(archives) == 1
 
                 # Should have task.yml but no logs subdir
                 archive_entry = archives[0]
-                self.assertTrue((archive_entry / "task.yml").is_file())
-                self.assertFalse((archive_entry / "logs").exists())
+                assert (archive_entry / "task.yml").is_file()
+                assert not (archive_entry / "logs").exists()
 
     def test_list_archived_tasks(self) -> None:
         """list_archived_tasks returns archived tasks sorted newest-first."""
@@ -1601,12 +1590,12 @@ class TaskArchiveTests(unittest.TestCase):
                 )
 
             archived = list_archived_tasks(project_id)
-            self.assertEqual(len(archived), 3)
+            assert len(archived) == 3
             # Newest first
-            self.assertEqual(archived[0].task_id, "3")
-            self.assertEqual(archived[1].task_id, "2")
-            self.assertEqual(archived[2].task_id, "1")
-            self.assertEqual(archived[0].archived_at, "20260303T100000Z")
+            assert archived[0].task_id == "3"
+            assert archived[1].task_id == "2"
+            assert archived[2].task_id == "1"
+            assert archived[0].archived_at == "20260303T100000Z"
 
     def test_task_archive_logs(self) -> None:
         """task_archive_logs returns log file path for matching archive."""
@@ -1625,16 +1614,16 @@ class TaskArchiveTests(unittest.TestCase):
 
             # Full match
             result = task_archive_logs(project_id, "20260305T120000Z_1_my-task")
-            self.assertIsNotNone(result)
-            self.assertEqual(result.read_text(), "archived log\n")
+            assert result is not None
+            assert result.read_text() == "archived log\n"
 
             # Prefix match
             result = task_archive_logs(project_id, "20260305T120000Z")
-            self.assertIsNotNone(result)
+            assert result is not None
 
             # No match
             result = task_archive_logs(project_id, "20990101")
-            self.assertIsNone(result)
+            assert result is None
 
     def test_task_archive_list_empty(self) -> None:
         """task_archive_list prints message when no archives exist."""
@@ -1648,7 +1637,7 @@ class TaskArchiveTests(unittest.TestCase):
             buf = StringIO()
             with redirect_stdout(buf):
                 task_archive_list(project_id)
-            self.assertIn("No archived tasks found", buf.getvalue())
+            assert "No archived tasks found" in buf.getvalue()
 
     def test_capture_task_logs(self) -> None:
         """capture_task_logs writes podman logs to host filesystem."""
@@ -1678,9 +1667,9 @@ class TaskArchiveTests(unittest.TestCase):
                 ):
                     log_file = capture_task_logs(project_id, task_id, "run")
 
-                self.assertIsNotNone(log_file)
+                assert log_file is not None
                 content = log_file.read_text()
-                self.assertIn("stdout line", content)
+                assert "stdout line" in content
 
     def test_capture_task_logs_podman_not_found(self) -> None:
         """capture_task_logs returns None when podman is not available."""
@@ -1700,4 +1689,4 @@ class TaskArchiveTests(unittest.TestCase):
                 ):
                     result = capture_task_logs(project_id, task_id, "run")
 
-                self.assertIsNone(result)
+                assert result is None

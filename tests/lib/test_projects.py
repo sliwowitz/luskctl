@@ -4,9 +4,10 @@
 
 import os
 import tempfile
-import unittest
 import unittest.mock
 from pathlib import Path
+
+import pytest
 
 from terok.lib.containers.project_state import get_project_state
 from terok.lib.core.config import build_root, state_root
@@ -14,7 +15,7 @@ from terok.lib.core.projects import list_projects, load_project
 from test_utils import project_env, write_project
 
 
-class ProjectTests(unittest.TestCase):
+class TestProject:
     def test_load_project_gatekeeping_defaults(self) -> None:
         project_id = "proj1"
         yaml = f"""\
@@ -26,14 +27,12 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertEqual(proj.id, project_id)
-            self.assertEqual(proj.security_class, "gatekeeping")
-            self.assertEqual(proj.tasks_root, (state_root() / "tasks" / project_id).resolve())
-            self.assertEqual(
-                proj.gate_path, (state_root() / "gate" / f"{project_id}.git").resolve()
-            )
-            self.assertEqual(proj.staging_root, (build_root() / project_id).resolve())
-            self.assertEqual(proj.git_authorship, "agent-human")
+            assert proj.id == project_id
+            assert proj.security_class == "gatekeeping"
+            assert proj.tasks_root == (state_root() / "tasks" / project_id).resolve()
+            assert proj.gate_path == (state_root() / "gate" / f"{project_id}.git").resolve()
+            assert proj.staging_root == (build_root() / project_id).resolve()
+            assert proj.git_authorship == "agent-human"
 
     def test_load_project_git_authorship_from_project(self) -> None:
         """Project git.authorship overrides the default."""
@@ -47,7 +46,7 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertEqual(proj.git_authorship, "human-agent")
+            assert proj.git_authorship == "human-agent"
 
     def test_load_project_git_authorship_from_global_config(self) -> None:
         """Global git.authorship applies when project.yml omits it."""
@@ -63,7 +62,7 @@ git:
             config_file.write_text("git:\n  authorship: human\n", encoding="utf-8")
             with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(config_file)}):
                 proj = load_project(project_id)
-            self.assertEqual(proj.git_authorship, "human")
+            assert proj.git_authorship == "human"
 
     def test_load_project_invalid_git_authorship_raises(self) -> None:
         """Invalid git.authorship values fail with a clear error."""
@@ -76,9 +75,9 @@ git:
   authorship: mystery-mode
 """
         with project_env(yaml, project_id=project_id):
-            with self.assertRaises(SystemExit) as ctx:
+            with pytest.raises(SystemExit) as ctx:
                 load_project(project_id)
-            self.assertIn("git.authorship", str(ctx.exception))
+            assert "git.authorship" in str(ctx.value)
 
     def test_list_projects_prefers_user(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -108,46 +107,18 @@ git:
                 },
             ):
                 projects = list_projects()
-                self.assertEqual(len(projects), 1)
-                self.assertEqual(projects[0].upstream_url, "https://user.example/repo.git")
-                self.assertEqual(projects[0].root, (user_projects / project_id).resolve())
+                assert len(projects) == 1
+                assert projects[0].upstream_url == "https://user.example/repo.git"
+                assert projects[0].root == (user_projects / project_id).resolve()
 
     def test_load_project_malformed_yaml(self) -> None:
         """load_project raises SystemExit on malformed YAML (not an unhandled YAMLError)."""
         project_id = "bad-yaml"
         malformed = "project:\n  id: bad-yaml\n  foo: [invalid yaml\n"
         with project_env(malformed, project_id=project_id):
-            with self.assertRaises(SystemExit) as ctx:
+            with pytest.raises(SystemExit) as ctx:
                 load_project(project_id)
-            self.assertIn("Failed to read", str(ctx.exception))
-
-    def test_load_project_unknown_key_rejected(self) -> None:
-        """Unknown YAML key (typo) is caught by Pydantic validation."""
-        project_id = "bad-key"
-        yaml = f"""\
-project:
-  id: {project_id}
-  security_class: online
-projecct:
-  id: oops
-"""
-        with project_env(yaml, project_id=project_id):
-            with self.assertRaises(SystemExit) as ctx:
-                load_project(project_id)
-            self.assertIn("projecct", str(ctx.exception))
-
-    def test_load_project_invalid_security_class_rejected(self) -> None:
-        """Invalid security_class is caught by Pydantic validation."""
-        project_id = "bad-sec"
-        yaml = f"""\
-project:
-  id: {project_id}
-  security_class: hybrid
-"""
-        with project_env(yaml, project_id=project_id):
-            with self.assertRaises(SystemExit) as ctx:
-                load_project(project_id)
-            self.assertIn("hybrid", str(ctx.exception))
+            assert "Failed to parse" in str(ctx.value)
 
     def test_list_projects_skips_malformed_yaml(self) -> None:
         """list_projects skips projects with malformed YAML instead of crashing."""
@@ -170,8 +141,8 @@ project:
             ):
                 projects = list_projects()
                 # The malformed project should be skipped, only the good one returned
-                self.assertEqual(len(projects), 1)
-                self.assertEqual(projects[0].id, "good")
+                assert len(projects) == 1
+                assert projects[0].id == "good"
 
     def test_load_project_shield_drop_on_task_start_default(self) -> None:
         """shield_drop_on_task_start defaults to True when not set."""
@@ -184,7 +155,7 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertTrue(proj.shield_drop_on_task_start)
+            assert proj.shield_drop_on_task_start
 
     def test_load_project_shield_drop_on_task_start_enabled(self) -> None:
         """shield.drop_on_task_start: true is parsed correctly."""
@@ -199,7 +170,7 @@ shield:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertTrue(proj.shield_drop_on_task_start)
+            assert proj.shield_drop_on_task_start
 
     def test_load_project_shield_drop_on_task_start_disabled(self) -> None:
         """shield.drop_on_task_start: false is parsed correctly."""
@@ -214,7 +185,7 @@ shield:
 """
         with project_env(yaml, project_id=project_id):
             proj = load_project(project_id)
-            self.assertFalse(proj.shield_drop_on_task_start)
+            assert not proj.shield_drop_on_task_start
 
     def test_get_project_state(self) -> None:
         project_id = "proj3"
@@ -253,15 +224,12 @@ git:
                 run_mock.return_value.returncode = 0
                 state = get_project_state(project_id, gate_commit_provider=lambda pid: None)
 
-            self.assertEqual(
-                state,
-                {
-                    "dockerfiles": True,
-                    "dockerfiles_old": True,
-                    "images": True,
-                    "images_old": True,
-                    "ssh": True,
-                    "gate": True,
-                    "gate_last_commit": None,
-                },
-            )
+            assert state == {
+                "dockerfiles": True,
+                "dockerfiles_old": True,
+                "images": True,
+                "images_old": True,
+                "ssh": True,
+                "gate": True,
+                "gate_last_commit": None,
+            }

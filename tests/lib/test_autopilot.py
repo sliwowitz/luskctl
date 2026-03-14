@@ -9,14 +9,15 @@ import json
 import os
 import subprocess
 import tempfile
-import unittest
 import unittest.mock
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stdout
+from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
 import yaml
 
 if TYPE_CHECKING:
@@ -38,7 +39,170 @@ from terok.lib.core.projects import load_project
 from test_utils import mock_git_config, write_project
 
 
-class AgentConfigProjectTests(unittest.TestCase):
+@dataclass
+class TaskRunnerResult:
+    """Captured result from a mocked headless task/follow-up invocation."""
+
+    output: str
+    run_mock: unittest.mock.Mock
+    wait_mock: unittest.mock.Mock
+    task_id: str | None = None
+
+
+def make_project_config(
+    *,
+    project_id: str,
+    root: Path,
+    tasks_root: Path,
+    gate_path: Path,
+    default_agent: str | None = None,
+) -> ProjectConfig:
+    """Build a ProjectConfig for wrapper/agent-config unit tests."""
+    from terok.lib.core.projects import ProjectConfig
+
+    return ProjectConfig(
+        id=project_id,
+        security_class="online",
+        upstream_url=None,
+        default_branch="main",
+        root=root,
+        tasks_root=tasks_root,
+        gate_path=gate_path,
+        staging_root=None,
+        ssh_key_name=None,
+        ssh_host_dir=None,
+        default_agent=default_agent,
+        human_name="Test User",
+        human_email="test@example.com",
+    )
+
+
+def runner_env_vars(base: Path, config_file: Path) -> dict[str, str]:
+    """Build TEROK_* env vars for task runner tests."""
+    return {
+        "TEROK_CONFIG_DIR": str(base / "config"),
+        "TEROK_STATE_DIR": str(base / "state"),
+        "TEROK_CONFIG_FILE": str(config_file),
+    }
+
+
+def task_paths(state_dir: Path, project_id: str, task_id: str = "1") -> tuple[Path, Path]:
+    """Return ``(agent_config_dir, meta_path)`` for a task."""
+    return (
+        state_dir / "tasks" / project_id / task_id / "agent-config",
+        state_dir / "projects" / project_id / "tasks" / f"{task_id}.yml",
+    )
+
+
+DEFAULT_SUBAGENTS_YAML = (
+    "agent:\n"
+    "  subagents:\n"
+    "    - name: reviewer\n"
+    "      default: true\n"
+    "      system_prompt: Review code\n"
+    "    - name: debugger\n"
+    "      default: false\n"
+    "      system_prompt: Debug code\n"
+)
+
+
+def write_runner_project(base: Path, project_id: str, extra_yml: str = "") -> Path:
+    """Write a minimal project config and matching global config file for task runners."""
+    config_root = base / "config"
+    envs_dir = base / "envs"
+    config_root.mkdir(parents=True, exist_ok=True)
+    config_file = base / "config.yml"
+    config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
+    write_project(config_root, project_id, f"project:\n  id: {project_id}\n{extra_yml}")
+    return config_file
+
+
+def read_task_agents(state_dir: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
+    """Load ``agents.json`` for a task."""
+    return json.loads((task_paths(state_dir, project_id, task_id)[0] / "agents.json").read_text())
+
+
+def read_task_meta(state_dir: Path, project_id: str, task_id: str = "1") -> dict[str, object]:
+    """Load task metadata YAML for a task."""
+    return yaml.safe_load(task_paths(state_dir, project_id, task_id)[1].read_text())
+
+
+def prepare_agent_config(
+    project: ProjectConfig,
+    task_id: str,
+    *,
+    instructions: str | None = None,
+) -> Path:
+    """Build an agent-config directory for the given task."""
+    from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
+
+    (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
+    return prepare_agent_config_dir(
+        AgentConfigSpec(project, task_id, subagents=[], instructions=instructions)
+    )
+
+
+def run_headless_request(
+    base: Path,
+    config_file: Path,
+    request: HeadlessRunRequest,
+) -> TaskRunnerResult:
+    """Run ``task_run_headless`` with the standard patched test harness."""
+    with unittest.mock.patch.dict(os.environ, runner_env_vars(base, config_file), clear=True):
+        with (
+            mock_git_config(),
+            unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            unittest.mock.patch(
+                "terok.lib.containers.task_runners.wait_for_exit", return_value=0
+            ) as wait_mock,
+            unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
+        ):
+            run_mock.return_value = subprocess.CompletedProcess([], 0)
+            buffer = StringIO()
+            with redirect_stdout(buffer):
+                task_id = task_run_headless(request)
+    return TaskRunnerResult(
+        task_id=task_id,
+        output=buffer.getvalue(),
+        run_mock=run_mock,
+        wait_mock=wait_mock,
+    )
+
+
+def run_followup_request(
+    base: Path,
+    project_id: str,
+    task_id: str,
+    prompt: str,
+    *,
+    container_state: list[str | None] | str | None,
+    follow: bool = True,
+) -> TaskRunnerResult:
+    """Run ``task_followup_headless`` with the standard patched success harness."""
+    with unittest.mock.patch.dict(
+        os.environ, runner_env_vars(base, base / "config.yml"), clear=True
+    ):
+        with (
+            mock_git_config(),
+            unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            unittest.mock.patch(
+                "terok.lib.containers.task_runners.get_container_state",
+                side_effect=container_state if isinstance(container_state, list) else None,
+                return_value=None if isinstance(container_state, list) else container_state,
+            ),
+            unittest.mock.patch(
+                "terok.lib.containers.task_runners.wait_for_exit", return_value=0
+            ) as wait_mock,
+            unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
+        ):
+            run_mock.return_value = subprocess.CompletedProcess([], 0)
+            buffer = StringIO()
+            with redirect_stdout(buffer):
+                task_followup_headless(project_id, task_id, prompt, follow=follow)
+    return TaskRunnerResult(output=buffer.getvalue(), run_mock=run_mock, wait_mock=wait_mock)
+
+
+class TestAgentConfigProject:
     """Tests for agent config parsing in projects.py."""
 
     def test_agent_config_empty_when_absent(self) -> None:
@@ -54,7 +218,7 @@ class AgentConfigProjectTests(unittest.TestCase):
             ):
                 with mock_git_config():
                     p = load_project("proj_noagent")
-                self.assertEqual(p.agent_config, {})
+                assert p.agent_config == {}
 
     def test_agent_config_parsed_as_dict(self) -> None:
         """Project parses agent: section as a dict."""
@@ -78,8 +242,8 @@ class AgentConfigProjectTests(unittest.TestCase):
             ):
                 with mock_git_config():
                     p = load_project("proj_agent")
-                self.assertIn("subagents", p.agent_config)
-                self.assertEqual(p.agent_config["subagents"][0]["name"], "reviewer")
+                assert "subagents" in p.agent_config
+                assert p.agent_config["subagents"][0]["name"] == "reviewer"
 
     def test_agent_config_resolves_subagent_file_paths(self) -> None:
         """Project resolves relative file: paths in subagents."""
@@ -101,11 +265,11 @@ class AgentConfigProjectTests(unittest.TestCase):
                     p = load_project("proj_sa")
                 # File path should be resolved to absolute
                 sa = p.agent_config["subagents"][0]
-                self.assertTrue(Path(sa["file"]).is_absolute())
-                self.assertIn("agents/reviewer.md", sa["file"])
+                assert Path(sa["file"]).is_absolute()
+                assert "agents/reviewer.md" in sa["file"]
 
 
-class SubagentsToJsonTests(unittest.TestCase):
+class TestSubagentsToJson:
     """Tests for _subagents_to_json (dict output keyed by agent name)."""
 
     def test_inline_definition_default_true(self) -> None:
@@ -121,16 +285,16 @@ class SubagentsToJsonTests(unittest.TestCase):
             }
         ]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertIsInstance(result, dict)
-        self.assertIn("reviewer", result)
-        self.assertEqual(result["reviewer"]["prompt"], "You are a code reviewer.")
-        self.assertEqual(result["reviewer"]["description"], "Code reviewer")
-        self.assertEqual(result["reviewer"]["tools"], ["Read", "Grep"])
-        self.assertEqual(result["reviewer"]["model"], "sonnet")
+        assert isinstance(result, dict)
+        assert "reviewer" in result
+        assert result["reviewer"]["prompt"] == "You are a code reviewer."
+        assert result["reviewer"]["description"] == "Code reviewer"
+        assert result["reviewer"]["tools"] == ["Read", "Grep"]
+        assert result["reviewer"]["model"] == "sonnet"
         # Non-Claude fields stripped
-        self.assertNotIn("system_prompt", result["reviewer"])
-        self.assertNotIn("name", result["reviewer"])
-        self.assertNotIn("default", result["reviewer"])
+        assert "system_prompt" not in result["reviewer"]
+        assert "name" not in result["reviewer"]
+        assert "default" not in result["reviewer"]
 
     def test_default_false_excluded_without_selection(self) -> None:
         """Agents with default=False are excluded when not selected."""
@@ -138,7 +302,7 @@ class SubagentsToJsonTests(unittest.TestCase):
             {"name": "debugger", "default": False, "model": "sonnet", "system_prompt": "Debug."},
         ]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(result, {})
+        assert result == {}
 
     def test_no_default_flag_excluded(self) -> None:
         """Agents without a default flag are excluded (default=False is the default)."""
@@ -146,7 +310,7 @@ class SubagentsToJsonTests(unittest.TestCase):
             {"name": "debugger", "model": "sonnet", "system_prompt": "Debug."},
         ]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(result, {})
+        assert result == {}
 
     def test_selected_agents_included(self) -> None:
         """Non-default agents are included when passed in selected_agents."""
@@ -154,8 +318,8 @@ class SubagentsToJsonTests(unittest.TestCase):
             {"name": "debugger", "default": False, "model": "sonnet", "system_prompt": "Debug."},
         ]
         result = json.loads(_subagents_to_json(subagents, selected_agents=["debugger"]))
-        self.assertIn("debugger", result)
-        self.assertEqual(result["debugger"]["prompt"], "Debug.")
+        assert "debugger" in result
+        assert result["debugger"]["prompt"] == "Debug."
 
     def test_mixed_default_and_selected(self) -> None:
         """Default agents + selected non-default agents are both included."""
@@ -165,9 +329,9 @@ class SubagentsToJsonTests(unittest.TestCase):
             {"name": "planner", "default": False, "model": "haiku", "system_prompt": "Plan."},
         ]
         result = json.loads(_subagents_to_json(subagents, selected_agents=["debugger"]))
-        self.assertIn("reviewer", result)
-        self.assertIn("debugger", result)
-        self.assertNotIn("planner", result)
+        assert "reviewer" in result
+        assert "debugger" in result
+        assert "planner" not in result
 
     def test_file_reference_with_default(self) -> None:
         """File references with default flag are handled correctly."""
@@ -181,8 +345,8 @@ class SubagentsToJsonTests(unittest.TestCase):
             )
             subagents = [{"file": str(md_file), "default": True}]
             result = json.loads(_subagents_to_json(subagents))
-            self.assertIn("reviewer", result)
-            self.assertEqual(result["reviewer"]["prompt"], "You are a code reviewer.")
+            assert "reviewer" in result
+            assert result["reviewer"]["prompt"] == "You are a code reviewer."
 
     def test_passthrough_native_claude_fields(self) -> None:
         """Native Claude fields like mcpServers, hooks are passed through."""
@@ -197,23 +361,23 @@ class SubagentsToJsonTests(unittest.TestCase):
             }
         ]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(result["advanced"]["mcpServers"], {"srv": {"command": "/bin/x"}})
-        self.assertEqual(result["advanced"]["hooks"], {"onStart": "echo hi"})
+        assert result["advanced"]["mcpServers"] == {"srv": {"command": "/bin/x"}}
+        assert result["advanced"]["hooks"] == {"onStart": "echo hi"}
 
     def test_missing_file_skipped(self) -> None:
         """Missing file references are skipped."""
         subagents = [{"file": "/nonexistent/agent.md", "default": True}]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(result, {})
+        assert result == {}
 
     def test_agent_without_name_skipped(self) -> None:
         """Agents without a name are skipped."""
         subagents = [{"default": True, "model": "sonnet", "system_prompt": "No name."}]
         result = json.loads(_subagents_to_json(subagents))
-        self.assertEqual(result, {})
+        assert result == {}
 
 
-class ParseMdAgentTests(unittest.TestCase):
+class TestParseMdAgent:
     """Tests for parse_md_agent."""
 
     def test_parse_with_frontmatter(self) -> None:
@@ -224,77 +388,67 @@ class ParseMdAgentTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = parse_md_agent(str(md))
-            self.assertEqual(result["name"], "test")
-            self.assertEqual(result["prompt"], "Prompt body.")
+            assert result["name"] == "test"
+            assert result["prompt"] == "Prompt body."
 
     def test_parse_without_frontmatter(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             md = Path(td) / "test.md"
             md.write_text("Just a prompt.", encoding="utf-8")
             result = parse_md_agent(str(md))
-            self.assertEqual(result["prompt"], "Just a prompt.")
+            assert result["prompt"] == "Just a prompt."
 
     def test_nonexistent_file(self) -> None:
         result = parse_md_agent("/nonexistent/file.md")
-        self.assertEqual(result, {})
+        assert result == {}
 
 
-class GenerateClaudeWrapperTests(unittest.TestCase):
+class TestGenerateClaudeWrapper:
     """Tests for _generate_claude_wrapper."""
 
     def _make_project(self) -> ProjectConfig:
-        from terok.lib.core.projects import ProjectConfig
-
-        return ProjectConfig(
-            id="testproj",
-            security_class="online",
-            upstream_url=None,
-            default_branch="main",
+        return make_project_config(
+            project_id="testproj",
             root=Path("/tmp/testproj"),
             tasks_root=Path("/tmp/testproj/tasks"),
             gate_path=Path("/tmp/testproj/gate"),
-            staging_root=None,
-            ssh_key_name=None,
-            ssh_host_dir=None,
-            human_name="Test User",
-            human_email="test@example.com",
         )
 
     def test_basic_wrapper(self) -> None:
-        """Wrapper includes add-dir / and git env vars (permissions via /etc/ config)."""
+        """Wrapper includes add-dir / and git env vars."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
-        self.assertIn("claude()", wrapper)
-        self.assertNotIn("--dangerously-skip-permissions", wrapper)
-        self.assertIn('--add-dir "/"', wrapper)
-        self.assertIn("_terok_apply_git_identity Claude noreply@anthropic.com", wrapper)
+        assert "claude()" in wrapper
+        assert "--dangerously-skip-permissions" not in wrapper
+        assert '--add-dir "/"' in wrapper
+        assert "_terok_apply_git_identity Claude noreply@anthropic.com" in wrapper
         # Should NOT contain agents reference when has_agents=False
-        self.assertNotIn("agents.json", wrapper)
+        assert "agents.json" not in wrapper
 
     def test_wrapper_with_agents(self) -> None:
         """Wrapper includes agents.json reference when has_agents=True."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True, project=project))
-        self.assertIn("agents.json", wrapper)
+        assert "agents.json" in wrapper
 
     def test_wrapper_does_not_inject_permission_flags(self) -> None:
-        """Wrapper does not inject permission flags — /etc/ managed settings handle it."""
+        """Wrapper relies on managed settings, not permission CLI flags."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
-        self.assertNotIn("TEROK_UNRESTRICTED", wrapper)
-        self.assertNotIn("--dangerously-skip-permissions", wrapper)
+        assert "TEROK_UNRESTRICTED" not in wrapper
+        assert "--dangerously-skip-permissions" not in wrapper
         # --add-dir / is always present regardless of permission mode
-        self.assertIn('--add-dir "/"', wrapper)
+        assert '--add-dir "/"' in wrapper
 
     def test_wrapper_no_model_or_mcp(self) -> None:
         """Wrapper does not contain --model, --mcp-config by default."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True, project=project))
-        self.assertNotIn("--model", wrapper)
-        self.assertNotIn("--mcp-config", wrapper)
-        self.assertNotIn("--max-turns", wrapper)
+        assert "--model" not in wrapper
+        assert "--mcp-config" not in wrapper
+        assert "--max-turns" not in wrapper
         # --append-system-prompt absent when has_instructions=False (default)
-        self.assertNotIn("--append-system-prompt", wrapper)
+        assert "--append-system-prompt" not in wrapper
 
     def test_wrapper_includes_append_system_prompt(self) -> None:
         """Wrapper includes --append-system-prompt when has_instructions=True."""
@@ -302,42 +456,41 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         wrapper = _generate_claude_wrapper(
             WrapperConfig(has_agents=False, project=project, has_instructions=True)
         )
-        self.assertIn("--append-system-prompt", wrapper)
-        self.assertIn("instructions.md", wrapper)
+        assert "--append-system-prompt" in wrapper
+        assert "instructions.md" in wrapper
 
     def test_wrapper_timeout_support(self) -> None:
         """Wrapper parses --terok-timeout and wraps claude with timeout."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
         # Wrapper should contain timeout flag parsing
-        self.assertIn("--terok-timeout", wrapper)
-        self.assertIn("_timeout", wrapper)
+        assert "--terok-timeout" in wrapper
+        assert "_timeout" in wrapper
         # Wrapper should use timeout command when _timeout is set
-        self.assertIn('timeout "$_timeout" claude', wrapper)
+        assert 'timeout "$_timeout" claude' in wrapper
         # Wrapper should still have the non-timeout path
-        self.assertIn('command claude "${_args[@]}" "$@"', wrapper)
+        assert 'command claude "${_args[@]}" "$@"' in wrapper
         # Both paths should apply git identity through the shared helper
-        self.assertEqual(wrapper.count("_terok_apply_git_identity Claude noreply@anthropic.com"), 2)
+        assert wrapper.count("_terok_apply_git_identity Claude noreply@anthropic.com") == 2
 
     def test_wrapper_resume_from_session_file(self) -> None:
         """Wrapper adds --resume from claude-session.txt when it exists."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
-        self.assertIn("claude-session.txt", wrapper)
-        self.assertIn("--resume", wrapper)
+        assert "claude-session.txt" in wrapper
+        assert "--resume" in wrapper
 
     def test_wrapper_sets_memory_override_with_project_id(self) -> None:
         """Wrapper exports CLAUDE_COWORK_MEMORY_PATH_OVERRIDE using $PROJECT_ID."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
-        self.assertIn(
+        assert (
             "export CLAUDE_COWORK_MEMORY_PATH_OVERRIDE="
-            '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"',
-            wrapper,
+            '"/home/dev/.claude/projects/${PROJECT_ID}-workspace/memory"' in wrapper
         )
 
 
-class WriteSessionHookTests(unittest.TestCase):
+class TestWriteSessionHook:
     """Tests for _write_session_hook."""
 
     def test_creates_settings_with_hook(self) -> None:
@@ -345,15 +498,15 @@ class WriteSessionHookTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             settings_path = Path(td) / "settings.json"
             _write_session_hook(settings_path)
-            self.assertTrue(settings_path.is_file())
+            assert settings_path.is_file()
             data = json.loads(settings_path.read_text())
-            self.assertIn("hooks", data)
-            self.assertIn("SessionStart", data["hooks"])
+            assert "hooks" in data
+            assert "SessionStart" in data["hooks"]
             hooks = data["hooks"]["SessionStart"]
-            self.assertEqual(len(hooks), 1)
+            assert len(hooks) == 1
             command = hooks[0]["hooks"][0]["command"]
-            self.assertIn("session_id", command)
-            self.assertIn("claude-session.txt", command)
+            assert "session_id" in command
+            assert "claude-session.txt" in command
 
     def test_merges_with_existing_settings(self) -> None:
         """Merges hook into existing settings.json without clobbering."""
@@ -363,9 +516,9 @@ class WriteSessionHookTests(unittest.TestCase):
             _write_session_hook(settings_path)
             data = json.loads(settings_path.read_text())
             # Original settings preserved
-            self.assertEqual(data["permissions"], {"allow": ["Read"]})
+            assert data["permissions"] == {"allow": ["Read"]}
             # Hook added
-            self.assertIn("SessionStart", data["hooks"])
+            assert "SessionStart" in data["hooks"]
 
     def test_idempotent_hook_write(self) -> None:
         """Calling _write_session_hook twice doesn't create duplicate hooks."""
@@ -375,7 +528,7 @@ class WriteSessionHookTests(unittest.TestCase):
             _write_session_hook(settings_path)
             data = json.loads(settings_path.read_text())
             hooks = data["hooks"]["SessionStart"]
-            self.assertEqual(len(hooks), 1)
+            assert len(hooks) == 1
 
     def test_does_not_rewrite_when_hook_already_present(self) -> None:
         """If equivalent hook exists, keep existing file content unchanged."""
@@ -389,7 +542,7 @@ class WriteSessionHookTests(unittest.TestCase):
 
             _write_session_hook(settings_path)
 
-            self.assertEqual(settings_path.read_text(encoding="utf-8"), original)
+            assert settings_path.read_text(encoding="utf-8") == original
 
     def test_handles_non_dict_hooks_shape(self) -> None:
         """Recovers if hooks shape is invalid and still writes SessionStart hook."""
@@ -403,8 +556,8 @@ class WriteSessionHookTests(unittest.TestCase):
             _write_session_hook(settings_path)
 
             data = json.loads(settings_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["permissions"], {"allow": ["Read"]})
-            self.assertIn("SessionStart", data["hooks"])
+            assert data["permissions"] == {"allow": ["Read"]}
+            assert "SessionStart" in data["hooks"]
 
     def test_concurrent_writes_keep_single_valid_hook(self) -> None:
         """Concurrent writes keep settings valid and avoid duplicate SessionStart entries."""
@@ -417,577 +570,241 @@ class WriteSessionHookTests(unittest.TestCase):
 
             data = json.loads(settings_path.read_text(encoding="utf-8"))
             hooks = data["hooks"]["SessionStart"]
-            self.assertEqual(len(hooks), 1)
+            assert len(hooks) == 1
 
 
-class PrepareAgentConfigDirTests(unittest.TestCase):
+class TestPrepareAgentConfigDir:
     """Tests for prepare_agent_config_dir."""
-
-    def _make_project(self) -> ProjectConfig:
-        from terok.lib.core.projects import ProjectConfig
-
-        return ProjectConfig(
-            id="test-proj",
-            security_class="online",
-            upstream_url=None,
-            default_branch="main",
-            root=Path("/tmp/test"),
-            tasks_root=Path(tempfile.mkdtemp()),
-            gate_path=Path("/tmp/test/gate"),
-            staging_root=None,
-            ssh_key_name=None,
-            ssh_host_dir=None,
-            default_agent=None,
-            human_name="Test User",
-            human_email="test@example.com",
-        )
 
     @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_prepare_agent_config_writes_instructions(self, _mock_hook: object) -> None:
         """Instructions text is written to instructions.md in agent-config dir."""
-        from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
-
-        project = self._make_project()
-        task_id = "test-task-1"
-        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
-
-        agent_config_dir = prepare_agent_config_dir(
-            AgentConfigSpec(
-                project, task_id, subagents=[], instructions="Custom instructions here."
-            )
+        project = make_project_config(
+            project_id="test-proj",
+            root=Path("/tmp/test"),
+            tasks_root=Path(tempfile.mkdtemp()),
+            gate_path=Path("/tmp/test/gate"),
+        )
+        agent_config_dir = prepare_agent_config(
+            project, "test-task-1", instructions="Custom instructions here."
         )
         instr_path = agent_config_dir / "instructions.md"
-        self.assertTrue(instr_path.is_file())
-        self.assertEqual(instr_path.read_text(encoding="utf-8"), "Custom instructions here.")
+        assert instr_path.is_file()
+        assert instr_path.read_text(encoding="utf-8") == "Custom instructions here."
 
     @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_prepare_agent_config_default_instructions_when_none(self, _mock_hook: object) -> None:
         """Default instructions.md written when instructions is None."""
-        from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
-
-        project = self._make_project()
-        task_id = "test-task-2"
-        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
-
-        agent_config_dir = prepare_agent_config_dir(AgentConfigSpec(project, task_id, subagents=[]))
+        project = make_project_config(
+            project_id="test-proj",
+            root=Path("/tmp/test"),
+            tasks_root=Path(tempfile.mkdtemp()),
+            gate_path=Path("/tmp/test/gate"),
+        )
+        agent_config_dir = prepare_agent_config(project, "test-task-2")
         instr_path = agent_config_dir / "instructions.md"
-        self.assertTrue(instr_path.is_file())
+        assert instr_path.is_file()
         content = instr_path.read_text(encoding="utf-8")
-        self.assertIn("conventions", content)
+        assert "conventions" in content
 
     @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
     def test_wrapper_has_append_system_prompt_when_instructions(self, _mock_hook: object) -> None:
         """Claude wrapper includes --append-system-prompt when instructions are provided."""
-        from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
-
-        project = self._make_project()
-        task_id = "test-task-3"
-        (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
-
-        agent_config_dir = prepare_agent_config_dir(
-            AgentConfigSpec(project, task_id, subagents=[], instructions="Test instructions.")
+        project = make_project_config(
+            project_id="test-proj",
+            root=Path("/tmp/test"),
+            tasks_root=Path(tempfile.mkdtemp()),
+            gate_path=Path("/tmp/test/gate"),
+        )
+        agent_config_dir = prepare_agent_config(
+            project, "test-task-3", instructions="Test instructions."
         )
         wrapper = (agent_config_dir / "terok-agent.sh").read_text(encoding="utf-8")
-        self.assertIn("--append-system-prompt", wrapper)
-        self.assertIn("instructions.md", wrapper)
+        assert "--append-system-prompt" in wrapper
+        assert "instructions.md" in wrapper
 
 
-class TaskRunHeadlessTests(unittest.TestCase):
+class TestTaskRunHeadless:
     """Tests for task_run_headless."""
-
-    def _make_project(self, base: Path, project_id: str, extra_yml: str = "") -> Path:
-        config_root = base / "config"
-        envs_dir = base / "envs"
-        config_root.mkdir(parents=True, exist_ok=True)
-        config_file = base / "config.yml"
-        config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
-        write_project(
-            config_root,
-            project_id,
-            f"project:\n  id: {project_id}\n{extra_yml}",
-        )
-        return config_file
 
     def test_headless_creates_task_and_writes_prompt(self) -> None:
         """task_run_headless creates a task with prompt.txt in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_hl")
             state_dir = base / "state"
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_hl"),
+                HeadlessRunRequest("proj_hl", "Fix the auth bug"),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_id = task_run_headless(
-                            HeadlessRunRequest("proj_hl", "Fix the auth bug")
-                        )
-
-                    self.assertEqual(task_id, "1")
-
-                    # Verify prompt file was written
-                    agent_config_dir = state_dir / "tasks" / "proj_hl" / "1" / "agent-config"
-                    self.assertTrue(agent_config_dir.is_dir())
-                    prompt_file = agent_config_dir / "prompt.txt"
-                    self.assertTrue(prompt_file.is_file())
-                    self.assertEqual(prompt_file.read_text(), "Fix the auth bug")
+            assert result.task_id == "1"
+            agent_config_dir, _meta_path = task_paths(state_dir, "proj_hl")
+            prompt_file = agent_config_dir / "prompt.txt"
+            assert prompt_file.is_file()
+            assert prompt_file.read_text() == "Fix the auth bug"
 
     def test_headless_mounts_agent_config_dir(self) -> None:
         """task_run_headless mounts agent-config dir to /home/dev/.terok."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_mount")
-            state_dir = base / "state"
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_mount", "test prompt"))
-
-                    # Check the podman run command has the agent-config mount
-                    cmd = run_mock.call_args[0][0]
-                    cmd_str = " ".join(cmd)
-                    self.assertIn("/home/dev/.terok:Z", cmd_str)
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_mount"),
+                HeadlessRunRequest("proj_mount", "test prompt"),
+            )
+            assert "/home/dev/.terok:Z" in " ".join(result.run_mock.call_args[0][0])
 
     def test_headless_generates_agent_wrapper(self) -> None:
         """task_run_headless generates terok-agent.sh in agent-config dir."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_wrap")
             state_dir = base / "state"
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_wrap"),
+                HeadlessRunRequest("proj_wrap", "test"),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_wrap", "test"))
-
-                    # Verify wrapper was written
-                    wrapper = (
-                        state_dir / "tasks" / "proj_wrap" / "1" / "agent-config" / "terok-agent.sh"
-                    )
-                    self.assertTrue(wrapper.is_file())
-                    content = wrapper.read_text()
-                    self.assertIn("claude()", content)
-                    self.assertNotIn("--dangerously-skip-permissions", content)
+            wrapper = task_paths(state_dir, "proj_wrap")[0] / "terok-agent.sh"
+            assert wrapper.is_file()
+            content = wrapper.read_text()
+            assert "claude()" in content
+            assert "--dangerously-skip-permissions" not in content
 
     def test_headless_writes_session_hook_settings(self) -> None:
         """task_run_headless writes shared Claude settings with SessionStart hook."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_hook")
-            state_dir = base / "state"
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_hook"),
+                HeadlessRunRequest("proj_hook", "test"),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_hook", "test"))
-
-                    settings = base / "envs" / "_claude-config" / "settings.json"
-                    self.assertTrue(settings.is_file())
-                    data = json.loads(settings.read_text())
-                    self.assertIn("SessionStart", data["hooks"])
+            settings = base / "envs" / "_claude-config" / "settings.json"
+            assert settings.is_file()
+            assert "SessionStart" in json.loads(settings.read_text())["hooks"]
 
     def test_headless_with_default_subagents(self) -> None:
         """task_run_headless includes default subagents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(
-                base,
-                "proj_agents",
-                (
-                    "agent:\n"
-                    "  subagents:\n"
-                    "    - name: reviewer\n"
-                    "      default: true\n"
-                    "      system_prompt: Review code\n"
-                    "    - name: debugger\n"
-                    "      default: false\n"
-                    "      system_prompt: Debug code\n"
-                ),
-            )
             state_dir = base / "state"
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_agents", DEFAULT_SUBAGENTS_YAML),
+                HeadlessRunRequest("proj_agents", "test"),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_agents", "test"))
-
-                    agents_file = (
-                        state_dir / "tasks" / "proj_agents" / "1" / "agent-config" / "agents.json"
-                    )
-                    self.assertTrue(agents_file.is_file())
-                    agents_data = json.loads(agents_file.read_text())
-                    # Only default agents should be included
-                    self.assertIn("reviewer", agents_data)
-                    self.assertNotIn("debugger", agents_data)
-                    # Verify dict-keyed-by-name format
-                    self.assertIsInstance(agents_data, dict)
-                    self.assertEqual(agents_data["reviewer"]["prompt"], "Review code")
+            agents_data = read_task_agents(state_dir, "proj_agents")
+            assert isinstance(agents_data, dict)
+            assert "reviewer" in agents_data
+            assert "debugger" not in agents_data
+            assert agents_data["reviewer"]["prompt"] == "Review code"
 
     def test_headless_with_agent_selection(self) -> None:
         """task_run_headless includes selected non-default agents in agents.json."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(
-                base,
-                "proj_sel",
-                (
-                    "agent:\n"
-                    "  subagents:\n"
-                    "    - name: reviewer\n"
-                    "      default: true\n"
-                    "      system_prompt: Review code\n"
-                    "    - name: debugger\n"
-                    "      default: false\n"
-                    "      system_prompt: Debug code\n"
-                ),
-            )
             state_dir = base / "state"
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_sel", DEFAULT_SUBAGENTS_YAML),
+                HeadlessRunRequest("proj_sel", "test", agents=["debugger"]),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(
-                            HeadlessRunRequest("proj_sel", "test", agents=["debugger"])
-                        )
-
-                    agents_file = (
-                        state_dir / "tasks" / "proj_sel" / "1" / "agent-config" / "agents.json"
-                    )
-                    self.assertTrue(agents_file.is_file())
-                    agents_data = json.loads(agents_file.read_text())
-                    # Both default and selected should be included
-                    self.assertIn("reviewer", agents_data)
-                    self.assertIn("debugger", agents_data)
+            agents_data = read_task_agents(state_dir, "proj_sel")
+            assert "reviewer" in agents_data
+            assert "debugger" in agents_data
 
     def test_headless_cli_model_max_turns_in_command(self) -> None:
         """CLI model/max_turns appear in headless bash command, not in wrapper."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_flags")
             state_dir = base / "state"
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_flags"),
+                HeadlessRunRequest("proj_flags", "test", model="opus", max_turns=100),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(
-                            HeadlessRunRequest(
-                                "proj_flags",
-                                "test",
-                                model="opus",
-                                max_turns=100,
-                            )
-                        )
+            bash_cmd = result.run_mock.call_args[0][0][-1]
+            assert "--model opus" in bash_cmd
+            assert "--max-turns 100" in bash_cmd
+            assert "--terok-timeout" in bash_cmd
 
-                    # Model/max_turns should be in the bash command
-                    cmd = run_mock.call_args[0][0]
-                    bash_cmd = cmd[-1]
-                    self.assertIn("--model opus", bash_cmd)
-                    self.assertIn("--max-turns 100", bash_cmd)
-                    # Timeout is delegated to the wrapper via --terok-timeout
-                    self.assertIn("--terok-timeout", bash_cmd)
-
-                    # But per-run flags are NOT in the wrapper
-                    wrapper = (
-                        state_dir / "tasks" / "proj_flags" / "1" / "agent-config" / "terok-agent.sh"
-                    )
-                    content = wrapper.read_text()
-                    self.assertNotIn("--model", content)
-                    self.assertNotIn("--max-turns", content)
-                    # Wrapper DOES have timeout support
-                    self.assertIn("--terok-timeout", content)
+            wrapper = task_paths(state_dir, "proj_flags")[0] / "terok-agent.sh"
+            content = wrapper.read_text()
+            assert "--model" not in content
+            assert "--max-turns" not in content
+            assert "--terok-timeout" in content
 
     def test_headless_container_name_uses_run_prefix(self) -> None:
         """task_run_headless names the container <project>-run-<task_id>."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_name")
-            state_dir = base / "state"
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_name", "test"))
-
-                    cmd = run_mock.call_args[0][0]
-                    name_idx = cmd.index("--name")
-                    self.assertEqual(cmd[name_idx + 1], "proj_name-run-1")
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_name"),
+                HeadlessRunRequest("proj_name", "test"),
+            )
+            cmd = result.run_mock.call_args[0][0]
+            assert cmd[cmd.index("--name") + 1] == "proj_name-run-1"
 
     def test_headless_metadata_updated(self) -> None:
         """task_run_headless sets mode=run and updates status on completion."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_meta")
             state_dir = base / "state"
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_meta"),
+                HeadlessRunRequest("proj_meta", "test"),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_meta", "test"))
-
-                    meta_path = state_dir / "projects" / "proj_meta" / "tasks" / "1.yml"
-                    meta = yaml.safe_load(meta_path.read_text())
-                    self.assertEqual(meta["mode"], "run")
-                    self.assertEqual(meta["exit_code"], 0)
+            meta = read_task_meta(state_dir, "proj_meta")
+            assert meta["mode"] == "run"
+            assert meta["exit_code"] == 0
 
     def test_headless_no_follow_mode(self) -> None:
         """task_run_headless with follow=False prints detach info."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_nf")
-            state_dir = base / "state"
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_nf"),
+                HeadlessRunRequest("proj_nf", "test", follow=False),
+            )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit"
-                    ) as stream_mock,
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_nf", "test", follow=False))
-
-                    # Stream should NOT be called in no-follow mode
-                    stream_mock.assert_not_called()
-
-                    output = buffer.getvalue()
-                    self.assertIn("detached", output.lower())
-                    self.assertIn("proj_nf-run-1", output)
+            result.wait_mock.assert_not_called()
+            assert "detached" in result.output.lower()
+            assert "proj_nf-run-1" in result.output
 
     def test_headless_uses_claude_function_in_command(self) -> None:
         """task_run_headless uses claude wrapper via --terok-timeout."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_cmd")
-            state_dir = base / "state"
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(HeadlessRunRequest("proj_cmd", "test"))
-
-                    cmd = run_mock.call_args[0][0]
-                    bash_cmd = cmd[-1]
-                    self.assertIn("init-ssh-and-repo.sh", bash_cmd)
-                    self.assertNotIn("start-claude.sh", bash_cmd)
-                    self.assertIn("--terok-timeout", bash_cmd)
-                    self.assertIn("--output-format stream-json", bash_cmd)
-                    self.assertIn("-p", bash_cmd)
-                    # Flags are now in the wrapper, not duplicated in the command
-                    self.assertNotIn("--dangerously-skip-permissions", bash_cmd)
-                    self.assertNotIn('--add-dir "/"', bash_cmd)
-                    self.assertNotIn("GIT_AUTHOR_NAME=Claude", bash_cmd)
+            result = run_headless_request(
+                base,
+                write_runner_project(base, "proj_cmd"),
+                HeadlessRunRequest("proj_cmd", "test"),
+            )
+            bash_cmd = result.run_mock.call_args[0][0][-1]
+            assert "init-ssh-and-repo.sh" in bash_cmd
+            assert "start-claude.sh" not in bash_cmd
+            assert "--terok-timeout" in bash_cmd
+            assert "--output-format stream-json" in bash_cmd
+            assert "-p" in bash_cmd
+            assert "--dangerously-skip-permissions" not in bash_cmd
+            assert '--add-dir "/"' not in bash_cmd
+            assert "GIT_AUTHOR_NAME=Claude" not in bash_cmd
 
     def test_headless_with_config_file_subagents(self) -> None:
         """task_run_headless reads subagents from YAML config file."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_cfgfile")
             state_dir = base / "state"
-
-            # Create a YAML agent config file with subagents
             agent_config = base / "my-agent-config.yml"
             agent_config.write_text(
                 "subagents:\n"
@@ -997,252 +814,123 @@ class TaskRunHeadlessTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_run_headless(
-                            HeadlessRunRequest(
-                                "proj_cfgfile",
-                                "test",
-                                config_path=str(agent_config),
-                            )
-                        )
+            run_headless_request(
+                base,
+                write_runner_project(base, "proj_cfgfile"),
+                HeadlessRunRequest("proj_cfgfile", "test", config_path=str(agent_config)),
+            )
 
-                    # Verify agents.json contains the config file agent
-                    agents_file = (
-                        state_dir / "tasks" / "proj_cfgfile" / "1" / "agent-config" / "agents.json"
-                    )
-                    self.assertTrue(agents_file.is_file())
-                    agents_data = json.loads(agents_file.read_text())
-                    self.assertIn("extra-agent", agents_data)
-                    self.assertEqual(agents_data["extra-agent"]["prompt"], "I am an extra agent")
+            agents_data = read_task_agents(state_dir, "proj_cfgfile")
+            assert "extra-agent" in agents_data
+            assert agents_data["extra-agent"]["prompt"] == "I am an extra agent"
 
 
-class TaskFollowupHeadlessTests(unittest.TestCase):
+class TestTaskFollowupHeadless:
     """Tests for task_followup_headless."""
-
-    def _make_project(self, base: Path, project_id: str) -> Path:
-        config_root = base / "config"
-        envs_dir = base / "envs"
-        config_root.mkdir(parents=True, exist_ok=True)
-        config_file = base / "config.yml"
-        config_file.write_text(f"envs:\n  base_dir: {envs_dir}\n", encoding="utf-8")
-        write_project(config_root, project_id, f"project:\n  id: {project_id}\n")
-        return config_file
 
     def _create_completed_task(self, base: Path, project_id: str) -> str:
         """Create a task via task_run_headless and return the task_id."""
-        config_file = self._make_project(base, project_id)
-        state_dir = base / "state"
-
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "TEROK_CONFIG_DIR": str(base / "config"),
-                "TEROK_STATE_DIR": str(state_dir),
-                "TEROK_CONFIG_FILE": str(config_file),
-            },
-            clear=True,
-        ):
-            with (
-                mock_git_config(),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
-                unittest.mock.patch(
-                    "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                ),
-                unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-            ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
-                buffer = StringIO()
-                with redirect_stdout(buffer):
-                    task_id = task_run_headless(HeadlessRunRequest(project_id, "initial prompt"))
-        return task_id
+        result = run_headless_request(
+            base,
+            write_runner_project(base, project_id),
+            HeadlessRunRequest(project_id, "initial prompt"),
+        )
+        assert result.task_id is not None
+        return result.task_id
 
     def test_followup_writes_new_prompt(self) -> None:
         """Follow-up replaces prompt.txt and archives old prompt to history."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            task_id = self._create_completed_task(base, "proj_fu")
             state_dir = base / "state"
+            task_id = self._create_completed_task(base, "proj_fu")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
-                        side_effect=["exited", "running"],
-                    ),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_followup_headless("proj_fu", task_id, "fix the remaining tests")
+            run_followup_request(
+                base,
+                "proj_fu",
+                task_id,
+                "fix the remaining tests",
+                container_state=["exited", "running"],
+            )
 
-                    agent_cfg = state_dir / "tasks" / "proj_fu" / "1" / "agent-config"
-                    prompt_file = agent_cfg / "prompt.txt"
-                    history_file = agent_cfg / "prompt-history.txt"
-                    content = prompt_file.read_text()
-                    # prompt.txt contains ONLY the new follow-up prompt
-                    self.assertEqual(content, "fix the remaining tests")
-                    # Original prompt is archived in the history file
-                    history = history_file.read_text()
-                    self.assertIn("initial prompt", history)
-                    self.assertIn("---", history)
+            agent_cfg, _meta_path = task_paths(state_dir, "proj_fu")
+            assert (agent_cfg / "prompt.txt").read_text() == "fix the remaining tests"
+            history = (agent_cfg / "prompt-history.txt").read_text()
+            assert "initial prompt" in history
+            assert "---" in history
 
     def test_followup_uses_podman_start(self) -> None:
         """Follow-up uses podman start, not podman run."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_start")
-            state_dir = base / "state"
-
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
-                        side_effect=["exited", "running"],
-                    ),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_followup_headless("proj_start", task_id, "continue")
-
-                    cmd = run_mock.call_args[0][0]
-                    self.assertEqual(cmd[0], "podman")
-                    self.assertEqual(cmd[1], "start")
+            result = run_followup_request(
+                base, "proj_start", task_id, "continue", container_state=["exited", "running"]
+            )
+            cmd = result.run_mock.call_args[0][0]
+            assert cmd[0] == "podman"
+            assert cmd[1] == "start"
 
     def test_followup_rejects_non_run_mode(self) -> None:
         """Follow-up rejects tasks that aren't headless (mode != 'run')."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_mode")
             state_dir = base / "state"
+            config_file = write_runner_project(base, "proj_mode")
 
-            # Create a task manually with mode=cli
             from terok.lib.containers.tasks import task_new
 
             with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
+                os.environ, runner_env_vars(base, config_file), clear=True
             ):
                 with mock_git_config():
                     task_id = task_new("proj_mode")
-                    meta_path = state_dir / "projects" / "proj_mode" / "tasks" / f"{task_id}.yml"
+                    _agent_cfg, meta_path = task_paths(state_dir, "proj_mode", task_id)
                     meta = yaml.safe_load(meta_path.read_text())
                     meta["mode"] = "cli"
                     meta_path.write_text(yaml.safe_dump(meta))
 
-                    with self.assertRaises(SystemExit) as ctx:
+                    with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_mode", task_id, "test")
-                    self.assertIn("not a headless task", str(ctx.exception))
+                    assert "not a headless task" in str(ctx.value)
 
     def test_followup_rejects_running_task(self) -> None:
         """Follow-up rejects tasks that are still running."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            config_file = self._make_project(base, "proj_run")
             state_dir = base / "state"
+            config_file = write_runner_project(base, "proj_run")
 
             from terok.lib.containers.tasks import task_new
 
             with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(config_file),
-                },
-                clear=True,
+                os.environ, runner_env_vars(base, config_file), clear=True
             ):
                 with mock_git_config():
                     task_id = task_new("proj_run")
-                    meta_path = state_dir / "projects" / "proj_run" / "tasks" / f"{task_id}.yml"
+                    _agent_cfg, meta_path = task_paths(state_dir, "proj_run", task_id)
                     meta = yaml.safe_load(meta_path.read_text())
                     meta["mode"] = "run"
                     meta_path.write_text(yaml.safe_dump(meta))
 
-                    # Container is running → follow-up should be rejected
                     with (
                         unittest.mock.patch(
                             "terok.lib.containers.task_runners.get_container_state",
                             return_value="running",
                         ),
-                        self.assertRaises(SystemExit) as ctx,
+                        pytest.raises(SystemExit) as ctx,
                     ):
                         task_followup_headless("proj_run", task_id, "test")
-                    self.assertIn("still running", str(ctx.exception))
+                    assert "still running" in str(ctx.value)
 
     def test_followup_rejects_running_container(self) -> None:
         """Follow-up rejects when container is still running (stale metadata)."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_crun")
-            state_dir = base / "state"
 
             with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
+                os.environ, runner_env_vars(base, base / "config.yml"), clear=True
             ):
                 with (
                     mock_git_config(),
@@ -1251,110 +939,54 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                         return_value="running",
                     ),
                 ):
-                    with self.assertRaises(SystemExit) as ctx:
+                    with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_crun", task_id, "test")
-                    self.assertIn("still running", str(ctx.exception))
+                    assert "still running" in str(ctx.value)
 
     def test_followup_updates_metadata(self) -> None:
         """Follow-up updates task status to running then completed."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            task_id = self._create_completed_task(base, "proj_meta2")
             state_dir = base / "state"
+            task_id = self._create_completed_task(base, "proj_meta2")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
-                        side_effect=["exited", "running"],
-                    ),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit", return_value=0
-                    ),
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_followup_headless("proj_meta2", task_id, "continue")
+            run_followup_request(
+                base, "proj_meta2", task_id, "continue", container_state=["exited", "running"]
+            )
 
-                    meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
-                    meta = yaml.safe_load(meta_path.read_text())
-                    self.assertEqual(meta["exit_code"], 0)
+            meta = read_task_meta(state_dir, "proj_meta2", task_id)
+            assert meta["exit_code"] == 0
 
     def test_followup_no_follow_mode(self) -> None:
         """Follow-up with follow=False prints detached info and skips wait."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
-            task_id = self._create_completed_task(base, "proj_meta2")
             state_dir = base / "state"
+            task_id = self._create_completed_task(base, "proj_meta2")
 
-            with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
-            ):
-                with (
-                    mock_git_config(),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
-                    ) as run_mock,
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
-                        side_effect=["exited", "running"],
-                    ),
-                    unittest.mock.patch(
-                        "terok.lib.containers.task_runners.wait_for_exit"
-                    ) as wait_mock,
-                    unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
-                ):
-                    run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    buffer = StringIO()
-                    with redirect_stdout(buffer):
-                        task_followup_headless("proj_meta2", task_id, "continue", follow=False)
+            result = run_followup_request(
+                base,
+                "proj_meta2",
+                task_id,
+                "continue",
+                container_state=["exited", "running"],
+                follow=False,
+            )
 
-                    # wait_for_exit should NOT be called in no-follow mode
-                    wait_mock.assert_not_called()
+            result.wait_mock.assert_not_called()
+            assert "detached" in result.output.lower()
 
-                    output = buffer.getvalue()
-                    self.assertIn("detached", output.lower())
-
-                    meta_path = state_dir / "projects" / "proj_meta2" / "tasks" / f"{task_id}.yml"
-                    meta = yaml.safe_load(meta_path.read_text())
-                    # exit_code should be cleared for the new run
-                    self.assertIsNone(meta["exit_code"])
+            meta = read_task_meta(state_dir, "proj_meta2", task_id)
+            assert meta["exit_code"] is None
 
     def test_followup_container_not_found(self) -> None:
         """Follow-up raises SystemExit with 'not found' when container has been removed."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_notfound")
-            state_dir = base / "state"
 
             with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
+                os.environ, runner_env_vars(base, base / "config.yml"), clear=True
             ):
                 with (
                     mock_git_config(),
@@ -1363,25 +995,18 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                         return_value=None,
                     ),
                 ):
-                    with self.assertRaises(SystemExit) as ctx:
+                    with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_notfound", task_id, "test")
-                    self.assertIn("not found", str(ctx.exception))
+                    assert "not found" in str(ctx.value)
 
     def test_followup_start_fails(self) -> None:
         """Follow-up raises SystemExit when container remains exited after start."""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             task_id = self._create_completed_task(base, "proj_startfail")
-            state_dir = base / "state"
 
             with unittest.mock.patch.dict(
-                os.environ,
-                {
-                    "TEROK_CONFIG_DIR": str(base / "config"),
-                    "TEROK_STATE_DIR": str(state_dir),
-                    "TEROK_CONFIG_FILE": str(base / "config.yml"),
-                },
-                clear=True,
+                os.environ, runner_env_vars(base, base / "config.yml"), clear=True
             ):
                 with (
                     mock_git_config(),
@@ -1390,11 +1015,10 @@ class TaskFollowupHeadlessTests(unittest.TestCase):
                     ) as run_mock,
                     unittest.mock.patch(
                         "terok.lib.containers.task_runners.get_container_state",
-                        # first call: pre-start check (exited); second call: post-start check (still exited)
                         side_effect=["exited", "exited"],
                     ),
                 ):
                     run_mock.return_value = subprocess.CompletedProcess([], 0)
-                    with self.assertRaises(SystemExit) as ctx:
+                    with pytest.raises(SystemExit) as ctx:
                         task_followup_headless("proj_startfail", task_id, "test")
-                    self.assertIn("failed to start", str(ctx.exception))
+                    assert "failed to start" in str(ctx.value)

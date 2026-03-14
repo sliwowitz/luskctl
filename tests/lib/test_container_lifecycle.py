@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
-import unittest
 import unittest.mock
 from contextlib import redirect_stdout
 from io import StringIO
 
+import pytest
 import yaml
 
 from terok.lib.containers.runtime import get_container_state, get_task_container_state
@@ -15,7 +15,7 @@ from terok.lib.containers.tasks import task_new, task_status, task_stop
 from test_utils import mock_git_config, project_env
 
 
-class ContainerLifecycleTests(unittest.TestCase):
+class TestContainerLifecycle:
     """Tests for container lifecycle management: stop, restart, status."""
 
     def test_get_container_state_running(self) -> None:
@@ -24,7 +24,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             "terok.lib.containers.runtime.subprocess.check_output", return_value="running\n"
         ):
             state = get_container_state("test-container")
-            self.assertEqual(state, "running")
+            assert state == "running"
 
     def test_get_container_state_exited(self) -> None:
         """_get_container_state returns 'exited' for stopped container."""
@@ -32,7 +32,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             "terok.lib.containers.runtime.subprocess.check_output", return_value="exited\n"
         ):
             state = get_container_state("test-container")
-            self.assertEqual(state, "exited")
+            assert state == "exited"
 
     def test_get_container_state_not_found(self) -> None:
         """_get_container_state returns None if container doesn't exist."""
@@ -41,7 +41,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             side_effect=subprocess.CalledProcessError(1, "podman"),
         ):
             state = get_container_state("test-container")
-            self.assertIsNone(state)
+            assert state is None
 
     def test_get_container_state_podman_not_found(self) -> None:
         """_get_container_state returns None if podman is not installed."""
@@ -50,7 +50,7 @@ class ContainerLifecycleTests(unittest.TestCase):
             side_effect=FileNotFoundError("podman"),
         ):
             state = get_container_state("test-container")
-            self.assertIsNone(state)
+            assert state is None
 
     def test_task_stop_calls_podman_stop(self) -> None:
         """task_stop calls podman stop with correct timeout."""
@@ -81,9 +81,9 @@ class ContainerLifecycleTests(unittest.TestCase):
                 # Verify podman stop was called with default 10s timeout
                 run_mock.assert_called()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[:2], ["podman", "stop"])
-                self.assertIn("--time", call_args)
-                self.assertEqual(call_args[call_args.index("--time") + 1], "10")
+                assert call_args[:2] == ["podman", "stop"]
+                assert "--time" in call_args
+                assert call_args[call_args.index("--time") + 1] == "10"
 
     def test_task_stop_custom_timeout_from_config(self) -> None:
         """task_stop uses shutdown_timeout from project config."""
@@ -110,9 +110,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                     task_stop(project_id, "1")
 
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(
-                    call_args, ["podman", "stop", "--time", "30", f"{project_id}-cli-1"]
-                )
+                assert call_args == ["podman", "stop", "--time", "30", f"{project_id}-cli-1"]
 
     def test_task_stop_cli_timeout_overrides_config(self) -> None:
         """Explicit timeout kwarg overrides project config."""
@@ -139,18 +137,16 @@ class ContainerLifecycleTests(unittest.TestCase):
                     task_stop(project_id, "1", timeout=60)
 
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(
-                    call_args, ["podman", "stop", "--time", "60", f"{project_id}-cli-1"]
-                )
+                assert call_args == ["podman", "stop", "--time", "60", f"{project_id}-cli-1"]
 
     def test_task_stop_nonexistent_fails(self) -> None:
         """task_stop raises SystemExit if task doesn't exist."""
         project_id = "proj_stop2"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id):
             with mock_git_config():
-                with self.assertRaises(SystemExit) as ctx:
+                with pytest.raises(SystemExit) as ctx:
                     task_stop(project_id, "999")
-                self.assertIn("Unknown task", str(ctx.exception))
+                assert "Unknown task" in str(ctx.value)
 
     def test_task_restart_starts_exited_container(self) -> None:
         """task_restart uses 'podman start' for exited container."""
@@ -181,7 +177,7 @@ class ContainerLifecycleTests(unittest.TestCase):
                 # Verify podman start was called
                 run_mock.assert_called()
                 call_args = run_mock.call_args[0][0]
-                self.assertEqual(call_args[:2], ["podman", "start"])
+                assert call_args[:2] == ["podman", "start"]
 
     def test_task_restart_already_running(self) -> None:
         """task_restart stops then starts a running container."""
@@ -212,14 +208,14 @@ class ContainerLifecycleTests(unittest.TestCase):
                     task_restart(project_id, "1")
 
                 # Verify podman stop then start were called
-                self.assertEqual(run_mock.call_count, 2)
+                assert run_mock.call_count == 2
                 stop_args = run_mock.call_args_list[0][0][0]
                 start_args = run_mock.call_args_list[1][0][0]
-                self.assertEqual(stop_args, ["podman", "stop", "--time", "10", cname])
-                self.assertEqual(start_args, ["podman", "start", cname])
+                assert stop_args == ["podman", "stop", "--time", "10", cname]
+                assert start_args == ["podman", "start", cname]
 
                 # Verify message indicates restarted
-                self.assertIn("Restarted", output.getvalue())
+                assert "Restarted" in output.getvalue()
 
     def test_task_status_shows_live_state(self) -> None:
         """task_status uses live container state for effective status."""
@@ -245,13 +241,13 @@ class ContainerLifecycleTests(unittest.TestCase):
                     task_status(project_id, "1")
 
                 output_str = output.getvalue()
-                self.assertIn("exited", output_str)
-                self.assertIn("stopped", output_str)
+                assert "exited" in output_str
+                assert "stopped" in output_str
 
     def test_get_task_container_state_no_mode(self) -> None:
         """get_task_container_state returns None if mode is not set."""
         state = get_task_container_state("proj", "1", None)
-        self.assertIsNone(state)
+        assert state is None
 
     def test_get_task_container_state_with_mode(self) -> None:
         """get_task_container_state checks container state when mode is set."""
@@ -265,5 +261,5 @@ class ContainerLifecycleTests(unittest.TestCase):
                 ) as mock_state,
             ):
                 state = get_task_container_state(project_id, "1", "cli")
-                self.assertEqual(state, "running")
+                assert state == "running"
                 mock_state.assert_called_once_with(f"{project_id}-cli-1")

@@ -3,11 +3,12 @@
 
 """Tests for task name functionality: sanitize, generate, rename, and YAML persistence."""
 
-import unittest
+import re
 import unittest.mock
 from contextlib import redirect_stdout
 from io import StringIO
 
+import pytest
 import yaml
 
 from terok.lib.containers.tasks import (
@@ -24,111 +25,108 @@ from terok.lib.containers.tasks import (
 from test_utils import project_env
 
 
-class TestSanitizeTaskName(unittest.TestCase):
+class TestSanitizeTaskName:
     """Tests for sanitize_task_name()."""
 
     def test_none_returns_none(self) -> None:
         """None input returns None."""
-        self.assertIsNone(sanitize_task_name(None))
+        assert sanitize_task_name(None) is None
 
     def test_empty_returns_none(self) -> None:
         """Empty string returns None."""
-        self.assertIsNone(sanitize_task_name(""))
+        assert sanitize_task_name("") is None
 
     def test_whitespace_only_returns_none(self) -> None:
         """Whitespace-only string returns None."""
-        self.assertIsNone(sanitize_task_name("   "))
+        assert sanitize_task_name("   ") is None
 
     def test_spaces_replaced_with_hyphens(self) -> None:
         """Spaces are replaced with hyphens."""
-        self.assertEqual(sanitize_task_name("fix auth bug"), "fix-auth-bug")
+        assert sanitize_task_name("fix auth bug") == "fix-auth-bug"
 
     def test_underscores_preserved(self) -> None:
         """Underscores are kept as valid characters."""
-        self.assertEqual(sanitize_task_name("fix_auth_bug"), "fix_auth_bug")
+        assert sanitize_task_name("fix_auth_bug") == "fix_auth_bug"
 
     def test_special_chars_stripped(self) -> None:
         """Non-alphanumeric characters (except hyphens and underscores) are stripped."""
-        self.assertEqual(sanitize_task_name("fix@auth#bug!"), "fixauthbug")
+        assert sanitize_task_name("fix@auth#bug!") == "fixauthbug"
 
     def test_uppercase_lowered(self) -> None:
         """Input is lowercased."""
-        self.assertEqual(sanitize_task_name("Fix-Auth-Bug"), "fix-auth-bug")
+        assert sanitize_task_name("Fix-Auth-Bug") == "fix-auth-bug"
 
     def test_consecutive_hyphens_collapsed(self) -> None:
         """Multiple consecutive hyphens collapse to one."""
-        self.assertEqual(sanitize_task_name("fix---auth---bug"), "fix-auth-bug")
+        assert sanitize_task_name("fix---auth---bug") == "fix-auth-bug"
 
     def test_trailing_hyphens_stripped(self) -> None:
         """Trailing hyphens are stripped; leading hyphens are preserved."""
-        self.assertEqual(sanitize_task_name("fix-bug-"), "fix-bug")
-        self.assertEqual(sanitize_task_name("-fix-bug"), "-fix-bug")
+        assert sanitize_task_name("fix-bug-") == "fix-bug"
+        assert sanitize_task_name("-fix-bug") == "-fix-bug"
 
     def test_truncation(self) -> None:
         """Names exceeding TASK_NAME_MAX_LEN are truncated."""
         long_name = "a" * 100
         result = sanitize_task_name(long_name)
-        self.assertEqual(len(result), TASK_NAME_MAX_LEN)
+        assert len(result) == TASK_NAME_MAX_LEN
 
     def test_mixed_transform(self) -> None:
         """Complex input with mixed issues sanitizes correctly."""
-        self.assertEqual(
-            sanitize_task_name("  Fix__Auth  Bug!! "),
-            "fix__auth-bug",
-        )
+        assert sanitize_task_name("  Fix__Auth  Bug!! ") == "fix__auth-bug"
 
     def test_only_special_chars_returns_none(self) -> None:
         """Input with only special characters returns None."""
-        self.assertIsNone(sanitize_task_name("@#$%^&"))
+        assert sanitize_task_name("@#$%^&") is None
 
     def test_numeric_name(self) -> None:
         """Numeric-only names are allowed."""
-        self.assertEqual(sanitize_task_name("42"), "42")
+        assert sanitize_task_name("42") == "42"
 
 
-class TestValidateTaskName(unittest.TestCase):
+class TestValidateTaskName:
     """Tests for validate_task_name()."""
 
     def test_valid_name_returns_none(self) -> None:
         """A normal slug name passes validation."""
-        self.assertIsNone(validate_task_name("fix-auth-bug"))
+        assert validate_task_name("fix-auth-bug") is None
 
     def test_leading_hyphen_rejected(self) -> None:
         """A name starting with a hyphen is rejected."""
         err = validate_task_name("-fix-bug")
-        self.assertIsNotNone(err)
-        self.assertIn("hyphen", err)
+        assert err is not None
+        assert "hyphen" in err
 
     def test_underscored_name_valid(self) -> None:
         """A name with underscores passes validation."""
-        self.assertIsNone(validate_task_name("fix_auth_bug"))
+        assert validate_task_name("fix_auth_bug") is None
 
     def test_numeric_name_valid(self) -> None:
         """A purely numeric name passes validation."""
-        self.assertIsNone(validate_task_name("42"))
+        assert validate_task_name("42") is None
 
 
-class TestGenerateTaskName(unittest.TestCase):
+class TestGenerateTaskName:
     """Tests for generate_task_name()."""
 
     def test_returns_non_empty(self) -> None:
         """Generated name is a non-empty string."""
         name = generate_task_name()
-        self.assertIsInstance(name, str)
-        self.assertTrue(len(name) > 0)
+        assert isinstance(name, str)
+        assert len(name) > 0
 
     def test_matches_slug_pattern(self) -> None:
         """Generated name matches adjective-noun slug pattern."""
         name = generate_task_name()
-        self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
+        assert re.search(r"^[a-z]+-[a-z0-9]+$", name)
 
     def test_uses_hyphen_separator(self) -> None:
         """Generated name uses hyphen as separator."""
         name = generate_task_name()
-        self.assertIn("-", name)
+        assert "-" in name
 
 
-class TestTaskNewWithName(unittest.TestCase):
+class TestTaskNewWithName:
     """Tests for task_new() with the name parameter."""
 
     def test_task_new_with_explicit_name(self) -> None:
@@ -142,7 +140,7 @@ class TestTaskNewWithName(unittest.TestCase):
 
             meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
             meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["name"], "fix-auth-bug")
+            assert meta["name"] == "fix-auth-bug"
 
     def test_task_new_default_name(self) -> None:
         """task_new without explicit name generates an auto name (not None)."""
@@ -154,9 +152,9 @@ class TestTaskNewWithName(unittest.TestCase):
             task_new(project_id)
 
             tasks = get_tasks(project_id)
-            self.assertEqual(len(tasks), 1)
-            self.assertIsNotNone(tasks[0].name)
-            self.assertRegex(tasks[0].name, r"^[a-z]+-[a-z]+$")
+            assert len(tasks) == 1
+            assert tasks[0].name is not None
+            assert re.search(r"^[a-z]+-[a-z]+$", tasks[0].name)
 
     def test_task_new_invalid_name_raises(self) -> None:
         """task_new with all-special-char name raises SystemExit and leaves no artifacts."""
@@ -165,10 +163,10 @@ class TestTaskNewWithName(unittest.TestCase):
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
         ) as ctx:
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 task_new(project_id, name="@#$")
             meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
-            self.assertFalse(meta_path.exists())
+            assert not meta_path.exists()
 
     def test_task_new_leading_hyphen_raises(self) -> None:
         """task_new with a leading hyphen raises SystemExit and leaves no artifacts."""
@@ -177,10 +175,10 @@ class TestTaskNewWithName(unittest.TestCase):
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
         ) as ctx:
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 task_new(project_id, name="-my-task")
             meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
-            self.assertFalse(meta_path.exists())
+            assert not meta_path.exists()
 
     def test_task_new_prints_name(self) -> None:
         """task_new output includes the task name."""
@@ -193,10 +191,10 @@ class TestTaskNewWithName(unittest.TestCase):
             with redirect_stdout(buf):
                 task_new(project_id, name="my-task")
             output = buf.getvalue()
-            self.assertIn("my-task", output)
+            assert "my-task" in output
 
 
-class TestTaskRename(unittest.TestCase):
+class TestTaskRename:
     """Tests for task_rename()."""
 
     def test_rename_task(self) -> None:
@@ -211,7 +209,7 @@ class TestTaskRename(unittest.TestCase):
 
             meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
             meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["name"], "new-name")
+            assert meta["name"] == "new-name"
 
     def test_rename_unknown_task_raises(self) -> None:
         """task_rename on unknown task raises SystemExit."""
@@ -220,7 +218,7 @@ class TestTaskRename(unittest.TestCase):
             f"project:\n  id: {project_id}\n",
             project_id=project_id,
         ):
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 task_rename(project_id, "999", "new-name")
 
     def test_rename_invalid_name_raises(self) -> None:
@@ -231,7 +229,7 @@ class TestTaskRename(unittest.TestCase):
             project_id=project_id,
         ):
             task_new(project_id)
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 task_rename(project_id, "1", "@#$%")
 
     def test_rename_leading_hyphen_raises(self) -> None:
@@ -242,7 +240,7 @@ class TestTaskRename(unittest.TestCase):
             project_id=project_id,
         ):
             task_new(project_id)
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 task_rename(project_id, "1", "-badname")
 
     def test_rename_sanitizes(self) -> None:
@@ -257,10 +255,10 @@ class TestTaskRename(unittest.TestCase):
 
             meta_path = ctx.state_dir / "projects" / project_id / "tasks" / "1.yml"
             meta = yaml.safe_load(meta_path.read_text())
-            self.assertEqual(meta["name"], "my-new-name")
+            assert meta["name"] == "my-new-name"
 
 
-class TestGetTasksLoadsName(unittest.TestCase):
+class TestGetTasksLoadsName:
     """Tests for name field in get_tasks()."""
 
     def test_get_tasks_loads_name(self) -> None:
@@ -273,17 +271,17 @@ class TestGetTasksLoadsName(unittest.TestCase):
             task_new(project_id, name="test-task")
 
             tasks = get_tasks(project_id)
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0].name, "test-task")
+            assert len(tasks) == 1
+            assert tasks[0].name == "test-task"
 
 
-class TestDefaultCategoriesForProject(unittest.TestCase):
+class TestDefaultCategoriesForProject:
     """Tests for _default_categories_for_project()."""
 
     def test_returns_three_categories(self) -> None:
         """Hash-based selection returns exactly 3 categories."""
         cats = _default_categories_for_project("myproject")
-        self.assertEqual(len(cats), 3)
+        assert len(cats) == 3
 
     def test_categories_are_valid(self) -> None:
         """All returned categories exist in the namer library."""
@@ -292,23 +290,23 @@ class TestDefaultCategoriesForProject(unittest.TestCase):
         valid = set(namer.list_categories())
         cats = _default_categories_for_project("testproj")
         for c in cats:
-            self.assertIn(c, valid)
+            assert c in valid
 
     def test_deterministic(self) -> None:
         """Same project ID always produces the same categories."""
         cats1 = _default_categories_for_project("stable-proj")
         cats2 = _default_categories_for_project("stable-proj")
-        self.assertEqual(cats1, cats2)
+        assert cats1 == cats2
 
     def test_different_projects_differ(self) -> None:
         """Different project IDs (usually) produce different category sets."""
         cats_a = _default_categories_for_project("project-alpha")
         cats_b = _default_categories_for_project("project-beta")
         # Not guaranteed, but overwhelmingly likely with 25-choose-3
-        self.assertNotEqual(cats_a, cats_b)
+        assert cats_a != cats_b
 
 
-class TestResolveNameCategories(unittest.TestCase):
+class TestResolveNameCategories:
     """Tests for _resolve_name_categories()."""
 
     def test_project_override(self) -> None:
@@ -319,7 +317,7 @@ class TestResolveNameCategories(unittest.TestCase):
         )
         with project_env(yml, project_id=project_id):
             cats = _resolve_name_categories(project_id)
-            self.assertEqual(cats, ["animals", "food"])
+            assert cats == ["animals", "food"]
 
     @unittest.mock.patch("terok.lib.core.config.get_task_name_categories")
     def test_global_config_fallback(self, mock_global: unittest.mock.Mock) -> None:
@@ -329,7 +327,7 @@ class TestResolveNameCategories(unittest.TestCase):
         yml = f"project:\n  id: {project_id}\n"
         with project_env(yml, project_id=project_id):
             cats = _resolve_name_categories(project_id)
-            self.assertEqual(cats, ["music", "sports"])
+            assert cats == ["music", "sports"]
 
     @unittest.mock.patch("terok.lib.core.config.get_task_name_categories")
     def test_hash_default_fallback(self, mock_global: unittest.mock.Mock) -> None:
@@ -339,19 +337,19 @@ class TestResolveNameCategories(unittest.TestCase):
         yml = f"project:\n  id: {project_id}\n"
         with project_env(yml, project_id=project_id):
             cats = _resolve_name_categories(project_id)
-            self.assertEqual(len(cats), 3)
+            assert len(cats) == 3
             # Should match the deterministic hash output
-            self.assertEqual(cats, _default_categories_for_project(project_id))
+            assert cats == _default_categories_for_project(project_id)
 
 
-class TestGenerateTaskNameWithCategories(unittest.TestCase):
+class TestGenerateTaskNameWithCategories:
     """Tests for generate_task_name() with project_id category resolution."""
 
     def test_generate_without_project_id(self) -> None:
         """generate_task_name() without project_id still works."""
         name = generate_task_name()
-        self.assertIsInstance(name, str)
-        self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
+        assert isinstance(name, str)
+        assert re.search(r"^[a-z]+-[a-z0-9]+$", name)
 
     def test_generate_with_project_id(self) -> None:
         """generate_task_name(project_id) uses resolved categories."""
@@ -359,8 +357,8 @@ class TestGenerateTaskNameWithCategories(unittest.TestCase):
         yml = f"project:\n  id: {project_id}\ntasks:\n  name_categories:\n    - animals\n"
         with project_env(yml, project_id=project_id):
             name = generate_task_name(project_id)
-            self.assertIsInstance(name, str)
-            self.assertRegex(name, r"^[a-z]+-[a-z0-9]+$")
+            assert isinstance(name, str)
+            assert re.search(r"^[a-z]+-[a-z0-9]+$", name)
 
     def test_task_new_uses_project_categories(self) -> None:
         """task_new() passes project_id to generate_task_name for category resolution."""
@@ -369,10 +367,6 @@ class TestGenerateTaskNameWithCategories(unittest.TestCase):
         with project_env(yml, project_id=project_id):
             task_new(project_id)
             tasks = get_tasks(project_id)
-            self.assertEqual(len(tasks), 1)
-            self.assertIsNotNone(tasks[0].name)
-            self.assertRegex(tasks[0].name, r"^[a-z]+-[a-z]+$")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert len(tasks) == 1
+            assert tasks[0].name is not None
+            assert re.search(r"^[a-z]+-[a-z]+$", tasks[0].name)

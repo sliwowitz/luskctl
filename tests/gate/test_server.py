@@ -7,10 +7,11 @@ import base64
 import io
 import json
 import tempfile
-import unittest
 import unittest.mock
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+
+import pytest
 
 from terok.gate.server import (
     _ROUTE,
@@ -24,7 +25,7 @@ from terok.gate.server import (
 from testnet import GATE_PORT, LOCALHOST_PEER
 
 
-class TestTokenStore(unittest.TestCase):
+class TestTokenStore:
     """Tests for TokenStore."""
 
     def test_validate_valid_token(self) -> None:
@@ -32,25 +33,25 @@ class TestTokenStore(unittest.TestCase):
             tf = Path(td) / "tokens.json"
             tf.write_text(json.dumps({"abc123": {"project": "proj-a", "task": "1"}}))
             store = TokenStore(tf)
-            self.assertEqual(store.validate("abc123"), "proj-a")
+            assert store.validate("abc123") == "proj-a"
 
     def test_validate_invalid_token(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tf = Path(td) / "tokens.json"
             tf.write_text(json.dumps({"abc123": {"project": "proj-a", "task": "1"}}))
             store = TokenStore(tf)
-            self.assertIsNone(store.validate("wrong"))
+            assert store.validate("wrong") is None
 
     def test_missing_file_returns_none(self) -> None:
         store = TokenStore(Path("/nonexistent/tokens.json"))
-        self.assertIsNone(store.validate("any"))
+        assert store.validate("any") is None
 
     def test_corrupt_json_returns_none(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tf = Path(td) / "tokens.json"
             tf.write_text("not json{{{")
             store = TokenStore(tf)
-            self.assertIsNone(store.validate("any"))
+            assert store.validate("any") is None
 
     def test_mtime_reload(self) -> None:
         """Token store reloads when file mtime changes."""
@@ -58,7 +59,7 @@ class TestTokenStore(unittest.TestCase):
             tf = Path(td) / "tokens.json"
             tf.write_text(json.dumps({"t1": {"project": "p1", "task": "1"}}))
             store = TokenStore(tf)
-            self.assertEqual(store.validate("t1"), "p1")
+            assert store.validate("t1") == "p1"
 
             # Overwrite with new token (force different mtime)
             import os
@@ -70,8 +71,8 @@ class TestTokenStore(unittest.TestCase):
             st = tf.stat()
             os.utime(tf, (st.st_atime, st.st_mtime + 1))
 
-            self.assertIsNone(store.validate("t1"))
-            self.assertEqual(store.validate("t2"), "p2")
+            assert store.validate("t1") is None
+            assert store.validate("t2") == "p2"
 
     def test_malformed_token_entry_skipped(self) -> None:
         """Token entries with wrong structure are ignored."""
@@ -79,8 +80,8 @@ class TestTokenStore(unittest.TestCase):
             tf = Path(td) / "tokens.json"
             tf.write_text(json.dumps({"bad": "not-a-dict", "ok": {"project": "p", "task": "1"}}))
             store = TokenStore(tf)
-            self.assertIsNone(store.validate("bad"))
-            self.assertEqual(store.validate("ok"), "p")
+            assert store.validate("bad") is None
+            assert store.validate("ok") == "p"
 
     def test_non_dict_json_returns_none(self) -> None:
         """Non-dict top-level JSON is treated as empty."""
@@ -88,127 +89,127 @@ class TestTokenStore(unittest.TestCase):
             tf = Path(td) / "tokens.json"
             tf.write_text(json.dumps(["a", "b"]))
             store = TokenStore(tf)
-            self.assertIsNone(store.validate("a"))
+            assert store.validate("a") is None
 
 
-class TestValidateTokenData(unittest.TestCase):
+class TestValidateTokenData:
     """Tests for _validate_token_data."""
 
     def test_valid_data(self) -> None:
         data = {"t1": {"project": "p", "task": "1"}}
-        self.assertEqual(_validate_token_data(data), data)
+        assert _validate_token_data(data) == data
 
     def test_non_dict_returns_empty(self) -> None:
-        self.assertEqual(_validate_token_data([1, 2]), {})
-        self.assertEqual(_validate_token_data("string"), {})
+        assert _validate_token_data([1, 2]) == {}
+        assert _validate_token_data("string") == {}
 
     def test_skips_non_dict_values(self) -> None:
         data = {"good": {"project": "p", "task": "1"}, "bad": "string"}
         result = _validate_token_data(data)
-        self.assertEqual(len(result), 1)
-        self.assertIn("good", result)
+        assert len(result) == 1
+        assert "good" in result
 
     def test_skips_missing_fields(self) -> None:
         data = {"no_task": {"project": "p"}, "no_proj": {"task": "1"}}
-        self.assertEqual(_validate_token_data(data), {})
+        assert _validate_token_data(data) == {}
 
 
-class TestExtractBasicAuthToken(unittest.TestCase):
+class TestExtractBasicAuthToken:
     """Tests for _extract_basic_auth_token."""
 
     def test_valid_basic_auth(self) -> None:
         creds = base64.b64encode(b"mytoken:password").decode()
-        self.assertEqual(_extract_basic_auth_token(f"Basic {creds}"), "mytoken")
+        assert _extract_basic_auth_token(f"Basic {creds}") == "mytoken"
 
     def test_none_header(self) -> None:
-        self.assertIsNone(_extract_basic_auth_token(None))
+        assert _extract_basic_auth_token(None) is None
 
     def test_non_basic_scheme(self) -> None:
-        self.assertIsNone(_extract_basic_auth_token("Bearer xyz"))
+        assert _extract_basic_auth_token("Bearer xyz") is None
 
     def test_invalid_base64(self) -> None:
-        self.assertIsNone(_extract_basic_auth_token("Basic !!!"))
+        assert _extract_basic_auth_token("Basic !!!") is None
 
     def test_no_colon(self) -> None:
         creds = base64.b64encode(b"nocolon").decode()
-        self.assertIsNone(_extract_basic_auth_token(f"Basic {creds}"))
+        assert _extract_basic_auth_token(f"Basic {creds}") is None
 
     def test_empty_username(self) -> None:
         creds = base64.b64encode(b":password").decode()
-        self.assertIsNone(_extract_basic_auth_token(f"Basic {creds}"))
+        assert _extract_basic_auth_token(f"Basic {creds}") is None
 
 
-class TestParseContentLength(unittest.TestCase):
+class TestParseContentLength:
     """Tests for _parse_content_length."""
 
     def test_valid_length(self) -> None:
         length, err = _parse_content_length("42")
-        self.assertEqual(length, 42)
-        self.assertIsNone(err)
+        assert length == 42
+        assert err is None
 
     def test_none_header(self) -> None:
         length, err = _parse_content_length(None)
-        self.assertEqual(length, 0)
-        self.assertIsNone(err)
+        assert length == 0
+        assert err is None
 
     def test_negative(self) -> None:
         _, err = _parse_content_length("-5")
-        self.assertIsNotNone(err)
+        assert err is not None
 
     def test_non_numeric(self) -> None:
         _, err = _parse_content_length("abc")
-        self.assertIsNotNone(err)
+        assert err is not None
 
 
-class TestParseCgiHeaders(unittest.TestCase):
+class TestParseCgiHeaders:
     """Tests for _parse_cgi_headers."""
 
     def test_parses_status_and_headers(self) -> None:
         stdout = io.BytesIO(b"Status: 404 Not Found\r\nContent-Type: text/plain\r\n\r\nbody")
         status, headers = _parse_cgi_headers(stdout)
-        self.assertEqual(status, 404)
-        self.assertEqual(headers, [("Content-Type", "text/plain")])
+        assert status == 404
+        assert headers == [("Content-Type", "text/plain")]
 
     def test_defaults_to_200(self) -> None:
         stdout = io.BytesIO(b"Content-Type: text/html\r\n\r\n")
         status, _ = _parse_cgi_headers(stdout)
-        self.assertEqual(status, 200)
+        assert status == 200
 
     def test_empty_response(self) -> None:
         stdout = io.BytesIO(b"\r\n")
         status, headers = _parse_cgi_headers(stdout)
-        self.assertEqual(status, 200)
-        self.assertEqual(headers, [])
+        assert status == 200
+        assert headers == []
 
 
-class TestRouting(unittest.TestCase):
+class TestRouting:
     """Tests for the route regex."""
 
     def test_info_refs(self) -> None:
         m = _ROUTE.match("/proj-a.git/info/refs")
-        self.assertIsNotNone(m)
-        self.assertEqual(m.group("repo"), "proj-a.git")
-        self.assertEqual(m.group("path"), "/info/refs")
+        assert m is not None
+        assert m.group("repo") == "proj-a.git"
+        assert m.group("path") == "/info/refs"
 
     def test_upload_pack(self) -> None:
         m = _ROUTE.match("/proj-a.git/git-upload-pack")
-        self.assertIsNotNone(m)
+        assert m is not None
 
     def test_receive_pack(self) -> None:
         m = _ROUTE.match("/proj-a.git/git-receive-pack")
-        self.assertIsNotNone(m)
+        assert m is not None
 
     def test_head(self) -> None:
         m = _ROUTE.match("/proj-a.git/HEAD")
-        self.assertIsNotNone(m)
+        assert m is not None
 
     def test_invalid_path_returns_none(self) -> None:
-        self.assertIsNone(_ROUTE.match("/proj-a.git/objects/pack/pack-abc.pack"))
-        self.assertIsNone(_ROUTE.match("/some/random/path"))
-        self.assertIsNone(_ROUTE.match("/"))
+        assert _ROUTE.match("/proj-a.git/objects/pack/pack-abc.pack") is None
+        assert _ROUTE.match("/some/random/path") is None
+        assert _ROUTE.match("/") is None
 
     def test_repo_without_git_suffix_fails(self) -> None:
-        self.assertIsNone(_ROUTE.match("/proj-a/info/refs"))
+        assert _ROUTE.match("/proj-a/info/refs") is None
 
 
 class _FakeSocket:
@@ -232,7 +233,7 @@ class _FakeSocket:
         """No-op close."""
 
 
-class TestAuth(unittest.TestCase):
+class TestAuth:
     """Tests for authentication handling."""
 
     def _make_request(
@@ -285,19 +286,19 @@ class TestAuth(unittest.TestCase):
 
     def test_no_auth_returns_401(self) -> None:
         code, _ = self._make_request("/proj-a.git/info/refs", token=None)
-        self.assertEqual(code, 401)
+        assert code == 401
 
     def test_wrong_token_returns_403(self) -> None:
         code, _ = self._make_request("/proj-a.git/info/refs", token="wrongtoken")
-        self.assertEqual(code, 403)
+        assert code == 403
 
     def test_wrong_project_returns_403(self) -> None:
         code, _ = self._make_request("/proj-b.git/info/refs", token="validtoken")
-        self.assertEqual(code, 403)
+        assert code == 403
 
     def test_invalid_path_returns_404(self) -> None:
         code, _ = self._make_request("/invalid/path", token="validtoken")
-        self.assertEqual(code, 404)
+        assert code == 404
 
     @unittest.mock.patch("subprocess.Popen")
     def test_valid_auth_delegates_to_cgi(self, mock_popen: unittest.mock.Mock) -> None:
@@ -313,16 +314,16 @@ class TestAuth(unittest.TestCase):
         code, _ = self._make_request(
             "/proj-a.git/info/refs?service=git-upload-pack", token="validtoken"
         )
-        self.assertEqual(code, 200)
+        assert code == 200
         mock_popen.assert_called_once()
         # Verify CGI env includes GIT_PROJECT_ROOT
         call_kwargs = mock_popen.call_args
         cgi_env = call_kwargs[1]["env"]
-        self.assertIn("GIT_PROJECT_ROOT", cgi_env)
-        self.assertEqual(cgi_env["GIT_HTTP_EXPORT_ALL"], "1")
+        assert "GIT_PROJECT_ROOT" in cgi_env
+        assert cgi_env["GIT_HTTP_EXPORT_ALL"] == "1"
         # Defense in depth: hooks disabled
-        self.assertEqual(cgi_env["GIT_CONFIG_KEY_0"], "core.hooksPath")
-        self.assertEqual(cgi_env["GIT_CONFIG_VALUE_0"], "/dev/null")
+        assert cgi_env["GIT_CONFIG_KEY_0"] == "core.hooksPath"
+        assert cgi_env["GIT_CONFIG_VALUE_0"] == "/dev/null"
 
     @unittest.mock.patch("terok.gate.server._logger")
     @unittest.mock.patch("subprocess.Popen")
@@ -340,10 +341,10 @@ class TestAuth(unittest.TestCase):
         code, _ = self._make_request(
             "/proj-a.git/info/refs?service=git-upload-pack", token="validtoken"
         )
-        self.assertEqual(code, 200)
+        assert code == 200
         mock_logger.warning.assert_called_once()
         logged_msg = mock_logger.warning.call_args[0][1]
-        self.assertIn("something happened", logged_msg)
+        assert "something happened" in logged_msg
 
     def test_invalid_content_length_returns_400(self) -> None:
         """Malformed Content-Length header returns 400."""
@@ -353,7 +354,7 @@ class TestAuth(unittest.TestCase):
             method="POST",
             extra_headers="Content-Length: notanumber\r\n",
         )
-        self.assertEqual(code, 400)
+        assert code == 400
 
     def test_negative_content_length_returns_400(self) -> None:
         """Negative Content-Length header returns 400."""
@@ -363,7 +364,7 @@ class TestAuth(unittest.TestCase):
             method="POST",
             extra_headers="Content-Length: -5\r\n",
         )
-        self.assertEqual(code, 400)
+        assert code == 400
 
     @unittest.mock.patch("subprocess.Popen")
     def test_content_encoding_forwarded(self, mock_popen: unittest.mock.Mock) -> None:
@@ -381,9 +382,9 @@ class TestAuth(unittest.TestCase):
             method="POST",
             extra_headers="Content-Encoding: gzip\r\nContent-Length: 0\r\n",
         )
-        self.assertEqual(code, 200)
+        assert code == 200
         cgi_env = mock_popen.call_args[1]["env"]
-        self.assertEqual(cgi_env["HTTP_CONTENT_ENCODING"], "gzip")
+        assert cgi_env["HTTP_CONTENT_ENCODING"] == "gzip"
 
     @unittest.mock.patch("subprocess.Popen")
     def test_git_protocol_forwarded(self, mock_popen: unittest.mock.Mock) -> None:
@@ -400,9 +401,9 @@ class TestAuth(unittest.TestCase):
             token="validtoken",
             extra_headers="Git-Protocol: version=2\r\n",
         )
-        self.assertEqual(code, 200)
+        assert code == 200
         cgi_env = mock_popen.call_args[1]["env"]
-        self.assertEqual(cgi_env["HTTP_GIT_PROTOCOL"], "version=2")
+        assert cgi_env["HTTP_GIT_PROTOCOL"] == "version=2"
 
     @unittest.mock.patch("subprocess.Popen")
     def test_absent_headers_not_in_env(self, mock_popen: unittest.mock.Mock) -> None:
@@ -417,13 +418,13 @@ class TestAuth(unittest.TestCase):
         code, _ = self._make_request(
             "/proj-a.git/info/refs?service=git-upload-pack", token="validtoken"
         )
-        self.assertEqual(code, 200)
+        assert code == 200
         cgi_env = mock_popen.call_args[1]["env"]
-        self.assertNotIn("HTTP_CONTENT_ENCODING", cgi_env)
-        self.assertNotIn("HTTP_GIT_PROTOCOL", cgi_env)
+        assert "HTTP_CONTENT_ENCODING" not in cgi_env
+        assert "HTTP_GIT_PROTOCOL" not in cgi_env
 
 
-class TestDetach(unittest.TestCase):
+class TestDetach:
     """Tests for daemon (detach) mode."""
 
     def test_child_calls_serve_forever(self) -> None:
@@ -446,7 +447,7 @@ class TestDetach(unittest.TestCase):
                 unittest.mock.patch("terok.gate.server.os.close"),
             ):
                 store = TokenStore(Path(td) / "tokens.json")
-                with self.assertRaises(SystemExit):
+                with pytest.raises(SystemExit):
                     _serve_daemon(Path(td), store, 9418, None)
 
                 mock_setsid.assert_called_once()
@@ -464,6 +465,6 @@ class TestDetach(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             pid_file = Path(td) / "gate.pid"
             store = TokenStore(Path(td) / "tokens.json")
-            with self.assertRaises(SystemExit):
+            with pytest.raises(SystemExit):
                 _serve_daemon(Path(td), store, 9418, pid_file)
-            self.assertEqual(pid_file.read_text(), "42")
+            assert pid_file.read_text() == "42"

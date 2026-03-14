@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
-import unittest
 import unittest.mock
+
+import pytest
 
 from terok.lib.core.projects import load_project
 from terok.lib.security.git_gate import (
@@ -16,7 +17,7 @@ from terok.lib.security.git_gate import (
 from test_utils import project_env, write_project
 
 
-class GitGateTests(unittest.TestCase):
+class TestGitGate:
     def test_sync_project_gate_ssh_requires_config(self) -> None:
         project_id = "proj6"
         yaml = f"""\
@@ -27,7 +28,7 @@ git:
 """
         with (
             project_env(yaml, project_id=project_id, with_config_file=True),
-            self.assertRaises(SystemExit),
+            pytest.raises(SystemExit),
         ):
             GitGate(load_project(project_id)).sync()
 
@@ -66,10 +67,10 @@ git:
                 run_mock.side_effect = _run_side_effect
                 result = GitGate(load_project(project_id)).sync()
 
-            self.assertTrue(result["created"])
-            self.assertTrue(result["success"])
-            self.assertIn("path", result)
-            self.assertEqual(result["upstream_url"], "https://example.com/repo.git")
+            assert result["created"]
+            assert result["success"]
+            assert "path" in result
+            assert result["upstream_url"] == "https://example.com/repo.git"
 
             clone_call = None
             for call in run_mock.call_args_list:
@@ -77,9 +78,9 @@ git:
                 if args and args[0][:3] == ["git", "clone", "--mirror"]:
                     clone_call = call
                     break
-            self.assertIsNotNone(clone_call)
+            assert clone_call is not None
             args, kwargs = clone_call
-            self.assertIn("env", kwargs)
+            assert "env" in kwargs
 
     def test_get_gate_last_commit_no_gate(self) -> None:
         """Test get_gate_last_commit when gate doesn't exist."""
@@ -92,7 +93,7 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             result = GitGate(load_project(project_id)).last_commit()
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_gate_last_commit_with_gate(self) -> None:
         """Test get_gate_last_commit when gate exists."""
@@ -116,11 +117,11 @@ git:
             ):
                 result = GitGate(load_project(project_id)).last_commit()
 
-            self.assertIsNotNone(result)
-            self.assertEqual(result["commit_hash"], "abc123def456")
-            self.assertEqual(result["commit_date"], "2023-01-01 12:00:00 +0000")
-            self.assertEqual(result["commit_message"], "Test commit message")
-            self.assertEqual(result["commit_author"], "John Doe")
+            assert result is not None
+            assert result["commit_hash"] == "abc123def456"
+            assert result["commit_date"] == "2023-01-01 12:00:00 +0000"
+            assert result["commit_message"] == "Test commit message"
+            assert result["commit_author"] == "John Doe"
 
     # Tests for get_upstream_head
     def test_get_upstream_head_success(self) -> None:
@@ -144,10 +145,10 @@ git:
             ):
                 result = _get_upstream_head(load_project(project_id))
 
-            self.assertIsNotNone(result)
-            self.assertEqual(result["commit_hash"], "abc123def456789")
-            self.assertEqual(result["ref_name"], "refs/heads/main")
-            self.assertEqual(result["upstream_url"], "https://example.com/repo.git")
+            assert result is not None
+            assert result["commit_hash"] == "abc123def456789"
+            assert result["ref_name"] == "refs/heads/main"
+            assert result["upstream_url"] == "https://example.com/repo.git"
 
     def test_get_upstream_head_no_upstream_url(self) -> None:
         """Test get_upstream_head when project has no upstream URL."""
@@ -158,7 +159,7 @@ project:
 """
         with project_env(yaml, project_id=project_id):
             result = _get_upstream_head(load_project(project_id))
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_upstream_head_network_failure(self) -> None:
         """Test get_upstream_head when network query fails."""
@@ -181,7 +182,7 @@ git:
             ):
                 result = _get_upstream_head(load_project(project_id))
 
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_upstream_head_branch_not_found(self) -> None:
         """Test get_upstream_head when branch doesn't exist."""
@@ -204,7 +205,7 @@ git:
             ):
                 result = _get_upstream_head(load_project(project_id))
 
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_upstream_head_timeout(self) -> None:
         """Test get_upstream_head when query times out."""
@@ -224,7 +225,7 @@ git:
             ):
                 result = _get_upstream_head(load_project(project_id))
 
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_upstream_head_custom_branch(self) -> None:
         """Test get_upstream_head with custom branch."""
@@ -247,9 +248,9 @@ git:
             ):
                 result = _get_upstream_head(load_project(project_id), branch="develop")
 
-            self.assertIsNotNone(result)
-            self.assertEqual(result["commit_hash"], "fedcba987654321")
-            self.assertEqual(result["ref_name"], "refs/heads/develop")
+            assert result is not None
+            assert result["commit_hash"] == "fedcba987654321"
+            assert result["ref_name"] == "refs/heads/develop"
 
     # Tests for get_gate_branch_head
     def test_get_gate_branch_head_success(self) -> None:
@@ -273,7 +274,7 @@ git:
             ):
                 result = _get_gate_branch_head(load_project(project_id))
 
-            self.assertEqual(result, "abc123def456789")
+            assert result == "abc123def456789"
 
     def test_get_gate_branch_head_no_gate(self) -> None:
         """Test get_gate_branch_head when gate doesn't exist."""
@@ -287,7 +288,7 @@ git:
 """
         with project_env(yaml, project_id=project_id):
             result = _get_gate_branch_head(load_project(project_id))
-            self.assertIsNone(result)
+            assert result is None
 
     def test_get_gate_branch_head_branch_not_found(self) -> None:
         """Test get_gate_branch_head when branch doesn't exist in gate."""
@@ -310,7 +311,7 @@ git:
             ):
                 result = _get_gate_branch_head(load_project(project_id), branch="nonexistent")
 
-            self.assertIsNone(result)
+            assert result is None
 
     # Tests for compare_gate_vs_upstream
     def test_compare_gate_vs_upstream_in_sync(self) -> None:
@@ -341,12 +342,12 @@ git:
                 ):
                     result = GitGate(load_project(project_id)).compare_vs_upstream()
 
-            self.assertEqual(result.branch, "main")
-            self.assertEqual(result.gate_head, commit_hash)
-            self.assertEqual(result.upstream_head, commit_hash)
-            self.assertFalse(result.is_stale)
-            self.assertEqual(result.commits_behind, 0)
-            self.assertIsNone(result.error)
+            assert result.branch == "main"
+            assert result.gate_head == commit_hash
+            assert result.upstream_head == commit_hash
+            assert not result.is_stale
+            assert result.commits_behind == 0
+            assert result.error is None
 
     def test_compare_gate_vs_upstream_stale(self) -> None:
         """Test compare when gate is stale."""
@@ -384,12 +385,12 @@ git:
                         ):
                             result = GitGate(load_project(project_id)).compare_vs_upstream()
 
-            self.assertEqual(result.branch, "main")
-            self.assertEqual(result.gate_head, gate_hash)
-            self.assertEqual(result.upstream_head, upstream_hash)
-            self.assertTrue(result.is_stale)
-            self.assertEqual(result.commits_behind, 5)
-            self.assertIsNone(result.error)
+            assert result.branch == "main"
+            assert result.gate_head == gate_hash
+            assert result.upstream_head == upstream_hash
+            assert result.is_stale
+            assert result.commits_behind == 5
+            assert result.error is None
 
     def test_compare_gate_vs_upstream_gate_not_initialized(self) -> None:
         """Test compare when gate is not initialized."""
@@ -408,12 +409,12 @@ git:
             ):
                 result = GitGate(load_project(project_id)).compare_vs_upstream()
 
-            self.assertEqual(result.branch, "main")
-            self.assertIsNone(result.gate_head)
-            self.assertIsNone(result.upstream_head)
-            self.assertFalse(result.is_stale)
-            self.assertIsNone(result.commits_behind)
-            self.assertEqual(result.error, "Gate not initialized")
+            assert result.branch == "main"
+            assert result.gate_head is None
+            assert result.upstream_head is None
+            assert not result.is_stale
+            assert result.commits_behind is None
+            assert result.error == "Gate not initialized"
 
     def test_compare_gate_vs_upstream_upstream_unreachable(self) -> None:
         """Test compare when upstream is unreachable."""
@@ -438,12 +439,12 @@ git:
                 ):
                     result = GitGate(load_project(project_id)).compare_vs_upstream()
 
-            self.assertEqual(result.branch, "main")
-            self.assertEqual(result.gate_head, gate_hash)
-            self.assertIsNone(result.upstream_head)
-            self.assertFalse(result.is_stale)
-            self.assertIsNone(result.commits_behind)
-            self.assertEqual(result.error, "Could not reach upstream")
+            assert result.branch == "main"
+            assert result.gate_head == gate_hash
+            assert result.upstream_head is None
+            assert not result.is_stale
+            assert result.commits_behind is None
+            assert result.error == "Could not reach upstream"
 
     def test_compare_gate_vs_upstream_commits_behind_unavailable(self) -> None:
         """Test compare when commits behind cannot be determined."""
@@ -481,8 +482,8 @@ git:
                         ):
                             result = GitGate(load_project(project_id)).compare_vs_upstream()
 
-            self.assertTrue(result.is_stale)
-            self.assertIsNone(result.commits_behind)
+            assert result.is_stale
+            assert result.commits_behind is None
 
     # Tests for sync_gate_branches
     def test_sync_gate_branches_success(self) -> None:
@@ -506,9 +507,9 @@ git:
             ):
                 result = GitGate(load_project(project_id)).sync_branches()
 
-            self.assertTrue(result["success"])
-            self.assertEqual(result["updated_branches"], ["all"])
-            self.assertEqual(result["errors"], [])
+            assert result["success"]
+            assert result["updated_branches"] == ["all"]
+            assert result["errors"] == []
 
     def test_sync_gate_branches_gate_not_initialized(self) -> None:
         """Test sync when gate is not initialized."""
@@ -523,9 +524,9 @@ git:
         with project_env(yaml, project_id=project_id):
             result = GitGate(load_project(project_id)).sync_branches()
 
-            self.assertFalse(result["success"])
-            self.assertEqual(result["updated_branches"], [])
-            self.assertEqual(result["errors"], ["Gate not initialized"])
+            assert not result["success"]
+            assert result["updated_branches"] == []
+            assert result["errors"] == ["Gate not initialized"]
 
     def test_sync_gate_branches_network_failure(self) -> None:
         """Test sync when network update fails."""
@@ -548,8 +549,8 @@ git:
             ):
                 result = GitGate(load_project(project_id)).sync_branches()
 
-            self.assertFalse(result["success"])
-            self.assertIn("remote update failed", result["errors"][0])
+            assert not result["success"]
+            assert "remote update failed" in result["errors"][0]
 
     def test_sync_gate_branches_timeout(self) -> None:
         """Test sync when operation times out."""
@@ -569,8 +570,8 @@ git:
             ):
                 result = GitGate(load_project(project_id)).sync_branches()
 
-            self.assertFalse(result["success"])
-            self.assertEqual(result["errors"], ["Sync timed out"])
+            assert not result["success"]
+            assert result["errors"] == ["Sync timed out"]
 
     def test_sync_gate_branches_specific_branches(self) -> None:
         """Test sync with specific branches."""
@@ -593,9 +594,9 @@ git:
             ):
                 result = GitGate(load_project(project_id)).sync_branches(["main", "develop"])
 
-            self.assertTrue(result["success"])
-            self.assertEqual(result["updated_branches"], ["main", "develop"])
-            self.assertEqual(result["errors"], [])
+            assert result["success"]
+            assert result["updated_branches"] == ["main", "develop"]
+            assert result["errors"] == []
 
     def test_sync_gate_branches_rejects_mismatched_upstream(self) -> None:
         """Test sync_gate_branches refuses when another project uses gate with different upstream."""
@@ -638,12 +639,12 @@ gate:
 """,
             )
 
-            with self.assertRaises(SystemExit) as exc_ctx:
+            with pytest.raises(SystemExit) as exc_ctx:
                 GitGate(load_project("new-proj")).sync_branches()
 
-            error_msg = str(exc_ctx.exception)
-            self.assertIn("Gate path conflict", error_msg)
-            self.assertIn("existing-proj", error_msg)
+            error_msg = str(exc_ctx.value)
+            assert "Gate path conflict" in error_msg
+            assert "existing-proj" in error_msg
 
     # Tests for gate sharing validation
     def test_find_projects_sharing_gate(self) -> None:
@@ -688,9 +689,9 @@ gate:
             # Find projects sharing the gate, excluding proj-a
             sharing = find_projects_sharing_gate(shared_gate, exclude_project="proj-a")
 
-            self.assertEqual(len(sharing), 1)
-            self.assertEqual(sharing[0][0], "proj-b")
-            self.assertEqual(sharing[0][1], "https://github.com/org/repo.git")
+            assert len(sharing) == 1
+            assert sharing[0][0] == "proj-b"
+            assert sharing[0][1] == "https://github.com/org/repo.git"
 
     def test_validate_gate_upstream_match_same_url(self) -> None:
         """Test validation passes when projects share gate with same upstream."""
@@ -773,15 +774,15 @@ gate:
             )
 
             # Should raise SystemExit with helpful error message
-            with self.assertRaises(SystemExit) as exc_ctx:
+            with pytest.raises(SystemExit) as exc_ctx:
                 validate_gate_upstream_match("proj-conflict-a")
 
-            error_msg = str(exc_ctx.exception)
-            self.assertIn("Gate path conflict detected", error_msg)
-            self.assertIn("proj-conflict-a", error_msg)
-            self.assertIn("proj-conflict-b", error_msg)
-            self.assertIn("repo-A.git", error_msg)
-            self.assertIn("repo-B.git", error_msg)
+            error_msg = str(exc_ctx.value)
+            assert "Gate path conflict detected" in error_msg
+            assert "proj-conflict-a" in error_msg
+            assert "proj-conflict-b" in error_msg
+            assert "repo-A.git" in error_msg
+            assert "repo-B.git" in error_msg
 
     def test_sync_project_gate_rejects_mismatched_upstream(self) -> None:
         """Test sync_project_gate refuses when another project uses gate with different upstream."""
@@ -822,9 +823,9 @@ gate:
 """,
             )
 
-            with self.assertRaises(SystemExit) as exc_ctx:
+            with pytest.raises(SystemExit) as exc_ctx:
                 GitGate(load_project("new-proj")).sync()
 
-            error_msg = str(exc_ctx.exception)
-            self.assertIn("Gate path conflict", error_msg)
-            self.assertIn("existing-proj", error_msg)
+            error_msg = str(exc_ctx.value)
+            assert "Gate path conflict" in error_msg
+            assert "existing-proj" in error_msg

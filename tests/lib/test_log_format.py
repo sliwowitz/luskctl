@@ -5,7 +5,6 @@
 
 import json
 import sys
-import unittest
 from io import StringIO
 
 from terok.lib.containers.log_format import (
@@ -15,7 +14,7 @@ from terok.lib.containers.log_format import (
 )
 
 
-class PlainTextFormatterTests(unittest.TestCase):
+class TestPlainTextFormatter:
     """Tests for PlainTextFormatter."""
 
     def test_passthrough(self) -> None:
@@ -28,14 +27,14 @@ class PlainTextFormatterTests(unittest.TestCase):
             fmt.finish()
         finally:
             sys.stdout = sys.__stdout__
-        self.assertEqual(buf.getvalue(), "hello world\nline two\n")
+        assert buf.getvalue() == "hello world\nline two\n"
 
     def test_finish_is_noop(self) -> None:
         fmt = PlainTextFormatter()
         fmt.finish()  # should not raise
 
 
-class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
+class TestClaudeStreamJsonFormatterStreaming:
     """Tests for ClaudeStreamJsonFormatter with streaming=True."""
 
     def _make_formatter(self) -> ClaudeStreamJsonFormatter:
@@ -59,9 +58,9 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("[system]", output)
-        self.assertIn("abc123", output)
-        self.assertIn("2 tools available", output)
+        assert "[system]" in output
+        assert "abc123" in output
+        assert "2 tools available" in output
 
     def test_streaming_text_block(self) -> None:
         """Streaming text delta produces typewriter output."""
@@ -100,8 +99,8 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("Hello", output)
-        self.assertIn(" world", output)
+        assert "Hello" in output
+        assert " world" in output
 
     def test_streaming_tool_use_block(self) -> None:
         """Streaming tool_use block accumulates input, prints on stop."""
@@ -137,9 +136,9 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("[tool] Read", output)
-        self.assertIn("file_path", output)
-        self.assertIn("/foo", output)
+        assert "[tool] Read" in output
+        assert "file_path" in output
+        assert "/foo" in output
 
     def test_result_captured_for_finish(self) -> None:
         """Result message is captured and printed on finish()."""
@@ -165,11 +164,11 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
         output = buf_err.getvalue()
-        self.assertIn("[result]", output)
-        self.assertIn("turns=3", output)
-        self.assertIn("cost=$0.0123", output)
-        self.assertIn("duration=5.0s", output)
-        self.assertIn("tokens=1000in/500out", output)
+        assert "[result]" in output
+        assert "turns=3" in output
+        assert "cost=$0.0123" in output
+        assert "duration=5.0s" in output
+        assert "tokens=1000in/500out" in output
 
     def test_assistant_coalesced_message(self) -> None:
         """Even in streaming mode, coalesced assistant messages are handled."""
@@ -193,9 +192,9 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("I'll fix the bug.", output)
-        self.assertIn("[tool] Edit", output)
-        self.assertIn("file", output)
+        assert "I'll fix the bug." in output
+        assert "[tool] Edit" in output
+        assert "file" in output
 
     def test_user_tool_result(self) -> None:
         """User messages with tool_result are displayed."""
@@ -222,8 +221,8 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("[tool_result]", output)
-        self.assertIn("File contents here", output)
+        assert "[tool_result]" in output
+        assert "File contents here" in output
 
     def test_user_tool_error(self) -> None:
         """User messages with tool_result and is_error are shown as errors."""
@@ -251,11 +250,11 @@ class ClaudeStreamJsonFormatterStreamingTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("[tool_error]", output)
-        self.assertIn("Permission denied", output)
+        assert "[tool_error]" in output
+        assert "Permission denied" in output
 
 
-class ClaudeStreamJsonFormatterNoStreamTests(unittest.TestCase):
+class TestClaudeStreamJsonFormatterNoStream:
     """Tests for ClaudeStreamJsonFormatter with streaming=False."""
 
     def _make_formatter(self) -> ClaudeStreamJsonFormatter:
@@ -287,7 +286,7 @@ class ClaudeStreamJsonFormatterNoStreamTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertEqual(output, "")
+        assert output == ""
 
     def test_coalesced_messages_still_work(self) -> None:
         """With streaming=False, coalesced assistant messages still appear."""
@@ -308,10 +307,10 @@ class ClaudeStreamJsonFormatterNoStreamTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("coalesced output", output)
+        assert "coalesced output" in output
 
 
-class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
+class TestClaudeStreamJsonFormatterEdgeCase:
     """Edge case tests for ClaudeStreamJsonFormatter."""
 
     def test_malformed_json_not_crash(self) -> None:
@@ -326,8 +325,8 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("{not valid json", output)
-        self.assertIn("plain text line", output)
+        assert "{not valid json" in output
+        assert "plain text line" in output
 
     def test_empty_lines_ignored(self) -> None:
         """Empty and whitespace-only lines are skipped."""
@@ -340,7 +339,7 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
             fmt.feed_line("\t\n")
         finally:
             sys.stdout = sys.__stdout__
-        self.assertEqual(buf.getvalue(), "")
+        assert buf.getvalue() == ""
 
     def test_unknown_type_ignored(self) -> None:
         """Unknown message types are silently ignored."""
@@ -351,7 +350,7 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
             fmt.feed_line(json.dumps({"type": "unknown_future_type", "data": "foo"}))
         finally:
             sys.stdout = sys.__stdout__
-        self.assertEqual(buf.getvalue(), "")
+        assert buf.getvalue() == ""
 
     def test_finish_flushes_in_progress_text_block(self) -> None:
         """finish() outputs newline if text block was in progress."""
@@ -380,7 +379,7 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("partial", output)
+        assert "partial" in output
 
     def test_long_tool_result_truncated(self) -> None:
         """Long tool results are truncated to 500 chars."""
@@ -407,9 +406,9 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("...", output)
+        assert "..." in output
         # Should not contain the full 1000 chars
-        self.assertLess(len(output), 600)
+        assert len(output) < 600
 
     def test_color_enabled(self) -> None:
         """When color=True, output contains ANSI escape codes."""
@@ -431,7 +430,7 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         output = buf.getvalue()
-        self.assertIn("\x1b[", output)
+        assert "\x1b[" in output
 
     def test_result_error_flag(self) -> None:
         """Result with is_error shows FAILED."""
@@ -452,34 +451,34 @@ class ClaudeStreamJsonFormatterEdgeCaseTests(unittest.TestCase):
         finally:
             sys.stderr = sys.__stderr__
         output = buf_err.getvalue()
-        self.assertIn("FAILED", output)
+        assert "FAILED" in output
 
 
-class AutoDetectFormatterTests(unittest.TestCase):
+class TestAutoDetectFormatter:
     """Tests for auto_detect_formatter factory."""
 
     def test_run_mode_returns_claude_formatter(self) -> None:
         fmt = auto_detect_formatter("run")
-        self.assertIsInstance(fmt, ClaudeStreamJsonFormatter)
+        assert isinstance(fmt, ClaudeStreamJsonFormatter)
 
     def test_cli_mode_returns_plain_text(self) -> None:
         fmt = auto_detect_formatter("cli")
-        self.assertIsInstance(fmt, PlainTextFormatter)
+        assert isinstance(fmt, PlainTextFormatter)
 
     def test_web_mode_returns_plain_text(self) -> None:
         fmt = auto_detect_formatter("web")
-        self.assertIsInstance(fmt, PlainTextFormatter)
+        assert isinstance(fmt, PlainTextFormatter)
 
     def test_none_mode_returns_plain_text(self) -> None:
         fmt = auto_detect_formatter(None)
-        self.assertIsInstance(fmt, PlainTextFormatter)
+        assert isinstance(fmt, PlainTextFormatter)
 
     def test_streaming_parameter_passed_through(self) -> None:
         fmt = auto_detect_formatter("run", streaming=False)
-        self.assertIsInstance(fmt, ClaudeStreamJsonFormatter)
-        self.assertFalse(fmt._streaming)
+        assert isinstance(fmt, ClaudeStreamJsonFormatter)
+        assert not fmt._streaming
 
     def test_color_parameter_passed_through(self) -> None:
         fmt = auto_detect_formatter("run", color=True)
-        self.assertIsInstance(fmt, ClaudeStreamJsonFormatter)
-        self.assertTrue(fmt._color)
+        assert isinstance(fmt, ClaudeStreamJsonFormatter)
+        assert fmt._color

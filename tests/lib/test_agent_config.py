@@ -6,9 +6,10 @@
 import json
 import os
 import tempfile
-import unittest
 import unittest.mock
 from pathlib import Path
+
+import pytest
 
 from terok.lib.containers.agent_config import build_agent_config_stack, resolve_agent_config
 from terok.lib.core.projects import list_presets, load_preset, load_project
@@ -36,7 +37,7 @@ def _env(
     return env
 
 
-class ResolveAgentConfigTests(unittest.TestCase):
+class TestResolveAgentConfig:
     """Tests for resolve_agent_config()."""
 
     def test_empty_config_all_levels(self) -> None:
@@ -49,7 +50,7 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     result = resolve_agent_config("empty")
-            self.assertEqual(result, {})
+            assert result == {}
 
     def test_project_only(self) -> None:
         """Project-level agent config is returned when no other levels."""
@@ -66,9 +67,9 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     result = resolve_agent_config("proj")
-            self.assertEqual(result["model"], "sonnet")
-            self.assertEqual(len(result["subagents"]), 1)
-            self.assertEqual(result["subagents"][0]["name"], "a1")
+            assert result["model"] == "sonnet"
+            assert len(result["subagents"]) == 1
+            assert result["subagents"][0]["name"] == "a1"
 
     def test_global_provides_defaults(self) -> None:
         """Global agent config provides defaults when project has none."""
@@ -83,8 +84,8 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s", global_cfg)):
                 with mock_git_config():
                     result = resolve_agent_config("proj")
-            self.assertEqual(result["model"], "haiku")
-            self.assertEqual(result["max_turns"], 5)
+            assert result["model"] == "haiku"
+            assert result["max_turns"] == 5
 
     def test_project_overrides_global(self) -> None:
         """Project-level config overrides global defaults."""
@@ -103,9 +104,9 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s", global_cfg)):
                 with mock_git_config():
                     result = resolve_agent_config("proj")
-            self.assertEqual(result["model"], "opus")
+            assert result["model"] == "opus"
             # max_turns inherited from global
-            self.assertEqual(result["max_turns"], 5)
+            assert result["max_turns"] == 5
 
     def test_preset_override(self) -> None:
         """Preset overrides project config."""
@@ -126,8 +127,8 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     result = resolve_agent_config("proj", preset="fast")
-            self.assertEqual(result["model"], "haiku")
-            self.assertEqual(result["max_turns"], 3)
+            assert result["model"] == "haiku"
+            assert result["max_turns"] == 3
 
     def test_cli_overrides_all(self) -> None:
         """CLI overrides take highest priority."""
@@ -145,8 +146,8 @@ class ResolveAgentConfigTests(unittest.TestCase):
                     result = resolve_agent_config(
                         "proj", cli_overrides={"model": "opus", "max_turns": 99}
                     )
-            self.assertEqual(result["model"], "opus")
-            self.assertEqual(result["max_turns"], 99)
+            assert result["model"] == "opus"
+            assert result["max_turns"] == 99
 
     def test_inherit_extends_subagents(self) -> None:
         """Preset with _inherit extends project subagents list."""
@@ -171,7 +172,7 @@ class ResolveAgentConfigTests(unittest.TestCase):
                 with mock_git_config():
                     result = resolve_agent_config("proj", preset="extend")
             names = [s["name"] for s in result["subagents"] if isinstance(s, dict)]
-            self.assertEqual(names, ["base-agent", "extra-agent"])
+            assert names == ["base-agent", "extra-agent"]
 
     def test_project_config_without_preset(self) -> None:
         """Project agent config resolves correctly without a preset."""
@@ -188,11 +189,11 @@ class ResolveAgentConfigTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     result = resolve_agent_config("proj2")
-            self.assertEqual(result["model"], "sonnet")
-            self.assertEqual(result["subagents"][0]["name"], "sa1")
+            assert result["model"] == "sonnet"
+            assert result["subagents"][0]["name"] == "sa1"
 
 
-class PresetTests(unittest.TestCase):
+class TestPreset:
     """Tests for list_presets() and load_preset()."""
 
     def test_list_presets_no_project_or_global(self) -> None:
@@ -206,10 +207,10 @@ class PresetTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             non_bundled = [info for info in result if info.source != "bundled"]
-            self.assertEqual(non_bundled, [])
+            assert non_bundled == []
             # Bundled presets are always present
             bundled = [info for info in result if info.source == "bundled"]
-            self.assertGreater(len(bundled), 0)
+            assert len(bundled) > 0
 
     def test_list_presets_found(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -227,7 +228,7 @@ class PresetTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             project_presets = [info for info in result if info.source == "project"]
-            self.assertEqual([info.name for info in project_presets], ["alpha", "beta"])
+            assert [info.name for info in project_presets] == ["alpha", "beta"]
 
     def test_load_preset_not_found(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -237,7 +238,7 @@ class PresetTests(unittest.TestCase):
 
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
-                    with self.assertRaises(SystemExit):
+                    with pytest.raises(SystemExit):
                         load_preset("proj", "nonexistent")
 
     def test_load_preset_found(self) -> None:
@@ -255,9 +256,9 @@ class PresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     data, path = load_preset("proj", "reviewer")
-            self.assertEqual(data["model"], "sonnet")
-            self.assertEqual(data["max_turns"], 10)
-            self.assertEqual(path, presets_dir / "reviewer.yml")
+            assert data["model"] == "sonnet"
+            assert data["max_turns"] == 10
+            assert path == presets_dir / "reviewer.yml"
 
     def test_load_preset_yaml_extension(self) -> None:
         """Preset with .yaml extension is also found."""
@@ -273,8 +274,8 @@ class PresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     data, path = load_preset("proj", "alt")
-            self.assertEqual(data["model"], "opus")
-            self.assertEqual(path, presets_dir / "alt.yaml")
+            assert data["model"] == "opus"
+            assert path == presets_dir / "alt.yaml"
 
     def test_presets_dir_property(self) -> None:
         """Project.presets_dir points to presets/ under project root."""
@@ -286,10 +287,10 @@ class PresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     p = load_project("proj")
-            self.assertEqual(p.presets_dir, p.root / "presets")
+            assert p.presets_dir == p.root / "presets"
 
 
-class PresetFileRefTests(unittest.TestCase):
+class TestPresetFileRef:
     """Tests for file references within presets."""
 
     def test_preset_resolves_relative_subagent_file(self) -> None:
@@ -312,7 +313,7 @@ class PresetFileRefTests(unittest.TestCase):
             # File path should be resolved to absolute
             resolved = data["subagents"][0]["file"]
             expected = str((presets_dir / "agents" / "reviewer.md").resolve())
-            self.assertEqual(resolved, expected)
+            assert resolved == expected
 
     def test_global_preset_fallback(self) -> None:
         """load_preset finds a preset in the global presets dir when not in project."""
@@ -333,8 +334,8 @@ class PresetFileRefTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, env):
                 with mock_git_config():
                     data, path = load_preset("proj", "shared")
-            self.assertEqual(data["model"], "haiku")
-            self.assertEqual(path, global_presets / "shared.yml")
+            assert data["model"] == "haiku"
+            assert path == global_presets / "shared.yml"
 
     def test_project_preset_shadows_global(self) -> None:
         """Project preset shadows a global preset with the same name."""
@@ -358,8 +359,8 @@ class PresetFileRefTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, env):
                 with mock_git_config():
                     data, path = load_preset("proj", "fast")
-            self.assertEqual(data["model"], "opus")
-            self.assertEqual(path, proj_presets / "fast.yml")
+            assert data["model"] == "opus"
+            assert path == proj_presets / "fast.yml"
 
     def test_global_preset_file_resolution(self) -> None:
         """Subagent file: paths in global presets resolve relative to global presets dir."""
@@ -382,10 +383,10 @@ class PresetFileRefTests(unittest.TestCase):
                     data, _path = load_preset("proj", "with-file")
             resolved = data["subagents"][0]["file"]
             expected = str((global_presets / "agents" / "custom.md").resolve())
-            self.assertEqual(resolved, expected)
+            assert resolved == expected
 
 
-class GlobalPresetListTests(unittest.TestCase):
+class TestGlobalPresetList:
     """Tests for list_presets() with global presets."""
 
     def test_list_presets_includes_global(self) -> None:
@@ -411,7 +412,7 @@ class GlobalPresetListTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             non_bundled = {info.name: info.source for info in result if info.source != "bundled"}
-            self.assertEqual(non_bundled, {"local": "project", "shared": "global"})
+            assert non_bundled == {"local": "project", "shared": "global"}
 
     def test_list_presets_project_shadows_global(self) -> None:
         """Project preset with same name replaces global in listing."""
@@ -434,12 +435,12 @@ class GlobalPresetListTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             non_bundled = [info for info in result if info.source != "bundled"]
-            self.assertEqual(len(non_bundled), 1)
-            self.assertEqual(non_bundled[0].name, "fast")
-            self.assertEqual(non_bundled[0].source, "project")
+            assert len(non_bundled) == 1
+            assert non_bundled[0].name == "fast"
+            assert non_bundled[0].source == "project"
 
 
-class GlobalPresetProvenanceTests(unittest.TestCase):
+class TestGlobalPresetProvenance:
     """Tests for global preset provenance in config stack."""
 
     def test_global_preset_scope_label(self) -> None:
@@ -459,7 +460,7 @@ class GlobalPresetProvenanceTests(unittest.TestCase):
                 with mock_git_config():
                     stack = build_agent_config_stack("proj", preset="shared")
             levels = [s.level for s in stack.scopes]
-            self.assertIn("preset (global)", levels)
+            assert "preset (global)" in levels
 
     def test_project_preset_scope_label(self) -> None:
         """Config stack labels project presets as 'preset (project)'."""
@@ -476,7 +477,7 @@ class GlobalPresetProvenanceTests(unittest.TestCase):
                 with mock_git_config():
                     stack = build_agent_config_stack("proj", preset="fast")
             levels = [s.level for s in stack.scopes]
-            self.assertIn("preset (project)", levels)
+            assert "preset (project)" in levels
 
 
 def _any_bundled_name() -> str:
@@ -490,7 +491,7 @@ def _any_bundled_name() -> str:
     raise RuntimeError("No bundled presets found — cannot run bundled preset tests")
 
 
-class BundledPresetTests(unittest.TestCase):
+class TestBundledPreset:
     """Tests for bundled (shipped) presets.
 
     These tests are name-agnostic: they discover whatever presets happen to
@@ -509,7 +510,7 @@ class BundledPresetTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             bundled = [info for info in result if info.source == "bundled"]
-            self.assertGreater(len(bundled), 0, "Expected at least one bundled preset")
+            assert len(bundled) > 0, "Expected at least one bundled preset"
 
     def test_bundled_preset_loadable(self) -> None:
         """Any bundled preset can be loaded via load_preset."""
@@ -522,8 +523,8 @@ class BundledPresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     data, path = load_preset("proj", name)
-            self.assertIsInstance(data, dict)
-            self.assertTrue(path.is_file())
+            assert isinstance(data, dict)
+            assert path.is_file()
 
     def test_global_shadows_bundled(self) -> None:
         """A global preset with the same name as a bundled preset wins."""
@@ -545,9 +546,9 @@ class BundledPresetTests(unittest.TestCase):
                 with mock_git_config():
                     data, path = load_preset("proj", name)
             # Global version wins
-            self.assertEqual(data["model"], "opus")
-            self.assertEqual(data["max_turns"], 99)
-            self.assertEqual(path, global_presets / f"{name}.yml")
+            assert data["model"] == "opus"
+            assert data["max_turns"] == 99
+            assert path == global_presets / f"{name}.yml"
 
     def test_project_shadows_bundled(self) -> None:
         """A project preset with the same name as a bundled preset wins."""
@@ -564,8 +565,8 @@ class BundledPresetTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, _env(config_root, base / "s")):
                 with mock_git_config():
                     data, path = load_preset("proj", name)
-            self.assertEqual(data["model"], "haiku")
-            self.assertEqual(path, proj_presets / f"{name}.yml")
+            assert data["model"] == "haiku"
+            assert path == proj_presets / f"{name}.yml"
 
     def test_bundled_preset_scope_label(self) -> None:
         """Config stack labels bundled presets as 'preset (bundled)'."""
@@ -579,7 +580,7 @@ class BundledPresetTests(unittest.TestCase):
                 with mock_git_config():
                     stack = build_agent_config_stack("proj", preset=name)
             levels = [s.level for s in stack.scopes]
-            self.assertIn("preset (bundled)", levels)
+            assert "preset (bundled)" in levels
 
     def test_shadowed_bundled_gets_correct_source(self) -> None:
         """Shadowing one bundled preset changes its source; others stay bundled."""
@@ -599,13 +600,13 @@ class BundledPresetTests(unittest.TestCase):
                 with mock_git_config():
                     result = list_presets("proj")
             by_name = {info.name: info.source for info in result}
-            self.assertEqual(by_name[name], "global")
+            assert by_name[name] == "global"
             # At least one other bundled preset should remain bundled
             remaining_bundled = [n for n, s in by_name.items() if s == "bundled"]
-            self.assertGreater(len(remaining_bundled), 0)
+            assert len(remaining_bundled) > 0
 
 
-class InjectOpencodeInstructionsTests(unittest.TestCase):
+class TestInjectOpencodeInstructions:
     """Tests for _inject_opencode_instructions()."""
 
     def test_creates_file_if_missing(self) -> None:
@@ -616,10 +617,10 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             config_path = Path(td) / "opencode.json"
             _inject_opencode_instructions(config_path)
 
-            self.assertTrue(config_path.is_file())
+            assert config_path.is_file()
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
-            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_idempotent_when_already_present(self) -> None:
         """Does not duplicate the instructions entry on repeated calls."""
@@ -631,7 +632,7 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
+            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
 
     def test_preserves_existing_instructions(self) -> None:
         """Appends to existing instructions list without removing entries."""
@@ -645,10 +646,10 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(
-                data["instructions"],
-                ["/some/other/file.md", "/home/dev/.terok/instructions.md"],
-            )
+            assert data["instructions"] == [
+                "/some/other/file.md",
+                "/home/dev/.terok/instructions.md",
+            ]
 
     def test_preserves_existing_config_keys(self) -> None:
         """Preserves other keys in the opencode.json file."""
@@ -663,9 +664,9 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["model"], "test/model")
-            self.assertEqual(data["provider"], {"test": {}})
-            self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
+            assert data["model"] == "test/model"
+            assert data["provider"] == {"test": {}}
+            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
 
     def test_creates_parent_directories(self) -> None:
         """Creates parent directories if they do not exist."""
@@ -675,10 +676,10 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             config_path = Path(td) / "nested" / "dir" / "opencode.json"
             _inject_opencode_instructions(config_path)
 
-            self.assertTrue(config_path.is_file())
+            assert config_path.is_file()
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
-            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_handles_invalid_json(self) -> None:
         """Overwrites file with valid config if existing JSON is invalid."""
@@ -690,8 +691,8 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["instructions"], ["/home/dev/.terok/instructions.md"])
-            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
+            assert data["instructions"] == ["/home/dev/.terok/instructions.md"]
+            assert data["$schema"] == "https://opencode.ai/config.json"
 
     def test_preserves_existing_schema(self) -> None:
         """Does not overwrite $schema if already present in existing config."""
@@ -706,26 +707,26 @@ class InjectOpencodeInstructionsTests(unittest.TestCase):
             _inject_opencode_instructions(config_path)
 
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["$schema"], "https://opencode.ai/config.json")
-            self.assertEqual(data["model"], "x/y")
+            assert data["$schema"] == "https://opencode.ai/config.json"
+            assert data["model"] == "x/y"
 
 
-class ValidateProjectIdTests(unittest.TestCase):
+class TestValidateProjectId:
     """Tests for validate_project_id error messages."""
 
     def test_error_message_mentions_first_char(self) -> None:
         """Error message describes the first-character requirement."""
         from terok.lib.core.project_model import validate_project_id
 
-        with self.assertRaises(SystemExit) as ctx:
+        with pytest.raises(SystemExit) as ctx:
             validate_project_id("-bad")
-        msg = str(ctx.exception)
-        self.assertIn("must start with a lowercase letter or digit", msg)
+        msg = str(ctx.value)
+        assert "must start with a lowercase letter or digit" in msg
 
     def test_uppercase_rejected(self) -> None:
         """Uppercase letters in project ID are rejected."""
         from terok.lib.core.project_model import validate_project_id
 
-        with self.assertRaises(SystemExit) as ctx:
+        with pytest.raises(SystemExit) as ctx:
             validate_project_id("MyProject")
-        self.assertIn("Invalid project ID", str(ctx.exception))
+        assert "Invalid project ID" in str(ctx.value)

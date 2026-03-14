@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
-import unittest
 import unittest.mock
 
 from terok.lib.containers.image_cleanup import (
@@ -18,19 +17,19 @@ def _podman_result(stdout: str = "", returncode: int = 0) -> subprocess.Complete
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
 
 
-class TestImageInfo(unittest.TestCase):
+class TestImageInfo:
     """Tests for ImageInfo dataclass."""
 
     def test_full_name_tagged(self) -> None:
         img = ImageInfo("terok-l0", "ubuntu-24.04", "sha256:abc", "500MB", "2 days ago")
-        self.assertEqual(img.full_name, "terok-l0:ubuntu-24.04")
+        assert img.full_name == "terok-l0:ubuntu-24.04"
 
     def test_full_name_dangling(self) -> None:
         img = ImageInfo("<none>", "<none>", "sha256:abc123def456", "500MB", "2 days ago")
-        self.assertEqual(img.full_name, "<none> (sha256:abc12)")
+        assert img.full_name == "<none> (sha256:abc12)"
 
 
-class TestListImages(unittest.TestCase):
+class TestListImages:
     """Tests for list_images()."""
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
@@ -42,13 +41,13 @@ class TestListImages(unittest.TestCase):
             "ubuntu\t24.04\tsha256:ddd\t77MB\t3 weeks ago\n"
         )
         images = list_images()
-        self.assertEqual(len(images), 3)
+        assert len(images) == 3
         names = [img.full_name for img in images]
-        self.assertIn("terok-l0:ubuntu-24.04", names)
-        self.assertIn("terok-l1-cli:ubuntu-24.04", names)
-        self.assertIn("myproj:l2-cli", names)
+        assert "terok-l0:ubuntu-24.04" in names
+        assert "terok-l1-cli:ubuntu-24.04" in names
+        assert "myproj:l2-cli" in names
         # Non-terok image should be excluded
-        self.assertNotIn("ubuntu:24.04", names)
+        assert "ubuntu:24.04" not in names
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
     def test_list_filtered_by_project(self, mock_podman: unittest.mock.Mock) -> None:
@@ -60,14 +59,14 @@ class TestListImages(unittest.TestCase):
         images = list_images("proj-a")
         names = [img.full_name for img in images]
         # L0/L1 always shown; only matching L2
-        self.assertIn("terok-l0:ubuntu-24.04", names)
-        self.assertIn("proj-a:l2-cli", names)
-        self.assertNotIn("proj-b:l2-cli", names)
+        assert "terok-l0:ubuntu-24.04" in names
+        assert "proj-a:l2-cli" in names
+        assert "proj-b:l2-cli" not in names
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
     def test_list_images_podman_failure(self, mock_podman: unittest.mock.Mock) -> None:
         mock_podman.return_value = _podman_result(returncode=1)
-        self.assertEqual(list_images(), [])
+        assert list_images() == []
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
     def test_l2_dev_and_web_tags(self, mock_podman: unittest.mock.Mock) -> None:
@@ -76,10 +75,10 @@ class TestListImages(unittest.TestCase):
             "myproj\tl2-web\tsha256:bbb\t1GB\t1 day ago\n"
         )
         images = list_images()
-        self.assertEqual(len(images), 2)
+        assert len(images) == 2
 
 
-class TestFindOrphanedImages(unittest.TestCase):
+class TestFindOrphanedImages:
     """Tests for find_orphaned_images()."""
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._is_terok_built_image")
@@ -101,8 +100,8 @@ class TestFindOrphanedImages(unittest.TestCase):
             ImageInfo("proj-deleted", "l2-cli", "sha256:bbb", "1GB", "5 days ago"),
         ]
         orphaned = find_orphaned_images()
-        self.assertEqual(len(orphaned), 1)
-        self.assertEqual(orphaned[0].repository, "proj-deleted")
+        assert len(orphaned) == 1
+        assert orphaned[0].repository == "proj-deleted"
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._is_terok_built_image")
     @unittest.mock.patch("terok.lib.containers.image_cleanup._find_dangling_terok_images")
@@ -123,7 +122,7 @@ class TestFindOrphanedImages(unittest.TestCase):
             ImageInfo("foreign-img", "l2-cli", "sha256:fff", "1GB", "1 day ago"),
         ]
         orphaned = find_orphaned_images()
-        self.assertEqual(len(orphaned), 0)
+        assert len(orphaned) == 0
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._is_terok_built_image")
     @unittest.mock.patch("terok.lib.containers.image_cleanup._find_dangling_terok_images")
@@ -142,7 +141,7 @@ class TestFindOrphanedImages(unittest.TestCase):
         mock_dangling.return_value = [img]
         mock_list.return_value = [img]
         orphaned = find_orphaned_images()
-        self.assertEqual(len(orphaned), 1)
+        assert len(orphaned) == 1
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._find_dangling_terok_images")
     @unittest.mock.patch("terok.lib.containers.image_cleanup.list_images")
@@ -161,12 +160,12 @@ class TestFindOrphanedImages(unittest.TestCase):
         ]
         orphaned = find_orphaned_images()
         # Should not consider proj-a orphaned since we couldn't verify projects
-        self.assertEqual(len(orphaned), 0)
+        assert len(orphaned) == 0
         # list_images should not even be called when discovery fails
         mock_list.assert_not_called()
 
 
-class TestCleanupImages(unittest.TestCase):
+class TestCleanupImages:
     """Tests for cleanup_images()."""
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
@@ -180,8 +179,8 @@ class TestCleanupImages(unittest.TestCase):
             ImageInfo("old-proj", "l2-cli", "sha256:abc", "1GB", "5 days ago"),
         ]
         result = cleanup_images(dry_run=True)
-        self.assertTrue(result.dry_run)
-        self.assertEqual(len(result.removed), 1)
+        assert result.dry_run
+        assert len(result.removed) == 1
         # Should NOT call podman rm in dry-run mode
         mock_podman.assert_not_called()
 
@@ -197,8 +196,8 @@ class TestCleanupImages(unittest.TestCase):
         ]
         mock_podman.return_value = _podman_result()
         result = cleanup_images(dry_run=False)
-        self.assertFalse(result.dry_run)
-        self.assertEqual(len(result.removed), 1)
+        assert not result.dry_run
+        assert len(result.removed) == 1
         mock_podman.assert_called_once_with("image", "rm", "sha256:abc")
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
@@ -213,12 +212,12 @@ class TestCleanupImages(unittest.TestCase):
         ]
         mock_podman.return_value = _podman_result(returncode=1)
         result = cleanup_images(dry_run=False)
-        self.assertEqual(len(result.removed), 0)
-        self.assertEqual(len(result.failed), 1)
+        assert len(result.removed) == 0
+        assert len(result.failed) == 1
 
     @unittest.mock.patch("terok.lib.containers.image_cleanup.find_orphaned_images")
     def test_nothing_to_clean(self, mock_orphaned: unittest.mock.Mock) -> None:
         mock_orphaned.return_value = []
         result = cleanup_images()
-        self.assertEqual(len(result.removed), 0)
-        self.assertEqual(len(result.failed), 0)
+        assert len(result.removed) == 0
+        assert len(result.failed) == 0

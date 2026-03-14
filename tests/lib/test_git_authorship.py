@@ -6,11 +6,10 @@
 import json
 import shlex
 import subprocess
-import unittest
 from importlib import resources
 
 
-class GitAuthorshipHelperTests(unittest.TestCase):
+class TestGitAuthorshipHelper:
     """Verify the shared shell helper applies the configured authorship modes."""
 
     def _apply_mode(self, mode: str) -> dict[str, str | None]:
@@ -48,33 +47,33 @@ PY
 
     def test_agent_human_mode(self) -> None:
         env = self._apply_mode("agent-human")
-        self.assertEqual(env["GIT_AUTHOR_NAME"], "Codex")
-        self.assertEqual(env["GIT_AUTHOR_EMAIL"], "noreply@openai.com")
-        self.assertEqual(env["GIT_COMMITTER_NAME"], "Alice Example")
-        self.assertEqual(env["GIT_COMMITTER_EMAIL"], "alice@example.com")
+        assert env["GIT_AUTHOR_NAME"] == "Codex"
+        assert env["GIT_AUTHOR_EMAIL"] == "noreply@openai.com"
+        assert env["GIT_COMMITTER_NAME"] == "Alice Example"
+        assert env["GIT_COMMITTER_EMAIL"] == "alice@example.com"
 
     def test_human_agent_mode(self) -> None:
         env = self._apply_mode("human-agent")
-        self.assertEqual(env["GIT_AUTHOR_NAME"], "Alice Example")
-        self.assertEqual(env["GIT_AUTHOR_EMAIL"], "alice@example.com")
-        self.assertEqual(env["GIT_COMMITTER_NAME"], "Codex")
-        self.assertEqual(env["GIT_COMMITTER_EMAIL"], "noreply@openai.com")
+        assert env["GIT_AUTHOR_NAME"] == "Alice Example"
+        assert env["GIT_AUTHOR_EMAIL"] == "alice@example.com"
+        assert env["GIT_COMMITTER_NAME"] == "Codex"
+        assert env["GIT_COMMITTER_EMAIL"] == "noreply@openai.com"
 
     def test_human_mode_sets_both_to_human(self) -> None:
         env = self._apply_mode("human")
-        self.assertEqual(env["GIT_AUTHOR_NAME"], "Alice Example")
-        self.assertEqual(env["GIT_AUTHOR_EMAIL"], "alice@example.com")
-        self.assertEqual(env["GIT_COMMITTER_NAME"], "Alice Example")
-        self.assertEqual(env["GIT_COMMITTER_EMAIL"], "alice@example.com")
+        assert env["GIT_AUTHOR_NAME"] == "Alice Example"
+        assert env["GIT_AUTHOR_EMAIL"] == "alice@example.com"
+        assert env["GIT_COMMITTER_NAME"] == "Alice Example"
+        assert env["GIT_COMMITTER_EMAIL"] == "alice@example.com"
 
     def test_agent_mode_sets_both_to_agent(self) -> None:
         env = self._apply_mode("agent")
-        self.assertEqual(env["GIT_AUTHOR_NAME"], "Codex")
-        self.assertEqual(env["GIT_AUTHOR_EMAIL"], "noreply@openai.com")
-        self.assertEqual(env["GIT_COMMITTER_NAME"], "Codex")
-        self.assertEqual(env["GIT_COMMITTER_EMAIL"], "noreply@openai.com")
+        assert env["GIT_AUTHOR_NAME"] == "Codex"
+        assert env["GIT_AUTHOR_EMAIL"] == "noreply@openai.com"
+        assert env["GIT_COMMITTER_NAME"] == "Codex"
+        assert env["GIT_COMMITTER_EMAIL"] == "noreply@openai.com"
 
     def test_invalid_mode_falls_back_to_agent_human(self) -> None:
         env = self._apply_mode("invalid-mode")
-        self.assertEqual(env["GIT_AUTHOR_NAME"], "Codex")
-        self.assertEqual(env["GIT_COMMITTER_NAME"], "Alice Example")
+        assert env["GIT_AUTHOR_NAME"] == "Codex"
+        assert env["GIT_COMMITTER_NAME"] == "Alice Example"

@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import types
-import unittest
 import unittest.mock
 
+import pytest
 import yaml
 
 from terok.lib.containers.tasks import get_login_command, task_login, task_new
 from test_utils import mock_git_config, project_env
 
 
-class LoginTests(unittest.TestCase):
+class TestLogin:
     """Tests for task_login, get_login_command, and _validate_login."""
 
     @staticmethod
@@ -31,18 +31,18 @@ class LoginTests(unittest.TestCase):
         """task_login raises SystemExit for non-existent task."""
         project_id = "proj_login_unknown"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id):
-            with self.assertRaises(SystemExit) as ctx:
+            with pytest.raises(SystemExit) as ctx:
                 task_login(project_id, "999")
-            self.assertIn("Unknown task", str(ctx.exception))
+            assert "Unknown task" in str(ctx.value)
 
     def test_task_login_no_mode(self) -> None:
         """task_login raises SystemExit when task has never been run (no mode)."""
         project_id = "proj_login_nomode"
         with project_env(f"project:\n  id: {project_id}\n", project_id=project_id) as ctx:
             self._setup_task_with_mode(ctx, project_id)
-            with self.assertRaises(SystemExit) as exc_ctx:
+            with pytest.raises(SystemExit) as exc_ctx:
                 task_login(project_id, "1")
-            self.assertIn("never been run", str(exc_ctx.exception))
+            assert "never been run" in str(exc_ctx.value)
 
     def test_task_login_container_not_found(self) -> None:
         """task_login raises SystemExit when container does not exist."""
@@ -52,9 +52,9 @@ class LoginTests(unittest.TestCase):
             with unittest.mock.patch(
                 "terok.lib.containers.tasks.get_container_state", return_value=None
             ):
-                with self.assertRaises(SystemExit) as exc_ctx:
+                with pytest.raises(SystemExit) as exc_ctx:
                     task_login(project_id, "1")
-                self.assertIn("does not exist", str(exc_ctx.exception))
+                assert "does not exist" in str(exc_ctx.value)
 
     def test_task_login_container_not_running(self) -> None:
         """task_login raises SystemExit when container is not running."""
@@ -64,9 +64,9 @@ class LoginTests(unittest.TestCase):
             with unittest.mock.patch(
                 "terok.lib.containers.tasks.get_container_state", return_value="exited"
             ):
-                with self.assertRaises(SystemExit) as exc_ctx:
+                with pytest.raises(SystemExit) as exc_ctx:
                     task_login(project_id, "1")
-                self.assertIn("not running", str(exc_ctx.exception))
+                assert "not running" in str(exc_ctx.value)
 
     def test_task_login_success(self) -> None:
         """task_login calls os.execvp with correct podman+tmux command."""
@@ -107,20 +107,17 @@ class LoginTests(unittest.TestCase):
                 return_value="running",
             ):
                 cmd = get_login_command(project_id, "1")
-                self.assertEqual(
-                    cmd,
-                    [
-                        "podman",
-                        "exec",
-                        "-it",
-                        f"{project_id}-cli-1",
-                        "tmux",
-                        "new-session",
-                        "-A",
-                        "-s",
-                        "main",
-                    ],
-                )
+                assert cmd == [
+                    "podman",
+                    "exec",
+                    "-it",
+                    f"{project_id}-cli-1",
+                    "tmux",
+                    "new-session",
+                    "-A",
+                    "-s",
+                    "main",
+                ]
 
     def test_get_login_command_web_mode(self) -> None:
         """get_login_command uses web mode container name when mode is web."""
@@ -132,7 +129,7 @@ class LoginTests(unittest.TestCase):
                 return_value="running",
             ):
                 cmd = get_login_command(project_id, "1")
-                self.assertEqual(cmd[3], f"{project_id}-web-1")
+                assert cmd[3] == f"{project_id}-web-1"
 
     def test_login_no_longer_injects_agent_config(self) -> None:
         """get_login_command does NOT inject agent config (handled via mount)."""
@@ -151,8 +148,8 @@ class LoginTests(unittest.TestCase):
                 cmd = get_login_command(project_id, "1")
 
                 # Should still return the tmux command
-                self.assertEqual(cmd[3], f"{project_id}-cli-1")
-                self.assertIn("tmux", cmd)
+                assert cmd[3] == f"{project_id}-cli-1"
+                assert "tmux" in cmd
 
                 # No podman exec/cp calls --- config injection is via mount
                 mock_run.assert_not_called()

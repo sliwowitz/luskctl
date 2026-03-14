@@ -1,12 +1,9 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the Blablador wrapper script and Dockerfile integration.
+"""Tests for the Blablador wrapper script and Dockerfile integration."""
 
-These tests verify that:
-1. The blablador wrapper script is syntactically correct Python
-2. The L1 CLI Dockerfile includes the blablador binary installation
-"""
+from __future__ import annotations
 
 import ast
 import importlib.machinery
@@ -14,17 +11,21 @@ import importlib.util
 import json
 import sys
 import tempfile
-import unittest
-import unittest.mock
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from terok.lib.containers.docker import generate_dockerfiles
 from terok.lib.core.config import build_root
 from test_utils import make_mock_http_response, project_env
 
+BLABLADOR_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
+TEST_API_KEY = "test-api-key"
 
-def get_blablador_script_path() -> Path:
-    """Get the path to the blablador wrapper script."""
+
+def blablador_script_path() -> Path:
+    """Return the path to the Blablador wrapper script."""
     return (
         Path(__file__).parent.parent.parent
         / "src"
@@ -36,664 +37,441 @@ def get_blablador_script_path() -> Path:
 
 
 def load_blablador_module():
-    """Load the blablador script as a Python module."""
-    script_path = get_blablador_script_path()
-
-    # Create a custom loader for scripts without .py extension
+    """Load the wrapper script as a Python module."""
+    script_path = blablador_script_path()
     loader = importlib.machinery.SourceFileLoader("blablador", str(script_path))
     spec = importlib.util.spec_from_file_location("blablador", script_path, loader=loader)
     if spec is None:
         raise ImportError(f"Could not load spec from {script_path}")
-
     module = importlib.util.module_from_spec(spec)
     sys.modules["blablador"] = module
     spec.loader.exec_module(module)
     return module
 
 
-class BlabladorScriptTests(unittest.TestCase):
-    """Tests for the blablador wrapper script."""
+@pytest.fixture()
+def blablador_module():
+    """Load the Blablador script as an isolated module for one test."""
+    sys.modules.pop("blablador", None)
+    module = load_blablador_module()
+    yield module
+    sys.modules.pop("blablador", None)
 
-    def setUp(self) -> None:
-        self.script_path = get_blablador_script_path()
-        self.assertTrue(
-            self.script_path.exists(),
-            f"Blablador script must exist at {self.script_path}. "
-            "This is a required artifact for the feature.",
+
+def build_update(
+    blablador_module,
+    *,
+    base_url: str = BLABLADOR_BASE_URL,
+    api_key: str = TEST_API_KEY,
+    model: str = "alias-huge",
+    models: list[str] | None = None,
+) -> dict:
+    """Create a Blablador config fragment using the script's real helper."""
+    return blablador_module._build_blablador_update(base_url, api_key, model, models or [model])
+
+
+def l1_cli_artifacts(project_id: str) -> tuple[str, bool, str]:
+    """Generate L1 CLI artifacts and return Dockerfile, wrapper presence, and hilfe text."""
+    yaml_text = (
+        f"project:\n  id: {project_id}\n"
+        "git:\n"
+        "  upstream_url: https://example.com/repo.git\n"
+        "  default_branch: main\n"
+    )
+    with project_env(yaml_text, project_id=project_id):
+        generate_dockerfiles(project_id)
+        out_dir = build_root() / project_id
+        return (
+            (out_dir / "L1.cli.Dockerfile").read_text(encoding="utf-8"),
+            (out_dir / "scripts" / "blablador").is_file(),
+            (out_dir / "scripts" / "hilfe").read_text(encoding="utf-8"),
         )
-        # Clean up any previously loaded blablador module for test isolation
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
 
-    def tearDown(self) -> None:
-        # Clean up the blablador module after each test
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
 
-    def test_script_is_valid_python(self) -> None:
-        """Verify that the blablador script is syntactically valid Python."""
-        source = self.script_path.read_text(encoding="utf-8")
-        # This will raise SyntaxError if the script is invalid
-        ast.parse(source)
+def seed_opencode_config(base_dir: Path, content: dict) -> Path:
+    """Write a seeded OpenCode config and return its path."""
+    config_path = base_dir / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(content), encoding="utf-8")
+    return config_path
 
-    def test_script_has_shebang(self) -> None:
-        """Verify the script has a proper Python shebang."""
-        content = self.script_path.read_text(encoding="utf-8")
-        self.assertTrue(
-            content.startswith("#!/usr/bin/env python3"),
-            "Script should start with #!/usr/bin/env python3",
-        )
 
-    def test_fetch_models_with_data_array(self) -> None:
-        """Test _fetch_models with OpenAI-compatible 'data' array response."""
-        blablador = load_blablador_module()
+def test_script_is_valid_python() -> None:
+    """The wrapper script parses as valid Python source."""
+    ast.parse(blablador_script_path().read_text(encoding="utf-8"))
 
-        mock_response = make_mock_http_response(
+
+def test_script_has_shebang() -> None:
+    """The wrapper script starts with a Python shebang."""
+    assert blablador_script_path().read_text(encoding="utf-8").startswith("#!/usr/bin/env python3")
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        pytest.param(
             {
                 "data": [
                     {"id": "model-1", "object": "model"},
                     {"id": "model-2", "object": "model"},
                     {"id": "model-3", "object": "model"},
                 ]
-            }
-        )
-
-        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
-            models = blablador._fetch_models(
-                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
-            )
-
-        self.assertEqual(models, ["model-1", "model-2", "model-3"])
-
-    def test_fetch_models_with_models_array(self) -> None:
-        """Test _fetch_models with alternative 'models' array response format."""
-        blablador = load_blablador_module()
-
-        mock_response = make_mock_http_response(
-            {"models": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]}
-        )
-
-        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
-            models = blablador._fetch_models(
-                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
-            )
-
-        self.assertEqual(models, ["custom-model-1", "custom-model-2"])
-
-    def test_fetch_models_deduplicates_and_sorts(self) -> None:
-        """Test that _fetch_models deduplicates and sorts model IDs."""
-        blablador = load_blablador_module()
-
-        mock_response = make_mock_http_response(
+            },
+            ["model-1", "model-2", "model-3"],
+            id="data-array",
+        ),
+        pytest.param(
+            {"models": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]},
+            ["custom-model-1", "custom-model-2"],
+            id="models-array",
+        ),
+        pytest.param(
             {
                 "data": [
                     {"id": "zebra-model"},
                     {"id": "alpha-model"},
-                    {"id": "zebra-model"},  # duplicate
+                    {"id": "zebra-model"},
                     {"id": "beta-model"},
                 ]
-            }
-        )
-
-        with unittest.mock.patch("blablador.request.urlopen", return_value=mock_response):
-            models = blablador._fetch_models(
-                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
-            )
-
-        self.assertEqual(models, ["alpha-model", "beta-model", "zebra-model"])
-
-    def test_fetch_models_returns_none_on_error(self) -> None:
-        """Test that _fetch_models returns None on API error."""
-        blablador = load_blablador_module()
-
-        with unittest.mock.patch(
-            "blablador.request.urlopen",
-            side_effect=blablador.error.URLError("Connection failed"),
-        ):
-            result = blablador._fetch_models(
-                "https://api.helmholtz-blablador.fz-juelich.de/v1", "test-api-key"
-            )
-
-        self.assertIsNone(result)
-
-    def test_build_config_structure(self) -> None:
-        """Test that _build_blablador_update generates correct OpenCode configuration."""
-        blablador = load_blablador_module()
-
-        config = blablador._build_blablador_update(
-            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
-            api_key="test-key-123",
-            model="test-model",
-            models=["test-model", "other-model"],
-        )
-
-        # Verify schema and model
-        self.assertEqual(config["$schema"], "https://opencode.ai/config.json")
-        self.assertEqual(config["model"], "blablador/test-model")
-
-        # Verify provider configuration
-        self.assertIn("blablador", config["provider"])
-        provider = config["provider"]["blablador"]
-        self.assertEqual(provider["npm"], "@ai-sdk/openai-compatible")
-        self.assertEqual(provider["name"], "Helmholtz Blablador")
-        self.assertEqual(
-            provider["options"]["baseURL"], "https://api.helmholtz-blablador.fz-juelich.de/v1"
-        )
-        self.assertEqual(provider["options"]["apiKey"], "test-key-123")
-
-        # Verify models map includes both models
-        self.assertIn("test-model", provider["models"])
-        self.assertIn("other-model", provider["models"])
-
-        # Verify permission is set to allow all
-        self.assertEqual(config["permission"]["*"], "allow")
+            },
+            ["alpha-model", "beta-model", "zebra-model"],
+            id="deduplicates-and-sorts",
+        ),
+    ],
+)
+def test_fetch_models_success(
+    blablador_module, payload: dict[str, object], expected: list[str]
+) -> None:
+    """Model fetching supports both response shapes and normalizes the returned IDs."""
+    with patch("blablador.request.urlopen", return_value=make_mock_http_response(payload)):
+        assert blablador_module._fetch_models(BLABLADOR_BASE_URL, TEST_API_KEY) == expected
 
 
-class BlabladorDockerfileTests(unittest.TestCase):
-    """Tests for Blablador integration in the L1 CLI Dockerfile."""
-
-    def test_l1_cli_has_blablador_binary(self) -> None:
-        """Verify that the L1 CLI Dockerfile installs the blablador binary."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_blablador_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_blablador_test") as _env:
-            generate_dockerfiles("proj_blablador_test")
-            out_dir = build_root() / "proj_blablador_test"
-            l1_cli = out_dir / "L1.cli.Dockerfile"
-
-            content = l1_cli.read_text(encoding="utf-8")
-
-            # Verify blablador binary is installed (wrapper function is in zz-terok-project.sh)
-            self.assertIn("COPY scripts/blablador /usr/local/bin/blablador", content)
-
-    def test_l1_cli_blablador_in_agents_list(self) -> None:
-        """Verify blablador appears in the available agents list."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_blablador_list_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_blablador_list_test") as _env:
-            generate_dockerfiles("proj_blablador_list_test")
-            out_dir = build_root() / "proj_blablador_list_test"
-            l1_cli = out_dir / "L1.cli.Dockerfile"
-
-            content = l1_cli.read_text(encoding="utf-8")
-
-            # Verify blablador is referenced in the Dockerfile
-            self.assertIn("blablador", content)
-            # Verify blablador description is in the hilfe banner script
-            hilfe_script = (out_dir / "scripts" / "hilfe").read_text(encoding="utf-8")
-            self.assertIn("Helmholtz Blablador", hilfe_script)
-
-    def test_l1_cli_opencode_installed(self) -> None:
-        """Verify that OpenCode CLI is installed in the L1 CLI image."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_opencode_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_opencode_test") as _env:
-            generate_dockerfiles("proj_opencode_test")
-            out_dir = build_root() / "proj_opencode_test"
-            l1_cli = out_dir / "L1.cli.Dockerfile"
-
-            content = l1_cli.read_text(encoding="utf-8")
-
-            # Verify OpenCode installation (runs as dev user)
-            self.assertIn("opencode.ai/install", content)
-
-    def test_l1_cli_opencode_in_agents_list(self) -> None:
-        """Verify opencode appears in the available agents list."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_opencode_list_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_opencode_list_test") as _env:
-            generate_dockerfiles("proj_opencode_list_test")
-            out_dir = build_root() / "proj_opencode_list_test"
-            l1_cli = out_dir / "L1.cli.Dockerfile"
-
-            content = l1_cli.read_text(encoding="utf-8")
-
-            # Verify opencode is referenced in the Dockerfile
-            self.assertIn("opencode", content)
-            # Verify opencode description is in the hilfe banner script
-            hilfe_script = (out_dir / "scripts" / "hilfe").read_text(encoding="utf-8")
-            self.assertIn("OpenCode CLI", hilfe_script)
-
-    def test_l1_cli_blablador_script_copied(self) -> None:
-        """Verify the blablador wrapper script is copied to the image."""
-        yaml_text = (
-            "project:\n"
-            "  id: proj_script_copy_test\n"
-            "git:\n"
-            "  upstream_url: https://example.com/repo.git\n"
-            "  default_branch: main\n"
-        )
-        with project_env(yaml_text, project_id="proj_script_copy_test") as _env:
-            generate_dockerfiles("proj_script_copy_test")
-            out_dir = build_root() / "proj_script_copy_test"
-
-            # Verify scripts directory exists and blablador is there
-            scripts_dir = out_dir / "scripts"
-            self.assertTrue(scripts_dir.is_dir())
-
-            blablador_script = scripts_dir / "blablador"
-            self.assertTrue(
-                blablador_script.is_file(), f"blablador script not found in {scripts_dir}"
-            )
+def test_fetch_models_returns_none_on_error(blablador_module) -> None:
+    """API failures return ``None`` instead of bubbling exceptions up."""
+    with patch(
+        "blablador.request.urlopen",
+        side_effect=blablador_module.error.URLError("Connection failed"),
+    ):
+        assert blablador_module._fetch_models(BLABLADOR_BASE_URL, TEST_API_KEY) is None
 
 
-class BlabladorPersistentConfigTests(unittest.TestCase):
-    """Tests for persistent configuration management."""
+@pytest.mark.parametrize(
+    ("model", "models"),
+    [
+        pytest.param("test-model", ["test-model", "other-model"], id="basic"),
+        pytest.param("alias-code", ["alias-code", "other-model"], id="json-structure"),
+    ],
+)
+def test_build_blablador_update(blablador_module, model: str, models: list[str]) -> None:
+    """The generated config fragment has the expected OpenCode provider structure."""
+    config = build_update(
+        blablador_module,
+        base_url=BLABLADOR_BASE_URL,
+        api_key="test-api-key-456",
+        model=model,
+        models=models,
+    )
+    parsed = json.loads(json.dumps(config, indent=2))
+    provider = parsed["provider"]["blablador"]
 
-    def setUp(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
+    assert parsed["$schema"] == "https://opencode.ai/config.json"
+    assert parsed["model"] == f"blablador/{model}"
+    assert provider["npm"] == "@ai-sdk/openai-compatible"
+    assert provider["name"] == "Helmholtz Blablador"
+    assert provider["options"]["baseURL"] == BLABLADOR_BASE_URL
+    assert provider["options"]["apiKey"] == "test-api-key-456"
+    assert parsed["permission"]["*"] == "allow"
+    for model_id in models:
+        assert model_id in provider["models"]
 
-    def tearDown(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
 
-    def test_get_configured_models_extracts_model_ids(self) -> None:
-        """Test that _get_configured_models extracts model IDs from config."""
-        blablador = load_blablador_module()
+@pytest.mark.parametrize(
+    ("project_id", "dockerfile_snippets", "hilfe_snippets"),
+    [
+        pytest.param(
+            "proj_blablador_test",
+            ["COPY scripts/blablador /usr/local/bin/blablador"],
+            [],
+            id="installs-wrapper",
+        ),
+        pytest.param(
+            "proj_blablador_list_test",
+            ["blablador"],
+            ["Helmholtz Blablador"],
+            id="blablador-in-agents-list",
+        ),
+        pytest.param(
+            "proj_opencode_test",
+            ["opencode.ai/install"],
+            [],
+            id="installs-opencode",
+        ),
+        pytest.param(
+            "proj_opencode_list_test",
+            ["opencode"],
+            ["OpenCode CLI"],
+            id="opencode-in-agents-list",
+        ),
+    ],
+)
+def test_l1_cli_dockerfile_integration(
+    project_id: str,
+    dockerfile_snippets: list[str],
+    hilfe_snippets: list[str],
+) -> None:
+    """Generated CLI artifacts advertise the expected Blablador/OpenCode integrations."""
+    dockerfile, _, hilfe = l1_cli_artifacts(project_id)
+    for snippet in dockerfile_snippets:
+        assert snippet in dockerfile
+    for snippet in hilfe_snippets:
+        assert snippet in hilfe
 
-        config = {
-            "provider": {
-                "blablador": {
-                    "models": {
-                        "model-a": {"name": "Model A"},
-                        "model-b": {"name": "Model B"},
+
+def test_l1_cli_blablador_script_copied() -> None:
+    """Dockerfile generation copies the wrapper script into the build context."""
+    _, script_present, _ = l1_cli_artifacts("proj_script_copy_test")
+    assert script_present
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        pytest.param(
+            {
+                "provider": {
+                    "blablador": {
+                        "models": {
+                            "model-a": {"name": "Model A"},
+                            "model-b": {"name": "Model B"},
+                        }
                     }
                 }
-            }
-        }
-
-        models = blablador._get_configured_models(config)
-        self.assertEqual(models, {"model-a", "model-b"})
-
-    def test_get_configured_models_returns_empty_for_no_config(self) -> None:
-        """Test that _get_configured_models returns empty set for None config."""
-        blablador = load_blablador_module()
-        self.assertEqual(blablador._get_configured_models(None), set())
-
-    def test_get_configured_models_returns_empty_for_missing_provider(self) -> None:
-        """Test that _get_configured_models handles missing provider."""
-        blablador = load_blablador_module()
-        self.assertEqual(blablador._get_configured_models({}), set())
-        self.assertEqual(blablador._get_configured_models({"provider": {}}), set())
-
-    def test_load_opencode_config_returns_none_for_missing_file(self) -> None:
-        """Test that _load_opencode_config returns None if file doesn't exist."""
-        blablador = load_blablador_module()
-
-        with tempfile.TemporaryDirectory() as td:
-            fake_home = Path(td)
-            with unittest.mock.patch.object(
-                blablador, "_opencode_config_path", return_value=fake_home / "nonexistent.json"
-            ):
-                result = blablador._load_opencode_config()
-                self.assertIsNone(result)
-
-    def test_load_opencode_config_returns_parsed_json(self) -> None:
-        """Test that _load_opencode_config returns parsed config."""
-        blablador = load_blablador_module()
-
-        with tempfile.TemporaryDirectory() as td:
-            config_path = Path(td) / "opencode.json"
-            config_data = {"model": "blablador/test", "provider": {"blablador": {}}}
-            config_path.write_text(json.dumps(config_data))
-
-            with unittest.mock.patch.object(
-                blablador, "_opencode_config_path", return_value=config_path
-            ):
-                result = blablador._load_opencode_config()
-                self.assertEqual(result, config_data)
-
-    def test_write_opencode_config_creates_directories(self) -> None:
-        """Test that _write_opencode_config creates parent directories."""
-        blablador = load_blablador_module()
-
-        with tempfile.TemporaryDirectory() as td:
-            config_path = Path(td) / "nested" / "dir" / "opencode.json"
-
-            with unittest.mock.patch.object(
-                blablador, "_opencode_config_path", return_value=config_path
-            ):
-                blablador._write_opencode_config({"test": "config"})
-                self.assertTrue(config_path.exists())
-                self.assertEqual(json.loads(config_path.read_text()), {"test": "config"})
+            },
+            {"model-a", "model-b"},
+            id="configured-models",
+        ),
+        pytest.param(None, set(), id="none"),
+        pytest.param({}, set(), id="missing-provider"),
+        pytest.param({"provider": {}}, set(), id="empty-provider"),
+    ],
+)
+def test_get_configured_models(blablador_module, config: dict | None, expected: set[str]) -> None:
+    """Configured-model extraction handles missing config and valid provider maps."""
+    assert blablador_module._get_configured_models(config) == expected
 
 
-class BlabladorConfigSeparationTests(unittest.TestCase):
-    """Tests for Blablador/OpenCode config separation (issue #132)."""
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        pytest.param(None, None, id="missing-file"),
+        pytest.param(
+            {"model": "blablador/test", "provider": {"blablador": {}}},
+            {"model": "blablador/test", "provider": {"blablador": {}}},
+            id="parsed-json",
+        ),
+    ],
+)
+def test_load_opencode_config(blablador_module, seed: dict | None, expected: dict | None) -> None:
+    """OpenCode config loading returns parsed JSON or ``None`` when missing."""
+    with tempfile.TemporaryDirectory() as td:
+        config_path = Path(td) / "opencode.json"
+        if seed is not None:
+            config_path.write_text(json.dumps(seed), encoding="utf-8")
+        with patch.object(blablador_module, "_opencode_config_path", return_value=config_path):
+            assert blablador_module._load_opencode_config() == expected
 
-    def setUp(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
 
-    def tearDown(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
+def test_write_opencode_config_creates_directories(blablador_module) -> None:
+    """Writing OpenCode config creates parent directories when needed."""
+    with tempfile.TemporaryDirectory() as td:
+        config_path = Path(td) / "nested" / "dir" / "opencode.json"
+        with patch.object(blablador_module, "_opencode_config_path", return_value=config_path):
+            blablador_module._write_opencode_config({"test": "config"})
 
-    def test_opencode_config_path_under_blablador_dir(self) -> None:
-        """Verify _opencode_config_path() returns a path under ~/.blablador/."""
-        blablador = load_blablador_module()
-        config_path = blablador._opencode_config_path()
-        home = Path.home()
-        self.assertTrue(
-            config_path.resolve().is_relative_to((home / ".blablador").resolve()),
-            f"Expected path under ~/.blablador/, got {config_path}",
+        assert config_path.exists()
+        assert json.loads(config_path.read_text()) == {"test": "config"}
+
+
+def test_opencode_config_path_under_blablador_dir(blablador_module) -> None:
+    """Blablador uses its own OpenCode config directory under ``~/.blablador``."""
+    config_path = blablador_module._opencode_config_path()
+    home = Path.home()
+    assert config_path.resolve().is_relative_to((home / ".blablador").resolve())
+    assert config_path.name == "opencode.json"
+    assert config_path != home / ".config" / "opencode" / "opencode.json"
+
+
+def test_main_passes_opencode_config_env(blablador_module) -> None:
+    """Running the wrapper passes ``OPENCODE_CONFIG`` to the spawned OpenCode process."""
+    mock_response = make_mock_http_response({"data": [{"id": "alias-huge"}]})
+    with tempfile.TemporaryDirectory() as td:
+        config_path = Path(td) / "opencode" / "opencode.json"
+        with (
+            patch.object(blablador_module, "_load_api_key", return_value="fake-key"),
+            patch("blablador.request.urlopen", return_value=mock_response),
+            patch.object(blablador_module, "_opencode_config_path", return_value=config_path),
+            patch("blablador.subprocess.call", return_value=0) as mock_call,
+            patch("sys.argv", ["blablador"]),
+        ):
+            blablador_module.main()
+
+    env = mock_call.call_args.kwargs["env"]
+    assert env["OPENCODE_CONFIG"] == str(config_path)
+
+
+def test_options_refresh_when_fetch_fails(blablador_module) -> None:
+    """Credential/base-URL changes still rewrite config when model fetch fails."""
+    with tempfile.TemporaryDirectory() as td:
+        config_path = Path(td) / "opencode" / "opencode.json"
+        old_config = build_update(
+            blablador_module,
+            base_url="https://old-url/v1",
+            api_key="old-key",
+            model="alias-huge",
+            models=["alias-huge", "alias-code"],
         )
-        self.assertEqual(config_path.name, "opencode.json")
-
-    def test_opencode_config_path_not_default_opencode_dir(self) -> None:
-        """Verify config path is NOT the default ~/.config/opencode/ location."""
-        blablador = load_blablador_module()
-        config_path = blablador._opencode_config_path()
-        default_path = Path.home() / ".config" / "opencode" / "opencode.json"
-        self.assertNotEqual(
-            config_path,
-            default_path,
-            "Blablador config path must differ from default OpenCode config path",
-        )
-
-    def test_main_passes_opencode_config_env(self) -> None:
-        """Verify main() passes OPENCODE_CONFIG env var to subprocess.call()."""
-        blablador = load_blablador_module()
-
-        mock_response = make_mock_http_response({"data": [{"id": "alias-huge"}]})
+        seed_opencode_config(Path(td), old_config)
 
         with (
-            tempfile.TemporaryDirectory() as td,
-            unittest.mock.patch.object(blablador, "_load_api_key", return_value="fake-key"),
-            unittest.mock.patch("blablador.request.urlopen", return_value=mock_response),
-            unittest.mock.patch.object(
-                blablador,
-                "_opencode_config_path",
-                return_value=Path(td) / "opencode" / "opencode.json",
+            patch.object(blablador_module, "_load_api_key", return_value="new-key"),
+            patch(
+                "blablador.request.urlopen",
+                side_effect=blablador_module.error.URLError("unreachable"),
             ),
-            unittest.mock.patch("blablador.subprocess.call", return_value=0) as mock_call,
-            unittest.mock.patch("sys.argv", ["blablador"]),
+            patch.object(blablador_module, "_opencode_config_path", return_value=config_path),
+            patch("blablador.subprocess.call", return_value=0),
+            patch("sys.argv", ["blablador"]),
         ):
-            blablador.main()
+            blablador_module.main()
 
-        mock_call.assert_called_once()
-        call_kwargs = mock_call.call_args
-        env = call_kwargs[1].get("env") if call_kwargs[1] else None
-        self.assertIsNotNone(env, "subprocess.call must be called with env kwarg")
-        self.assertIn("OPENCODE_CONFIG", env)
-        self.assertEqual(env["OPENCODE_CONFIG"], str(Path(td) / "opencode" / "opencode.json"))
-
-    def test_options_refresh_when_fetch_fails(self) -> None:
-        """Config is rewritten with new credentials even when model fetch fails."""
-        blablador = load_blablador_module()
-
-        with tempfile.TemporaryDirectory() as td:
-            config_path = Path(td) / "opencode" / "opencode.json"
-            # Seed an existing config with old credentials
-            old_config = blablador._build_blablador_update(
-                base_url="https://old-url/v1",
-                api_key="old-key",
-                model="alias-huge",
-                models=["alias-huge", "alias-code"],
-            )
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(json.dumps(old_config), encoding="utf-8")
-
-            with (
-                unittest.mock.patch.object(blablador, "_load_api_key", return_value="new-key"),
-                unittest.mock.patch(
-                    "blablador.request.urlopen",
-                    side_effect=blablador.error.URLError("unreachable"),
-                ),
-                unittest.mock.patch.object(
-                    blablador, "_opencode_config_path", return_value=config_path
-                ),
-                unittest.mock.patch("blablador.subprocess.call", return_value=0),
-                unittest.mock.patch("sys.argv", ["blablador"]),
-            ):
-                blablador.main()
-
-            # Config should have been rewritten with new credentials
-            updated = json.loads(config_path.read_text(encoding="utf-8"))
-            opts = updated["provider"]["blablador"]["options"]
-            self.assertEqual(opts["apiKey"], "new-key")
-            # Models should be preserved from the old config
-            self.assertIn("alias-huge", updated["provider"]["blablador"]["models"])
-            self.assertIn("alias-code", updated["provider"]["blablador"]["models"])
+        updated = json.loads(config_path.read_text(encoding="utf-8"))
+        options = updated["provider"]["blablador"]["options"]
+        assert options["apiKey"] == "new-key"
+        assert {"alias-huge", "alias-code"} <= set(updated["provider"]["blablador"]["models"])
 
 
-class BlabladorConfigTests(unittest.TestCase):
-    """Tests for Blablador configuration structure."""
+@pytest.mark.parametrize(
+    ("existing", "expected_permission", "expected_model"),
+    [
+        pytest.param(
+            {"instructions": ["/home/dev/.terok/instructions.md"]},
+            {"*": "allow"},
+            "blablador/alias-huge",
+            id="preserves-instructions",
+        ),
+        pytest.param(
+            {"permission": {"Bash(*)": "deny"}},
+            {"Bash(*)": "deny"},
+            "blablador/alias-huge",
+            id="preserves-existing-permission",
+        ),
+        pytest.param(
+            {"model": "other-provider/custom-model"},
+            {"*": "allow"},
+            "other-provider/custom-model",
+            id="preserves-non-blablador-model",
+        ),
+        pytest.param(
+            {"model": "blablador/old-model"},
+            {"*": "allow"},
+            "blablador/alias-huge",
+            id="updates-blablador-model",
+        ),
+    ],
+)
+def test_merge_blablador_config_core_behaviour(
+    blablador_module,
+    existing: dict,
+    expected_permission: dict[str, str],
+    expected_model: str,
+) -> None:
+    """Config merging preserves unrelated settings while refreshing the Blablador provider."""
+    merged = blablador_module._merge_blablador_config(
+        existing,
+        build_update(blablador_module, base_url="https://api.example.com/v1", api_key="key"),
+    )
+    assert merged["permission"] == expected_permission
+    assert merged["model"] == expected_model
+    if "instructions" in existing:
+        assert merged["instructions"] == existing["instructions"]
 
-    def test_config_json_structure(self) -> None:
-        """Test that _build_blablador_update generates valid and correctly structured config."""
-        blablador = load_blablador_module()
 
-        # Call the actual _build_blablador_update function
-        config = blablador._build_blablador_update(
-            base_url="https://api.helmholtz-blablador.fz-juelich.de/v1",
-            api_key="test-api-key-456",
-            model="alias-code",
-            models=["alias-code", "other-model"],
-        )
-
-        # Verify it's valid JSON by serializing and deserializing
-        json_str = json.dumps(config, indent=2)
-        parsed = json.loads(json_str)
-
-        # Assert on key fields from the actual implementation
-        self.assertEqual(parsed["$schema"], "https://opencode.ai/config.json")
-        self.assertEqual(parsed["model"], "blablador/alias-code")
-        self.assertIn("blablador", parsed["provider"])
-        self.assertEqual(parsed["provider"]["blablador"]["npm"], "@ai-sdk/openai-compatible")
-        self.assertEqual(parsed["provider"]["blablador"]["name"], "Helmholtz Blablador")
-        self.assertEqual(
-            parsed["provider"]["blablador"]["options"]["baseURL"],
-            "https://api.helmholtz-blablador.fz-juelich.de/v1",
-        )
-        self.assertEqual(parsed["provider"]["blablador"]["options"]["apiKey"], "test-api-key-456")
-        self.assertEqual(parsed["permission"]["*"], "allow")
-
-        # Verify model map includes the models we passed
-        self.assertIn("alias-code", parsed["provider"]["blablador"]["models"])
-        self.assertIn("other-model", parsed["provider"]["blablador"]["models"])
+def test_merge_preserves_other_providers(blablador_module) -> None:
+    """Merging Blablador config keeps unrelated provider entries intact."""
+    merged = blablador_module._merge_blablador_config(
+        {"provider": {"other-provider": {"npm": "other-npm", "models": {}}}},
+        build_update(blablador_module, base_url="https://api.example.com/v1", api_key="key"),
+    )
+    assert {"other-provider", "blablador"} <= set(merged["provider"])
 
 
-class BlabladorMergeConfigTests(unittest.TestCase):
-    """Tests for merge-based config writing (preserves existing settings)."""
-
-    def setUp(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
-
-    def tearDown(self) -> None:
-        if "blablador" in sys.modules:
-            del sys.modules["blablador"]
-
-    def test_merge_preserves_instructions(self) -> None:
-        """Merging blablador config preserves existing instructions key."""
-        blablador = load_blablador_module()
-
-        existing = {"instructions": ["/home/dev/.terok/instructions.md"]}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertEqual(merged["instructions"], ["/home/dev/.terok/instructions.md"])
-        self.assertIn("blablador", merged["provider"])
-
-    def test_merge_preserves_other_providers(self) -> None:
-        """Merging blablador config preserves other provider entries."""
-        blablador = load_blablador_module()
-
-        existing = {
-            "provider": {"other-provider": {"npm": "other-npm", "models": {}}},
-        }
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertIn("other-provider", merged["provider"])
-        self.assertIn("blablador", merged["provider"])
-
-    def test_merge_preserves_existing_permission(self) -> None:
-        """Merging does not overwrite existing permission settings."""
-        blablador = load_blablador_module()
-
-        existing = {"permission": {"Bash(*)": "deny"}}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertEqual(merged["permission"], {"Bash(*)": "deny"})
-
-    def test_merge_sets_permission_when_missing(self) -> None:
-        """Merging sets permission to allow-all when not already set."""
-        blablador = load_blablador_module()
-
-        existing = {}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertEqual(merged["permission"], {"*": "allow"})
-
-    def test_merge_preserves_non_blablador_model(self) -> None:
-        """Merging does not overwrite model if it's not a blablador model."""
-        blablador = load_blablador_module()
-
-        existing = {"model": "other-provider/custom-model"}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertEqual(merged["model"], "other-provider/custom-model")
-
-    def test_merge_overwrites_blablador_model(self) -> None:
-        """Merging updates model if it's already a blablador model."""
-        blablador = load_blablador_module()
-
-        existing = {"model": "blablador/old-model"}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
-
-        self.assertEqual(merged["model"], "blablador/alias-huge")
-
-    def test_merge_updates_blablador_provider(self) -> None:
-        """Merging replaces the blablador provider section entirely."""
-        blablador = load_blablador_module()
-
-        existing = {
+def test_merge_updates_blablador_provider(blablador_module) -> None:
+    """Merging replaces the Blablador provider section wholesale."""
+    merged = blablador_module._merge_blablador_config(
+        {
             "provider": {
                 "blablador": {"npm": "old-npm", "models": {"old-model": {"name": "old"}}},
             }
-        }
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "new-key", "alias-huge", ["alias-huge"]
-        )
-        merged = blablador._merge_blablador_config(existing, update)
+        },
+        build_update(
+            blablador_module,
+            base_url="https://api.example.com/v1",
+            api_key="new-key",
+        ),
+    )
+    provider = merged["provider"]["blablador"]
+    assert provider["npm"] == "@ai-sdk/openai-compatible"
+    assert provider["options"]["apiKey"] == "new-key"
 
-        provider = merged["provider"]["blablador"]
-        self.assertEqual(provider["npm"], "@ai-sdk/openai-compatible")
-        self.assertEqual(provider["options"]["apiKey"], "new-key")
 
-    def test_merge_warns_on_schema_mismatch(self) -> None:
-        """Merging warns when existing $schema differs from expected value."""
-        blablador = load_blablador_module()
-
-        existing = {"$schema": "https://example.com/wrong.json"}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
-        )
-
-        with unittest.mock.patch("builtins.print") as mock_print:
-            merged = blablador._merge_blablador_config(existing, update)
-
-        # Warning printed about unexpected schema
-        mock_print.assert_called_once()
-        warning_msg = mock_print.call_args[0][0]
-        self.assertIn("unexpected $schema", warning_msg)
-        self.assertIn("https://example.com/wrong.json", warning_msg)
-        # Schema is overwritten to the correct value
-        self.assertEqual(merged["$schema"], "https://opencode.ai/config.json")
-
-    def test_merge_no_warning_on_matching_schema(self) -> None:
-        """Merging does not warn when existing $schema matches expected value."""
-        blablador = load_blablador_module()
-
-        existing = {"$schema": "https://opencode.ai/config.json"}
-        update = blablador._build_blablador_update(
-            "https://api.example.com/v1", "key", "alias-huge", ["alias-huge"]
+@pytest.mark.parametrize(
+    ("schema", "should_warn"),
+    [
+        pytest.param("https://example.com/wrong.json", True, id="schema-mismatch"),
+        pytest.param("https://opencode.ai/config.json", False, id="schema-match"),
+    ],
+)
+def test_merge_schema_warning(blablador_module, schema: str, should_warn: bool) -> None:
+    """Schema mismatches print a warning and are overwritten to the expected value."""
+    with patch("builtins.print") as mock_print:
+        merged = blablador_module._merge_blablador_config(
+            {"$schema": schema},
+            build_update(blablador_module, base_url="https://api.example.com/v1", api_key="key"),
         )
 
-        with unittest.mock.patch("builtins.print") as mock_print:
-            blablador._merge_blablador_config(existing, update)
+    assert mock_print.called is should_warn
+    assert merged["$schema"] == "https://opencode.ai/config.json"
+    if should_warn:
+        assert "unexpected $schema" in mock_print.call_args.args[0]
 
-        mock_print.assert_not_called()
 
-    def test_main_preserves_instructions_on_update(self) -> None:
-        """main() preserves instructions key when updating config."""
-        blablador = load_blablador_module()
+def test_main_preserves_instructions_on_update(blablador_module) -> None:
+    """Updating config through ``main()`` preserves existing ``instructions`` entries."""
+    mock_response = make_mock_http_response({"data": [{"id": "alias-huge"}]})
 
-        mock_response = make_mock_http_response({"data": [{"id": "alias-huge"}]})
-
-        with tempfile.TemporaryDirectory() as td:
-            config_path = Path(td) / "opencode" / "opencode.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            # Seed config with instructions
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "instructions": ["/home/dev/.terok/instructions.md"],
-                        "provider": {
-                            "blablador": {
-                                "options": {"baseURL": "https://old/v1", "apiKey": "old"},
-                                "models": {},
-                            }
-                        },
+    with tempfile.TemporaryDirectory() as td:
+        config_path = seed_opencode_config(
+            Path(td),
+            {
+                "instructions": ["/home/dev/.terok/instructions.md"],
+                "provider": {
+                    "blablador": {
+                        "options": {"baseURL": "https://old/v1", "apiKey": "old"},
+                        "models": {},
                     }
-                ),
-                encoding="utf-8",
-            )
+                },
+            },
+        )
+        with (
+            patch.object(blablador_module, "_load_api_key", return_value="new-key"),
+            patch("blablador.request.urlopen", return_value=mock_response),
+            patch.object(blablador_module, "_opencode_config_path", return_value=config_path),
+            patch("blablador.subprocess.call", return_value=0),
+            patch("sys.argv", ["blablador"]),
+        ):
+            blablador_module.main()
 
-            with (
-                unittest.mock.patch.object(blablador, "_load_api_key", return_value="new-key"),
-                unittest.mock.patch("blablador.request.urlopen", return_value=mock_response),
-                unittest.mock.patch.object(
-                    blablador, "_opencode_config_path", return_value=config_path
-                ),
-                unittest.mock.patch("blablador.subprocess.call", return_value=0),
-                unittest.mock.patch("sys.argv", ["blablador"]),
-            ):
-                blablador.main()
-
-            updated = json.loads(config_path.read_text(encoding="utf-8"))
-            self.assertEqual(updated["instructions"], ["/home/dev/.terok/instructions.md"])
-            self.assertEqual(updated["provider"]["blablador"]["options"]["apiKey"], "new-key")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        updated = json.loads(config_path.read_text(encoding="utf-8"))
+    assert updated["instructions"] == ["/home/dev/.terok/instructions.md"]
+    assert updated["provider"]["blablador"]["options"]["apiKey"] == "new-key"

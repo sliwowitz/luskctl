@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-import unittest
 import unittest.mock
 from collections.abc import Callable
+
+import pytest
 
 
 def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
@@ -22,7 +23,7 @@ def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     return func
 
 
-class ProjectInitTests(unittest.TestCase):
+class TestProjectInit:
     """Tests for the project-init convenience command."""
 
     @_patch_init_steps
@@ -59,7 +60,7 @@ class ProjectInitTests(unittest.TestCase):
 
         cmd_project_init("proj1")
 
-        self.assertEqual(call_order, ["ssh", "pause", "generate", "build", "gate"])
+        assert call_order == ["ssh", "pause", "generate", "build", "gate"]
 
     @_patch_init_steps
     def test_cmd_project_init_gate_failure_raises(
@@ -72,12 +73,12 @@ class ProjectInitTests(unittest.TestCase):
 
         from terok.cli.commands.setup import cmd_project_init
 
-        with self.assertRaises(SystemExit) as ctx:
+        with pytest.raises(SystemExit) as ctx:
             cmd_project_init("badproj")
-        self.assertIn("Gate sync failed", str(ctx.exception))
+        assert "Gate sync failed" in str(ctx.value)
 
 
-class SshPauseTests(unittest.TestCase):
+class TestSshPause:
     """Tests for the SSH key registration pause in maybe_pause_for_ssh_key_registration."""
 
     @unittest.mock.patch("terok.lib.facade.load_project")
@@ -122,7 +123,7 @@ class SshPauseTests(unittest.TestCase):
         mock_gate_cls.return_value.sync.assert_called_once()
 
 
-class TaskStartTests(unittest.TestCase):
+class TestTaskStart:
     """Tests for the 'task start' convenience command."""
 
     @unittest.mock.patch("terok.cli.commands.task.task_run_cli")
@@ -199,10 +200,10 @@ class TaskStartTests(unittest.TestCase):
         with (
             unittest.mock.patch("terok.cli.commands.task.task_new", return_value="1") as mock_new,
             unittest.mock.patch("sys.argv", ["terok", "task", "start", "proj1", "--web"]),
-            self.assertRaises(SystemExit) as ctx,
+            pytest.raises(SystemExit) as ctx,
         ):
             main()
-        self.assertIn("--experimental", str(ctx.exception))
+        assert "--experimental" in str(ctx.value)
         mock_new.assert_not_called()
 
     @unittest.mock.patch("terok.cli.commands.task.task_run_web")
@@ -212,10 +213,10 @@ class TaskStartTests(unittest.TestCase):
 
         with (
             unittest.mock.patch("sys.argv", ["terok", "task", "run-web", "proj1", "1"]),
-            self.assertRaises(SystemExit) as ctx,
+            pytest.raises(SystemExit) as ctx,
         ):
             main()
-        self.assertIn("--experimental", str(ctx.exception))
+        assert "--experimental" in str(ctx.value)
         mock_run_web.assert_not_called()
 
     @unittest.mock.patch("terok.cli.commands.setup.cmd_project_init")
