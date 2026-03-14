@@ -28,12 +28,12 @@ by Toad bypass the wrappers and need separate mechanisms:
 
 | Agent | terok `auto_approve_flags` | terok `auto_approve_env` | ACP covered? |
 |-------|---------------------------|-------------------------|--------------|
-| Claude | `--dangerously-skip-permissions` | — | **No** |
-| Vibe | `--auto-approve` (bug: not a valid flag; use `--agent auto-approve`) | — | **No** |
-| Blablador | — | `OPENCODE_PERMISSION` | **Partially** |
-| OpenCode | — | `OPENCODE_PERMISSION` | **Partially** |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` | — | **No** |
-| Copilot | `--allow-all-tools` (bug: should be `--yolo` for full unrestricted) | — | **No** |
+| Claude | `--dangerously-skip-permissions` | — | **Yes** (managed-settings.json) |
+| Vibe | `--agent auto-approve` | `VIBE_AUTO_APPROVE` | **Yes** |
+| Blablador | — | `OPENCODE_PERMISSION` | **Yes** |
+| OpenCode | — | `OPENCODE_PERMISSION` | **Yes** |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` | — | **No** (needs `-c` at spawn) |
+| Copilot | `--yolo` | `COPILOT_ALLOW_ALL` | **Yes** |
 
 ### Recommended ACP implementation
 

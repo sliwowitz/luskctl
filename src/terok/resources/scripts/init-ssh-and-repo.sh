@@ -308,6 +308,18 @@ if command -v nvfortran >/dev/null 2>&1; then
   nvfortran --version || true
 fi
 
+# ACP permission mode: write managed settings files for agents that need
+# file-based config rather than env vars.  These files are per-container
+# (not shared volumes) so they provide true per-task control.
+if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then
+  # Claude: managed-settings.json has highest precedence and cannot be
+  # overridden by user/project settings.  Directory pre-created in Dockerfile.
+  if [ -d /etc/claude-code ]; then
+    printf '{"permissions":{"defaultMode":"bypassPermissions"}}\n' \
+      > /etc/claude-code/managed-settings.json
+  fi
+fi
+
 # Signal readiness for host tools that watch initial logs
 echo ">> init complete"
 exec bash

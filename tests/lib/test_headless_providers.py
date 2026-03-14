@@ -89,14 +89,14 @@ class HeadlessProviderRegistryTests(unittest.TestCase):
         p = HEADLESS_PROVIDERS["copilot"]
         self.assertEqual(p.binary, "copilot")
         self.assertEqual(p.prompt_flag, "-p")
-        self.assertEqual(p.auto_approve_flags, ("--allow-all-tools",))
+        self.assertEqual(p.auto_approve_flags, ("--yolo",))
 
     def test_vibe_provider_attributes(self) -> None:
         """Vibe provider has expected attributes."""
         p = HEADLESS_PROVIDERS["vibe"]
         self.assertEqual(p.binary, "vibe")
         self.assertEqual(p.model_flag, "--agent")
-        self.assertEqual(p.auto_approve_flags, ("--auto-approve",))
+        self.assertEqual(p.auto_approve_flags, ("--agent", "auto-approve"))
         self.assertTrue(p.supports_session_resume)
 
     def test_blablador_provider_attributes(self) -> None:
@@ -188,8 +188,8 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         p = HEADLESS_PROVIDERS["copilot"]
         cmd = build_headless_command(p, timeout=900)
         self.assertIn("copilot --terok-timeout 900", cmd)
-        # Auto-approve flags are now injected by the wrapper, not the command builder
-        self.assertNotIn("--allow-all-tools", cmd)
+        # Auto-approve flags are injected by the wrapper, not the command builder
+        self.assertNotIn("--yolo", cmd)
         self.assertIn("-p", cmd)
 
     def test_vibe_command(self) -> None:
@@ -419,9 +419,9 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             self.assertEqual(p.auto_approve_flags, (), f"{name} should have no CLI flags")
 
     def test_vibe_auto_approve_flag(self) -> None:
-        """Vibe uses --auto-approve."""
+        """Vibe uses --agent auto-approve (two separate args)."""
         p = HEADLESS_PROVIDERS["vibe"]
-        self.assertEqual(p.auto_approve_flags, ("--auto-approve",))
+        self.assertEqual(p.auto_approve_flags, ("--agent", "auto-approve"))
 
     def test_opencode_wrapper_exports_permission_env(self) -> None:
         """OpenCode wrapper exports OPENCODE_PERMISSION when TEROK_UNRESTRICTED=1."""
@@ -443,6 +443,43 @@ class GenerateAgentWrapperTests(unittest.TestCase):
                 self.assertNotIn(flag, cmd, f"{name}: {flag} should not be in command")
             for key in p.auto_approve_env:
                 self.assertNotIn(key, cmd, f"{name}: {key} env should stay in wrapper")
+
+
+class CollectAutoApproveEnvTests(unittest.TestCase):
+    """Tests for collect_all_auto_approve_env()."""
+
+    def test_collects_all_provider_env_vars(self) -> None:
+        """Merged dict contains env vars from all providers."""
+        from terok.lib.containers.headless_providers import collect_all_auto_approve_env
+
+        merged = collect_all_auto_approve_env()
+        self.assertEqual(merged["OPENCODE_PERMISSION"], '{"*":"allow"}')
+        self.assertEqual(merged["VIBE_AUTO_APPROVE"], "true")
+        self.assertEqual(merged["COPILOT_ALLOW_ALL"], "true")
+
+    def test_vibe_auto_approve_env(self) -> None:
+        """Vibe has VIBE_AUTO_APPROVE in auto_approve_env."""
+        p = HEADLESS_PROVIDERS["vibe"]
+        self.assertEqual(p.auto_approve_env.get("VIBE_AUTO_APPROVE"), "true")
+
+    def test_copilot_auto_approve_env(self) -> None:
+        """Copilot has COPILOT_ALLOW_ALL in auto_approve_env."""
+        p = HEADLESS_PROVIDERS["copilot"]
+        self.assertEqual(p.auto_approve_env.get("COPILOT_ALLOW_ALL"), "true")
+
+    def test_vibe_wrapper_exports_auto_approve_env(self) -> None:
+        """Vibe wrapper exports VIBE_AUTO_APPROVE when TEROK_UNRESTRICTED=1."""
+        project = _make_project()
+        p = HEADLESS_PROVIDERS["vibe"]
+        wrapper = generate_agent_wrapper(p, project, has_agents=False)
+        self.assertIn("export VIBE_AUTO_APPROVE=", wrapper)
+
+    def test_copilot_wrapper_exports_auto_approve_env(self) -> None:
+        """Copilot wrapper exports COPILOT_ALLOW_ALL when TEROK_UNRESTRICTED=1."""
+        project = _make_project()
+        p = HEADLESS_PROVIDERS["copilot"]
+        wrapper = generate_agent_wrapper(p, project, has_agents=False)
+        self.assertIn("export COPILOT_ALLOW_ALL=", wrapper)
 
 
 class ResolveProviderValueTests(unittest.TestCase):
