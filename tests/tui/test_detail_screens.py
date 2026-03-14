@@ -211,6 +211,21 @@ class RenderHelpersTests(TestCase):
         self.assertIn("Perms:     restricted", text_str)
         self.assertNotIn("Perms:     unrestricted", text_str)
 
+    def test_render_task_details_shield_disabled(self) -> None:
+        widgets = import_widgets()
+        task = widgets.TaskMeta(
+            task_id="99",
+            mode="cli",
+            workspace="/tmp/ws",
+            web_port=None,
+            container_state="running",
+            shield_state="DISABLED",
+        )
+        result = widgets.render_task_details(task, project_id="proj1")
+        text_str = str(result)
+        self.assertIn("Shield:", text_str)
+        self.assertIn("disabled", text_str)
+
     def test_format_task_label_with_work_status(self) -> None:
         widgets = import_widgets()
         task = widgets.TaskMeta(

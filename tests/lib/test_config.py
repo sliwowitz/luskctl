@@ -100,3 +100,26 @@ class ConfigTests(unittest.TestCase):
         finally:
             cfg.set_experimental(False)
         self.assertFalse(cfg.is_experimental())
+
+
+class ShieldBypassTests(unittest.TestCase):
+    """Tests for get_shield_bypass_firewall_no_protection()."""
+
+    @unittest.mock.patch.object(cfg, "get_global_section", return_value={})
+    def test_default_false(self, _sec: unittest.mock.MagicMock) -> None:
+        """Returns False when no shield config is set."""
+        self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())
+
+    @unittest.mock.patch.object(
+        cfg, "get_global_section", return_value={"bypass_firewall_no_protection": True}
+    )
+    def test_true_when_set(self, _sec: unittest.mock.MagicMock) -> None:
+        """Returns True when bypass_firewall_no_protection is set."""
+        self.assertTrue(cfg.get_shield_bypass_firewall_no_protection())
+
+    @unittest.mock.patch.object(
+        cfg, "get_global_section", return_value={"bypass_firewall_no_protection": False}
+    )
+    def test_explicit_false(self, _sec: unittest.mock.MagicMock) -> None:
+        """Returns False when explicitly set to false."""
+        self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())

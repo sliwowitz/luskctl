@@ -278,6 +278,24 @@ def get_task_name_categories() -> list[str] | None:
     return None
 
 
+def get_shield_bypass_firewall_no_protection() -> bool:
+    """Return whether the shield firewall is globally bypassed.
+
+    .. danger::
+
+        This is a **dangerous transitional override** that disables the egress
+        firewall entirely.  It exists only as an escape hatch for users whose
+        podman version is incompatible with the OCI-hook-based shield.  It
+        will be removed once terok-shield supports all target podman versions.
+
+    Global config (config.yml)::
+
+        shield:
+          bypass_firewall_no_protection: true
+    """
+    return bool(get_global_section("shield").get("bypass_firewall_no_protection", False))
+
+
 def get_gate_server_port() -> int:
     """Return the gate server port from global config (default 9418)."""
     return int(get_global_section("gate_server").get("port", 9418))

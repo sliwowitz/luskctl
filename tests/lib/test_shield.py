@@ -5,12 +5,14 @@
 """Tests for the terok-shield adapter (terok.lib.security.shield)."""
 
 import unittest
+import warnings
 from unittest.mock import MagicMock, patch
 
 from terok_shield import NftNotFoundError, Shield, ShieldMode, ShieldState
 
 from constants import GATE_PORT, MOCK_CONFIG_ROOT, MOCK_TASK_DIR
 from terok.lib.security.shield import (
+    _BYPASS_WARNING,
     _normalize_profiles,
     _profiles_dir,
     _state_dir,
@@ -225,3 +227,93 @@ class TestStatus(unittest.TestCase):
         result = status()
         self.assertEqual(result["profiles"], ["custom"])
         self.assertFalse(result["audit_enabled"])
+
+
+# ---------------------------------------------------------------------------
+# bypass_firewall_no_protection — DANGEROUS TRANSITIONAL OVERRIDE
+# ---------------------------------------------------------------------------
+
+_BYPASS_PATCH = "terok.lib.security.shield.get_shield_bypass_firewall_no_protection"
+
+
+@patch(_BYPASS_PATCH, return_value=True)
+class TestBypassPreStart(unittest.TestCase):
+    """pre_start returns [] and emits a warning when bypass is active."""
+
+    def test_returns_empty_list(self, _bypass: MagicMock) -> None:
+        """pre_start() returns no podman args when bypass is active."""
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            result = pre_start("ctr", MOCK_TASK_DIR)
+        self.assertEqual(result, [])
+
+    def test_emits_warning(self, _bypass: MagicMock) -> None:
+        """pre_start() emits the bypass warning."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pre_start("ctr", MOCK_TASK_DIR)
+        msgs = [str(w.message) for w in caught]
+        self.assertTrue(any(_BYPASS_WARNING in m for m in msgs))
+
+
+@patch(_BYPASS_PATCH, return_value=True)
+class TestBypassDown(unittest.TestCase):
+    """down() is a no-op when bypass is active."""
+
+    @patch("terok.lib.security.shield.make_shield")
+    def test_does_not_call_shield(self, mock_make: MagicMock, _bypass: MagicMock) -> None:
+        """down() must not construct a Shield when bypass is active."""
+        down("ctr", MOCK_TASK_DIR)
+        mock_make.assert_not_called()
+
+
+@patch(_BYPASS_PATCH, return_value=True)
+class TestBypassUp(unittest.TestCase):
+    """up() is a no-op when bypass is active."""
+
+    @patch("terok.lib.security.shield.make_shield")
+    def test_does_not_call_shield(self, mock_make: MagicMock, _bypass: MagicMock) -> None:
+        """up() must not construct a Shield when bypass is active."""
+        up("ctr", MOCK_TASK_DIR)
+        mock_make.assert_not_called()
+
+
+@patch(_BYPASS_PATCH, return_value=True)
+class TestBypassState(unittest.TestCase):
+    """state() returns INACTIVE when bypass is active."""
+
+    @patch("terok.lib.security.shield.make_shield")
+    def test_returns_inactive(self, mock_make: MagicMock, _bypass: MagicMock) -> None:
+        """state() returns ShieldState.INACTIVE without constructing a Shield."""
+        result = state("ctr", MOCK_TASK_DIR)
+        self.assertEqual(result, ShieldState.INACTIVE)
+        mock_make.assert_not_called()
+
+
+@patch(_BYPASS_PATCH, return_value=True)
+class TestBypassStatus(unittest.TestCase):
+    """status() includes bypass_firewall_no_protection flag when active."""
+
+    @patch("terok.lib.security.shield.get_global_section", return_value={})
+    def test_includes_bypass_flag(self, _sec: MagicMock, _bypass: MagicMock) -> None:
+        """status() output must include bypass_firewall_no_protection: True."""
+        result = status()
+        self.assertTrue(result["bypass_firewall_no_protection"])
+
+    @patch("terok.lib.security.shield.get_global_section", return_value={})
+    def test_still_returns_profiles(self, _sec: MagicMock, _bypass: MagicMock) -> None:
+        """status() still returns profile info even when bypassed."""
+        result = status()
+        self.assertEqual(result["mode"], "hook")
+        self.assertIn("profiles", result)
+
+
+@patch(_BYPASS_PATCH, return_value=False)
+class TestNoBypassStatus(unittest.TestCase):
+    """status() omits bypass flag when bypass is not active."""
+
+    @patch("terok.lib.security.shield.get_global_section", return_value={})
+    def test_no_bypass_key(self, _sec: MagicMock, _bypass: MagicMock) -> None:
+        """status() output must NOT contain bypass_firewall_no_protection."""
+        result = status()
+        self.assertNotIn("bypass_firewall_no_protection", result)

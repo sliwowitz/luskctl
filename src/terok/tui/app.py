@@ -47,7 +47,12 @@ if _HAS_TEXTUAL:
     from textual.worker import Worker, WorkerState
 
     from ..lib.containers.tasks import get_tasks
-    from ..lib.core.config import get_tui_default_tmux, set_experimental, state_root
+    from ..lib.core.config import (
+        get_shield_bypass_firewall_no_protection as _shield_bypassed,
+        get_tui_default_tmux,
+        set_experimental,
+        state_root,
+    )
     from ..lib.core.projects import ProjectConfig, list_projects, load_project
 
     # Import version info function (shared with CLI --version)
@@ -602,6 +607,9 @@ if _HAS_TEXTUAL:
         @staticmethod
         def _load_shield_state(project_id: str, task: TaskMeta) -> tuple[str, str, str | None]:
             """Query shield state for a task (runs in thread)."""
+            # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
+            if _shield_bypassed():
+                return project_id, task.task_id, "DISABLED"
             try:
                 project = load_project(project_id)
                 mode = task.mode or "cli"

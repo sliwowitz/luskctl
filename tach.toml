@@ -216,6 +216,7 @@ depends_on = [
     "terok.lib.containers.ports",
     "terok.lib.containers.runtime",
     "terok.lib.containers.tasks",
+    "terok.lib.core.config",
     "terok.lib.core.images",
     "terok.lib.core.projects",
     "terok.lib.security.shield",
@@ -681,6 +682,7 @@ expose = [
     "get_prefix",
     "is_experimental",
     "set_experimental",
+    "get_shield_bypass_firewall_no_protection",
 ]
 from = ["terok.lib.core.config"]
 

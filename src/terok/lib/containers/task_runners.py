@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from ..core.config import get_shield_bypass_firewall_no_protection
 from ..core.images import project_cli_image, project_web_image
 from ..core.projects import load_project
 from ..security.shield import down as _shield_down_impl, pre_start as _shield_pre_start_impl
@@ -239,6 +240,14 @@ def _run_container(
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
     """
+    # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
+    # Print a loud banner so the user cannot miss that the firewall is off.
+    if get_shield_bypass_firewall_no_protection():
+        print(
+            "\n!! SHIELD BYPASSED — egress firewall DISABLED "
+            "(shield.bypass_firewall_no_protection is set) !!\n"
+        )
+
     cmd: list[str] = ["podman", "run", "-d"]
     cmd += _podman_userns_args()
     cmd += _shield_pre_start_impl(cname, task_dir)

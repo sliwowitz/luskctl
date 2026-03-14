@@ -8,6 +8,7 @@ Creates per-task :class:`Shield` instances from the terok global config.
 Each task gets its own ``state_dir`` under ``{task_dir}/shield/``.
 """
 
+import warnings
 from pathlib import Path
 
 from terok_shield import (
@@ -18,10 +19,23 @@ from terok_shield import (
     ShieldState,  # noqa: F401 — re-exported
 )
 
-from ..core.config import get_gate_server_port, get_global_section
+from ..core.config import (
+    get_gate_server_port,
+    get_global_section,
+    get_shield_bypass_firewall_no_protection,
+)
 from ..core.paths import config_root
 
 _DEFAULT_PROFILES = ("dev-standard",)
+
+# DANGEROUS TRANSITIONAL OVERRIDE — will be removed once terok-shield
+# supports all target podman versions (see terok-shield#71, #101).
+_BYPASS_WARNING = (
+    "WARNING: shield.bypass_firewall_no_protection is set — "
+    "the egress firewall is DISABLED.  Containers have unrestricted "
+    "network access.  Remove this setting once your podman version "
+    "is compatible with terok-shield."
+)
 
 
 def _state_dir(task_dir: Path) -> Path:
@@ -86,22 +100,39 @@ def make_shield(task_dir: Path) -> Shield:
 
 
 def pre_start(container: str, task_dir: Path) -> list[str]:
-    """Return extra ``podman run`` args for egress firewalling."""
+    """Return extra ``podman run`` args for egress firewalling.
+
+    Returns an empty list (no firewall args) when the dangerous
+    ``bypass_firewall_no_protection`` override is active.
+    """
+    if get_shield_bypass_firewall_no_protection():
+        warnings.warn(_BYPASS_WARNING, stacklevel=2)
+        return []
     return make_shield(task_dir).pre_start(container)
 
 
 def down(container: str, task_dir: Path) -> None:
     """Set shield to bypass mode (allow egress) for a running container."""
+    if get_shield_bypass_firewall_no_protection():
+        return
     make_shield(task_dir).down(container)
 
 
 def up(container: str, task_dir: Path) -> None:
     """Set shield to deny-all mode for a running container."""
+    if get_shield_bypass_firewall_no_protection():
+        return
     make_shield(task_dir).up(container)
 
 
 def state(container: str, task_dir: Path) -> ShieldState:
-    """Return the live shield state for a running container."""
+    """Return the live shield state for a running container.
+
+    Returns ``ShieldState.INACTIVE`` when the dangerous
+    ``bypass_firewall_no_protection`` override is active.
+    """
+    if get_shield_bypass_firewall_no_protection():
+        return ShieldState.INACTIVE
     return make_shield(task_dir).state(container)
 
 
@@ -112,10 +143,15 @@ def status() -> dict:
     :class:`Shield`, because ``Shield.status()`` returns *available*
     profiles (filesystem scan) while terok needs *configured* profiles.
     """
+    bypassed = get_shield_bypass_firewall_no_protection()
     sec = get_global_section("shield")
     profiles = _normalize_profiles(sec.get("profiles", _DEFAULT_PROFILES))
-    return {
+    result: dict = {
         "mode": "hook",
         "profiles": list(profiles),
         "audit_enabled": bool(sec.get("audit", True)),
     }
+    if bypassed:
+        # DANGEROUS TRANSITIONAL OVERRIDE — surface prominently in status output
+        result["bypass_firewall_no_protection"] = True
+    return result
