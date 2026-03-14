@@ -89,6 +89,7 @@ nav:
 
   - Developer Guide:
     - Contributing: developer.md
+    - Agent Compatibility Matrix: agent-compat-matrix.md
     - Code Quality: quality-report.md
     - Brainstorming:
       - Agent Helpers: brainstorming/todo-agent-helpers.md

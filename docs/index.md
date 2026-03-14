@@ -100,8 +100,8 @@ per-project in `<project>/presets/`. See the
 - [Shared Directories](shared-dirs.md) — Volume mounts and SSH configuration
 - [Security Modes](git-gate-and-security-modes.md) — Online vs gatekeeping modes
 - [Login Design](login-design.md) — Login session architecture
-- [Packaging](packaging.md) — pip, deb, and rpm packaging
 - [Developer Guide](developer.md) — Architecture and contributing
+- [Agent Compatibility Matrix](agent-compat-matrix.md) — Per-agent feature support
 - [API Reference](reference/) — Auto-generated API documentation
 
 ## License
