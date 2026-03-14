@@ -47,7 +47,6 @@ def _has(binary: str) -> bool:
 # ── Generic skip decorators ───────────────────────────────
 
 git_missing = pytest.mark.skipif(not _has("git"), reason="git not installed")
-skip_if_no_podman = pytest.mark.skipif(not _has("podman"), reason="podman not found")
 podman_missing = pytest.mark.skipif(not _has("podman"), reason="podman not installed")
 skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
 
