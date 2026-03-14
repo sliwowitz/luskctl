@@ -61,12 +61,15 @@ if _HAS_TEXTUAL:
         short_version as _short_version,
     )
     from ..lib.facade import (
+        EnvironmentCheck,
         GateServerStatus,
         GateStalenessInfo,
         GitGate,
+        ShieldState,
         get_project_state,
         get_server_status,
         is_task_image_old,
+        shield_check_environment as _shield_check_environment,
         shield_state as _shield_state,
     )
 
@@ -79,12 +82,13 @@ if _HAS_TEXTUAL:
         state: dict | None = None
         staleness: GateStalenessInfo | None = None
         gate_server_status: GateServerStatus | None = None
+        shield_env: EnvironmentCheck | None = None
         error: str | None = None
 
     from .clipboard import get_clipboard_helper_status
     from .polling import PollingMixin
     from .project_actions import ProjectActionsMixin
-    from .screens import GateServerScreen, ProjectDetailsScreen, TaskDetailsScreen
+    from .screens import GateServerScreen, ProjectDetailsScreen, ShieldScreen, TaskDetailsScreen
     from .task_actions import TaskActionsMixin
     from .widgets import (
         ProjectList,
@@ -120,6 +124,10 @@ if _HAS_TEXTUAL:
         "gate_uninstall": "_action_gate_uninstall",
         "gate_start": "_action_gate_start",
         "gate_stop": "_action_gate_stop",
+    }
+
+    SHIELD_ACTION_HANDLERS: dict[str, str] = {
+        "shield_setup": "_action_shield_setup",
     }
 
     TASK_ACTION_HANDLERS: dict[str, str] = {
@@ -241,6 +249,7 @@ if _HAS_TEXTUAL:
             self._gate_server_timer = None
             self._last_gate_server_running: bool | None = None
             self._last_gate_server_status: GateServerStatus | None = None
+            self._last_shield_env: EnvironmentCheck | None = None
             # Cached state for detail screens
             self._last_project_state: dict | None = None
             self._last_image_old: bool | None = None
@@ -554,12 +563,17 @@ if _HAS_TEXTUAL:
                     gate_status = get_server_status()
                 except Exception:
                     gate_status = None
+                try:
+                    shield_env = _shield_check_environment()
+                except Exception:
+                    shield_env = None
                 return ProjectStateResult(
                     project_id,
                     project,
                     state,
                     staleness,
                     gate_server_status=gate_status,
+                    shield_env=shield_env,
                 )
             except SystemExit as e:
                 return ProjectStateResult(project_id, error=str(e))
@@ -607,9 +621,6 @@ if _HAS_TEXTUAL:
         @staticmethod
         def _load_shield_state(project_id: str, task: TaskMeta) -> tuple[str, str, str | None]:
             """Query shield state for a task (runs in thread)."""
-            # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
-            if _shield_bypassed():
-                return project_id, task.task_id, "DISABLED"
             try:
                 project = load_project(project_id)
                 mode = task.mode or "cli"
@@ -618,8 +629,16 @@ if _HAS_TEXTUAL:
                 cname = container_name(project_id, mode, task.task_id)
                 task_dir = project.tasks_root / str(task.task_id)
                 st = _shield_state(cname, task_dir)
-                return project_id, task.task_id, st.name
+                label = st.name
+                # Annotate with bypass warning only if config says bypass AND
+                # the container actually has no active shield state.
+                if _shield_bypassed() and st == ShieldState.INACTIVE:
+                    label = "DISABLED"
+                return project_id, task.task_id, label
             except Exception:
+                # If we can't query at all and bypass is set, show DISABLED
+                if _shield_bypassed():
+                    return project_id, task.task_id, "DISABLED"
                 return project_id, task.task_id, None
 
         # ---------- Selection handlers (from widgets) ----------
@@ -685,12 +704,14 @@ if _HAS_TEXTUAL:
                 self._staleness_info = psr.staleness
                 self._last_project_state = psr.state
                 self._last_gate_server_status = psr.gate_server_status
+                self._last_shield_env = psr.shield_env
                 state_widget.set_state(
                     psr.project,
                     psr.state,
                     self._last_task_count,
                     self._staleness_info,
                     gate_server_status=psr.gate_server_status,
+                    shield_env=psr.shield_env,
                 )
                 return
 
@@ -950,7 +971,7 @@ if _HAS_TEXTUAL:
         # ---------- Command palette ----------
 
         def get_system_commands(self, screen):
-            """Add gate server management to the command palette."""
+            """Add gate server and shield management to the command palette."""
             from textual.app import SystemCommand
 
             yield from super().get_system_commands(screen)
@@ -958,6 +979,11 @@ if _HAS_TEXTUAL:
                 "Git Gate Server",
                 "Manage gate server status and operations",
                 self.action_show_gate_server,
+            )
+            yield SystemCommand(
+                "Shield Status",
+                "View shield environment and install hooks",
+                self.action_show_shield,
             )
 
         async def action_show_gate_server(self) -> None:
@@ -972,6 +998,21 @@ if _HAS_TEXTUAL:
             if not result:
                 return
             handler = GATE_SERVER_ACTION_HANDLERS.get(result)
+            if handler:
+                await getattr(self, handler)()
+
+        async def action_show_shield(self) -> None:
+            """Open the shield environment screen."""
+            await self.push_screen(
+                ShieldScreen(self._last_shield_env),
+                self._on_shield_action_result,
+            )
+
+        async def _on_shield_action_result(self, result: str | None) -> None:
+            """Handle result from shield screen."""
+            if not result:
+                return
+            handler = SHIELD_ACTION_HANDLERS.get(result)
             if handler:
                 await getattr(self, handler)()
 
