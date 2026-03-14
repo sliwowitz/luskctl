@@ -14,7 +14,9 @@ import subprocess
 import uuid
 
 import pytest
-from terok_shield import Shield
+
+terok_shield = pytest.importorskip("terok_shield")
+Shield = terok_shield.Shield
 
 from constants import EGRESS_DOMAIN, TEST_EGRESS_URL, TEST_IP_RFC5737
 
