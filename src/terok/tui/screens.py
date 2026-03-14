@@ -1483,9 +1483,9 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
         with Vertical(id="setup-dialog") as dialog:
             yield Static("Install global OCI hooks for podman < 5.6.0")
             with Horizontal(id="setup-buttons"):
-                yield Button("[u] User-local", id="btn-user")
-                yield Button("[r] System-wide", id="btn-root")
-                yield Button("Cancel", id="btn-cancel")
+                yield Button("User-local  [u]", id="btn-user")
+                yield Button("System-wide [r]", id="btn-root")
+                yield Button("Cancel    [Esc]", id="btn-cancel")
         dialog.border_title = "Shield Setup"
         dialog.border_subtitle = "Esc to cancel"
 
