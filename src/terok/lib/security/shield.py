@@ -144,11 +144,10 @@ def up(container: str, task_dir: Path) -> None:
 def state(container: str, task_dir: Path) -> ShieldState:
     """Return the live shield state for a running container.
 
-    Returns ``ShieldState.INACTIVE`` when the dangerous
-    ``bypass_firewall_no_protection`` override is active.
+    Queries actual nft state even when ``bypass_firewall_no_protection``
+    is set, because containers started *before* bypass was enabled may
+    still have active firewall rules.
     """
-    if get_shield_bypass_firewall_no_protection():
-        return ShieldState.INACTIVE
     return make_shield(task_dir).state(container)
 
 

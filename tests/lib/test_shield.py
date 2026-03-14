@@ -289,14 +289,18 @@ class TestBypassUp(unittest.TestCase):
 
 @patch(_BYPASS_PATCH, return_value=True)
 class TestBypassState(unittest.TestCase):
-    """state() returns INACTIVE when bypass is active."""
+    """state() queries real shield even when bypass is active."""
 
     @patch("terok.lib.security.shield.make_shield")
-    def test_returns_inactive(self, mock_make: MagicMock, _bypass: MagicMock) -> None:
-        """state() returns ShieldState.INACTIVE without constructing a Shield."""
+    def test_queries_real_state(self, mock_make: MagicMock, _bypass: MagicMock) -> None:
+        """state() delegates to shield even when bypass is set (containers may pre-date bypass)."""
+        mock_shield = MagicMock(spec=Shield)
+        mock_shield.state.return_value = ShieldState.UP
+        mock_make.return_value = mock_shield
+
         result = state("ctr", MOCK_TASK_DIR)
-        self.assertEqual(result, ShieldState.INACTIVE)
-        mock_make.assert_not_called()
+        self.assertEqual(result, ShieldState.UP)
+        mock_make.assert_called_once_with(MOCK_TASK_DIR)
 
 
 @patch(_BYPASS_PATCH, return_value=True)

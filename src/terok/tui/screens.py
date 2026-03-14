@@ -1330,6 +1330,7 @@ class ShieldScreen(screen.Screen[str | None]):
         super().__init__()
         self._env_check = env_check
         self._shield_info: dict | None = None
+        self._loading = False
 
     @property
     def _needs_setup(self) -> bool:
@@ -1351,12 +1352,15 @@ class ShieldScreen(screen.Screen[str | None]):
         )
 
     def on_mount(self) -> None:
-        """Render shield status, fetch config info, and focus the action list."""
-        self._load_shield_info()
-        self._render_status()
-        self._update_setup_option()
+        """Start loading shield status and focus the action list."""
         actions = self.query_one("#actions-list", OptionList)
         actions.focus()
+        if self._env_check is not None:
+            # Already have cached data — render it, then refresh in background
+            self._load_shield_info()
+            self._render_status()
+            self._update_setup_option()
+        self._start_refresh()
 
     def _load_shield_info(self) -> None:
         """Fetch shield config (mode, audit, profiles) for display."""
@@ -1370,7 +1374,15 @@ class ShieldScreen(screen.Screen[str | None]):
     def _render_status(self) -> None:
         """Update the detail pane with current status."""
         detail_widget = self.query_one("#detail-content", Static)
-        detail_widget.update(render_shield_status(self._env_check, self._shield_info))
+        if self._loading and self._env_check is None:
+            detail_widget.update(Text("Loading shield status...", style=Style(dim=True)))
+        elif self._loading:
+            # Show existing data with a loading hint
+            content = render_shield_status(self._env_check, self._shield_info)
+            content.append("\n\nRefreshing...")
+            detail_widget.update(content)
+        else:
+            detail_widget.update(render_shield_status(self._env_check, self._shield_info))
 
     def _update_setup_option(self) -> None:
         """Disable the setup option when hooks are per-container (modern podman)."""
@@ -1384,23 +1396,47 @@ class ShieldScreen(screen.Screen[str | None]):
                     actions.disable_option_at_index(idx)
                 break
 
-    def _refresh_status(self) -> None:
-        """Re-fetch status and update the display."""
-        from ..lib.facade import shield_check_environment
-
-        try:
-            self._env_check = shield_check_environment()
-        except Exception:
-            self._env_check = None
-        self._load_shield_info()
+    def _start_refresh(self) -> None:
+        """Kick off a background refresh of shield status."""
+        self._loading = True
         self._render_status()
-        self._update_setup_option()
+        self.run_worker(self._fetch_status, thread=True, exit_on_error=False)
+
+    @staticmethod
+    def _fetch_status() -> tuple[EnvironmentCheck | None, dict | None]:
+        """Load environment check and shield config in a thread."""
+        from ..lib.facade import shield_check_environment, shield_status
+
+        env: EnvironmentCheck | None = None
+        info: dict | None = None
+        try:
+            env = shield_check_environment()
+        except Exception:
+            pass
+        try:
+            info = shield_status()
+        except Exception:
+            pass
+        return env, info
+
+    def on_worker_state_changed(self, event) -> None:
+        """Handle background worker completion."""
+        if event.state.name != "SUCCESS":
+            self._loading = False
+            self._render_status()
+            return
+        result = event.worker.result
+        if result and isinstance(result, tuple) and len(result) == 2:
+            self._env_check, self._shield_info = result
+            self._loading = False
+            self._render_status()
+            self._update_setup_option()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Handle action selection from the option list."""
         option_id = event.option_id
         if option_id == "shield_refresh":
-            self._refresh_status()
+            self._start_refresh()
         elif option_id:
             self.dismiss(option_id)
 
@@ -1416,7 +1452,7 @@ class ShieldScreen(screen.Screen[str | None]):
 
     def action_shield_refresh(self) -> None:
         """Refresh the status display."""
-        self._refresh_status()
+        self._start_refresh()
 
 
 class ShieldSetupScreen(screen.ModalScreen[str | None]):
@@ -1430,22 +1466,36 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
     ShieldSetupScreen {
         align: center middle;
     }
-    ShieldSetupScreen > Vertical {
-        width: 60;
+    #setup-dialog {
+        width: 50;
         height: auto;
-        max-height: 12;
+        max-height: 14;
         border: round $primary;
+        border-title-align: right;
+        border-subtitle-align: left;
         background: $surface;
         padding: 1 2;
+    }
+    #setup-buttons {
+        height: auto;
+        align-horizontal: center;
+        margin-top: 1;
+    }
+    #setup-buttons Button {
+        margin: 0 1;
     }
     """
 
     def compose(self) -> ComposeResult:
-        """Build the setup choice dialog."""
-        with Vertical():
-            yield Static("Install global OCI hooks\n")
-            yield Button("[r] System-wide (uses sudo)", id="btn-root")
-            yield Button("[u] User-local", id="btn-user")
+        """Build the setup choice dialog with styled buttons."""
+        with Vertical(id="setup-dialog") as dialog:
+            yield Static("Install global OCI hooks for podman < 5.6.0")
+            with Horizontal(id="setup-buttons"):
+                yield Button("[r] System-wide", id="btn-root", variant="warning")
+                yield Button("[u] User-local", id="btn-user", variant="primary")
+                yield Button("Cancel", id="btn-cancel", variant="default")
+        dialog.border_title = "Shield Setup"
+        dialog.border_subtitle = "Esc to cancel"
 
     def on_mount(self) -> None:
         """Focus the user-local button (safer default)."""
@@ -1457,6 +1507,8 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
             self.dismiss("root")
         elif event.button.id == "btn-user":
             self.dismiss("user")
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
 
     def on_key(self, event: events.Key) -> None:
         """Handle shortcut keys for root/user selection."""

@@ -48,7 +48,6 @@ if _HAS_TEXTUAL:
 
     from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import (
-        get_shield_bypass_firewall_no_protection as _shield_bypassed,
         get_tui_default_tmux,
         set_experimental,
         state_root,
@@ -65,7 +64,6 @@ if _HAS_TEXTUAL:
         GateServerStatus,
         GateStalenessInfo,
         GitGate,
-        ShieldState,
         get_project_state,
         get_server_status,
         is_task_image_old,
@@ -629,16 +627,8 @@ if _HAS_TEXTUAL:
                 cname = container_name(project_id, mode, task.task_id)
                 task_dir = project.tasks_root / str(task.task_id)
                 st = _shield_state(cname, task_dir)
-                label = st.name
-                # Annotate with bypass warning only if config says bypass AND
-                # the container actually has no active shield state.
-                if _shield_bypassed() and st == ShieldState.INACTIVE:
-                    label = "DISABLED"
-                return project_id, task.task_id, label
+                return project_id, task.task_id, st.name
             except Exception:
-                # If we can't query at all and bypass is set, show DISABLED
-                if _shield_bypassed():
-                    return project_id, task.task_id, "DISABLED"
                 return project_id, task.task_id, None
 
         # ---------- Selection handlers (from widgets) ----------
