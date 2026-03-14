@@ -838,7 +838,7 @@ if _HAS_TEXTUAL:
 
                         self.notify(f"Shield dropped for task {task_id}. {SHIELD_SECURITY_HINT}")
                     else:
-                        self.notify(f"Shield updated for task {task_id}")
+                        self.notify(f"Shield up for task {task_id}")
                 # Refresh shield state after action
                 if (
                     self.current_task
