@@ -36,7 +36,7 @@ launched by Toad do not see `TEROK_UNRESTRICTED` and use their own defaults.
 | Agent | terok wrapper | `auto_approve_flags` | `auto_approve_env` | ACP covered? |
 |-------|-------------|---------------------|-------------------|--------------|
 | Claude | `--dangerously-skip-permissions` | Yes | — | **No** |
-| Vibe | `--auto-approve` | Yes | — | **No** (env var not set) |
+| Vibe | `--agent auto-approve` | Yes | — | **No** (env var not set) |
 | Blablador | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
 | OpenCode | (via OpenCode) | — | `OPENCODE_PERMISSION` | **Partially** (env var works if set) |
 | Codex | `--dangerously-bypass-approvals-and-sandbox` | Yes | — | **No** |
