@@ -89,14 +89,14 @@ class HeadlessProviderRegistryTests(unittest.TestCase):
         p = HEADLESS_PROVIDERS["copilot"]
         self.assertEqual(p.binary, "copilot")
         self.assertEqual(p.prompt_flag, "-p")
-        self.assertEqual(p.auto_approve_flags, ("--yolo",))
+        self.assertEqual(p.auto_approve_env.get("COPILOT_ALLOW_ALL"), "true")
 
     def test_vibe_provider_attributes(self) -> None:
         """Vibe provider has expected attributes."""
         p = HEADLESS_PROVIDERS["vibe"]
         self.assertEqual(p.binary, "vibe")
         self.assertEqual(p.model_flag, "--agent")
-        self.assertEqual(p.auto_approve_flags, ("--agent", "auto-approve"))
+        self.assertEqual(p.auto_approve_env.get("VIBE_AUTO_APPROVE"), "true")
         self.assertTrue(p.supports_session_resume)
 
     def test_blablador_provider_attributes(self) -> None:
@@ -172,9 +172,7 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         cmd = build_headless_command(p, timeout=1800)
         self.assertIn("codex --terok-timeout 1800", cmd)
         self.assertIn("exec", cmd)
-        # Auto-approve flags are now injected by the wrapper, not the command builder
         self.assertNotIn("--full-auto", cmd)
-        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", cmd)
         self.assertIn("prompt.txt", cmd)
 
     def test_codex_command_with_model(self) -> None:
@@ -188,8 +186,6 @@ class BuildHeadlessCommandTests(unittest.TestCase):
         p = HEADLESS_PROVIDERS["copilot"]
         cmd = build_headless_command(p, timeout=900)
         self.assertIn("copilot --terok-timeout 900", cmd)
-        # Auto-approve flags are injected by the wrapper, not the command builder
-        self.assertNotIn("--yolo", cmd)
         self.assertIn("-p", cmd)
 
     def test_vibe_command(self) -> None:
@@ -385,26 +381,20 @@ class GenerateAgentWrapperTests(unittest.TestCase):
             self.assertNotIn("_resume_args", wrapper, f"{name} should not have resume args")
             self.assertNotIn("TEROK_SESSION_FILE", wrapper, f"{name} should not set session env")
 
-    def test_unrestricted_env_in_generic_wrappers(self) -> None:
-        """All non-Claude wrappers with auto_approve_flags check TEROK_UNRESTRICTED."""
+    def test_wrappers_do_not_inject_permission_flags(self) -> None:
+        """Wrappers must not inject permission flags — env vars and /etc/ config handle it."""
         project = _make_project()
         for name, p in HEADLESS_PROVIDERS.items():
             if name == "claude":
                 continue
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            if p.auto_approve_flags or p.auto_approve_env:
-                self.assertIn(
-                    'if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then',
-                    wrapper,
-                    f"{name} should check TEROK_UNRESTRICTED",
-                )
-                for flag in p.auto_approve_flags:
-                    self.assertIn(flag, wrapper, f"{name} should render {flag}")
+            self.assertNotIn("TEROK_UNRESTRICTED", wrapper, f"{name} should not check unrestricted")
+            self.assertNotIn("_approve_args", wrapper, f"{name} should not have approve args")
 
-    def test_codex_auto_approve_flag(self) -> None:
-        """Codex uses --dangerously-bypass-approvals-and-sandbox (not --full-auto)."""
+    def test_codex_no_auto_approve_env(self) -> None:
+        """Codex uses /etc/codex/requirements.toml, not env vars."""
         p = HEADLESS_PROVIDERS["codex"]
-        self.assertEqual(p.auto_approve_flags, ("--dangerously-bypass-approvals-and-sandbox",))
+        self.assertEqual(p.auto_approve_env, {})
 
     def test_opencode_auto_approve_env(self) -> None:
         """OpenCode and Blablador use OPENCODE_PERMISSION env var with correct payload."""
@@ -416,33 +406,25 @@ class GenerateAgentWrapperTests(unittest.TestCase):
                 '{"*":"allow"}',
                 f"{name} should grant all permissions",
             )
-            self.assertEqual(p.auto_approve_flags, (), f"{name} should have no CLI flags")
 
-    def test_vibe_auto_approve_flag(self) -> None:
-        """Vibe uses --agent auto-approve (two separate args)."""
-        p = HEADLESS_PROVIDERS["vibe"]
-        self.assertEqual(p.auto_approve_flags, ("--agent", "auto-approve"))
-
-    def test_opencode_wrapper_exports_permission_env(self) -> None:
-        """OpenCode wrapper exports OPENCODE_PERMISSION when TEROK_UNRESTRICTED=1."""
+    def test_opencode_wrapper_does_not_export_permission_env(self) -> None:
+        """OpenCode wrapper does not export env vars — container env handles it."""
         project = _make_project()
         for name in ("opencode", "blablador"):
             p = HEADLESS_PROVIDERS[name]
             wrapper = generate_agent_wrapper(p, project, has_agents=False)
-            self.assertIn(
-                'export OPENCODE_PERMISSION=\'{"*":"allow"}\'',
+            self.assertNotIn(
+                "OPENCODE_PERMISSION",
                 wrapper,
-                f"{name} should export exact OPENCODE_PERMISSION payload",
+                f"{name} should not export OPENCODE_PERMISSION in wrapper",
             )
 
     def test_auto_approve_not_in_headless_command(self) -> None:
-        """Auto-approve flags and env vars are not injected by the command builder."""
+        """Auto-approve env vars are not injected by the command builder."""
         for name, p in HEADLESS_PROVIDERS.items():
             cmd = build_headless_command(p, timeout=1800)
-            for flag in p.auto_approve_flags:
-                self.assertNotIn(flag, cmd, f"{name}: {flag} should not be in command")
             for key in p.auto_approve_env:
-                self.assertNotIn(key, cmd, f"{name}: {key} env should stay in wrapper")
+                self.assertNotIn(key, cmd, f"{name}: {key} should not be in command")
 
 
 class CollectAutoApproveEnvTests(unittest.TestCase):
@@ -467,19 +449,10 @@ class CollectAutoApproveEnvTests(unittest.TestCase):
         p = HEADLESS_PROVIDERS["copilot"]
         self.assertEqual(p.auto_approve_env.get("COPILOT_ALLOW_ALL"), "true")
 
-    def test_vibe_wrapper_exports_auto_approve_env(self) -> None:
-        """Vibe wrapper exports VIBE_AUTO_APPROVE when TEROK_UNRESTRICTED=1."""
-        project = _make_project()
-        p = HEADLESS_PROVIDERS["vibe"]
-        wrapper = generate_agent_wrapper(p, project, has_agents=False)
-        self.assertIn("export VIBE_AUTO_APPROVE=", wrapper)
-
-    def test_copilot_wrapper_exports_auto_approve_env(self) -> None:
-        """Copilot wrapper exports COPILOT_ALLOW_ALL when TEROK_UNRESTRICTED=1."""
-        project = _make_project()
-        p = HEADLESS_PROVIDERS["copilot"]
-        wrapper = generate_agent_wrapper(p, project, has_agents=False)
-        self.assertIn("export COPILOT_ALLOW_ALL=", wrapper)
+    def test_claude_no_auto_approve_env(self) -> None:
+        """Claude uses /etc/ managed settings, not env vars."""
+        p = HEADLESS_PROVIDERS["claude"]
+        self.assertEqual(p.auto_approve_env, {})
 
 
 class ResolveProviderValueTests(unittest.TestCase):

@@ -69,11 +69,13 @@ class HeadlessProvider:
     ``"-p"`` for flag-based, ``""`` for positional (after subcommand).
     """
 
-    auto_approve_flags: tuple[str, ...]
-    """Flags to enable fully autonomous execution (injected when unrestricted)."""
-
     auto_approve_env: dict[str, str]
-    """Environment variables to set for fully autonomous execution (injected when unrestricted)."""
+    """Environment variables for fully autonomous execution.
+
+    Injected into the container env by ``_apply_unrestricted_env()`` when
+    ``TEROK_UNRESTRICTED=1``.  Read by agents regardless of launch path.
+    File-based agents (Claude, Codex) use ``/etc/`` config instead.
+    """
 
     output_format_flags: tuple[str, ...]
     """Flags for structured output (e.g. ``("--output-format", "stream-json")``)."""
@@ -136,7 +138,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@anthropic.com",
         headless_subcommand=None,
         prompt_flag="-p",
-        auto_approve_flags=("--dangerously-skip-permissions",),
+
         auto_approve_env={},
         output_format_flags=("--output-format", "stream-json"),
         model_flag="--model",
@@ -159,7 +161,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@openai.com",
         headless_subcommand="exec",
         prompt_flag="",
-        auto_approve_flags=("--dangerously-bypass-approvals-and-sandbox",),
+
         auto_approve_env={},
         output_format_flags=(),
         model_flag="--model",
@@ -182,7 +184,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@github.com",
         headless_subcommand=None,
         prompt_flag="-p",
-        auto_approve_flags=("--yolo",),
+
         auto_approve_env={"COPILOT_ALLOW_ALL": "true"},
         output_format_flags=(),
         model_flag="--model",
@@ -205,7 +207,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@mistral.ai",
         headless_subcommand=None,
         prompt_flag="--prompt",
-        auto_approve_flags=("--agent", "auto-approve"),
+
         auto_approve_env={"VIBE_AUTO_APPROVE": "true"},
         output_format_flags=(),
         model_flag="--agent",
@@ -228,7 +230,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@hzdr.de",
         headless_subcommand="run",
         prompt_flag="",
-        auto_approve_flags=(),
+
         auto_approve_env={"OPENCODE_PERMISSION": '{"*":"allow"}'},
         output_format_flags=(),
         model_flag=None,
@@ -251,7 +253,7 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@opencode.ai",
         headless_subcommand="run",
         prompt_flag="",
-        auto_approve_flags=(),
+
         auto_approve_env={"OPENCODE_PERMISSION": '{"*":"allow"}'},
         output_format_flags=(),
         model_flag="--model",
@@ -462,7 +464,7 @@ def _build_claude_command(
 ) -> str:
     """Build the headless command for Claude using the wrapper function."""
     # Claude uses the claude() wrapper from terok-agent.sh which handles
-    # --dangerously-skip-permissions, --add-dir, --agents, git env, and timeout
+    # --add-dir, --agents, git env, and timeout
     flags = ""
     if model:
         flags += f" --model {shlex.quote(model)}"
@@ -544,8 +546,7 @@ def generate_agent_wrapper(
 
     For Claude, uses *claude_wrapper_fn* (which should be
     ``agents._generate_claude_wrapper``) to produce the full wrapper with
-    ``--dangerously-skip-permissions``, ``--add-dir /``, ``--agents``, and
-    session resume support.  The function is passed in by the caller to
+    ``--add-dir /``, ``--agents``, and session resume support.  The function is passed in by the caller to
     avoid a circular import between this module and ``agents``.
 
     For other providers, produces a simpler wrapper that sets git env vars
@@ -631,15 +632,9 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
         "        . /usr/local/share/terok/terok-git-identity.sh",
     ]
 
-    # Auto-approve flags and env vars, injected when TEROK_UNRESTRICTED=1.
-    if provider.auto_approve_flags or provider.auto_approve_env:
-        lines.append("    local _approve_args=()")
-        lines.append('    if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then')
-        for flag in provider.auto_approve_flags:
-            lines.append(f"        _approve_args+=({shlex.quote(flag)})")
-        for k, v in provider.auto_approve_env.items():
-            lines.append(f"        export {k}={shlex.quote(v)}")
-        lines.append("    fi")
+    # Permission mode is handled entirely by container-level env vars and
+    # /etc/ config files (written by init-ssh-and-repo.sh).  No CLI flags
+    # or env var exports needed in the wrapper.
 
     # OpenCode session plugin setup for opencode/blablador.
     if provider.session_file and provider.name in {"opencode", "blablador"}:
@@ -706,10 +701,7 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
         lines.append(f"            export TEROK_SESSION_FILE={session_path}")
 
     # Build the extra-args expansions that sit between the binary and "$@".
-    has_approve = bool(provider.auto_approve_flags or provider.auto_approve_env)
     _extra_expansions: list[str] = []
-    if has_approve:
-        _extra_expansions.append('"${_approve_args[@]}"')
     if session_path and provider.resume_flag:
         _extra_expansions.append('"${_resume_args[@]}"')
     if provider.name == "codex":

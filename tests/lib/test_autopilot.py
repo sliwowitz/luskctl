@@ -261,11 +261,11 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         )
 
     def test_basic_wrapper(self) -> None:
-        """Wrapper includes skip-permissions, add-dir /, and git env vars."""
+        """Wrapper includes add-dir / and git env vars (permissions via /etc/ config)."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
         self.assertIn("claude()", wrapper)
-        self.assertIn("--dangerously-skip-permissions", wrapper)
+        self.assertNotIn("--dangerously-skip-permissions", wrapper)
         self.assertIn('--add-dir "/"', wrapper)
         self.assertIn("_terok_apply_git_identity Claude noreply@anthropic.com", wrapper)
         # Should NOT contain agents reference when has_agents=False
@@ -277,13 +277,12 @@ class GenerateClaudeWrapperTests(unittest.TestCase):
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=True, project=project))
         self.assertIn("agents.json", wrapper)
 
-    def test_wrapper_uses_terok_unrestricted_env(self) -> None:
-        """Wrapper conditionally injects --dangerously-skip-permissions via TEROK_UNRESTRICTED."""
+    def test_wrapper_does_not_inject_permission_flags(self) -> None:
+        """Wrapper does not inject permission flags — /etc/ managed settings handle it."""
         project = self._make_project()
         wrapper = _generate_claude_wrapper(WrapperConfig(has_agents=False, project=project))
-        # The flag is gated by the env var check, not unconditionally injected
-        self.assertIn('if [ "${TEROK_UNRESTRICTED:-}" = "1" ]; then', wrapper)
-        self.assertIn("_args+=(--dangerously-skip-permissions)", wrapper)
+        self.assertNotIn("TEROK_UNRESTRICTED", wrapper)
+        self.assertNotIn("--dangerously-skip-permissions", wrapper)
         # --add-dir / is always present regardless of permission mode
         self.assertIn('--add-dir "/"', wrapper)
 
@@ -625,7 +624,7 @@ class TaskRunHeadlessTests(unittest.TestCase):
                     self.assertTrue(wrapper.is_file())
                     content = wrapper.read_text()
                     self.assertIn("claude()", content)
-                    self.assertIn("--dangerously-skip-permissions", content)
+                    self.assertNotIn("--dangerously-skip-permissions", content)
 
     def test_headless_writes_session_hook_settings(self) -> None:
         """task_run_headless writes shared Claude settings with SessionStart hook."""
