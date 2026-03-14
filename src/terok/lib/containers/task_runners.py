@@ -109,6 +109,20 @@ def _bypass_network_args(gate_port: int) -> list[str]:
     ]
 
 
+def _apply_unrestricted_env(env: dict[str, str]) -> None:
+    """Set ``TEROK_UNRESTRICTED`` and all agent auto-approve env vars.
+
+    Shell wrappers already export provider-specific env vars when
+    ``TEROK_UNRESTRICTED=1``, but ACP-spawned agents bypass wrappers and
+    inherit the container environment directly.  Setting these vars at the
+    container level ensures both paths behave consistently.
+    """
+    from .headless_providers import collect_all_auto_approve_env
+
+    env["TEROK_UNRESTRICTED"] = "1"
+    env.update(collect_all_auto_approve_env())
+
+
 def _redact_env_args(cmd: list[str]) -> list[str]:
     """Return a copy of *cmd* with sensitive ``-e KEY=VALUE`` args redacted."""
     out: list[str] = []
@@ -376,7 +390,7 @@ def task_run_cli(
         "unrestricted", _effective, project.default_agent or "claude"
     )
     if _unrestricted is None or _unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+        _apply_unrestricted_env(env)
 
     # Run detached and keep the container alive so users can exec into it later
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
@@ -467,7 +481,7 @@ def task_run_web(
     _unrestricted = resolve_provider_value("unrestricted", _effective, effective_backend)
     resolved_unrestricted = _unrestricted is None or bool(_unrestricted)
     if resolved_unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+        _apply_unrestricted_env(env)
 
     cname = container_name(project.id, "web", task_id)
     container_state = get_container_state(cname)
@@ -691,7 +705,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     # Set TEROK_UNRESTRICTED for the wrapper functions inside the container
     if unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+        _apply_unrestricted_env(env)
 
     # Mount agent-config dir to /home/dev/.terok
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")

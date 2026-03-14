@@ -205,14 +205,20 @@ Default: unrestricted (True)
   ▼
 TEROK_UNRESTRICTED=1 env var  ← single decision carrier
   │
-  ▼  (inside container)
-Shell wrapper function reads $TEROK_UNRESTRICTED
+  ├─── Container env vars (set by task_runners.py, inherited by ACP)
+  │    ├─ VIBE_AUTO_APPROVE=true
+  │    ├─ OPENCODE_PERMISSION='{"*":"allow"}'
+  │    └─ COPILOT_ALLOW_ALL=true
   │
-  ├─ claude():   _args+=(--dangerously-skip-permissions)
-  ├─ codex():    _approve_args+=(--dangerously-bypass-approvals-and-sandbox)
-  ├─ copilot():  _approve_args+=(--allow-all-tools)
-  ├─ vibe():     _approve_args+=(--auto-approve)
-  └─ opencode()/blablador():  export OPENCODE_PERMISSION='{"*":"allow"}'
+  ├─── Init script writes /etc/claude-code/managed-settings.json
+  │    (highest-precedence Claude config, per-container)
+  │
+  └─── Shell wrapper functions (CLI path)
+       ├─ claude():   _args+=(--dangerously-skip-permissions)
+       ├─ codex():    _approve_args+=(--dangerously-bypass-approvals-and-sandbox)
+       ├─ copilot():  _approve_args+=(--yolo)
+       ├─ vibe():     _approve_args+=(--agent auto-approve)
+       └─ opencode()/blablador():  export OPENCODE_PERMISSION='{"*":"allow"}'
 ```
 
 ### Key decision points

@@ -182,8 +182,8 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@github.com",
         headless_subcommand=None,
         prompt_flag="-p",
-        auto_approve_flags=("--allow-all-tools",),
-        auto_approve_env={},
+        auto_approve_flags=("--yolo",),
+        auto_approve_env={"COPILOT_ALLOW_ALL": "true"},
         output_format_flags=(),
         model_flag="--model",
         max_turns_flag=None,
@@ -205,8 +205,8 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         git_author_email="noreply@mistral.ai",
         headless_subcommand=None,
         prompt_flag="--prompt",
-        auto_approve_flags=("--auto-approve",),
-        auto_approve_env={},
+        auto_approve_flags=("--agent", "auto-approve"),
+        auto_approve_env={"VIBE_AUTO_APPROVE": "true"},
         output_format_flags=(),
         model_flag="--agent",
         max_turns_flag="--max-turns",
@@ -270,6 +270,19 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
 
 #: Valid provider names for CLI argument validation.
 PROVIDER_NAMES: tuple[str, ...] = tuple(HEADLESS_PROVIDERS.keys())
+
+
+def collect_all_auto_approve_env() -> dict[str, str]:
+    """Collect ``auto_approve_env`` from all providers into one dict.
+
+    Used by task runners to inject these env vars at the container level
+    (not just inside shell wrappers) so that ACP-spawned agents also
+    inherit unrestricted permissions.
+    """
+    merged: dict[str, str] = {}
+    for p in HEADLESS_PROVIDERS.values():
+        merged.update(p.auto_approve_env)
+    return merged
 
 
 def get_provider(name: str | None, project: ProjectConfig) -> HeadlessProvider:
