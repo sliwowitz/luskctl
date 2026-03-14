@@ -8,8 +8,6 @@ Creates per-task :class:`Shield` instances from the terok global config.
 Each task gets its own ``state_dir`` under ``{task_dir}/shield/``.
 """
 
-import subprocess
-import sys
 import tempfile
 import warnings
 from pathlib import Path
@@ -194,17 +192,21 @@ def check_environment() -> EnvironmentCheck:
 
 
 def run_setup(*, root: bool = False, user: bool = False) -> None:
-    """Run ``terok-shield setup`` as a subprocess (interactive, inherits stdio).
+    """Install global OCI hooks for podman < 5.6.0 (interactive, may prompt for sudo).
 
-    Delegates to ``python -m terok_shield setup`` so that sudo prompts
-    and other interactive output are passed through to the terminal.
+    Checks the environment first — if podman >= 5.6.0 uses per-container
+    hooks natively, prints a message and returns without installing anything.
+
+    Raises :class:`SystemExit` on errors.
     """
-    cmd = [sys.executable, "-m", "terok_shield", "setup"]
-    if root:
-        cmd.append("--root")
-    if user:
-        cmd.append("--user")
-    subprocess.run(cmd, check=True)
+    env = check_environment()
+    if env.hooks == "per-container":
+        print(
+            f"Podman {'.'.join(str(v) for v in env.podman_version)} uses per-task hooks natively.\n"
+            "Global hook setup is not needed."
+        )
+        return
+    setup_hooks_direct(root=root or not user)
 
 
 def setup_hooks_direct(*, root: bool = False) -> None:

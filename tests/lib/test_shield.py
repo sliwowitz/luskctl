@@ -390,29 +390,46 @@ class TestPreStartShieldNeedsSetup(unittest.TestCase):
 class TestRunSetup(unittest.TestCase):
     """Tests for run_setup()."""
 
-    @patch("terok.lib.security.shield.subprocess.run")
-    def test_calls_subprocess_default(self, mock_run: MagicMock) -> None:
-        """run_setup() calls python -m terok_shield setup."""
+    @patch("terok.lib.security.shield.setup_hooks_direct")
+    @patch(
+        "terok.lib.security.shield.check_environment",
+        return_value=EnvironmentCheck(hooks="not-installed", needs_setup=True),
+    )
+    def test_calls_setup_hooks_when_needed(self, _env: MagicMock, mock_direct: MagicMock) -> None:
+        """run_setup() delegates to setup_hooks_direct when setup is needed."""
         run_setup()
-        args = mock_run.call_args[0][0]
-        self.assertIn("terok_shield", args)
-        self.assertIn("setup", args)
-        self.assertNotIn("--root", args)
-        self.assertNotIn("--user", args)
+        mock_direct.assert_called_once()
 
-    @patch("terok.lib.security.shield.subprocess.run")
-    def test_calls_subprocess_root(self, mock_run: MagicMock) -> None:
-        """run_setup(root=True) passes --root flag."""
-        run_setup(root=True)
-        args = mock_run.call_args[0][0]
-        self.assertIn("--root", args)
+    @patch("builtins.print")
+    @patch(
+        "terok.lib.security.shield.check_environment",
+        return_value=EnvironmentCheck(hooks="per-container", podman_version=(5, 8, 0)),
+    )
+    def test_skips_when_per_container(self, _env: MagicMock, mock_print: MagicMock) -> None:
+        """run_setup() prints message and returns when hooks are per-container."""
+        run_setup()
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        self.assertIn("per-task", printed.lower())
 
-    @patch("terok.lib.security.shield.subprocess.run")
-    def test_calls_subprocess_user(self, mock_run: MagicMock) -> None:
-        """run_setup(user=True) passes --user flag."""
+    @patch("terok.lib.security.shield.setup_hooks_direct")
+    @patch(
+        "terok.lib.security.shield.check_environment",
+        return_value=EnvironmentCheck(hooks="not-installed", needs_setup=True),
+    )
+    def test_user_flag(self, _env: MagicMock, mock_direct: MagicMock) -> None:
+        """run_setup(user=True) passes root=False to setup_hooks_direct."""
         run_setup(user=True)
-        args = mock_run.call_args[0][0]
-        self.assertIn("--user", args)
+        mock_direct.assert_called_once_with(root=False)
+
+    @patch("terok.lib.security.shield.setup_hooks_direct")
+    @patch(
+        "terok.lib.security.shield.check_environment",
+        return_value=EnvironmentCheck(hooks="not-installed", needs_setup=True),
+    )
+    def test_root_flag(self, _env: MagicMock, mock_direct: MagicMock) -> None:
+        """run_setup(root=True) passes root=True to setup_hooks_direct."""
+        run_setup(root=True)
+        mock_direct.assert_called_once_with(root=True)
 
 
 # ---------------------------------------------------------------------------

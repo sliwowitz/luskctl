@@ -1244,7 +1244,9 @@ _SHIELD_HEALTH_STYLES: dict[str, str] = {
 }
 
 
-def render_shield_status(env_check: EnvironmentCheck | None) -> Text:
+def render_shield_status(
+    env_check: EnvironmentCheck | None, shield_info: dict | None = None
+) -> Text:
     """Render shield environment check as a Rich Text object."""
     if env_check is None:
         return Text("Shield environment status unknown.")
@@ -1252,12 +1254,38 @@ def render_shield_status(env_check: EnvironmentCheck | None) -> Text:
     color = _SHIELD_HEALTH_STYLES.get(env_check.health, "red")
     health_s = Text(env_check.health, style=Style(color=color))
 
-    version_str = ".".join(str(v) for v in env_check.podman_version)
+    # Shield package version
+    try:
+        from importlib.metadata import version as _meta_version
+
+        shield_version = _meta_version("terok-shield")
+    except Exception:
+        shield_version = "unknown"
+
+    podman_str = ".".join(str(v) for v in env_check.podman_version)
     lines = [
+        Text(f"Version:   {shield_version}"),
+        Text(f"Podman:    {podman_str}"),
         Text.assemble("Health:    ", health_s),
-        Text(f"Podman:    {version_str}"),
         Text(f"Hooks:     {env_check.hooks}"),
     ]
+
+    # Config details from shield_info (mode, audit, profiles)
+    if shield_info:
+        mode = shield_info.get("mode", "hook")
+        audit = "enabled" if shield_info.get("audit_enabled", True) else "disabled"
+        profiles = shield_info.get("profiles", [])
+        lines.append(Text(f"Mode:      {mode}"))
+        lines.append(Text(f"Audit:     {audit}"))
+        lines.append(Text(f"Profiles:  {', '.join(profiles) or '(none)'}"))
+        if shield_info.get("bypass_firewall_no_protection"):
+            lines.append(Text(""))
+            lines.append(
+                Text(
+                    "!! bypass_firewall_no_protection is set — firewall DISABLED !!",
+                    style=Style(color="red", bold=True),
+                )
+            )
 
     if env_check.issues:
         lines.append(Text(""))
@@ -1301,6 +1329,12 @@ class ShieldScreen(screen.Screen[str | None]):
         """Store environment check result for rendering."""
         super().__init__()
         self._env_check = env_check
+        self._shield_info: dict | None = None
+
+    @property
+    def _needs_setup(self) -> bool:
+        """Return True if global hook setup is needed (podman < 5.6.0 without hooks)."""
+        return self._env_check is not None and self._env_check.needs_setup
 
     def compose(self) -> ComposeResult:
         """Build the detail pane and action list for shield management."""
@@ -1317,15 +1351,38 @@ class ShieldScreen(screen.Screen[str | None]):
         )
 
     def on_mount(self) -> None:
-        """Render shield status and focus the action list."""
+        """Render shield status, fetch config info, and focus the action list."""
+        self._load_shield_info()
         self._render_status()
+        self._update_setup_option()
         actions = self.query_one("#actions-list", OptionList)
         actions.focus()
+
+    def _load_shield_info(self) -> None:
+        """Fetch shield config (mode, audit, profiles) for display."""
+        from ..lib.facade import shield_status
+
+        try:
+            self._shield_info = shield_status()
+        except Exception:
+            self._shield_info = None
 
     def _render_status(self) -> None:
         """Update the detail pane with current status."""
         detail_widget = self.query_one("#detail-content", Static)
-        detail_widget.update(render_shield_status(self._env_check))
+        detail_widget.update(render_shield_status(self._env_check, self._shield_info))
+
+    def _update_setup_option(self) -> None:
+        """Disable the setup option when hooks are per-container (modern podman)."""
+        actions = self.query_one("#actions-list", OptionList)
+        for idx in range(actions.option_count):
+            opt = actions.get_option_at_index(idx)
+            if opt.id == "shield_setup":
+                if self._needs_setup:
+                    actions.enable_option_at_index(idx)
+                else:
+                    actions.disable_option_at_index(idx)
+                break
 
     def _refresh_status(self) -> None:
         """Re-fetch status and update the display."""
@@ -1335,7 +1392,9 @@ class ShieldScreen(screen.Screen[str | None]):
             self._env_check = shield_check_environment()
         except Exception:
             self._env_check = None
+        self._load_shield_info()
         self._render_status()
+        self._update_setup_option()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         """Handle action selection from the option list."""
@@ -1350,7 +1409,9 @@ class ShieldScreen(screen.Screen[str | None]):
         self.dismiss(None)
 
     def action_shield_setup(self) -> None:
-        """Trigger shield setup flow."""
+        """Trigger shield setup flow (only if needed)."""
+        if not self._needs_setup:
+            return
         self.dismiss("shield_setup")
 
     def action_shield_refresh(self) -> None:
@@ -1363,8 +1424,6 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
 
     BINDINGS = [
         _modal_binding("escape", "dismiss", "Cancel"),
-        _modal_binding("r", "choose_root", "System-wide (sudo)"),
-        _modal_binding("u", "choose_user", "User-local"),
     ]
 
     CSS = """
@@ -1385,18 +1444,29 @@ class ShieldSetupScreen(screen.ModalScreen[str | None]):
         """Build the setup choice dialog."""
         with Vertical():
             yield Static("Install global OCI hooks\n")
-            yield Static("  [r] System-wide (uses sudo)")
-            yield Static("  [u] User-local")
-            yield Static("\n  [Esc] Cancel")
+            yield Button("[r] System-wide (uses sudo)", id="btn-root")
+            yield Button("[u] User-local", id="btn-user")
+
+    def on_mount(self) -> None:
+        """Focus the user-local button (safer default)."""
+        self.query_one("#btn-user", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "btn-root":
+            self.dismiss("root")
+        elif event.button.id == "btn-user":
+            self.dismiss("user")
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle shortcut keys for root/user selection."""
+        if event.character == "r":
+            self.dismiss("root")
+            event.stop()
+        elif event.character == "u":
+            self.dismiss("user")
+            event.stop()
 
     def action_dismiss(self) -> None:
         """Cancel without choosing."""
         self.dismiss(None)
-
-    def action_choose_root(self) -> None:
-        """Select system-wide installation."""
-        self.dismiss("root")
-
-    def action_choose_user(self) -> None:
-        """Select user-local installation."""
-        self.dismiss("user")

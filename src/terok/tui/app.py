@@ -65,6 +65,7 @@ if _HAS_TEXTUAL:
         GateServerStatus,
         GateStalenessInfo,
         GitGate,
+        ShieldState,
         get_project_state,
         get_server_status,
         is_task_image_old,
@@ -620,9 +621,6 @@ if _HAS_TEXTUAL:
         @staticmethod
         def _load_shield_state(project_id: str, task: TaskMeta) -> tuple[str, str, str | None]:
             """Query shield state for a task (runs in thread)."""
-            # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
-            if _shield_bypassed():
-                return project_id, task.task_id, "DISABLED"
             try:
                 project = load_project(project_id)
                 mode = task.mode or "cli"
@@ -631,8 +629,16 @@ if _HAS_TEXTUAL:
                 cname = container_name(project_id, mode, task.task_id)
                 task_dir = project.tasks_root / str(task.task_id)
                 st = _shield_state(cname, task_dir)
-                return project_id, task.task_id, st.name
+                label = st.name
+                # Annotate with bypass warning only if config says bypass AND
+                # the container actually has no active shield state.
+                if _shield_bypassed() and st == ShieldState.INACTIVE:
+                    label = "DISABLED"
+                return project_id, task.task_id, label
             except Exception:
+                # If we can't query at all and bypass is set, show DISABLED
+                if _shield_bypassed():
+                    return project_id, task.task_id, "DISABLED"
                 return project_id, task.task_id, None
 
         # ---------- Selection handlers (from widgets) ----------
