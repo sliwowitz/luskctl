@@ -175,8 +175,8 @@ See [shared-dirs.md](shared-dirs.md) for detailed documentation.
 
 ### Gatekeeping Mode
 - `CODE_REPO` points to `file:///git-gate/gate.git`
-- Container cannot access upstream directly
-- Human review required before changes reach upstream
+- Container's default `origin` is the gate, not upstream
+- Human review required before changes are promoted to upstream
 
 See [git-gate-and-security-modes.md](git-gate-and-security-modes.md) for detailed documentation.
 

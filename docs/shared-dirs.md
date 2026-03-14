@@ -14,8 +14,9 @@ When a task starts, terok mounts host directories into the container for workspa
 > **Security warning:** The container has full write access to this directory and
 > could have rewritten git hooks, checked in malicious scripts, or otherwise
 > poisoned the repository. **Do not execute code or run `git` commands in this
-> directory from the host.** The safe way to interact with agent work is through
-> the **git gate** — a host-controlled bare repo that agents push to.
+> directory from the host.** The safer way to interact with agent work is through
+> the **git gate** — a host-controlled bare repo where agents push their
+> changes for human review before promotion to upstream.
 
 ## Shared Credential Directories
 

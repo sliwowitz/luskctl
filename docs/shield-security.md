@@ -57,8 +57,9 @@ into installing backdoored dependencies.
   `{task_dir}/shield/audit.jsonl`.
 - **OCI hook infrastructure** — the shield can be raised again at any time
   via `terokctl shield up` or the TUI.
-- **Gate server protection** — the git gate still controls which code
-  enters and leaves the container (in gatekeeping mode).
+- **Gate server** — the git gate still directs agent pushes to the
+  host-side mirror for human review (in gatekeeping mode), though it
+  does not prevent outbound network connections on its own.
 
 ---
 
@@ -111,7 +112,9 @@ shield:
 If you must operate without the shield, consider these compensating controls:
 
 1. **Use gatekeeping mode** — even without the shield, the git gate
-   prevents the agent from pushing code directly to upstream.
+   directs agent pushes to the host-side mirror instead of upstream.
+   This is a configuration default, not a hard barrier — see
+   [Security Modes](git-gate-and-security-modes.md) for details.
 2. **Don't mount sensitive credentials** — avoid mounting SSH keys, API
    tokens, or cloud credentials into the container.
 3. **Monitor container traffic externally** — use host-level firewall
