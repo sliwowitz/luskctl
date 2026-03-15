@@ -22,21 +22,34 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
+import subprocess
+import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 from tests.testfs import CONFIG_ROOT_NAME, HOME_DIR_NAME, STATE_ROOT_NAME, XDG_CONFIG_HOME_NAME
-from tests.testnet import GATE_PORT, TEST_IP
+from tests.testnet import EGRESS_DOMAIN, GATE_PORT, TEST_IP
 
-from .helpers import TerokIntegrationEnv
+from .helpers import (
+    PODMAN_CONTAINER_PREFIX,
+    PODMAN_TEST_IMAGE,
+    TerokIntegrationEnv,
+    TerokShieldIntegrationEnv,
+    start_shielded_container,
+)
 
 try:
     from terok_shield import Shield, ShieldConfig, ShieldMode
+    from terok_shield.run import find_nft as _shield_find_nft
 except ImportError:  # pragma: no cover - optional integration dependency
     Shield = ShieldConfig = ShieldMode = None  # type: ignore[assignment]
+    _shield_find_nft = None
 
 SHIELD_MISSING_SKIP_REASON = "terok_shield not installed"
+EGRESS_HTTP_PORT = 80
 
 
 def _has(binary: str) -> bool:
@@ -44,10 +57,26 @@ def _has(binary: str) -> bool:
     return shutil.which(binary) is not None
 
 
+def _find_nft() -> str | None:
+    """Return the nft binary path, using terok-shield's sbin-aware lookup when available."""
+    return _shield_find_nft() if _shield_find_nft is not None else shutil.which("nft")
+
+
+def _image_available() -> bool:
+    """Return whether the podman integration image is already available locally."""
+    result = subprocess.run(
+        ["podman", "image", "exists", PODMAN_TEST_IMAGE],
+        capture_output=True,
+        timeout=30,
+    )
+    return result.returncode == 0
+
+
 # ── Generic skip decorators ───────────────────────────────
 
 git_missing = pytest.mark.skipif(not _has("git"), reason="git not installed")
 podman_missing = pytest.mark.skipif(not _has("podman"), reason="podman not installed")
+nft_missing = pytest.mark.skipif(not _find_nft(), reason="nft not installed")
 skip_if_no_root = pytest.mark.skipif(os.geteuid() != 0, reason="root required")
 
 
@@ -118,28 +147,58 @@ class MockRunner:
         return [TEST_IP]
 
 
+# ── Podman integration preflight ──────────────────────────
+
+
+@pytest.fixture(scope="session")
+def _pull_image() -> None:
+    """Pull the podman integration image once per test session."""
+    if not _has("podman"):
+        pytest.skip("podman not installed")
+    if not _image_available():
+        subprocess.run(["podman", "pull", PODMAN_TEST_IMAGE], check=True, timeout=120)
+
+
+@pytest.fixture(scope="session")
+def _verify_connectivity() -> None:
+    """Fail fast when the host cannot reach the external egress test target."""
+    try:
+        connection = socket.create_connection((EGRESS_DOMAIN, EGRESS_HTTP_PORT), timeout=5)
+    except OSError as exc:
+        pytest.fail(
+            f"Pre-flight: cannot reach {EGRESS_DOMAIN}:{EGRESS_HTTP_PORT} from the host.\n"
+            "Fix host internet connectivity before running egress integration tests.\n"
+            "Traffic-based tests would produce false positives when the host network is down.\n"
+            f"Error: {exc}"
+        )
+    else:
+        connection.close()
+
+
 # ── Isolated shield environment ───────────────────────────
 
 
 @pytest.fixture()
-def shield_env(tmp_path: Path) -> dict[str, Path]:
+def shield_env(tmp_path: Path) -> TerokShieldIntegrationEnv:
     """Create an isolated per-task shield state directory."""
     task_dir = tmp_path / "tasks" / "test-task"
     state_dir = task_dir / "shield"
-    state_dir.mkdir(parents=True)
-    return {
-        "task_dir": task_dir,
-        "state_dir": state_dir,
-    }
+    task_dir.mkdir(parents=True, exist_ok=True)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    return TerokShieldIntegrationEnv(
+        base_dir=tmp_path,
+        task_dir=task_dir,
+        state_dir=state_dir,
+    )
 
 
 @pytest.fixture()
-def shield_config(shield_env: dict[str, Path]) -> ShieldConfig:
+def shield_config(shield_env: TerokShieldIntegrationEnv) -> ShieldConfig:
     """Standard ShieldConfig for integration tests with per-task state_dir."""
     if ShieldConfig is None or ShieldMode is None:
         pytest.skip(SHIELD_MISSING_SKIP_REASON)
     return ShieldConfig(
-        state_dir=shield_env["state_dir"],
+        state_dir=shield_env.state_dir,
         mode=ShieldMode.HOOK,
         default_profiles=("dev-standard",),
         loopback_ports=(GATE_PORT,),
@@ -167,6 +226,19 @@ def real_shield(shield_config: ShieldConfig) -> Shield:
 def mock_runner() -> MockRunner:
     """Return a MockRunner instance for tests that need to customise it."""
     return MockRunner()
+
+
+@pytest.fixture()
+def shielded_container(_pull_image: None, real_shield: Shield) -> Iterator[str]:
+    """Start a disposable podman container with shield hooks applied."""
+    name = f"{PODMAN_CONTAINER_PREFIX}-{uuid.uuid4().hex[:8]}"
+    subprocess.run(["podman", "rm", "-f", name], capture_output=True, timeout=30)
+    try:
+        extra_args = real_shield.pre_start(name)
+        start_shielded_container(name, extra_args, PODMAN_TEST_IMAGE)
+        yield name
+    finally:
+        subprocess.run(["podman", "rm", "-f", name], capture_output=True, timeout=30)
 
 
 # ── Isolated terok CLI environment ────────────────────────

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -18,8 +19,20 @@ SRC_DIR = ROOT / "src"
 PROJECT_FILENAME = "project.yml"
 WORKSPACE_DIRNAME = "workspace-dangerous"
 NEW_TASK_MARKER = ".new-task-marker"
+PODMAN_TEST_IMAGE = "docker.io/library/alpine:latest"
+PODMAN_CONTAINER_PREFIX = "terok-itest"
+PODMAN_SLEEP_COMMAND = ("sleep", "300")
 
 type ProjectScope = Literal["user", "system"]
+
+
+@dataclass(frozen=True)
+class TerokShieldIntegrationEnv:
+    """Filesystem roots for a shield-focused integration test."""
+
+    base_dir: Path
+    task_dir: Path
+    state_dir: Path
 
 
 @dataclass(frozen=True)
@@ -135,3 +148,123 @@ class TerokIntegrationEnv:
     def task_archive_root(self, project_id: str) -> Path:
         """Return the archive root for deleted tasks."""
         return self.state_root / "projects" / project_id / "archive"
+
+
+def _hook_diagnostics(extra_args: list[str]) -> str:
+    """Gather OCI hook diagnostics from shield extra args."""
+    try:
+        hooks_index = extra_args.index("--hooks-dir")
+        hooks_dir = Path(extra_args[hooks_index + 1])
+        hook_json = hooks_dir / "terok-shield-createRuntime.json"
+        if not hook_json.exists():
+            return f"\n  [diag] hook JSON missing: {hook_json}"
+        data = json.loads(hook_json.read_text(encoding="utf-8"))
+        entrypoint = Path(data["hook"]["path"])
+        parts = [f"entrypoint={entrypoint}", f"exists={entrypoint.exists()}"]
+        if entrypoint.exists():
+            parts.append(f"executable={os.access(entrypoint, os.X_OK)}")
+            parts.append(f"content={entrypoint.read_text(encoding='utf-8').strip()!r}")
+        return f"\n  [diag] {', '.join(parts)}"
+    except ValueError:
+        return "\n  [diag] --hooks-dir missing from podman extra args"
+    except Exception as exc:  # pragma: no cover - diagnostic fallback
+        return f"\n  [diag] error: {exc}"
+
+
+def start_shielded_container(
+    name: str,
+    extra_args: list[str],
+    image: str = PODMAN_TEST_IMAGE,
+    *,
+    timeout: int = 60,
+) -> None:
+    """Start a podman container with shield args and detailed failure output."""
+    result = subprocess.run(
+        ["podman", "run", "-d", "--name", name, *extra_args, image, *PODMAN_SLEEP_COMMAND],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if result.returncode != 0:
+        diagnostics = _hook_diagnostics(extra_args)
+        raise RuntimeError(
+            f"podman run failed (exit {result.returncode}):\n"
+            f"  stderr: {result.stderr.strip()}\n"
+            f"  stdout: {result.stdout.strip()}\n"
+            f"  extra_args: {extra_args}{diagnostics}"
+        )
+
+
+def inspect_container_json(container: str, *, timeout: int = 30) -> dict[str, object]:
+    """Return ``podman inspect`` output for ``container`` as a single JSON object."""
+    result = subprocess.run(
+        ["podman", "inspect", container, "--format", "json"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=timeout,
+    )
+    data = json.loads(result.stdout)
+    return data[0]
+
+
+def exec_in_container(
+    container: str, *cmd: str, timeout: int = 10
+) -> subprocess.CompletedProcess[str]:
+    """Run ``cmd`` inside ``container`` via ``podman exec``."""
+    return subprocess.run(
+        ["podman", "exec", container, *cmd],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def wget(container: str, url: str, timeout: int = 5) -> subprocess.CompletedProcess[str]:
+    """Attempt an outbound HTTP/HTTPS request from inside ``container``."""
+    return exec_in_container(
+        container,
+        "wget",
+        "-q",
+        "-O",
+        "/dev/null",
+        f"--timeout={timeout}",
+        url,
+        timeout=timeout + 5,
+    )
+
+
+def _assert_container_running(container: str) -> None:
+    """Assert that ``container`` is running to avoid false-positive assertions."""
+    result = subprocess.run(
+        ["podman", "inspect", "--format", "{{.State.Running}}", container],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0 and result.stdout.strip() == "true", (
+        f"Container {container} is not running — cannot assert network behavior: {result.stderr}"
+    )
+
+
+def is_reachable(result: subprocess.CompletedProcess[str]) -> bool:
+    """Return whether a wget result proves the target was reachable."""
+    if result.returncode == 0:
+        return True
+    return "bad address" in result.stderr
+
+
+def assert_blocked(container: str, url: str, timeout: int = 10) -> None:
+    """Assert that ``url`` is blocked from inside ``container``."""
+    _assert_container_running(container)
+    result = wget(container, url, timeout=timeout)
+    assert result.returncode != 0, f"Expected {url} to be blocked, but it was reachable"
+
+
+def assert_reachable(container: str, url: str, timeout: int = 10) -> None:
+    """Assert that ``url`` is reachable from inside ``container``."""
+    _assert_container_running(container)
+    result = wget(container, url, timeout=timeout)
+    assert is_reachable(result), (
+        f"Expected {url} to be reachable, but it was blocked: {result.stderr}"
+    )
