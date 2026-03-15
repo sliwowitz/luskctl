@@ -32,6 +32,15 @@ def patch_completion_locations(monkeypatch):
     return _apply
 
 
+def install_targets(tmp_path: Path) -> dict[str, Path]:
+    """Build completion-install paths rooted in *tmp_path*."""
+    return {
+        "bash": tmp_path / "bash" / "terokctl",
+        "zsh": tmp_path / "zsh" / "_terokctl",
+        "fish": tmp_path / "fish" / "terokctl.fish",
+    }
+
+
 @pytest.mark.parametrize(
     ("shell", "expected"),
     [
@@ -45,6 +54,7 @@ def test_detect_shell_returns_supported_shell(
     shell: str,
     expected: str,
 ) -> None:
+    """Shell detection accepts the supported interactive shells."""
     monkeypatch.setenv("SHELL", shell)
     assert completions._detect_shell() == expected
 
@@ -54,6 +64,7 @@ def test_detect_shell_returns_supported_shell(
     [pytest.param("/bin/tcsh", id="unsupported"), pytest.param(None, id="missing")],
 )
 def test_detect_shell_rejects_unknown_shell(monkeypatch, shell: str | None) -> None:
+    """Unsupported or missing ``$SHELL`` values cause a clean CLI exit."""
     if shell is None:
         monkeypatch.delenv("SHELL", raising=False)
     else:
@@ -63,49 +74,41 @@ def test_detect_shell_rejects_unknown_shell(monkeypatch, shell: str | None) -> N
         completions._detect_shell()
 
 
+@pytest.mark.parametrize(
+    ("requested_shell", "detected_shell", "expected_shell"),
+    [
+        pytest.param("bash", None, "bash", id="explicit-shell"),
+        pytest.param(None, "fish", "fish", id="auto-detected-shell"),
+    ],
+)
 @patch("terok.cli.commands.completions.shellcode", return_value="# completion")
-def test_install_completions_writes_to_requested_target(
+def test_install_completions_writes_to_selected_target(
     _mock_shellcode,
     monkeypatch,
     tmp_path: Path,
-    capsys,
+    requested_shell: str | None,
+    detected_shell: str | None,
+    expected_shell: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    target = tmp_path / "nested" / "dir" / "terokctl"
-    monkeypatch.setattr(
-        completions,
-        "_INSTALL_TARGETS",
-        {"bash": target, "zsh": Path("/unused"), "fish": Path("/unused")},
-    )
+    """Completion install writes the generated script to the resolved target path."""
+    targets = install_targets(tmp_path)
+    monkeypatch.setattr(completions, "_INSTALL_TARGETS", targets)
+    if detected_shell is not None:
+        monkeypatch.setattr(completions, "_detect_shell", lambda: detected_shell)
 
-    completions._install_completions("bash")
+    completions._install_completions(requested_shell)
 
+    target = targets[expected_shell]
     assert target.is_file()
     assert "# completion" in target.read_text(encoding="utf-8")
     assert str(target) in capsys.readouterr().out
 
 
-@patch("terok.cli.commands.completions.shellcode", return_value="# comp")
-def test_install_completions_auto_detects_shell(
-    _mock_shellcode,
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    target = tmp_path / "terokctl.fish"
-    monkeypatch.setattr(
-        completions,
-        "_INSTALL_TARGETS",
-        {"bash": Path("/unused"), "zsh": Path("/unused"), "fish": target},
-    )
-    monkeypatch.setattr(completions, "_detect_shell", lambda: "fish")
-
-    completions._install_completions(None)
-
-    assert target.is_file()
-
-
 def test_is_completion_installed_returns_false_when_nothing_found(
     patch_completion_locations,
 ) -> None:
+    """Completion detection is false when no autoload file or RC marker exists."""
     patch_completion_locations()
     assert not completions.is_completion_installed()
 
@@ -124,9 +127,9 @@ def test_is_completion_installed_detects_autoload_files(
     attr: str,
     filename: str,
 ) -> None:
+    """Completion detection succeeds when an autoload target exists."""
     (tmp_path / filename).write_text("# comp", encoding="utf-8")
     patch_completion_locations(**{attr: (tmp_path,)})
-
     assert completions.is_completion_installed()
 
 
@@ -134,8 +137,8 @@ def test_is_completion_installed_detects_rc_marker(
     patch_completion_locations,
     tmp_path: Path,
 ) -> None:
+    """Completion detection succeeds when a shell RC file has the registration marker."""
     rc_file = tmp_path / ".bashrc"
     rc_file.write_text("# register-python-argcomplete terokctl\n", encoding="utf-8")
     patch_completion_locations(rc=(rc_file,))
-
     assert completions.is_completion_installed()

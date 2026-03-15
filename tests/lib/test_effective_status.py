@@ -1,10 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for effective_status(), mode_info(), and batch container state queries."""
+"""Tests for task status/mode display helpers and batch state lookup."""
+
+from __future__ import annotations
 
 import subprocess
-import unittest.mock
+from unittest.mock import patch
+
+import pytest
 
 from terok.lib.containers.runtime import get_project_container_states
 from terok.lib.containers.task_display import (
@@ -17,7 +21,7 @@ from terok.lib.containers.tasks import TaskMeta, get_all_task_states
 
 
 def _task(**kwargs) -> TaskMeta:
-    """Build a TaskMeta with sensible defaults, overridden by *kwargs*."""
+    """Build a ``TaskMeta`` with sensible defaults overridden by *kwargs*."""
     defaults = {
         "task_id": "1",
         "mode": None,
@@ -28,191 +32,155 @@ def _task(**kwargs) -> TaskMeta:
     return TaskMeta(**defaults)
 
 
-class TestEffectiveStatus:
-    """Test effective_status() with all input combinations."""
+EFFECTIVE_STATUS_CASES = [
+    ({"container_state": "running", "mode": "cli"}, "running"),
+    ({"container_state": "running", "mode": "run", "exit_code": 0}, "running"),
+    ({"container_state": "exited", "mode": "cli", "exit_code": None}, "stopped"),
+    ({"container_state": "exited", "mode": "run", "exit_code": 0}, "completed"),
+    ({"container_state": "exited", "mode": "run", "exit_code": 1}, "failed"),
+    ({"container_state": "stopped", "mode": "web"}, "stopped"),
+    ({"container_state": None, "mode": None}, "created"),
+    ({"container_state": None, "mode": "cli", "exit_code": None}, "not found"),
+    ({"container_state": None, "mode": "run", "exit_code": 0}, "completed"),
+    ({"container_state": None, "mode": "run", "exit_code": 2}, "failed"),
+    ({"container_state": "running", "mode": "cli", "deleting": True}, "deleting"),
+    ({"container_state": "running", "mode": "cli", "deleting": False}, "running"),
+    ({}, "created"),
+]
 
-    def test_running_container(self) -> None:
-        assert effective_status(_task(container_state="running", mode="cli")) == "running"
-
-    def test_running_container_with_exit_code(self) -> None:
-        """Running container takes precedence over exit_code."""
-        task = _task(container_state="running", mode="run", exit_code=0)
-        assert effective_status(task) == "running"
-
-    def test_stopped_container_no_exit_code(self) -> None:
-        task = _task(container_state="exited", mode="cli", exit_code=None)
-        assert effective_status(task) == "stopped"
-
-    def test_stopped_container_exit_zero(self) -> None:
-        task = _task(container_state="exited", mode="run", exit_code=0)
-        assert effective_status(task) == "completed"
-
-    def test_stopped_container_exit_nonzero(self) -> None:
-        task = _task(container_state="exited", mode="run", exit_code=1)
-        assert effective_status(task) == "failed"
-
-    def test_no_container_no_mode(self) -> None:
-        task = _task(container_state=None, mode=None)
-        assert effective_status(task) == "created"
-
-    def test_no_container_mode_set_no_exit(self) -> None:
-        task = _task(container_state=None, mode="cli", exit_code=None)
-        assert effective_status(task) == "not found"
-
-    def test_no_container_exit_zero(self) -> None:
-        """Container removed after successful run."""
-        task = _task(container_state=None, mode="run", exit_code=0)
-        assert effective_status(task) == "completed"
-
-    def test_no_container_exit_nonzero(self) -> None:
-        """Container removed after failed run."""
-        task = _task(container_state=None, mode="run", exit_code=2)
-        assert effective_status(task) == "failed"
-
-    def test_deleting_overrides_everything(self) -> None:
-        task = _task(container_state="running", mode="cli", deleting=True)
-        assert effective_status(task) == "deleting"
-
-    def test_deleting_false_is_ignored(self) -> None:
-        task = _task(container_state="running", mode="cli", deleting=False)
-        assert effective_status(task) == "running"
-
-    def test_defaults_to_created(self) -> None:
-        """Minimal TaskMeta with no relevant fields set."""
-        assert effective_status(_task()) == "created"
-
-    def test_stopped_podman_state(self) -> None:
-        """Podman reports 'stopped' (not 'exited') for some containers."""
-        task = _task(container_state="stopped", mode="web")
-        assert effective_status(task) == "stopped"
-
-    # -- Every status is in STATUS_DISPLAY --
-
-    def test_all_returned_statuses_have_display_info(self) -> None:
-        """Every value effective_status can return must be in STATUS_DISPLAY."""
-        cases = [
-            _task(container_state="running", mode="cli"),
-            _task(container_state="exited", mode="cli"),
-            _task(container_state="exited", mode="run", exit_code=0),
-            _task(container_state="exited", mode="run", exit_code=1),
-            _task(container_state=None, mode=None),
-            _task(container_state=None, mode="cli"),
-            _task(deleting=True),
-        ]
-        for task in cases:
-            status = effective_status(task)
-            assert status in STATUS_DISPLAY, f"Status {status!r} not in STATUS_DISPLAY"
+MODE_INFO_CASES = [
+    ({"mode": "cli"}, "💻", "CLI"),
+    ({"mode": "run"}, "🚀", "Autopilot"),
+    ({"mode": None}, "🦗", ""),
+    ({"mode": "web", "backend": "claude"}, "💠", "Claude"),
+    ({"mode": "web", "backend": "codex"}, "🌸", "Codex"),
+    ({"mode": "web", "backend": "mistral"}, "🏰", "Mistral"),
+    ({"mode": "web", "backend": "copilot"}, "🤖", "Copilot"),
+    ({"mode": "web", "backend": "something"}, "🌍", "Web"),
+    ({"mode": "web"}, "🌍", "Web"),
+]
 
 
-class TestModeInfo:
-    """Test mode_info() for all modes and web backends."""
-
-    def test_cli_mode(self) -> None:
-        assert mode_info(_task(mode="cli")).emoji == "💻"
-
-    def test_run_mode(self) -> None:
-        assert mode_info(_task(mode="run")).emoji == "🚀"
-
-    def test_none_mode(self) -> None:
-        assert mode_info(_task(mode=None)).emoji == "🦗"
-
-    def test_web_mode_claude(self) -> None:
-        assert mode_info(_task(mode="web", backend="claude")).emoji == "💠"
-
-    def test_web_mode_codex(self) -> None:
-        assert mode_info(_task(mode="web", backend="codex")).emoji == "🌸"
-
-    def test_web_mode_mistral(self) -> None:
-        assert mode_info(_task(mode="web", backend="mistral")).emoji == "🏰"
-
-    def test_web_mode_copilot(self) -> None:
-        assert mode_info(_task(mode="web", backend="copilot")).emoji == "🤖"
-
-    def test_web_mode_unknown_backend(self) -> None:
-        assert mode_info(_task(mode="web", backend="something")).emoji == "🌍"
-
-    def test_web_mode_no_backend(self) -> None:
-        assert mode_info(_task(mode="web")).emoji == "🌍"
-
-    def test_all_known_backends_covered(self) -> None:
-        for backend, info in WEB_BACKEND_DISPLAY.items():
-            assert mode_info(_task(mode="web", backend=backend)).emoji == info.emoji
-
-    def test_mode_info_returns_mode_info(self) -> None:
-        """mode_info() returns a ModeInfo with both emoji and label."""
-        m = mode_info(_task(mode="cli"))
-        assert m.emoji == "\U0001f4bb"
-        assert m.label == "CLI"
-
-    def test_mode_info_web_backend(self) -> None:
-        """mode_info() resolves web backends to ModeInfo with label."""
-        m = mode_info(_task(mode="web", backend="claude"))
-        assert m.emoji == "\U0001f4a0"
-        assert m.label == "Claude"
+@pytest.mark.parametrize(
+    ("task_kwargs", "expected"),
+    EFFECTIVE_STATUS_CASES,
+    ids=[
+        "running",
+        "running-beats-exit-code",
+        "exited-no-exit-code",
+        "exited-success",
+        "exited-failure",
+        "stopped-podman-state",
+        "no-container-no-mode",
+        "no-container-mode-set",
+        "no-container-success",
+        "no-container-failure",
+        "deleting-overrides-all",
+        "deleting-false-ignored",
+        "minimal-defaults",
+    ],
+)
+def test_effective_status_cases(task_kwargs: dict[str, object], expected: str) -> None:
+    """``effective_status`` handles the supported task/container combinations."""
+    assert effective_status(_task(**task_kwargs)) == expected
 
 
-class TestBatchContainerState:
-    """Test get_project_container_states() and get_all_task_states()."""
+def test_all_effective_status_values_have_display_info() -> None:
+    """Every effective status returned by the tested cases has display metadata."""
+    assert {expected for _, expected in EFFECTIVE_STATUS_CASES} <= set(STATUS_DISPLAY)
 
-    def test_get_project_container_states_parses_output(self) -> None:
-        output = "proj-cli-1 running\nproj-web-2 exited\nproj-run-3 stopped\n"
-        with unittest.mock.patch(
-            "terok.lib.containers.runtime.subprocess.check_output",
-            return_value=output,
-        ):
-            result = get_project_container_states("proj")
-        assert result == {
-            "proj-cli-1": "running",
-            "proj-web-2": "exited",
-            "proj-run-3": "stopped",
-        }
 
-    def test_get_project_container_states_empty(self) -> None:
-        with unittest.mock.patch(
-            "terok.lib.containers.runtime.subprocess.check_output",
-            return_value="",
-        ):
-            result = get_project_container_states("proj")
-        assert result == {}
+@pytest.mark.parametrize(
+    ("task_kwargs", "emoji", "label"),
+    MODE_INFO_CASES,
+    ids=[
+        "cli",
+        "run",
+        "unset",
+        "web-claude",
+        "web-codex",
+        "web-mistral",
+        "web-copilot",
+        "web-unknown",
+        "web-default",
+    ],
+)
+def test_mode_info_cases(task_kwargs: dict[str, object], emoji: str, label: str) -> None:
+    """``mode_info`` resolves direct modes and web backends into display metadata."""
+    info = mode_info(_task(**task_kwargs))
+    assert info.emoji == emoji
+    assert info.label == label
 
-    def test_get_project_container_states_podman_missing(self) -> None:
-        with unittest.mock.patch(
-            "terok.lib.containers.runtime.subprocess.check_output",
-            side_effect=FileNotFoundError,
-        ):
-            result = get_project_container_states("proj")
-        assert result == {}
 
-    def test_get_project_container_states_podman_error(self) -> None:
-        with unittest.mock.patch(
-            "terok.lib.containers.runtime.subprocess.check_output",
-            side_effect=subprocess.CalledProcessError(1, "podman"),
-        ):
-            result = get_project_container_states("proj")
-        assert result == {}
+def test_all_known_backends_use_their_registered_mode_info() -> None:
+    """Every registered web backend resolves to its declared display metadata."""
+    for backend, info in WEB_BACKEND_DISPLAY.items():
+        assert mode_info(_task(mode="web", backend=backend)) == info
 
-    def test_get_all_task_states_maps_correctly(self) -> None:
-        tasks = [
-            _task(task_id="1", mode="cli"),
-            _task(task_id="2", mode="web"),
-            _task(task_id="3", mode=None),
-        ]
-        container_states = {
-            "proj-cli-1": "running",
-            "proj-web-2": "exited",
-        }
-        with unittest.mock.patch(
-            "terok.lib.containers.tasks.get_project_container_states",
-            return_value=container_states,
-        ):
-            result = get_all_task_states("proj", tasks)
-        assert result == {"1": "running", "2": "exited", "3": None}
 
-    def test_get_all_task_states_missing_container(self) -> None:
-        tasks = [_task(task_id="1", mode="cli")]
-        with unittest.mock.patch(
-            "terok.lib.containers.tasks.get_project_container_states",
-            return_value={},
-        ):
-            result = get_all_task_states("proj", tasks)
-        assert result == {"1": None}
+@pytest.mark.parametrize(
+    ("output", "error", "expected"),
+    [
+        pytest.param(
+            "proj-cli-1 running\nproj-web-2 exited\nproj-run-3 stopped\n",
+            None,
+            {
+                "proj-cli-1": "running",
+                "proj-web-2": "exited",
+                "proj-run-3": "stopped",
+            },
+            id="parsed-output",
+        ),
+        pytest.param("", None, {}, id="empty-output"),
+        pytest.param(None, FileNotFoundError(), {}, id="podman-missing"),
+        pytest.param(
+            None,
+            subprocess.CalledProcessError(1, "podman"),
+            {},
+            id="podman-error",
+        ),
+    ],
+)
+def test_get_project_container_states_handles_output_and_errors(
+    output: str | None,
+    error: Exception | None,
+    expected: dict[str, str],
+) -> None:
+    """Project-wide state lookup parses output and degrades cleanly on errors."""
+    patch_kwargs = {"side_effect": error} if error else {"return_value": output}
+    with patch("terok.lib.containers.runtime.subprocess.check_output", **patch_kwargs):
+        assert get_project_container_states("proj") == expected
+
+
+@pytest.mark.parametrize(
+    ("tasks", "container_states", "expected"),
+    [
+        pytest.param(
+            [
+                _task(task_id="1", mode="cli"),
+                _task(task_id="2", mode="web"),
+                _task(task_id="3", mode=None),
+            ],
+            {"proj-cli-1": "running", "proj-web-2": "exited"},
+            {"1": "running", "2": "exited", "3": None},
+            id="mixed-task-modes",
+        ),
+        pytest.param(
+            [_task(task_id="1", mode="cli")],
+            {},
+            {"1": None},
+            id="missing-container",
+        ),
+    ],
+)
+def test_get_all_task_states_maps_project_container_lookup(
+    tasks: list[TaskMeta],
+    container_states: dict[str, str],
+    expected: dict[str, str | None],
+) -> None:
+    """Task-state lookup maps batch project container states back to task IDs."""
+    with patch(
+        "terok.lib.containers.tasks.get_project_container_states",
+        return_value=container_states,
+    ):
+        assert get_all_task_states("proj", tasks) == expected

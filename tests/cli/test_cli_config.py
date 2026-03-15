@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -16,11 +17,13 @@ from terok.cli.main import main
 
 
 def run_cli(*argv: str) -> None:
+    """Run the CLI entrypoint with a temporary argv."""
     with patch.object(sys, "argv", ["terok", *argv]):
         main()
 
 
 def make_config_layout(tmp_path: Path) -> SimpleNamespace:
+    """Create a filesystem layout used by the ``terok config`` tests."""
     global_cfg = tmp_path / "global.yml"
     global_cfg.write_text("ui:\n  base_port: 7777\n", encoding="utf-8")
 
@@ -60,34 +63,62 @@ def make_config_layout(tmp_path: Path) -> SimpleNamespace:
     )
 
 
+@contextmanager
+def patch_config_command(layout: SimpleNamespace):
+    """Patch the ``terok config`` command to use the temporary test layout."""
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(layout.global_cfg)}, clear=True)
+        )
+        stack.enter_context(patch("terok.cli.commands.info._supports_color", return_value=True))
+        stack.enter_context(
+            patch("terok.cli.commands.info._global_config_path", return_value=layout.global_cfg)
+        )
+        stack.enter_context(
+            patch(
+                "terok.cli.commands.info._global_config_search_paths",
+                return_value=[layout.global_cfg],
+            )
+        )
+        stack.enter_context(patch("terok.cli.commands.info._get_ui_base_port", return_value=7777))
+        stack.enter_context(
+            patch("terok.cli.commands.info._get_envs_base_dir", return_value=layout.envs_root)
+        )
+        stack.enter_context(
+            patch("terok.cli.commands.info._user_projects_root", return_value=layout.user_root)
+        )
+        stack.enter_context(
+            patch("terok.cli.commands.info._config_root", return_value=layout.system_root)
+        )
+        stack.enter_context(
+            patch("terok.cli.commands.info._state_root", return_value=layout.state_root)
+        )
+        stack.enter_context(
+            patch("terok.cli.commands.info._build_root", return_value=layout.build_root)
+        )
+        stack.enter_context(
+            patch(
+                "terok.cli.commands.info.list_projects",
+                return_value=[SimpleNamespace(id="alpha", root=layout.project_root)],
+            )
+        )
+        stack.enter_context(
+            patch("terok.cli.commands.info.resources.files", return_value=layout.resources_root)
+        )
+        yield
+
+
 def run_import(file_path: Path, envs_root: Path) -> None:
+    """Invoke ``terok config import-opencode`` with a patched env root."""
     with patch("terok.cli.commands.info._get_envs_base_dir", return_value=envs_root):
         run_cli("config", "import-opencode", str(file_path))
 
 
 def test_config_command_color_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The config command prints the expected colorized layout details."""
     layout = make_config_layout(tmp_path)
 
-    with (
-        patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(layout.global_cfg)}, clear=True),
-        patch("terok.cli.commands.info._supports_color", return_value=True),
-        patch("terok.cli.commands.info._global_config_path", return_value=layout.global_cfg),
-        patch(
-            "terok.cli.commands.info._global_config_search_paths",
-            return_value=[layout.global_cfg],
-        ),
-        patch("terok.cli.commands.info._get_ui_base_port", return_value=7777),
-        patch("terok.cli.commands.info._get_envs_base_dir", return_value=layout.envs_root),
-        patch("terok.cli.commands.info._user_projects_root", return_value=layout.user_root),
-        patch("terok.cli.commands.info._config_root", return_value=layout.system_root),
-        patch("terok.cli.commands.info._state_root", return_value=layout.state_root),
-        patch("terok.cli.commands.info._build_root", return_value=layout.build_root),
-        patch(
-            "terok.cli.commands.info.list_projects",
-            return_value=[SimpleNamespace(id="alpha", root=layout.project_root)],
-        ),
-        patch("terok.cli.commands.info.resources.files", return_value=layout.resources_root),
-    ):
+    with patch_config_command(layout):
         run_cli("config")
 
     output = capsys.readouterr().out
@@ -103,6 +134,7 @@ def test_config_command_color_output(tmp_path: Path, capsys: pytest.CaptureFixtu
 
 
 def test_import_valid_json_copies_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Importing a valid OpenCode config copies it into the envs root."""
     envs_root = tmp_path / "envs"
     envs_root.mkdir()
     source = tmp_path / "my-opencode.json"
@@ -121,12 +153,7 @@ def test_import_valid_json_copies_file(tmp_path: Path, capsys: pytest.CaptureFix
     [
         pytest.param("bad.json", "not json", "Cannot read config", id="invalid-json"),
         pytest.param("nope.json", None, "File not found", id="missing-file"),
-        pytest.param(
-            "array.json",
-            "[1, 2, 3]",
-            "expected a JSON object",
-            id="non-object-json",
-        ),
+        pytest.param("array.json", "[1, 2, 3]", "expected a JSON object", id="non-object-json"),
     ],
 )
 def test_import_rejects_invalid_configs(
@@ -135,13 +162,12 @@ def test_import_rejects_invalid_configs(
     content: str | None,
     expected_message: str,
 ) -> None:
+    """Invalid OpenCode config payloads fail with actionable errors."""
     envs_root = tmp_path / "envs"
     envs_root.mkdir()
     source = tmp_path / filename
     if content is not None:
         source.write_text(content, encoding="utf-8")
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(SystemExit, match=expected_message):
         run_import(source, envs_root)
-
-    assert expected_message in str(exc.value)
