@@ -145,13 +145,14 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
         class OptionHighlighted(_StubObject):
             """Stub option-highlighted event that only captures construction args."""
 
-    class TextArea:
+    class TextArea(_StubObject):
         text: str
+        has_focus: bool
 
         def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__(*args, **kwargs)
             self.text = ""
-            self._stub_args = args
-            self._stub_kwargs = kwargs
+            self.has_focus = False
 
         def focus(self) -> None:
             self.has_focus = True
@@ -159,11 +160,13 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     class SelectionList(_StubObject):
         _items: tuple[object, ...]
         selected: list[object]
+        has_focus: bool
 
         def __init__(self, *items: object, **kwargs: object) -> None:
             super().__init__(*items, **kwargs)
             self._items = items
             self.selected = []
+            self.has_focus = False
 
         def focus(self) -> None:
             self.has_focus = True
