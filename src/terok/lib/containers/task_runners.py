@@ -60,6 +60,18 @@ if TYPE_CHECKING:
     from ..core.project_model import ProjectConfig
 
 _LOCALHOST = "127.0.0.1"
+_FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
+
+
+def _str_to_bool(value: object) -> bool:
+    """Strictly coerce a config value to bool, treating string ``"false"`` as ``False``."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() not in _FALSE_STRINGS
+    return bool(value)
+
+
 _SENSITIVE_KEY_RE = re.compile(r"(?i)(KEY|TOKEN|SECRET|API|PASSWORD|PRIVATE)")
 
 # --- DANGEROUS TRANSITIONAL OVERRIDE helpers (bypass_firewall_no_protection) ---
@@ -394,7 +406,7 @@ def task_run_cli(
         _cfg_val = resolve_provider_value(
             "unrestricted", _effective, project.default_agent or "claude"
         )
-        unrestricted = _cfg_val is None or bool(_cfg_val)
+        unrestricted = _cfg_val is None or _str_to_bool(_cfg_val)
     if unrestricted:
         _apply_unrestricted_env(env)
 
@@ -487,7 +499,7 @@ def task_run_web(
     if unrestricted is None:
         _effective = resolve_agent_config(project_id, preset=preset)
         _cfg_val = resolve_provider_value("unrestricted", _effective, effective_backend)
-        unrestricted = _cfg_val is None or bool(_cfg_val)
+        unrestricted = _cfg_val is None or _str_to_bool(_cfg_val)
     if unrestricted:
         _apply_unrestricted_env(env)
 
@@ -706,7 +718,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     unrestricted = request.unrestricted
     if unrestricted is None:
         cfg_val = resolve_provider_value("unrestricted", effective, resolved.name)
-        unrestricted = cfg_val if cfg_val is not None else True
+        unrestricted = _str_to_bool(cfg_val) if cfg_val is not None else True
 
     # Build env and volumes
     env, volumes = build_task_env_and_volumes(project, task_id)

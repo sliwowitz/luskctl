@@ -258,8 +258,10 @@ provider-agnostic: it doesn't need to know *which* flags each agent needs.
 To add permission-mode support for a new agent:
 
 1. Set `auto_approve_env` (for env-var-based approval) on the
-   `HeadlessProvider` definition, or add a config-file block to
-   `init-ssh-and-repo.sh` (for file-based agents like Claude/Codex).
+   `HeadlessProvider` definition, add a config-file block to
+   `init-ssh-and-repo.sh` (for file-based agents like Claude), or set
+   `auto_approve_flags` as a last resort (for agents with no env var
+   or managed config, like Codex).
 2. No other changes needed — `_apply_unrestricted_env()` collects all
    providers' env vars automatically via `collect_all_auto_approve_env()`.
 
