@@ -18,10 +18,17 @@ def _set_toad_theme(theme: str) -> None:
     """Ensure toad's config has the desired UI theme."""
     config: dict = {}
     if TOAD_CONFIG.exists():
-        config = json.loads(TOAD_CONFIG.read_text())
+        try:
+            config = json.loads(TOAD_CONFIG.read_text())
+        except (json.JSONDecodeError, OSError):
+            config = {}
+    if not isinstance(config, dict):
+        config = {}
     if config.get("ui", {}).get("theme") == theme:
         return
-    config.setdefault("ui", {})["theme"] = theme
+    if not isinstance(config.get("ui"), dict):
+        config["ui"] = {}
+    config["ui"]["theme"] = theme
     TOAD_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     TOAD_CONFIG.write_text(json.dumps(config, indent=4) + "\n")
 

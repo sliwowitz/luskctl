@@ -11,7 +11,9 @@ import importlib.util
 import json
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch
 
 import pytest
@@ -28,7 +30,7 @@ def blablatoad_script_path() -> Path:
     return REPO_ROOT / "src" / "terok" / "resources" / "scripts" / "blablatoad"
 
 
-def load_blablatoad_module():
+def load_blablatoad_module() -> ModuleType:
     """Load the wrapper script as a Python module."""
     script_path = blablatoad_script_path()
     loader = importlib.machinery.SourceFileLoader("blablatoad", str(script_path))
@@ -42,7 +44,7 @@ def load_blablatoad_module():
 
 
 @pytest.fixture()
-def blablatoad_module():
+def blablatoad_module() -> Iterator[ModuleType]:
     """Load the blablatoad script as an isolated module for one test."""
     sys.modules.pop("blablatoad", None)
     mod = load_blablatoad_module()
