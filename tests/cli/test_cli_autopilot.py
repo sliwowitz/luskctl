@@ -217,6 +217,7 @@ class RunCliTests(unittest.TestCase):
                 "1",
                 agents=["debugger"],
                 preset=None,
+                unrestricted=None,
             )
 
     def test_task_run_web_with_agent_selection(self) -> None:
@@ -244,4 +245,5 @@ class RunCliTests(unittest.TestCase):
                 backend=None,
                 agents=["reviewer"],
                 preset=None,
+                unrestricted=None,
             )

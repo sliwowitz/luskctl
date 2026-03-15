@@ -63,6 +63,32 @@ def _add_project_task_args(parser: argparse.ArgumentParser) -> None:
     set_completer(parser.add_argument("task_id"), _complete_task_ids)
 
 
+def _add_restriction_flags(parser: argparse.ArgumentParser) -> None:
+    """Add mutually exclusive ``--unrestricted`` / ``--restricted`` flags."""
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--unrestricted",
+        action="store_true",
+        default=None,
+        help="Run agent fully autonomous (skip all approval prompts)",
+    )
+    group.add_argument(
+        "--restricted",
+        action="store_true",
+        default=None,
+        help="Run agent with vendor-default permissions (ask before acting)",
+    )
+
+
+def _resolve_unrestricted(args: argparse.Namespace) -> bool | None:
+    """Resolve ``--unrestricted`` / ``--restricted`` to a tri-state bool."""
+    if getattr(args, "unrestricted", None):
+        return True
+    if getattr(args, "restricted", None):
+        return False
+    return None
+
+
 _BACKENDS_HELP = ", ".join(WEB_BACKENDS)
 
 
@@ -107,19 +133,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         metavar="FILE",
         help="Path to instructions file (overrides config stack)",
     )
-    _restrict_group = p_run.add_mutually_exclusive_group()
-    _restrict_group.add_argument(
-        "--unrestricted",
-        action="store_true",
-        default=None,
-        help="Run agent fully autonomous (skip all approval prompts)",
-    )
-    _restrict_group.add_argument(
-        "--restricted",
-        action="store_true",
-        default=None,
-        help="Run agent with vendor-default permissions (ask before acting)",
-    )
+    _add_restriction_flags(p_run)
 
     # task subcommand group
     p_task = subparsers.add_parser("task", help="Manage tasks")
@@ -157,6 +171,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Include a non-default agent by name (repeatable)",
     )
     t_run_cli.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
+    _add_restriction_flags(t_run_cli)
 
     t_run_ui = tsub.add_parser("run-web", help=argparse.SUPPRESS)
     _add_project_task_args(t_run_ui)
@@ -174,6 +189,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Include a non-default agent by name (repeatable)",
     )
     t_run_ui.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
+    _add_restriction_flags(t_run_ui)
 
     t_delete = tsub.add_parser("delete", help="Delete a task and its containers")
     _add_project_task_args(t_delete)
@@ -230,6 +246,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     t_start.add_argument("--preset", help="Name of a preset to apply (global or project-level)")
     t_start.add_argument("--name", help="Human-readable task name (slug-style, e.g. fix-auth-bug)")
+    _add_restriction_flags(t_start)
 
     t_rename = tsub.add_parser("rename", help="Rename a task")
     _add_project_task_args(t_rename)
@@ -299,13 +316,6 @@ def dispatch(args: argparse.Namespace) -> bool:
                     f"Failed to read instructions file {instructions_path}: {exc}"
                 ) from exc
 
-        # Resolve --unrestricted / --restricted to a tri-state bool
-        unrestricted: bool | None = None
-        if getattr(args, "unrestricted", None):
-            unrestricted = True
-        elif getattr(args, "restricted", None):
-            unrestricted = False
-
         task_run_headless(
             HeadlessRunRequest(
                 project_id=args.project_id,
@@ -320,7 +330,7 @@ def dispatch(args: argparse.Namespace) -> bool:
                 name=getattr(args, "name", None),
                 provider=getattr(args, "provider", None),
                 instructions=instructions_text,
-                unrestricted=unrestricted,
+                unrestricted=_resolve_unrestricted(args),
             )
         )
         return True
@@ -346,6 +356,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             args.task_id,
             agents=getattr(args, "selected_agents", None),
             preset=getattr(args, "preset", None),
+            unrestricted=_resolve_unrestricted(args),
         )
     elif args.task_cmd == "run-web":
         if not _is_experimental():
@@ -356,6 +367,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
             backend=getattr(args, "ui_backend", None),
             agents=getattr(args, "selected_agents", None),
             preset=getattr(args, "preset", None),
+            unrestricted=_resolve_unrestricted(args),
         )
     elif args.task_cmd == "delete":
         task_delete(args.project_id, args.task_id)
@@ -380,6 +392,7 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
         task_id = task_new(args.project_id, name=getattr(args, "name", None))
         selected = getattr(args, "selected_agents", None)
         preset = getattr(args, "preset", None)
+        restriction = _resolve_unrestricted(args)
         if args.web:
             task_run_web(
                 args.project_id,
@@ -387,9 +400,12 @@ def _dispatch_task_sub(args: argparse.Namespace) -> bool:
                 backend=getattr(args, "backend", None),
                 agents=selected,
                 preset=preset,
+                unrestricted=restriction,
             )
         else:
-            task_run_cli(args.project_id, task_id, agents=selected, preset=preset)
+            task_run_cli(
+                args.project_id, task_id, agents=selected, preset=preset, unrestricted=restriction
+            )
     elif args.task_cmd == "rename":
         task_rename(args.project_id, args.task_id, args.name)
     elif args.task_cmd == "status":

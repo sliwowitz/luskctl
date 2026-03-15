@@ -134,7 +134,9 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_new.assert_called_once_with("proj1", name=None)
-        mock_run_cli.assert_called_once_with("proj1", "42", agents=None, preset=None)
+        mock_run_cli.assert_called_once_with(
+            "proj1", "42", agents=None, preset=None, unrestricted=None
+        )
 
     @unittest.mock.patch("terok.cli.commands.task.task_run_web")
     @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="7")
@@ -147,7 +149,9 @@ class TaskStartTests(unittest.TestCase):
             main()
 
         mock_new.assert_called_once_with("proj2", name=None)
-        mock_run_web.assert_called_once_with("proj2", "7", backend=None, agents=None, preset=None)
+        mock_run_web.assert_called_once_with(
+            "proj2", "7", backend=None, agents=None, preset=None, unrestricted=None
+        )
 
     @unittest.mock.patch("terok.cli.commands.task.task_run_web")
     @unittest.mock.patch("terok.cli.commands.task.task_new", return_value="3")
@@ -162,7 +166,7 @@ class TaskStartTests(unittest.TestCase):
 
         mock_new.assert_called_once_with("proj3", name=None)
         mock_run_web.assert_called_once_with(
-            "proj3", "3", backend="codex", agents=None, preset=None
+            "proj3", "3", backend="codex", agents=None, preset=None, unrestricted=None
         )
 
     def test_task_start_web_requires_experimental(self) -> None:
