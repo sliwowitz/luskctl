@@ -13,18 +13,22 @@ have no behavior beyond computed paths.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
-@dataclass
-class ProjectConfig:
+class ProjectConfig(BaseModel):
     """Resolved project configuration loaded from ``project.yml``.
 
     Pure value object — holds configuration fields with no behavior beyond
     computed paths.  The rich domain object :class:`~terok.lib.project.Project`
     wraps this and provides behavior.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     id: str
     security_class: str  # "online" | "gatekeeping"
@@ -38,43 +42,28 @@ class ProjectConfig:
 
     ssh_key_name: str | None
     ssh_host_dir: Path | None
-    # Optional path to an SSH config template (user-provided). If set, ssh-init
-    # will render this template to the shared .ssh/config. Tokens supported:
-    #   {{IDENTITY_FILE}}  -> absolute path of the generated private key
-    #   {{KEY_NAME}}       -> filename of the generated key (no .pub)
-    #   {{PROJECT_ID}}     -> project id
     ssh_config_template: Path | None = None
-    # Whether to mount SSH credentials in online mode. Default: True.
     ssh_mount_in_online: bool = True
-    # Whether to mount SSH credentials in gatekeeping mode. Default: False.
     ssh_mount_in_gatekeeping: bool = False
-    # Whether to expose the upstream URL as a remote named "external" in gatekeeping mode.
-    # This allows the container to also reference the real upstream.
     expose_external_remote: bool = False
-    # Optional human credentials for git committer (while AI is the author)
     human_name: str | None = None
     human_email: str | None = None
-    # How terok maps human/agent identities onto Git author/committer fields.
     git_authorship: str = "agent-human"
-    # Upstream polling configuration for gatekeeping mode
     upstream_polling_enabled: bool = True
     upstream_polling_interval_minutes: int = 5
-    # Auto-sync configuration for gatekeeping mode
     auto_sync_enabled: bool = False
-    auto_sync_branches: list[str] = field(default_factory=list)
-    # Default agent preference (codex, claude, mistral) - used for Web UI and potentially CLI
+    auto_sync_branches: list[str] = Field(default_factory=list)
     default_agent: str | None = None
-    # Agent configuration dict (from project.yml agent: section)
-    agent_config: dict = field(default_factory=dict)
-    # Seconds to wait before SIGKILL when stopping a container (podman stop --time).
-    # Default 10 matches podman's built-in default.
+    agent_config: dict[str, Any] = Field(default_factory=dict)
     shutdown_timeout: int = 10
-    # Task name categories for unique-namer (from tasks.name_categories in project.yml)
     task_name_categories: list[str] | None = None
-    # When True, automatically drop the shield (bypass mode) after task container starts.
-    # Default True is a temporary measure until the full shield UI is in place.
     shield_drop_on_task_start: bool = True
+    # Docker configuration (flattened from docker: section)
+    docker_base_image: str = "ubuntu:24.04"
+    docker_snippet_inline: str | None = None
+    docker_snippet_file: str | None = None
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def presets_dir(self) -> Path:
         """Directory for preset config files for this project."""

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # pip install pyyaml
+from pydantic import ValidationError
 
 from ..util.config_stack import ConfigScope, ConfigStack
 from .config import (
@@ -29,6 +30,7 @@ from .project_model import (  # noqa: F401 — re-exported public API
     effective_ssh_key_name,
     validate_project_id,
 )
+from .yaml_schema import RawGlobalGitSection, RawProjectYaml
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +75,97 @@ def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Pa
         if not file_path.is_absolute():
             file_path = base_dir / file_path
         sa["file"] = str(file_path.resolve())
+
+
+def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
+    """Format a Pydantic ValidationError into a user-friendly message."""
+    lines = [f"Invalid project.yml ({cfg_path}):"]
+    for err in exc.errors():
+        loc = " → ".join(str(p) for p in err["loc"])
+        lines.append(f"  {loc}: {err['msg']}")
+    return "\n".join(lines)
+
+
+def _parse_project_yaml(cfg_path: Path) -> RawProjectYaml:
+    """Parse and validate a project.yml file, returning a typed model."""
+    try:
+        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise SystemExit(f"Failed to read {cfg_path}: {exc}")
+    try:
+        return RawProjectYaml.model_validate(raw)
+    except ValidationError as exc:
+        raise SystemExit(_format_validation_error(exc, cfg_path))
+
+
+def _resolve_ssh_template(raw_template: str | None, root: Path) -> Path | None:
+    """Resolve an SSH config_template path relative to the project root."""
+    if not raw_template:
+        return None
+    p = Path(raw_template).expanduser()
+    if not p.is_absolute():
+        p = root / p
+    return p.resolve()
+
+
+def _build_project_config(
+    raw: RawProjectYaml,
+    identity: dict[str, str | None],
+    root: Path,
+    project_id: str,
+) -> ProjectConfig:
+    """Transform a validated raw YAML model + resolved identity into a flat ProjectConfig."""
+    pid = raw.project.id or project_id
+    sec = raw.project.security_class
+    sr = state_root()
+
+    tasks_root = Path(raw.tasks.root or (sr / "tasks" / pid)).resolve()
+    gate_path = Path(raw.gate.path or (sr / "gate" / f"{pid}.git")).resolve()
+
+    staging_root: Path | None = None
+    if sec == "gatekeeping":
+        staging_root = Path(raw.gatekeeping.staging_root or (build_root() / pid)).resolve()
+
+    ssh_host_dir = Path(raw.ssh.host_dir).expanduser().resolve() if raw.ssh.host_dir else None
+
+    # Default agent: project → global → None
+    default_agent = raw.default_agent or get_global_default_agent()
+
+    # Agent config (stays as dict — semi-structured, _inherit merging)
+    agent_cfg = dict(raw.agent)
+    _resolve_subagent_files(agent_cfg.get("subagents", []), root)
+
+    return ProjectConfig(
+        id=pid,
+        security_class=sec,
+        upstream_url=raw.git.upstream_url,
+        default_branch=raw.git.default_branch or None,
+        root=root.resolve(),
+        tasks_root=tasks_root,
+        gate_path=gate_path,
+        staging_root=staging_root,
+        ssh_key_name=raw.ssh.key_name,
+        ssh_host_dir=ssh_host_dir,
+        ssh_config_template=_resolve_ssh_template(raw.ssh.config_template, root),
+        ssh_mount_in_online=raw.ssh.mount_in_online,
+        ssh_mount_in_gatekeeping=raw.ssh.mount_in_gatekeeping,
+        expose_external_remote=raw.gatekeeping.expose_external_remote,
+        human_name=identity.get("human_name") or "Nobody",
+        human_email=identity.get("human_email") or "nobody@localhost",
+        git_authorship=normalize_git_authorship(identity.get("authorship")),
+        upstream_polling_enabled=raw.gatekeeping.upstream_polling.enabled,
+        upstream_polling_interval_minutes=raw.gatekeeping.upstream_polling.interval_minutes,
+        auto_sync_enabled=raw.gatekeeping.auto_sync.enabled,
+        auto_sync_branches=raw.gatekeeping.auto_sync.branches,
+        default_agent=default_agent,
+        agent_config=agent_cfg,
+        shutdown_timeout=raw.run.shutdown_timeout,
+        task_name_categories=raw.tasks.name_categories,
+        shield_drop_on_task_start=raw.shield.drop_on_task_start,
+        docker_base_image=raw.docker.base_image,
+        docker_snippet_inline=raw.docker.user_snippet_inline,
+        docker_snippet_file=raw.docker.user_snippet_file,
+    )
 
 
 def find_preset_path(project: ProjectConfig, preset_name: str) -> Path | None:
@@ -217,135 +310,47 @@ def list_projects() -> list[ProjectConfig]:
     return projects
 
 
+def _validated_global_git_section() -> dict[str, Any]:
+    """Return the global config ``git:`` section, validated through the schema.
+
+    If the global config has type errors in the git section (e.g. ``human_name: 123``),
+    they are caught here with a clear message rather than surfacing later as a confusing
+    Pydantic error during ProjectConfig construction.
+    """
+    raw = get_global_section("git")
+    if not raw:
+        return {}
+    try:
+        return RawGlobalGitSection.model_validate(raw).model_dump(exclude_none=True)
+    except ValidationError:
+        logger.warning("Invalid git section in global config, ignoring", exc_info=True)
+        return {}
+
+
 def load_project(project_id: str) -> ProjectConfig:
     """Load and return a fully resolved :class:`ProjectConfig` from *project_id*."""
     root = _find_project_root(project_id)
     cfg_path = root / "project.yml"
     if not cfg_path.is_file():
         raise SystemExit(f"Missing project.yml in {root}")
-    try:
-        cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
-        raise SystemExit(f"Failed to parse {cfg_path}: {exc}")
 
-    proj_cfg = cfg.get("project", {}) or {}
-    git_cfg = cfg.get("git", {}) or {}
-    ssh_cfg = cfg.get("ssh", {}) or {}
-    tasks_cfg = cfg.get("tasks", {}) or {}
-    gate_path_cfg = cfg.get("gate", {}) or {}
-    gate_cfg = cfg.get("gatekeeping", {}) or {}
+    raw = _parse_project_yaml(cfg_path)
 
-    pid = proj_cfg.get("id", project_id)
-    sec = proj_cfg.get("security_class", "online")
-
-    sr = state_root()
-    tasks_root = Path(tasks_cfg.get("root", sr / "tasks" / pid)).resolve()
-    gate_path = Path(gate_path_cfg.get("path", sr / "gate" / f"{pid}.git")).resolve()
-
-    staging_root: Path | None = None
-    if sec == "gatekeeping":
-        # Default to build_root unless explicitly configured in project.yml
-        staging_root = Path(gate_cfg.get("staging_root", build_root() / pid)).resolve()
-
-    upstream_url = git_cfg.get("upstream_url")
-    default_branch = git_cfg.get("default_branch") or None
-
-    ssh_key_name = ssh_cfg.get("key_name")
-    ssh_host_dir = (
-        Path(ssh_cfg.get("host_dir")).expanduser().resolve() if ssh_cfg.get("host_dir") else None
-    )
-
-    # Optional: ssh.config_template (path to a template file). If relative, it's relative to the project root.
-    ssh_cfg_template_path: Path | None = None
-    if ssh_cfg.get("config_template"):
-        cfg_t = Path(str(ssh_cfg.get("config_template")))
-        if not cfg_t.is_absolute():
-            cfg_t = root / cfg_t
-        ssh_cfg_template_path = cfg_t.expanduser().resolve()
-
-    # Optional flag: ssh.mount_in_online (default true)
-    ssh_mount_in_online = bool(ssh_cfg.get("mount_in_online", True))
-    # Optional flag: ssh.mount_in_gatekeeping (default false)
-    ssh_mount_in_gatekeeping = bool(ssh_cfg.get("mount_in_gatekeeping", False))
-    # Optional flag: gatekeeping.expose_external_remote (default false)
-    # When true, passes the upstream URL to the container as "external" remote
-    expose_external_remote = bool(gate_cfg.get("expose_external_remote", False))
-
-    # Human credentials for git committer (while AI is the author)
-    # Resolved via ConfigStack: git-global → terok-global → project.yml
+    # Git identity resolved via ConfigStack: git-global → terok-global → project.yml
+    git_dict = raw.git.model_dump(exclude_none=True)
     identity_stack = ConfigStack()
     identity_stack.push(ConfigScope("git-global", None, _git_global_identity()))
-    identity_stack.push(ConfigScope("terok-global", None, get_global_section("git")))
-    identity_stack.push(ConfigScope("project", cfg_path, git_cfg))
+    identity_stack.push(ConfigScope("terok-global", None, _validated_global_git_section()))
+    identity_stack.push(ConfigScope("project", cfg_path, git_dict))
     identity = identity_stack.resolve()
 
-    human_name = identity.get("human_name") or "Nobody"
-    human_email = identity.get("human_email") or "nobody@localhost"
-    git_authorship = normalize_git_authorship(identity.get("authorship"))
-
-    # Upstream polling configuration
-    polling_cfg = gate_cfg.get("upstream_polling", {}) or {}
-    upstream_polling_enabled = bool(polling_cfg.get("enabled", True))
-    upstream_polling_interval_minutes = int(polling_cfg.get("interval_minutes", 5))
-
-    # Auto-sync configuration
-    sync_cfg = gate_cfg.get("auto_sync", {}) or {}
-    auto_sync_enabled = bool(sync_cfg.get("enabled", False))
-    auto_sync_branches = list(sync_cfg.get("branches", []))
-
-    # Default agent preference (for Web UI and potentially CLI)
-    # Precedence: 1) project.yml default_agent, 2) global terokctl config, 3) None (use default)
-    default_agent = cfg.get("default_agent")
-    if not default_agent:
-        default_agent = get_global_default_agent()
-
-    # Run section (GPU, shutdown timeout, etc.)
-    run_cfg = cfg.get("run", {}) or {}
-    shutdown_timeout = int(run_cfg.get("shutdown_timeout", 10))
-
-    # Task name categories (from tasks.name_categories in project.yml)
-    raw_cats = tasks_cfg.get("name_categories")
-    task_name_categories: list[str] | None = None
-    if isinstance(raw_cats, list) and raw_cats:
-        task_name_categories = [str(c) for c in raw_cats]
-    elif isinstance(raw_cats, str) and raw_cats.strip():
-        task_name_categories = [raw_cats.strip()]
-
-    # Shield config
-    shield_cfg = cfg.get("shield", {}) or {}
-    shield_drop_on_task_start = bool(shield_cfg.get("drop_on_task_start", True))
-
-    # Agent config section (model, subagents, mcp_servers, etc.)
-    agent_cfg = cfg.get("agent", {}) or {}
-    # Resolve subagent file: paths relative to project root
-    _resolve_subagent_files(agent_cfg.get("subagents", []), root)
-
-    p = ProjectConfig(
-        id=pid,
-        security_class=sec,
-        upstream_url=upstream_url,
-        default_branch=default_branch,
-        root=root.resolve(),
-        tasks_root=tasks_root,
-        gate_path=gate_path,
-        staging_root=staging_root,
-        ssh_key_name=ssh_key_name,
-        ssh_host_dir=ssh_host_dir,
-        ssh_config_template=ssh_cfg_template_path,
-        ssh_mount_in_online=ssh_mount_in_online,
-        ssh_mount_in_gatekeeping=ssh_mount_in_gatekeeping,
-        expose_external_remote=expose_external_remote,
-        human_name=human_name,
-        human_email=human_email,
-        git_authorship=git_authorship,
-        upstream_polling_enabled=upstream_polling_enabled,
-        upstream_polling_interval_minutes=upstream_polling_interval_minutes,
-        auto_sync_enabled=auto_sync_enabled,
-        auto_sync_branches=auto_sync_branches,
-        default_agent=default_agent,
-        agent_config=agent_cfg,
-        shutdown_timeout=shutdown_timeout,
-        task_name_categories=task_name_categories,
-        shield_drop_on_task_start=shield_drop_on_task_start,
-    )
-    return p
+    try:
+        return _build_project_config(raw, identity, root, project_id)
+    except ValidationError as exc:
+        # Identity values come from merged sources (git config, global config,
+        # project.yml).  Include provenance in the error so the user knows
+        # where to look.
+        sources = ", ".join(s.level for s in identity_stack.scopes if s.data)
+        raise SystemExit(
+            _format_validation_error(exc, cfg_path) + f"\n  (git identity merged from: {sources})"
+        )

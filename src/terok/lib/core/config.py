@@ -3,6 +3,7 @@
 
 """Global configuration, directory helpers, and preset/image path resolution."""
 
+import logging
 import os
 import sys
 from collections.abc import Callable
@@ -11,8 +12,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # pip install pyyaml
+from pydantic import ValidationError
 
 from .paths import config_root as _config_root_base, state_root as _state_root_base
+from .yaml_schema import RawGlobalConfig
+
+logger = logging.getLogger(__name__)
 
 # ---------- Prefix & roots ----------
 
@@ -95,6 +100,23 @@ def global_config_path() -> Path:
 
 
 # ---------- Global config (cached) ----------
+
+
+def _load_validated() -> RawGlobalConfig:
+    """Load and validate the global config, returning a typed model."""
+    cfg_path = global_config_path()
+    if not cfg_path.is_file():
+        return RawGlobalConfig()
+    try:
+        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        logger.warning("Failed to read global config %s, using defaults", cfg_path, exc_info=True)
+        return RawGlobalConfig()
+    try:
+        return RawGlobalConfig.model_validate(raw)
+    except ValidationError:
+        logger.warning("Invalid global config %s, using defaults", cfg_path, exc_info=True)
+        return RawGlobalConfig()
 
 
 def load_global_config() -> dict[str, Any]:
@@ -217,7 +239,7 @@ def deleted_projects_dir() -> Path:
 
 def get_ui_base_port() -> int:
     """Return the base port for the web UI (default 7860)."""
-    return int(get_global_section("ui").get("base_port", 7860))
+    return _load_validated().ui.base_port
 
 
 def get_envs_base_dir() -> Path:
@@ -234,23 +256,22 @@ def get_envs_base_dir() -> Path:
 
 def get_global_human_name() -> str | None:
     """Return git.human_name from global config, or None if not set."""
-    return get_global_section("git").get("human_name")
+    return _load_validated().git.human_name
 
 
 def get_global_human_email() -> str | None:
     """Return git.human_email from global config, or None if not set."""
-    return get_global_section("git").get("human_email")
+    return _load_validated().git.human_email
 
 
 def get_global_default_agent() -> str | None:
     """Return default_agent from global config, or None if not set."""
-    cfg = load_global_config()
-    return cfg.get("default_agent")
+    return _load_validated().default_agent
 
 
 def get_tui_default_tmux() -> bool:
     """Return whether to default to tmux mode for TUI, or False if not set."""
-    return bool(get_global_section("tui").get("default_tmux", False))
+    return _load_validated().tui.default_tmux
 
 
 def get_logs_partial_streaming() -> bool:
@@ -261,7 +282,7 @@ def get_logs_partial_streaming() -> bool:
         logs:
           partial_streaming: false  # disable typewriter effect
     """
-    return bool(get_global_section("logs").get("partial_streaming", True))
+    return _load_validated().logs.partial_streaming
 
 
 def get_task_name_categories() -> list[str] | None:
@@ -270,12 +291,7 @@ def get_task_name_categories() -> list[str] | None:
     The value may be a list of category strings (e.g. ``["animals", "food"]``)
     or a single string.  Returns ``None`` when the key is absent or empty.
     """
-    val = get_global_section("tasks").get("name_categories")
-    if isinstance(val, list):
-        return [str(c) for c in val] if val else None
-    if isinstance(val, str) and val.strip():
-        return [val.strip()]
-    return None
+    return _load_validated().tasks.name_categories
 
 
 def get_shield_bypass_firewall_no_protection() -> bool:
@@ -293,17 +309,17 @@ def get_shield_bypass_firewall_no_protection() -> bool:
         shield:
           bypass_firewall_no_protection: true
     """
-    return bool(get_global_section("shield").get("bypass_firewall_no_protection", False))
+    return _load_validated().shield.bypass_firewall_no_protection
 
 
 def get_gate_server_port() -> int:
     """Return the gate server port from global config (default 9418)."""
-    return int(get_global_section("gate_server").get("port", 9418))
+    return _load_validated().gate_server.port
 
 
 def get_gate_server_suppress_warning() -> bool:
     """Return whether to suppress the systemd suggestion warning."""
-    return bool(get_global_section("gate_server").get("suppress_systemd_warning", False))
+    return _load_validated().gate_server.suppress_systemd_warning
 
 
 def get_global_agent_config() -> dict[str, Any]:

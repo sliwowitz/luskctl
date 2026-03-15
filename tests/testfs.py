@@ -23,6 +23,18 @@ MOCK_TASK_DIR_1 = MOCK_BASE / "tasks" / "1"
 MOCK_CONFIG_ROOT = Path("/home/user/.config/terok")
 """Fake XDG-style config root used by path-related tests."""
 
+MOCK_SSH_HOST_DIR = str(MOCK_BASE / "ssh-keys")
+"""Fake SSH host directory for YAML schema tests."""
+
+MOCK_TASKS_ROOT = str(MOCK_BASE / "custom-tasks")
+"""Fake tasks root override for YAML schema tests."""
+
+MOCK_GATE_PATH = str(MOCK_BASE / "custom-gate")
+"""Fake gate path override for YAML schema tests."""
+
+MOCK_STAGING_ROOT = str(MOCK_BASE / "custom-staging")
+"""Fake staging root for YAML schema tests."""
+
 # ── Well-known integration environment path fragments ────────────────────────
 
 HOME_DIR_NAME = "home"

@@ -10,8 +10,6 @@ from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 
-import yaml  # pip install pyyaml
-
 from ..core.config import build_root, is_experimental
 from ..core.images import (
     agent_cli_image,
@@ -21,6 +19,7 @@ from ..core.images import (
     project_dev_image,
     project_web_image,
 )
+from ..core.project_model import ProjectConfig
 from ..core.projects import effective_ssh_key_name, load_project
 from ..util.fs import ensure_dir
 
@@ -92,15 +91,6 @@ def _stage_tmux_config_into(dest: Path) -> None:
     _copy_package_tree("terok", pkg_rel, dest)
 
 
-def _load_docker_config(project_root: Path) -> dict:
-    """Load the ``docker:`` section from *project_root*/project.yml."""
-    try:
-        cfg = yaml.safe_load((project_root / "project.yml").read_text()) or {}
-        return cfg.get("docker", {}) or {}
-    except (OSError, yaml.YAMLError):
-        return {}
-
-
 def _hash_traversable_tree(root) -> str:
     """Compute a SHA-256 digest over all files in a Traversable tree."""
     hasher = hashlib.sha256()
@@ -135,10 +125,32 @@ def _tmux_config_hash() -> str:
     return _hash_traversable_tree(tmux_root)
 
 
+def _resolve_user_snippet(project: ProjectConfig) -> str:
+    """Resolve the docker user snippet from project config (inline or file).
+
+    Raises :class:`SystemExit` if ``docker.user_snippet_file`` is configured but
+    the file does not exist or cannot be read.
+    """
+    if project.docker_snippet_inline and project.docker_snippet_inline.strip():
+        return project.docker_snippet_inline
+    if project.docker_snippet_file:
+        us_path = Path(project.docker_snippet_file).expanduser()
+        if not us_path.is_absolute():
+            us_path = project.root / us_path
+        if not us_path.is_file():
+            raise SystemExit(
+                f"docker.user_snippet_file not found: {us_path}\n"
+                f"  (configured in project '{project.id}')"
+            )
+        try:
+            return us_path.read_text()
+        except OSError as exc:
+            raise SystemExit(f"Failed to read docker.user_snippet_file {us_path}: {exc}")
+    return ""
+
+
 def _render_dockerfiles(project) -> dict[str, str]:
-    """Render all Dockerfile templates for *project* and return name→content mapping."""
-    # Load templates from package resources (terok/resources/templates). Use
-    # importlib.resources Traversable API so it works from wheels/zip too.
+    """Render all Dockerfile templates for *project* and return name->content mapping."""
     tmpl_pkg = resources.files("terok") / "resources" / "templates"
     templates = {
         "L0.Dockerfile": (tmpl_pkg / "l0.dev.Dockerfile.template").read_text(),
@@ -148,29 +160,6 @@ def _render_dockerfiles(project) -> dict[str, str]:
     if is_experimental():
         templates["L1.ui.Dockerfile"] = (tmpl_pkg / "l1.agent-ui.Dockerfile.template").read_text()
 
-    # Read additional docker-related settings directly from the project.yml
-    docker_cfg = _load_docker_config(project.root)
-
-    # Resolve optional user snippet: prefer inline over file
-    user_snippet = ""
-    us_inline = docker_cfg.get("user_snippet_inline")
-    if isinstance(us_inline, str) and us_inline.strip():
-        user_snippet = us_inline
-    else:
-        us_file = docker_cfg.get("user_snippet_file")
-        if isinstance(us_file, str) and us_file:
-            us_path = Path(us_file)
-            if not us_path.is_absolute():
-                us_path = project.root / us_file
-            try:
-                if us_path.is_file():
-                    user_snippet = us_path.read_text()
-            except OSError:
-                user_snippet = ""
-
-    # SSH_KEY_NAME inside containers should mirror the filename that ssh-init
-    # generated (or will generate) for this project. We assume the default
-    # key_type (ed25519) here, which matches init_project_ssh's default.
     ssh_key_name = effective_ssh_key_name(project, key_type="ed25519")
 
     variables = {
@@ -178,18 +167,14 @@ def _render_dockerfiles(project) -> dict[str, str]:
         "SECURITY_CLASS": project.security_class,
         "UPSTREAM_URL": project.upstream_url or "",
         "DEFAULT_BRANCH": project.default_branch or "",
-        # Template-specific extras
-        "BASE_IMAGE": str(docker_cfg.get("base_image", "ubuntu:24.04")),
+        "BASE_IMAGE": project.docker_base_image,
         "SSH_KEY_NAME": ssh_key_name,
-        # For gatekeeping projects, default CODE_REPO to the git-gate mount path.
-        # For online projects, default to the real upstream URL.
-        # These defaults can be overridden at runtime via -e flags.
         "CODE_REPO_DEFAULT": (
             "file:///git-gate/gate.git"
             if project.security_class == "gatekeeping"
             else (project.upstream_url or "")
         ),
-        "USER_SNIPPET": user_snippet,
+        "USER_SNIPPET": _resolve_user_snippet(project),
     }
 
     rendered = {}
@@ -204,11 +189,9 @@ def build_context_hash(project_id: str) -> str:
     """Compute a SHA-256 digest of the full build context for *project_id*."""
     project = load_project(project_id)
     rendered = _render_dockerfiles(project)
-    docker_cfg = _load_docker_config(project.root)
-    base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
 
     hasher = hashlib.sha256()
-    hasher.update(f"base_image={base_image}".encode())
+    hasher.update(f"base_image={project.docker_base_image}".encode())
     hasher.update(b"\0")
     for name in sorted(rendered):
         hasher.update(name.encode("utf-8"))
@@ -279,7 +262,7 @@ def build_images(
     _check_podman_available()
 
     project = load_project(project_id)
-    docker_cfg = _load_docker_config(project.root)
+    base_image = project.docker_base_image
     stage_dir = build_root() / project.id
     context_hash = build_context_hash(project_id)
 
@@ -296,7 +279,6 @@ def build_images(
 
     context_dir = str(stage_dir)
 
-    base_image = str(docker_cfg.get("base_image", "ubuntu:24.04"))
     l0_image = base_dev_image(base_image)
     l1_cli_image = agent_cli_image(base_image)
     l1_ui_image = agent_ui_image(base_image)

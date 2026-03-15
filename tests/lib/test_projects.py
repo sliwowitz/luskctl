@@ -119,7 +119,35 @@ git:
         with project_env(malformed, project_id=project_id):
             with self.assertRaises(SystemExit) as ctx:
                 load_project(project_id)
-            self.assertIn("Failed to parse", str(ctx.exception))
+            self.assertIn("Failed to read", str(ctx.exception))
+
+    def test_load_project_unknown_key_rejected(self) -> None:
+        """Unknown YAML key (typo) is caught by Pydantic validation."""
+        project_id = "bad-key"
+        yaml = f"""\
+project:
+  id: {project_id}
+  security_class: online
+projecct:
+  id: oops
+"""
+        with project_env(yaml, project_id=project_id):
+            with self.assertRaises(SystemExit) as ctx:
+                load_project(project_id)
+            self.assertIn("projecct", str(ctx.exception))
+
+    def test_load_project_invalid_security_class_rejected(self) -> None:
+        """Invalid security_class is caught by Pydantic validation."""
+        project_id = "bad-sec"
+        yaml = f"""\
+project:
+  id: {project_id}
+  security_class: hybrid
+"""
+        with project_env(yaml, project_id=project_id):
+            with self.assertRaises(SystemExit) as ctx:
+                load_project(project_id)
+            self.assertIn("hybrid", str(ctx.exception))
 
     def test_list_projects_skips_malformed_yaml(self) -> None:
         """list_projects skips projects with malformed YAML instead of crashing."""
@@ -214,9 +242,14 @@ git:
             gate_dir = state_root() / "gate" / f"{project_id}.git"
             gate_dir.mkdir(parents=True, exist_ok=True)
 
-            with unittest.mock.patch(
-                "terok.lib.containers.project_state.subprocess.run"
-            ) as run_mock:
+            with (
+                unittest.mock.patch(
+                    "terok.lib.containers.project_state.subprocess.run"
+                ) as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.core.projects._get_global_git_config", return_value=None
+                ),
+            ):
                 run_mock.return_value.returncode = 0
                 state = get_project_state(project_id, gate_commit_provider=lambda pid: None)
 

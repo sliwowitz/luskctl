@@ -107,7 +107,10 @@ class TaskTests(unittest.TestCase):
             second_id = task_new(project_id)
             self.assertEqual(second_id, "2")
 
-            with unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock:
+            with (
+                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
+                mock_git_config(),
+            ):
                 run_mock.return_value.returncode = 0
                 task_delete(project_id, "1")
 

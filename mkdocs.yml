@@ -52,6 +52,7 @@ plugins:
       scripts:
         - docs/gen_ref_pages.py
         - docs/gen_quality_report.py
+        - docs/gen_config_reference.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
@@ -80,6 +81,7 @@ nav:
   - Home: index.md
   - User Guide:
     - Getting Started: usage.md
+    - Config Reference: config-reference.md
     - Container Layers: container-layers.md
     - Container Lifecycle: container-lifecycle.md
     - Shared Directories: shared-dirs.md

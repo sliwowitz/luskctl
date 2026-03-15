@@ -102,27 +102,72 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(cfg.is_experimental())
 
 
+class GlobalConfigValidationTests(unittest.TestCase):
+    """Tests for global config validation via _load_validated()."""
+
+    def test_gate_server_port_from_config(self) -> None:
+        """gate_server.port is read from validated config."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("gate_server:\n  port: 1234\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertEqual(cfg.get_gate_server_port(), 1234)
+
+    def test_invalid_config_falls_back_to_defaults(self) -> None:
+        """Invalid global config falls back to defaults (doesn't crash)."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            # Use a non-default port (9999) so we can prove the typoed section is ignored
+            # and the default (7860) is returned instead.
+            cfg_path.write_text("uii:\n  base_port: 9999\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                # Typoed key "uii" is rejected; fallback returns the real default 7860
+                self.assertEqual(cfg.get_ui_base_port(), 7860)
+
+    def test_logs_partial_streaming_from_config(self) -> None:
+        """logs.partial_streaming is read from validated config."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("logs:\n  partial_streaming: false\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertFalse(cfg.get_logs_partial_streaming())
+
+    def test_task_name_categories_single_string(self) -> None:
+        """tasks.name_categories coerces a single string to a list."""
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("tasks:\n  name_categories: animals\n", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertEqual(cfg.get_task_name_categories(), ["animals"])
+
+
 class ShieldBypassTests(unittest.TestCase):
     """Tests for get_shield_bypass_firewall_no_protection()."""
 
-    @unittest.mock.patch.object(cfg, "get_global_section", return_value={})
-    def test_default_false(self, _sec: unittest.mock.MagicMock) -> None:
+    def test_default_false(self) -> None:
         """Returns False when no shield config is set."""
-        self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())
-        _sec.assert_called_once_with("shield")
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text("", encoding="utf-8")
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())
 
-    @unittest.mock.patch.object(
-        cfg, "get_global_section", return_value={"bypass_firewall_no_protection": True}
-    )
-    def test_true_when_set(self, _sec: unittest.mock.MagicMock) -> None:
+    def test_true_when_set(self) -> None:
         """Returns True when bypass_firewall_no_protection is set."""
-        self.assertTrue(cfg.get_shield_bypass_firewall_no_protection())
-        _sec.assert_called_once_with("shield")
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text(
+                "shield:\n  bypass_firewall_no_protection: true\n", encoding="utf-8"
+            )
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertTrue(cfg.get_shield_bypass_firewall_no_protection())
 
-    @unittest.mock.patch.object(
-        cfg, "get_global_section", return_value={"bypass_firewall_no_protection": False}
-    )
-    def test_explicit_false(self, _sec: unittest.mock.MagicMock) -> None:
+    def test_explicit_false(self) -> None:
         """Returns False when explicitly set to false."""
-        self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())
-        _sec.assert_called_once_with("shield")
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = Path(td) / "config.yml"
+            cfg_path.write_text(
+                "shield:\n  bypass_firewall_no_protection: false\n", encoding="utf-8"
+            )
+            with unittest.mock.patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(cfg_path)}):
+                self.assertFalse(cfg.get_shield_bypass_firewall_no_protection())

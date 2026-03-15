@@ -7,7 +7,7 @@ import unittest.mock
 from terok.lib.containers.docker import build_images, generate_dockerfiles
 from terok.lib.core.config import build_root, set_experimental
 from terok.lib.core.images import base_dev_image
-from test_utils import project_env
+from test_utils import mock_git_config, project_env
 
 
 class DockerTests(unittest.TestCase):
@@ -127,6 +127,7 @@ git:
                 "terok.lib.containers.docker._image_exists",
                 return_value=image_exists,
             ),
+            mock_git_config(),
         ):
             build_images(project_id, **build_kwargs)
 
@@ -252,6 +253,7 @@ git:
                     "terok.lib.containers.docker._image_exists",
                     side_effect=l0_exists_only,
                 ),
+                mock_git_config(),
             ):
                 build_images(project_id)
 
