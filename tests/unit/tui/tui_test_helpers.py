@@ -16,6 +16,13 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     """Build stub modules for textual so we can import TUI code without it."""
     textual = types.ModuleType("textual")
 
+    class _StubObject:
+        """Capture constructor args for lightweight Textual test doubles."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self._stub_args = args
+            self._stub_kwargs = kwargs
+
     def on(*args: Any, **kwargs: Any) -> Callable[..., Any]:
         def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
             return fn
@@ -33,18 +40,12 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     screen_mod = types.ModuleType("textual.screen")
 
-    class ModalScreen:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
+    class ModalScreen(_StubObject):
         @classmethod
         def __class_getitem__(cls, item: type) -> type:
             return cls
 
-    class Screen:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
+    class Screen(_StubObject):
         @classmethod
         def __class_getitem__(cls, item: type) -> type:
             return cls
@@ -54,10 +55,7 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     app_mod = types.ModuleType("textual.app")
 
-    class App:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
+    class App(_StubObject):
         def get_system_commands(self, _screen: Any) -> Any:
             return iter(())
 
@@ -95,15 +93,12 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     containers_mod = types.ModuleType("textual.containers")
 
-    class _ContextStub:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
+    class _ContextStub(_StubObject):
         def __enter__(self) -> "_ContextStub":
             return self
 
         def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
-            pass
+            return None
 
     class Horizontal(_ContextStub):
         pass
@@ -120,13 +115,9 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     widgets_mod = types.ModuleType("textual.widgets")
 
-    class Button:
-        class Pressed:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class Button(_StubObject):
+        class Pressed(_StubObject):
+            """Stub button event that only captures construction args."""
 
     class Footer:
         pass
@@ -134,71 +125,64 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     class Header:
         pass
 
-    class ListItem:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class ListItem(_StubObject):
+        """Stub list item that only captures construction args."""
 
-    class ListView:
-        class Selected:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
+    class ListView(_StubObject):
+        class Selected(_StubObject):
+            """Stub selection event that only captures construction args."""
 
-        class Highlighted:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
+        class Highlighted(_StubObject):
+            """Stub highlight event that only captures construction args."""
 
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class Static(_StubObject):
+        """Stub static widget that only captures construction args."""
 
-    class Static:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class OptionList(_StubObject):
+        class OptionSelected(_StubObject):
+            """Stub option-selected event that only captures construction args."""
 
-    class OptionList:
-        class OptionSelected:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
-
-        class OptionHighlighted:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+        class OptionHighlighted(_StubObject):
+            """Stub option-highlighted event that only captures construction args."""
 
     class TextArea:
         text: str
 
         def __init__(self, *args: object, **kwargs: object) -> None:
             self.text = ""
+            self._stub_args = args
+            self._stub_kwargs = kwargs
 
         def focus(self) -> None:
-            pass
+            self.has_focus = True
 
-    class SelectionList:
+    class SelectionList(_StubObject):
         _items: tuple[object, ...]
         selected: list[object]
 
         def __init__(self, *items: object, **kwargs: object) -> None:
+            super().__init__(*items, **kwargs)
             self._items = items
             self.selected = []
 
         def focus(self) -> None:
-            pass
+            self.has_focus = True
 
         @classmethod
         def __class_getitem__(cls, item: type) -> type:
             return cls
 
-    class RichLog:
+    class RichLog(_StubObject):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
             self.auto_scroll = kwargs.get("auto_scroll", True)
+            self.entries: list[Any] = []
 
         def write(self, content: Any) -> None:
-            pass
+            self.entries.append(content)
 
         def clear(self) -> None:
-            pass
+            self.entries.clear()
 
     widgets_mod.Button = Button
     widgets_mod.Footer = Footer
@@ -213,9 +197,8 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     option_list_mod = types.ModuleType("textual.widgets.option_list")
 
-    class Option:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class Option(_StubObject):
+        """Stub option that only captures construction args."""
 
     option_list_mod.Option = Option
 
@@ -229,11 +212,8 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
     worker_mod = types.ModuleType("textual.worker")
 
     class Worker:
-        class StateChanged:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
-
-        pass
+        class StateChanged(_StubObject):
+            """Stub worker state-changed event that only captures args."""
 
     class WorkerState:
         SUCCESS = "success"
@@ -244,9 +224,8 @@ def build_textual_stubs() -> dict[str, types.ModuleType]:
 
     binding_mod = types.ModuleType("textual.binding")
 
-    class Binding:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+    class Binding(_StubObject):
+        """Stub binding that only captures construction args."""
 
     binding_mod.Binding = Binding
 
@@ -283,7 +262,7 @@ def _import_with_stubs(
 
     with mock.patch("importlib.util.find_spec", side_effect=_find_spec):
         with mock.patch.dict(sys.modules, stubs):
-            for mod_name in list(sys.modules):
+            for mod_name in tuple(sys.modules):
                 if mod_name.startswith("terok.tui"):
                     sys.modules.pop(mod_name, None)
             return [importlib.import_module(name) for name in module_names]

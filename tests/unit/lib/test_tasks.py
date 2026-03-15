@@ -1085,7 +1085,7 @@ class TestTask:
             with_config_file=True,
             with_gate=True,
         ):
-            env, volumes = build_task_env_and_volumes(
+            env, _ = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="10",
             )
@@ -1114,7 +1114,7 @@ class TestTask:
             with_config_file=True,
             with_gate=True,
         ):
-            env, volumes = build_task_env_and_volumes(
+            env, _ = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="11",
             )
@@ -1142,7 +1142,7 @@ class TestTask:
             with_config_file=True,
             with_gate=True,
         ):
-            env, volumes = build_task_env_and_volumes(
+            env, _ = build_task_env_and_volumes(
                 project=load_project(project_id),
                 task_id="12",
             )
