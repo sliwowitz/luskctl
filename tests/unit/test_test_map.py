@@ -32,7 +32,7 @@ def test_map_module() -> ModuleType:
 
 
 def test_collect_tests_filters_output_and_uses_integration_dir(
-    test_map_module,
+    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Collection should call pytest on the integration dir and keep only node IDs."""
@@ -84,7 +84,7 @@ def test_collect_tests_filters_output_and_uses_integration_dir(
 
 
 def test_collect_tests_raises_with_pytest_output_on_failure(
-    test_map_module,
+    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Collection failures should surface pytest output for debugging."""
@@ -102,7 +102,7 @@ def test_collect_tests_raises_with_pytest_output_on_failure(
         test_map_module.collect_tests()
 
 
-def test_group_by_directory_groups_root_and_subdirs(test_map_module) -> None:
+def test_group_by_directory_groups_root_and_subdirs(test_map_module: ModuleType) -> None:
     """Collected node IDs should be grouped by the first integration path segment."""
     groups = test_map_module._group_by_directory(
         [
@@ -121,7 +121,7 @@ def test_group_by_directory_groups_root_and_subdirs(test_map_module) -> None:
     }
 
 
-def test_sorted_dirs_orders_known_before_unknown(test_map_module) -> None:
+def test_sorted_dirs_orders_known_before_unknown(test_map_module: ModuleType) -> None:
     """Known directories should keep canonical order before unknown directories."""
     groups = {
         "launch": ["x"],
@@ -153,13 +153,13 @@ def test_sorted_dirs_orders_known_before_unknown(test_map_module) -> None:
         ),
     ],
 )
-def test_format_test_row(test_map_module, test_id: str, expected: str) -> None:
+def test_format_test_row(test_map_module: ModuleType, test_id: str, expected: str) -> None:
     """Formatted rows should expose test, class, and file columns."""
     assert test_map_module._format_test_row(test_id) == expected
 
 
 def test_generate_test_map_uses_collect_tests_when_needed(
-    test_map_module,
+    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The generator should collect tests on demand when none are provided."""
@@ -185,7 +185,7 @@ def test_generate_test_map_uses_collect_tests_when_needed(
 
 
 def test_generate_test_map_renders_directory_descriptions(
-    test_map_module,
+    test_map_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Directory descriptions should appear in their matching Markdown sections."""
