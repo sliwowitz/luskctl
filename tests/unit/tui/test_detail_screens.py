@@ -488,7 +488,6 @@ class TestTaskScreenKeyBinding:
         [
             pytest.param("N", False, "task_start_cli", None, True, id="shift-n"),
             pytest.param("A", False, "task_start_autopilot", None, True, id="shift-a"),
-            pytest.param("C", False, "new", None, None, id="shift-c"),
             pytest.param("H", True, "diff_head", None, None, id="shift-h"),
             pytest.param("P", True, "diff_prev", None, None, id="shift-p"),
             pytest.param("X", True, "delete", None, None, id="shift-x"),
@@ -681,73 +680,33 @@ class TestActionDispatch:
 class TestActionSelection:
     """Tests for task selection after task creation flows."""
 
-    def test_action_new_task_selects_created_task(self) -> None:
-        _, app_class = import_app()
-        instance = make_creation_app(app_class)
-        fake_task_new = mock.Mock(return_value="7")
-        action_globals = app_class.action_new_task.__globals__
-
-        with (
-            mock.patch.dict(
-                action_globals,
-                {"task_new": fake_task_new, "generate_task_name": lambda *a, **kw: "test-name"},
-            ),
-            mock.patch("builtins.input", return_value=""),
-        ):
-            run(app_class.action_new_task(instance))
-
-        assert instance._last_selected_tasks.get("proj1") == "7"
-        fake_task_new.assert_called_once_with("proj1", name="test-name")
-        instance._save_selection_state.assert_called_once()
-        instance.refresh_tasks.assert_awaited_once()
-
-    def test_action_new_task_calls_focus_helper(self) -> None:
-        _, app_class = import_app()
-        instance = make_creation_app(app_class)
-        fake_task_new = mock.Mock(return_value="8")
-        action_globals = app_class.action_new_task.__globals__
-        original_focus = instance._focus_task_after_creation
-        instance._focus_task_after_creation = mock.Mock(wraps=original_focus)
-
-        with (
-            mock.patch.dict(
-                action_globals,
-                {"task_new": fake_task_new, "generate_task_name": lambda *a, **kw: "test-name"},
-            ),
-            mock.patch("builtins.input", return_value=""),
-        ):
-            run(app_class.action_new_task(instance))
-
-        fake_task_new.assert_called_once_with("proj1", name="test-name")
-        instance._focus_task_after_creation.assert_called_once_with("proj1", "8")
-        instance._save_selection_state.assert_called_once()
-        instance.refresh_tasks.assert_awaited_once()
-
     def test_task_start_cli_selects_created_task(self) -> None:
         _, app_class = import_app()
         instance = make_creation_app(app_class)
+        instance.run_worker = mock.Mock()
+        instance.push_screen = mock.AsyncMock()
         fake_task_new = mock.Mock(return_value="42")
-        fake_task_run_cli = mock.Mock()
-        action_globals = app_class._action_task_start_cli.__globals__
+        action_globals = app_class._start_cli_task_background.__globals__
 
-        with (
-            mock.patch.dict(
-                action_globals,
-                {
-                    "task_new": fake_task_new,
-                    "task_run_cli": fake_task_run_cli,
-                    "generate_task_name": lambda *a, **kw: "test-name",
-                },
-            ),
-            mock.patch("builtins.input", return_value=""),
+        fake_project = mock.Mock()
+        fake_project.default_login = None
+        fake_load_project = mock.Mock(return_value=fake_project)
+
+        with mock.patch.dict(
+            action_globals,
+            {
+                "task_new": fake_task_new,
+                "load_project": fake_load_project,
+                "container_name": lambda *a: "terok-proj1-cli-42",
+            },
         ):
-            run(app_class._action_task_start_cli(instance))
+            run(app_class._start_cli_task_background(instance, "test-name"))
 
         assert instance._last_selected_tasks.get("proj1") == "42"
         fake_task_new.assert_called_once_with("proj1", name="test-name")
-        fake_task_run_cli.assert_called_once_with("proj1", "42")
         instance._save_selection_state.assert_called_once()
-        instance.refresh_tasks.assert_awaited_once()
+        instance.run_worker.assert_called_once()
+        instance.refresh_tasks.assert_awaited()
 
     def test_task_start_web_selects_created_task(self) -> None:
         from terok.lib.core.config import set_experimental
