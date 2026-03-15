@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -89,7 +89,7 @@ def test_detect_shell_rejects_unknown_shell(
 )
 @patch("terok.cli.commands.completions.shellcode", return_value="# completion")
 def test_install_completions_writes_to_selected_target(
-    _mock_shellcode,
+    _mock_shellcode: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     requested_shell: str | None,
@@ -112,7 +112,7 @@ def test_install_completions_writes_to_selected_target(
 
 
 def test_is_completion_installed_returns_false_when_nothing_found(
-    patch_completion_locations,
+    patch_completion_locations: Callable[..., None],
 ) -> None:
     """Completion detection is false when no autoload file or RC marker exists."""
     patch_completion_locations()
@@ -128,7 +128,7 @@ def test_is_completion_installed_returns_false_when_nothing_found(
     ],
 )
 def test_is_completion_installed_detects_autoload_files(
-    patch_completion_locations,
+    patch_completion_locations: Callable[..., None],
     tmp_path: Path,
     attr: str,
     filename: str,
@@ -140,7 +140,7 @@ def test_is_completion_installed_detects_autoload_files(
 
 
 def test_is_completion_installed_detects_rc_marker(
-    patch_completion_locations,
+    patch_completion_locations: Callable[..., None],
     tmp_path: Path,
 ) -> None:
     """Completion detection succeeds when a shell RC file has the registration marker."""

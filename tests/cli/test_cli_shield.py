@@ -15,8 +15,8 @@ from terok_shield import ExecError
 from terok.cli.commands.shield import _resolve_task, dispatch, register
 from testfs import MOCK_TASK_DIR_1
 
-MISSING = object()
-"""Sentinel used when an argparse attribute should be absent."""
+MISSING: object = object()
+# Sentinel used when an argparse attribute should be absent.
 
 
 @pytest.fixture()
