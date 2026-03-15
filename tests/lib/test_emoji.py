@@ -19,7 +19,7 @@ from terok.lib.containers.task_display import (
     WEB_BACKEND_DISPLAY,
 )
 from terok.lib.containers.work_status import WORK_STATUS_DISPLAY
-from terok.lib.util.emoji import is_emoji_enabled, render_emoji, set_emoji_enabled
+from terok.lib.util.emoji import EmojiInfo, is_emoji_enabled, render_emoji, set_emoji_enabled
 
 
 class _FakeInfo:
@@ -87,7 +87,7 @@ def test_set_emoji_enabled_toggles_global_state() -> None:
 @pytest.mark.parametrize(("name", "infos"), EMOJI_COLLECTIONS)
 def test_project_display_emojis_are_natively_two_cells(
     name: str,
-    infos: Iterable[object],
+    infos: Iterable[EmojiInfo],
 ) -> None:
     """Every registered project emoji is natively two cells wide."""
     assert all(is_width_two(info.emoji) for info in infos), name
@@ -97,7 +97,10 @@ def test_project_display_emojis_are_natively_two_cells(
 
 
 @pytest.mark.parametrize(("name", "infos"), LABEL_COLLECTIONS)
-def test_display_entries_have_non_empty_labels(name: str, infos: Iterable[object]) -> None:
+def test_display_entries_have_non_empty_labels(
+    name: str,
+    infos: Iterable[EmojiInfo],
+) -> None:
     """Collections used in ``--no-emoji`` mode expose non-empty labels."""
     assert all(info.label for info in infos), name
 

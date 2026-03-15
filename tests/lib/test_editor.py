@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,10 +15,14 @@ import pytest
 from terok.ui_utils.editor import _resolve_editor, open_in_editor
 
 
-def which_for(*available: str):
+def which_for(*available: str) -> Callable[[str], str | None]:
     """Return a ``shutil.which`` side effect for the given available commands."""
     available_set = set(available)
-    return lambda cmd: cmd if cmd in available_set else None
+
+    def _which(cmd: str) -> str | None:
+        return cmd if cmd in available_set else None
+
+    return _which
 
 
 def config_path(tmp_path: Path) -> Path:
@@ -43,9 +48,9 @@ def config_path(tmp_path: Path) -> Path:
     ],
 )
 def test_resolve_editor_prefers_env_then_fallbacks(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     editor: str,
-    which_side_effect,
+    which_side_effect: Callable[[str], str | None],
     expected: str,
 ) -> None:
     """Editor resolution prefers ``$EDITOR`` and otherwise falls back to common editors."""
@@ -54,7 +59,9 @@ def test_resolve_editor_prefers_env_then_fallbacks(
         assert _resolve_editor() == expected
 
 
-def test_resolve_editor_returns_none_when_no_editor(monkeypatch) -> None:
+def test_resolve_editor_returns_none_when_no_editor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Editor resolution returns ``None`` when nothing usable is found."""
     monkeypatch.setenv("EDITOR", "")
     with patch("shutil.which", return_value=None):

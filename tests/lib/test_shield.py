@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from terok_shield import (
+    USER_HOOKS_DIR,
     EnvironmentCheck,
     NftNotFoundError,
     Shield,
@@ -34,7 +35,7 @@ from terok.lib.security.shield import (
     status,
     up,
 )
-from testfs import MOCK_CONFIG_ROOT, MOCK_TASK_DIR
+from testfs import MOCK_BASE, MOCK_CONFIG_ROOT, MOCK_TASK_DIR
 from testnet import GATE_PORT
 
 _BYPASS_PATCH = "terok.lib.security.shield.get_shield_bypass_firewall_no_protection"
@@ -46,14 +47,6 @@ def _bypass_disabled_by_default() -> Iterator[None]:
     """Keep normal-path shield tests deterministic unless explicitly overridden."""
     with patch(_BYPASS_PATCH, return_value=False):
         yield
-
-
-def collect_warning_messages(func: Callable[[], object]) -> list[str]:
-    """Run *func* and return all emitted warning messages."""
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        func()
-    return [str(item.message) for item in caught]
 
 
 def make_mock_shield(
@@ -244,11 +237,9 @@ def test_bypass_makes_down_and_up_noops(
 @patch(_BYPASS_PATCH, return_value=True)
 def test_bypass_pre_start_returns_empty_with_warning(_bypass: MagicMock) -> None:
     """Bypass mode returns no pre-start Podman args and warns loudly."""
-    assert pre_start("ctr", MOCK_TASK_DIR) == []
-    assert any(
-        _BYPASS_WARNING in message
-        for message in collect_warning_messages(lambda: pre_start("ctr", MOCK_TASK_DIR))
-    )
+    with pytest.warns(UserWarning) as caught:
+        assert pre_start("ctr", MOCK_TASK_DIR) == []
+    assert any(_BYPASS_WARNING in str(item.message) for item in caught)
 
 
 @patch(_BYPASS_PATCH, return_value=True)
@@ -364,11 +355,14 @@ def test_run_setup(
         if expected_call is None and environment.hooks != "per-container":
             with pytest.raises(SystemExit, match=expected_message or ""):
                 run_setup(**kwargs)
+            mock_direct.assert_not_called()
+            mock_print.assert_not_called()
             return
 
         run_setup(**kwargs)
 
     if expected_call is None:
+        mock_direct.assert_not_called()
         printed = " ".join(str(call) for call in mock_print.call_args_list)
         assert expected_message is not None and expected_message in printed.lower()
     else:
@@ -382,18 +376,27 @@ def test_run_setup(
         pytest.param(True, True, False, id="root-mode"),
     ],
 )
+@patch("terok.lib.security.shield.system_hooks_dir")
 @patch("terok.lib.security.shield.ensure_containers_conf_hooks_dir")
 @patch("terok.lib.security.shield.setup_global_hooks")
 def test_setup_hooks_direct(
     mock_setup: MagicMock,
     mock_conf: MagicMock,
+    mock_system_hooks_dir: MagicMock,
     root: bool,
     expected_use_sudo: bool,
     should_configure_user_hooks: bool,
 ) -> None:
     """Hook installation chooses the correct target and user/root post-processing."""
+    expected_target = (MOCK_BASE / "system-hooks") if root else Path(USER_HOOKS_DIR).expanduser()
+    mock_system_hooks_dir.return_value = expected_target
+
     setup_hooks_direct(root=root)
 
-    _, kwargs = mock_setup.call_args
+    args, kwargs = mock_setup.call_args
+    assert args == (expected_target,)
     assert kwargs.get("use_sudo", False) is expected_use_sudo
-    assert mock_conf.called is should_configure_user_hooks
+    if should_configure_user_hooks:
+        mock_conf.assert_called_once_with(expected_target)
+    else:
+        mock_conf.assert_not_called()

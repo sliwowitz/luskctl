@@ -15,6 +15,9 @@ from terok_shield import ExecError
 from terok.cli.commands.shield import _resolve_task, dispatch, register
 from testfs import MOCK_TASK_DIR_1
 
+MISSING = object()
+"""Sentinel used when an argparse attribute should be absent."""
+
 
 @pytest.fixture()
 def shield_parser() -> argparse.ArgumentParser:
@@ -75,7 +78,7 @@ def shield_parser() -> argparse.ArgumentParser:
         ),
         pytest.param(
             ["shield", "profiles"],
-            {"shield_cmd": "profiles", "project_id": None},
+            {"shield_cmd": "profiles", "project_id": MISSING},
             id="profiles",
         ),
         pytest.param(
@@ -98,12 +101,12 @@ def shield_parser() -> argparse.ArgumentParser:
 def test_register_parses_shield_subcommands(
     shield_parser: argparse.ArgumentParser,
     argv: list[str],
-    expected: dict[str, object | None],
+    expected: dict[str, object],
 ) -> None:
     """Registered shield subcommands parse the expected argument shapes."""
     args = shield_parser.parse_args(argv)
     for key, value in expected.items():
-        if value is None:
+        if value is MISSING:
             assert not hasattr(args, key)
         else:
             assert getattr(args, key) == value
@@ -138,6 +141,7 @@ def test_dispatch_status_without_task(mock_make: MagicMock) -> None:
     with patch("sys.stdout", new_callable=StringIO) as out:
         assert dispatch(argparse.Namespace(cmd="shield", shield_cmd="status"))
 
+    mock_shield.status.assert_called_once_with()
     assert "Mode" in out.getvalue()
     assert "hook" in out.getvalue()
 

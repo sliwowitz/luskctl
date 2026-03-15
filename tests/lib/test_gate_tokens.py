@@ -27,8 +27,16 @@ from testfs import FAKE_TEROK_STATE_DIR, MISSING_TOKENS_PATH, NONEXISTENT_TOKENS
 @contextmanager
 def patched_token_file(path: Path | None = None) -> Iterator[Path]:
     """Patch ``token_file_path()`` to point at a temporary JSON file."""
+    if path is not None:
+        token_path = path
+        with unittest.mock.patch(
+            "terok.lib.security.gate_tokens.token_file_path", return_value=token_path
+        ):
+            yield token_path
+        return
+
     with tempfile.TemporaryDirectory() as td:
-        token_path = path or Path(td) / "tokens.json"
+        token_path = Path(td) / "tokens.json"
         with unittest.mock.patch(
             "terok.lib.security.gate_tokens.token_file_path", return_value=token_path
         ):

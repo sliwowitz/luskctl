@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import unittest.mock
 from collections.abc import Callable
@@ -22,6 +23,11 @@ from terok.tui.shell_launch import (
 from testfs import FAKE_TMUX_SOCKET
 
 SHELL_COMMAND = ["podman", "exec", "-it", "c1", "bash"]
+
+
+def _shell_payload(command: list[str]) -> str:
+    """Return the shell-quoted payload string used by launcher helpers."""
+    return " ".join(shlex.quote(part) for part in command)
 
 
 def terminal_env(
@@ -105,6 +111,7 @@ class TestTmuxNewWindow:
         ids=["success", "failure", "tmux-not-found"],
     )
     def test_tmux_new_window(self, side_effect: object, expected: bool) -> None:
+        expected_argv = ["tmux", "new-window", "-n", "login:c1", _shell_payload(SHELL_COMMAND)]
         with unittest.mock.patch("terok.tui.shell_launch.subprocess.run") as mock_run:
             if isinstance(side_effect, Exception):
                 mock_run.side_effect = side_effect
@@ -112,51 +119,56 @@ class TestTmuxNewWindow:
                 mock_run.return_value = side_effect
             result = tmux_new_window(SHELL_COMMAND, title="login:c1")
         assert result is expected
-        assert mock_run.call_args.kwargs.get("check") is True
-        if expected:
-            call_args = mock_run.call_args[0][0]
-            assert call_args[:2] == ["tmux", "new-window"]
-            assert "-n" in call_args
-            assert "login:c1" in call_args
+        mock_run.assert_called_once_with(expected_argv, check=True)
 
 
 class TestSpawnTerminal:
     """Tests for spawn_terminal_with_command."""
 
     @pytest.mark.parametrize(
-        ("env", "parent_match", "title", "expected_binary", "expected_args", "unexpected_args"),
+        ("env", "parent_match", "title", "expected_argv"),
         [
             (
                 terminal_env("gnome-terminal"),
                 False,
                 None,
-                "gnome-terminal",
-                ["--tab", "--"],
-                ["--window", "--title"],
+                ["gnome-terminal", "--tab", "--", "bash", "-c", _shell_payload(SHELL_COMMAND)],
             ),
             (
                 terminal_env("gnome-terminal"),
                 False,
                 "login:c1",
-                "gnome-terminal",
-                ["--tab", "--", "--title", "login:c1"],
-                ["--window"],
+                [
+                    "gnome-terminal",
+                    "--tab",
+                    "--title",
+                    "login:c1",
+                    "--",
+                    "bash",
+                    "-c",
+                    _shell_payload(SHELL_COMMAND),
+                ],
             ),
             (
                 terminal_env("konsole"),
                 False,
                 None,
-                "konsole",
-                ["--new-tab"],
-                ["--title"],
+                ["konsole", "--new-tab", "-e", "bash", "-c", _shell_payload(SHELL_COMMAND)],
             ),
             (
                 terminal_env("konsole"),
                 False,
                 "login:c1",
-                "konsole",
-                ["--new-tab", "--title", "login:c1"],
-                [],
+                [
+                    "konsole",
+                    "--new-tab",
+                    "--title",
+                    "login:c1",
+                    "-e",
+                    "bash",
+                    "-c",
+                    _shell_payload(SHELL_COMMAND),
+                ],
             ),
         ],
         ids=["gnome", "gnome-with-title", "konsole", "konsole-with-title"],
@@ -166,9 +178,7 @@ class TestSpawnTerminal:
         env: dict[str, str],
         parent_match: bool,
         title: str | None,
-        expected_binary: str,
-        expected_args: list[str],
-        unexpected_args: list[str],
+        expected_argv: list[str],
     ) -> None:
         with (
             unittest.mock.patch.dict("os.environ", env, clear=True),
@@ -180,12 +190,7 @@ class TestSpawnTerminal:
         ):
             result = spawn_terminal_with_command(SHELL_COMMAND, title=title)
         assert result
-        call_args = mock_popen.call_args[0][0]
-        assert call_args[0] == expected_binary
-        for arg in expected_args:
-            assert arg in call_args
-        for arg in unexpected_args:
-            assert arg not in call_args
+        mock_popen.assert_called_once_with(expected_argv, start_new_session=True)
 
     @pytest.mark.parametrize(
         ("env", "parent_match"),
@@ -203,8 +208,10 @@ class TestSpawnTerminal:
                 "terok.tui.shell_launch._parent_process_has_name",
                 return_value=parent_match,
             ),
+            unittest.mock.patch("terok.tui.shell_launch.subprocess.Popen") as mock_popen,
         ):
             assert not spawn_terminal_with_command(["echo", "hello"])
+        mock_popen.assert_not_called()
 
     @pytest.mark.parametrize(
         "side_effect",

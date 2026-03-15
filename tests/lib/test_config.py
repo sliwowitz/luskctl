@@ -28,13 +28,19 @@ def write_config(tmp_path: Path, content: str) -> Path:
     return path
 
 
-def test_global_config_search_paths_respects_env_override(monkeypatch, tmp_path: Path) -> None:
+def test_global_config_search_paths_respects_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yml"
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(config_path))
     assert cfg.global_config_search_paths() == [config_path.expanduser().resolve()]
 
 
-def test_global_config_path_prefers_xdg(monkeypatch, tmp_path: Path) -> None:
+def test_global_config_path_prefers_xdg(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     monkeypatch.delenv("TEROK_CONFIG_FILE", raising=False)
     config_file = tmp_path / "terok" / "config.yml"
     config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +70,7 @@ def test_global_config_path_prefers_xdg(monkeypatch, tmp_path: Path) -> None:
     ids=["state-env", "state-config", "projects-config", "envs-config"],
 )
 def test_path_resolution(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     env_var: str,
     config_text: str | None,
@@ -81,7 +87,10 @@ def test_path_resolution(
     assert resolver() == expected_path.resolve()
 
 
-def test_ui_base_port_is_read_from_global_config(monkeypatch, tmp_path: Path) -> None:
+def test_ui_base_port_is_read_from_global_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "ui:\n  base_port: 8123\n")))
     assert cfg.get_ui_base_port() == 8123
 
@@ -95,7 +104,12 @@ def test_ui_base_port_is_read_from_global_config(monkeypatch, tmp_path: Path) ->
     ],
     ids=["true", "default-false", "explicit-false"],
 )
-def test_tui_default_tmux(monkeypatch, tmp_path: Path, config_text: str, expected: bool) -> None:
+def test_tui_default_tmux(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    config_text: str,
+    expected: bool,
+) -> None:
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, config_text)))
     assert cfg.get_tui_default_tmux() is expected
 
@@ -118,7 +132,7 @@ def test_experimental_flag_roundtrip() -> None:
     ids=["default-false", "enabled", "explicit-false"],
 )
 def test_get_shield_bypass_firewall_no_protection(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     section: dict[str, bool],
     expected: bool,

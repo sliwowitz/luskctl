@@ -53,7 +53,7 @@ def install_targets(tmp_path: Path) -> dict[str, Path]:
     ],
 )
 def test_detect_shell_returns_supported_shell(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     shell: str,
     expected: str,
 ) -> None:
@@ -66,7 +66,10 @@ def test_detect_shell_returns_supported_shell(
     "shell",
     [pytest.param("/bin/tcsh", id="unsupported"), pytest.param(None, id="missing")],
 )
-def test_detect_shell_rejects_unknown_shell(monkeypatch, shell: str | None) -> None:
+def test_detect_shell_rejects_unknown_shell(
+    monkeypatch: pytest.MonkeyPatch,
+    shell: str | None,
+) -> None:
     """Unsupported or missing ``$SHELL`` values cause a clean CLI exit."""
     if shell is None:
         monkeypatch.delenv("SHELL", raising=False)
@@ -87,7 +90,7 @@ def test_detect_shell_rejects_unknown_shell(monkeypatch, shell: str | None) -> N
 @patch("terok.cli.commands.completions.shellcode", return_value="# completion")
 def test_install_completions_writes_to_selected_target(
     _mock_shellcode,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     requested_shell: str | None,
     detected_shell: str | None,
