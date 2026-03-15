@@ -10,7 +10,6 @@ Shield class with an injected ``MockRunner`` (no subprocess calls).
 Uses the per-task Shield class API (state_dir from ShieldConfig).
 """
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +22,7 @@ ShieldMode = terok_shield.ShieldMode
 from tests.testnet import GATE_PORT, HOST_ALIAS_LOOPBACK, HOST_ALIAS_SLIRP
 
 from .conftest import MockRunner
+from .helpers import TerokShieldIntegrationEnv
 
 pytestmark = pytest.mark.needs_host_features
 
@@ -91,10 +91,10 @@ class TestPreStartIntegration:
         host_val = args[args.index("--add-host") + 1]
         assert host_val == HOST_ALIAS_SLIRP
 
-    def test_multiple_loopback_ports(self, shield_env: dict[str, Path]) -> None:
+    def test_multiple_loopback_ports(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """Multiple loopback ports each get a -T flag in pasta arg."""
         config = ShieldConfig(
-            state_dir=shield_env["state_dir"],
+            state_dir=shield_env.state_dir,
             mode=ShieldMode.HOOK,
             default_profiles=("dev-standard",),
             loopback_ports=(GATE_PORT, 8080),
@@ -104,10 +104,10 @@ class TestPreStartIntegration:
         assert f"-T,{GATE_PORT}" in network_val
         assert "-T,8080" in network_val
 
-    def test_no_loopback_ports(self, shield_env: dict[str, Path]) -> None:
+    def test_no_loopback_ports(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """No loopback ports yields bare 'pasta:' without -T flags."""
         config = ShieldConfig(
-            state_dir=shield_env["state_dir"],
+            state_dir=shield_env.state_dir,
             mode=ShieldMode.HOOK,
             default_profiles=("dev-standard",),
             loopback_ports=(),
@@ -116,10 +116,10 @@ class TestPreStartIntegration:
         network_val = args[args.index("--network") + 1]
         assert network_val.startswith("pasta")
 
-    def test_rootful_no_network_args(self, shield_env: dict[str, Path]) -> None:
+    def test_rootful_no_network_args(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """Root mode omits --network and --add-host but keeps annotations and cap-drops."""
         config = ShieldConfig(
-            state_dir=shield_env["state_dir"],
+            state_dir=shield_env.state_dir,
             mode=ShieldMode.HOOK,
             default_profiles=("dev-standard",),
             loopback_ports=(GATE_PORT,),
@@ -173,14 +173,16 @@ class TestProfilesIntegration:
 class TestTaskRunnerShieldIntegration:
     """Verify the full path from _run_container through real shield."""
 
-    def test_run_container_includes_shield_args(self, shield_env: dict[str, Path]) -> None:
+    def test_run_container_includes_shield_args(
+        self, shield_env: TerokShieldIntegrationEnv
+    ) -> None:
         """_run_container() injects real shield args into the podman command."""
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
-        task_dir = shield_env["task_dir"]
+        task_dir = shield_env.task_dir
         with (
             patch("terok.lib.security.shield.get_global_section", return_value={}),
             patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT),
@@ -199,7 +201,7 @@ class TestTaskRunnerShieldIntegration:
                 "terok.lib.security.shield.make_shield",
                 return_value=Shield(
                     ShieldConfig(
-                        state_dir=shield_env["state_dir"],
+                        state_dir=shield_env.state_dir,
                         mode=ShieldMode.HOOK,
                         default_profiles=("dev-standard",),
                         loopback_ports=(GATE_PORT,),
@@ -232,14 +234,16 @@ class TestTaskRunnerShieldIntegration:
         secopt_values = [captured_cmd[i + 1] for i in secopt_indices]
         assert "no-new-privileges" in secopt_values
 
-    def test_unrestricted_skips_no_new_privileges(self, shield_env: dict[str, Path]) -> None:
+    def test_unrestricted_skips_no_new_privileges(
+        self, shield_env: TerokShieldIntegrationEnv
+    ) -> None:
         """Unrestricted containers must NOT set no-new-privileges (sudo needed)."""
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
-        task_dir = shield_env["task_dir"]
+        task_dir = shield_env.task_dir
         with (
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
@@ -273,14 +277,16 @@ class TestTaskRunnerShieldIntegration:
 
         assert "--security-opt" not in captured_cmd
 
-    def _run_bypass_container(self, shield_env: dict[str, Path], network_mode: str) -> list[str]:
+    def _run_bypass_container(
+        self, shield_env: TerokShieldIntegrationEnv, network_mode: str
+    ) -> list[str]:
         """Helper: run _run_container with bypass active and given network mode."""
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
-        task_dir = shield_env["task_dir"]
+        task_dir = shield_env.task_dir
         with (
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
@@ -325,7 +331,7 @@ class TestTaskRunnerShieldIntegration:
             )
         return captured_cmd
 
-    def test_bypass_uses_pasta_networking(self, shield_env: dict[str, Path]) -> None:
+    def test_bypass_uses_pasta_networking(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """Bypass on pasta: injects --network=pasta:-T,<port> and --add-host."""
         cmd = self._run_bypass_container(shield_env, "pasta")
         assert f"pasta:-T,{GATE_PORT}" in cmd
@@ -336,7 +342,9 @@ class TestTaskRunnerShieldIntegration:
         assert "--annotation" not in cmd
         assert "--cap-drop" not in cmd
 
-    def test_bypass_uses_slirp4netns_networking(self, shield_env: dict[str, Path]) -> None:
+    def test_bypass_uses_slirp4netns_networking(
+        self, shield_env: TerokShieldIntegrationEnv
+    ) -> None:
         """Bypass on slirp4netns: injects --network=slirp4netns:... and --add-host."""
         cmd = self._run_bypass_container(shield_env, "slirp4netns")
         assert "slirp4netns:allow_host_loopback=true" in cmd

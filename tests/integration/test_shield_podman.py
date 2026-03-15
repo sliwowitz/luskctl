@@ -4,86 +4,58 @@
 """Tier 2 integration tests: full end-to-end with real Podman.
 
 These tests require ``podman`` on PATH and are auto-skipped when it
-is absent.  Some additionally require root for nftables operations.
+is absent. Some additionally require root for nftables operations.
 
 Uses the per-task Shield class API.
 """
-
-import json
-import subprocess
-import uuid
 
 import pytest
 
 terok_shield = pytest.importorskip("terok_shield")
 Shield = terok_shield.Shield
 
-from tests.testnet import EGRESS_DOMAIN, TEST_EGRESS_URL, TEST_IP_RFC5737
+from tests.testnet import ALLOWED_TARGET_DOMAIN, ALLOWED_TARGET_HTTP, TEST_IP_RFC5737
 
-from .conftest import podman_missing, skip_if_no_root
+from .conftest import nft_missing, podman_missing, skip_if_no_root
+from .helpers import assert_blocked, assert_reachable, inspect_container_json
 
 pytestmark = pytest.mark.needs_podman
-
-
-# ── Fixtures ──────────────────────────────────────────────
-
-
-@pytest.fixture()
-def podman_container(real_shield: Shield) -> str:
-    """Start a real Podman container with shield args, yield its name, cleanup."""
-    cname = f"terok-shield-integ-{uuid.uuid4().hex[:8]}"
-    args = real_shield.pre_start(cname)
-
-    cmd = ["podman", "run", "-d", "--name", cname, *args, "alpine:latest", "sleep", "300"]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, timeout=60)
-    except BaseException:
-        subprocess.run(["podman", "rm", "-f", cname], capture_output=True)
-        raise
-
-    yield cname
-
-    subprocess.run(["podman", "rm", "-f", cname], capture_output=True)
 
 
 # ── TestShieldEndToEnd ───────────────────────────────────
 
 
 @podman_missing
+@nft_missing
 class TestShieldEndToEnd:
     """End-to-end tests with a real container."""
 
-    def test_container_starts_with_annotations(self, podman_container: str) -> None:
+    def test_container_starts_with_annotations(self, shielded_container: str) -> None:
         """Inspect container and verify shield annotations are present."""
-        result = subprocess.run(
-            ["podman", "inspect", podman_container, "--format", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
-        info = json.loads(result.stdout)
-        annotations = info[0].get("Config", {}).get("Annotations", {})
+        container_info = inspect_container_json(shielded_container)
+        annotations = container_info.get("Config", {}).get("Annotations", {})
         assert "terok.shield.profiles" in annotations
         assert "dev-standard" in annotations["terok.shield.profiles"]
 
     @skip_if_no_root
-    def test_shield_rules_returns_ruleset(self, podman_container: str, real_shield: Shield) -> None:
+    def test_shield_rules_returns_ruleset(
+        self, shielded_container: str, real_shield: Shield
+    ) -> None:
         """shield.rules returns a non-empty ruleset containing terok_shield."""
-        output = real_shield.rules(podman_container)
+        output = real_shield.rules(shielded_container)
         assert "terok_shield" in output
 
     @skip_if_no_root
-    def test_allow_then_deny(self, podman_container: str, real_shield: Shield) -> None:
+    def test_allow_then_deny(self, shielded_container: str, real_shield: Shield) -> None:
         """shield.allow adds an IP; shield.deny removes it."""
-        allowed = real_shield.allow(podman_container, TEST_IP_RFC5737)
+        allowed = real_shield.allow(shielded_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in allowed
-        rules_after_allow = real_shield.rules(podman_container)
+        rules_after_allow = real_shield.rules(shielded_container)
         assert TEST_IP_RFC5737 in rules_after_allow
 
-        denied = real_shield.deny(podman_container, TEST_IP_RFC5737)
+        denied = real_shield.deny(shielded_container, TEST_IP_RFC5737)
         assert TEST_IP_RFC5737 in denied
-        rules_after_deny = real_shield.rules(podman_container)
+        rules_after_deny = real_shield.rules(shielded_container)
         assert TEST_IP_RFC5737 not in rules_after_deny
 
 
@@ -91,46 +63,18 @@ class TestShieldEndToEnd:
 
 
 @podman_missing
+@nft_missing
 @skip_if_no_root
+@pytest.mark.needs_internet
+@pytest.mark.usefixtures("_verify_connectivity")
 class TestShieldEgress:
     """Egress filtering tests (requires network + root)."""
 
-    def test_egress_blocked_by_default(self, podman_container: str) -> None:
+    def test_egress_blocked_by_default(self, shielded_container: str) -> None:
         """Container cannot reach an external host by default."""
-        result = subprocess.run(
-            [
-                "podman",
-                "exec",
-                podman_container,
-                "wget",
-                "-q",
-                "-O",
-                "/dev/null",
-                "--timeout=5",
-                TEST_EGRESS_URL,
-            ],
-            capture_output=True,
-            timeout=30,
-        )
-        assert result.returncode != 0
+        assert_blocked(shielded_container, ALLOWED_TARGET_HTTP, timeout=5)
 
-    def test_egress_allowed_after_allow(self, podman_container: str, real_shield: Shield) -> None:
+    def test_egress_allowed_after_allow(self, shielded_container: str, real_shield: Shield) -> None:
         """Container can reach a host after shield.allow."""
-        real_shield.allow(podman_container, EGRESS_DOMAIN)
-
-        result = subprocess.run(
-            [
-                "podman",
-                "exec",
-                podman_container,
-                "wget",
-                "-q",
-                "-O",
-                "/dev/null",
-                "--timeout=10",
-                TEST_EGRESS_URL,
-            ],
-            capture_output=True,
-            timeout=45,
-        )
-        assert result.returncode == 0
+        real_shield.allow(shielded_container, ALLOWED_TARGET_DOMAIN)
+        assert_reachable(shielded_container, ALLOWED_TARGET_HTTP, timeout=10)

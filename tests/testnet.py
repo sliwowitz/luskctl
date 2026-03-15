@@ -15,6 +15,15 @@ TEST_IP = "198.51.100.42"
 TEST_IP_RFC5737 = "203.0.113.42"
 """RFC 5737 TEST-NET-3 address for firewall allow/deny tests."""
 
+ALLOWED_TARGET_IPS = ["1.1.1.1", "1.0.0.1"]
+"""Cloudflare anycast pair used for real egress integration tests."""
+
+ALLOWED_TARGET_DOMAIN = "one.one.one.one"
+"""Cloudflare DNS hostname that resolves to ``ALLOWED_TARGET_IPS``."""
+
+ALLOWED_TARGET_HTTP = "http://1.1.1.1/"
+"""HTTP target used for real egress reachability checks in integration tests."""
+
 SLIRP_GATEWAY = "10.0.2.2"
 """Default slirp4netns gateway address."""
 
