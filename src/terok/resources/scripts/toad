@@ -26,7 +26,9 @@ blablador.helmholtz.de"
 TOAD_AGENTS_DIR="${HOME}/.local/share/uv/tools/batrachian-toad/lib/python3.14/site-packages/toad/data/agents"
 BLABLADOR_TOML="${TOAD_AGENTS_DIR}/blablador.helmholtz.de.toml"
 if [[ -d "${TOAD_AGENTS_DIR}" ]] && [[ ! -f "${BLABLADOR_TOML}" ]]; then
-  cat > "${BLABLADOR_TOML}" << 'TOML_EOF'
+  _toml_tmp=$(mktemp "${BLABLADOR_TOML}.XXXXXX" 2>/dev/null) || true
+  if [[ -n "${_toml_tmp}" ]]; then
+    cat > "${_toml_tmp}" << 'TOML_EOF'
 identity = "blablador.helmholtz.de"
 name = "Blablador"
 short_name = "blablador"
@@ -57,6 +59,9 @@ Requires BLABLADOR_API_KEY to be set.
 command = "echo 'Blablador is pre-installed in terok containers.'"
 description = "Already installed"
 TOML_EOF
+    mv -f "${_toml_tmp}" "${BLABLADOR_TOML}" 2>/dev/null \
+      || { echo "Warning: could not install Blablador agent TOML" >&2; rm -f "${_toml_tmp}"; }
+  fi
 fi
 
 if command -v jq >/dev/null 2>&1; then
