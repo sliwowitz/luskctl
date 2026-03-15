@@ -352,7 +352,12 @@ def write_fake_podman(bin_dir: Path, state_path: Path) -> Path:
                 raise SystemExit(0)
 
             if args and args[0] == "run":
-                name = args[args.index("--name") + 1]
+                try:
+                    name = args[args.index("--name") + 1]
+                except (ValueError, IndexError):
+                    save_state(state)
+                    print("fake podman: missing --name for run", file=sys.stderr)
+                    raise SystemExit(1)
                 state["containers"][name] = {{
                     "status": "running",
                     "marker": ready_marker(args),

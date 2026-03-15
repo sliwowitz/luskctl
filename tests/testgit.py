@@ -52,7 +52,7 @@ def run_git(
 
 def file_repo_url(path: Path) -> str:
     """Build a ``file://`` repository URL for ``path``."""
-    return f"file://{path}"
+    return path.resolve().as_uri()
 
 
 def create_bare_repo_with_branches(
