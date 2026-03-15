@@ -60,6 +60,18 @@ if TYPE_CHECKING:
     from ..core.project_model import ProjectConfig
 
 _LOCALHOST = "127.0.0.1"
+_FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
+
+
+def _str_to_bool(value: object) -> bool:
+    """Strictly coerce a config value to bool, treating string ``"false"`` as ``False``."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() not in _FALSE_STRINGS
+    return bool(value)
+
+
 _SENSITIVE_KEY_RE = re.compile(r"(?i)(KEY|TOKEN|SECRET|API|PASSWORD|PRIVATE)")
 
 # --- DANGEROUS TRANSITIONAL OVERRIDE helpers (bypass_firewall_no_protection) ---
@@ -107,6 +119,20 @@ def _bypass_network_args(gate_port: int) -> list[str]:
         "--add-host",
         f"host.containers.internal:{_LOCALHOST}",
     ]
+
+
+def _apply_unrestricted_env(env: dict[str, str]) -> None:
+    """Set ``TEROK_UNRESTRICTED`` and all agent auto-approve env vars.
+
+    Each agent reads its own env var (``VIBE_AUTO_APPROVE``,
+    ``OPENCODE_PERMISSION``, ``COPILOT_ALLOW_ALL``) regardless of how
+    it is launched (CLI wrapper or ACP).  Setting them at the container
+    level provides a single, unified permission mechanism.
+    """
+    from .headless_providers import collect_all_auto_approve_env
+
+    env["TEROK_UNRESTRICTED"] = "1"
+    env.update(collect_all_auto_approve_env())
 
 
 def _redact_env_args(cmd: list[str]) -> list[str]:
@@ -333,7 +359,11 @@ def _run_container(
 
 
 def task_run_cli(
-    project_id: str, task_id: str, agents: list[str] | None = None, preset: str | None = None
+    project_id: str,
+    task_id: str,
+    agents: list[str] | None = None,
+    preset: str | None = None,
+    unrestricted: bool | None = None,
 ) -> None:
     """Launch a CLI-mode task container and wait for its readiness marker.
 
@@ -370,13 +400,15 @@ def task_run_cli(
     agent_config_dir = _prepare_agent_config(project, project_id, task_id, agents, preset)
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")
 
-    # Resolve unrestricted mode from config (CLI/web tasks default to True)
-    _effective = resolve_agent_config(project_id, preset=preset)
-    _unrestricted = resolve_provider_value(
-        "unrestricted", _effective, project.default_agent or "claude"
-    )
-    if _unrestricted is None or _unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+    # Resolve unrestricted mode: CLI flag → config → default (True)
+    if unrestricted is None:
+        _effective = resolve_agent_config(project_id, preset=preset)
+        _cfg_val = resolve_provider_value(
+            "unrestricted", _effective, project.default_agent or "claude"
+        )
+        unrestricted = _cfg_val is None or _str_to_bool(_cfg_val)
+    if unrestricted:
+        _apply_unrestricted_env(env)
 
     # Run detached and keep the container alive so users can exec into it later
     # Note: We intentionally do NOT use --rm so containers persist after stopping.
@@ -406,7 +438,7 @@ def task_run_cli(
     _assert_running(cname)
 
     meta["mode"] = "cli"
-    meta["unrestricted"] = _unrestricted is None or bool(_unrestricted)
+    meta["unrestricted"] = unrestricted
     if preset:
         meta["preset"] = preset
     meta_path.write_text(yaml.safe_dump(meta))
@@ -425,6 +457,7 @@ def task_run_web(
     backend: str | None = None,
     agents: list[str] | None = None,
     preset: str | None = None,
+    unrestricted: bool | None = None,
 ) -> None:
     """Launch a web-mode task container with a browser-accessible IDE backend.
 
@@ -462,12 +495,13 @@ def task_run_web(
     if backend_updated:
         meta["backend"] = effective_backend
 
-    # Resolve unrestricted mode from config using the effective backend
-    _effective = resolve_agent_config(project_id, preset=preset)
-    _unrestricted = resolve_provider_value("unrestricted", _effective, effective_backend)
-    resolved_unrestricted = _unrestricted is None or bool(_unrestricted)
-    if resolved_unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+    # Resolve unrestricted mode: CLI flag → config → default (True)
+    if unrestricted is None:
+        _effective = resolve_agent_config(project_id, preset=preset)
+        _cfg_val = resolve_provider_value("unrestricted", _effective, effective_backend)
+        unrestricted = _cfg_val is None or _str_to_bool(_cfg_val)
+    if unrestricted:
+        _apply_unrestricted_env(env)
 
     cname = container_name(project.id, "web", task_id)
     container_state = get_container_state(cname)
@@ -491,7 +525,7 @@ def task_run_web(
         return
 
     # Persist metadata only when a new container is actually being created
-    meta["unrestricted"] = resolved_unrestricted
+    meta["unrestricted"] = unrestricted
     meta_path.write_text(yaml.safe_dump(meta))
 
     # Start UI in background and return terminal when it's reachable
@@ -684,14 +718,14 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     unrestricted = request.unrestricted
     if unrestricted is None:
         cfg_val = resolve_provider_value("unrestricted", effective, resolved.name)
-        unrestricted = cfg_val if cfg_val is not None else True
+        unrestricted = _str_to_bool(cfg_val) if cfg_val is not None else True
 
     # Build env and volumes
     env, volumes = build_task_env_and_volumes(project, task_id)
 
     # Set TEROK_UNRESTRICTED for the wrapper functions inside the container
     if unrestricted:
-        env["TEROK_UNRESTRICTED"] = "1"
+        _apply_unrestricted_env(env)
 
     # Mount agent-config dir to /home/dev/.terok
     volumes.append(f"{agent_config_dir}:/home/dev/.terok:Z")

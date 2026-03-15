@@ -227,9 +227,11 @@ class BlabladorDockerfileTests(unittest.TestCase):
 
             content = l1_cli.read_text(encoding="utf-8")
 
-            # Verify blablador is listed with description
+            # Verify blablador is referenced in the Dockerfile
             self.assertIn("blablador", content)
-            self.assertIn("Helmholtz Blablador", content)
+            # Verify blablador description is in the hilfe banner script
+            hilfe_script = (out_dir / "scripts" / "hilfe").read_text(encoding="utf-8")
+            self.assertIn("Helmholtz Blablador", hilfe_script)
 
     def test_l1_cli_opencode_installed(self) -> None:
         """Verify that OpenCode CLI is installed in the L1 CLI image."""
@@ -266,9 +268,11 @@ class BlabladorDockerfileTests(unittest.TestCase):
 
             content = l1_cli.read_text(encoding="utf-8")
 
-            # Verify opencode is listed with import hint
+            # Verify opencode is referenced in the Dockerfile
             self.assertIn("opencode", content)
-            self.assertIn("import-opencode", content)
+            # Verify opencode description is in the hilfe banner script
+            hilfe_script = (out_dir / "scripts" / "hilfe").read_text(encoding="utf-8")
+            self.assertIn("OpenCode CLI", hilfe_script)
 
     def test_l1_cli_blablador_script_copied(self) -> None:
         """Verify the blablador wrapper script is copied to the image."""

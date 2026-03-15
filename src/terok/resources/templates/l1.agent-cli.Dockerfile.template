@@ -64,6 +64,11 @@ RUN set -eux; \
     dpkg -i /tmp/glab.deb; \
     rm -f /tmp/glab.deb /tmp/checksums.txt
 
+# Pre-create managed config directories for per-task permission mode.
+# init-ssh-and-repo.sh writes config here when TEROK_UNRESTRICTED=1.
+# Owned by dev so no sudo is needed at runtime.
+RUN mkdir -p /etc/claude-code && chown dev:dev /etc/claude-code
+
 # Copy setup script for codex auth (port forwarding for OAuth callbacks)
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 RUN chmod +x /usr/local/bin/setup-codex-auth.sh
@@ -73,6 +78,10 @@ RUN mkdir -p /usr/local/share/terok
 COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
 COPY scripts/terok-git-identity.sh /usr/local/share/terok/terok-git-identity.sh
 RUN chmod +x /usr/local/share/terok/terok-git-identity.sh
+
+# Container help banner (available as `hilfe` command, also sourced on login)
+COPY scripts/hilfe /usr/local/bin/hilfe
+RUN chmod +x /usr/local/bin/hilfe
 
 # Copy blablador wrapper (OpenCode-based)
 COPY scripts/blablador /usr/local/bin/blablador
@@ -108,17 +117,10 @@ RUN set -eux; \
       '  )' \
       '}' \
       '' \
-      '# Print available agents on interactive login' \
-      'if [ -t 1 ] && [ -z "$_TEROK_AGENTS_SHOWN" ]; then' \
-      '  export _TEROK_AGENTS_SHOWN=1' \
-      '  printf "\\n\\033[1mAvailable AI agents:\\033[0m\\n"' \
-      '  printf "  \\033[36mcodex\\033[0m     - OpenAI Codex CLI (auto-approve enabled)\\n"' \
-      '  printf "  \\033[36mclaude\\033[0m    - Claude Code CLI (permissions skipped)\\n"' \
-      '  printf "  \\033[36mcopilot\\033[0m   - GitHub Copilot CLI\\n"' \
-      '  printf "  \\033[36mvibe\\033[0m      - Mistral Vibe CLI (auto-approve enabled)\\n"' \
-      '  printf "  \\033[36mblablador\\033[0m - OpenCode with Helmholtz Blablador (full permissions)\\n"' \
-      '  printf "  \\033[36mopencode\\033[0m  - OpenCode CLI (use terokctl config import-opencode to set up)\\n"' \
-      '  printf "\\n"' \
+      '# Print help banner on interactive login' \
+      'if [ -t 1 ] && [ -z "$_TEROK_BANNER_SHOWN" ]; then' \
+      '  export _TEROK_BANNER_SHOWN=1' \
+      '  _TEROK_LOGIN=1 hilfe 2>/dev/null || true' \
       'fi' \
       '' \
       '# Source terok project config (agent wrapper functions)' \

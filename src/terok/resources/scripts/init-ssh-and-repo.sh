@@ -308,6 +308,18 @@ if command -v nvfortran >/dev/null 2>&1; then
   nvfortran --version || true
 fi
 
+# Per-task permission mode: write managed settings for agents that need
+# file-based config.  Env-var-based agents (Vibe, OpenCode, Copilot) are
+# handled by task_runners.py injecting env vars into the container.
+# Codex has no env var or managed config — it uses CLI flags via the wrapper.
+if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then
+  # Claude: managed-settings.json has highest precedence, per-container.
+  if [[ -d /etc/claude-code ]]; then
+    printf '{"permissions":{"defaultMode":"bypassPermissions"}}\n' \
+      > /etc/claude-code/managed-settings.json
+  fi
+fi
+
 # Signal readiness for host tools that watch initial logs
 echo ">> init complete"
 exec bash

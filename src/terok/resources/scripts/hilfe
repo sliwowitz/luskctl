@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-License-Identifier: Apache-2.0
+
+# terok container help banner.  Sourced on login (with _TEROK_LOGIN=1)
+# and available as the `hilfe` command for quick reference.
+
+_terok_show_banner() {
+    local login="${_TEROK_LOGIN:-}"
+
+    # Permission mode
+    if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then
+        printf '\n\033[1mPermission mode:\033[0m \033[32munrestricted\033[0m\n'
+    else
+        printf '\n\033[1mPermission mode:\033[0m \033[33mrestricted\033[0m (vendor defaults)\n'
+    fi
+
+    # Available agents
+    printf '\n\033[1mAvailable AI agents:\033[0m\n'
+    printf '  \033[36mcodex\033[0m     - OpenAI Codex CLI\n'
+    printf '  \033[36mclaude\033[0m    - Claude Code CLI\n'
+    printf '  \033[36mcopilot\033[0m   - GitHub Copilot CLI\n'
+    printf '  \033[36mvibe\033[0m      - Mistral Vibe CLI\n'
+    printf '  \033[36mblablador\033[0m - OpenCode with Helmholtz Blablador\n'
+    printf '  \033[36mopencode\033[0m  - OpenCode CLI\n'
+
+    # Login hint (only on first login, not when running `hilfe`)
+    if [[ -n "$login" ]]; then
+        printf '\nRun \033[1mhilfe\033[0m to show this info again.\n'
+    fi
+    printf '\n'
+}
+
+_terok_show_banner
