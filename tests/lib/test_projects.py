@@ -37,7 +37,7 @@ def project_yaml(
     return "\n".join(lines) + "\n"
 
 
-def assert_loaded_project(project_id: str, yaml_text: str):
+def load_project_in_env(project_id: str, yaml_text: str):
     """Load a project inside an isolated temp config and return it."""
     with project_env(yaml_text, project_id=project_id):
         project = load_project(project_id)

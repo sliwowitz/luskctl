@@ -148,7 +148,10 @@ class TestResolveInstructions:
         assert resolve_instructions(config, "claude") == f"{DEFAULT_INSTRUCTIONS}\n\nTeam policy."
 
     def test_per_provider_dict_no_match_returns_bundled(self) -> None:
-        assert "terok" in resolve_instructions({"instructions": {"claude": "Claude only"}}, "codex")
+        assert (
+            resolve_instructions({"instructions": {"claude": "Claude only"}}, "codex")
+            == DEFAULT_INSTRUCTIONS
+        )
 
 
 class TestFileAppend:

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
@@ -44,7 +44,7 @@ def build_commands(
     project_id: str,
     *,
     image_exists: bool = True,
-    image_exists_side_effect=None,
+    image_exists_side_effect: Callable[[str], bool] | None = None,
     **build_kwargs: object,
 ) -> list[list[str]]:
     """Run ``build_images`` with Podman mocked and return captured build commands."""
@@ -157,10 +157,11 @@ def test_build_images_layer_selection(
         commands = build_commands(project_id, **capture_kwargs)
 
     assert len(commands) == expected_count
-    assert [
-        path.rsplit("/", 1)[-1]
-        for path in [next(part for part in cmd if part.endswith(".Dockerfile")) for cmd in commands]
-    ] == expected_suffixes
+    dockerfile_names = [
+        next(part for part in cmd if part.endswith(".Dockerfile")).rsplit("/", 1)[-1]
+        for cmd in commands
+    ]
+    assert dockerfile_names == expected_suffixes
 
 
 def test_build_images_rebuild_agents_builds_all_layers() -> None:

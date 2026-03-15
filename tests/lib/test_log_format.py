@@ -286,6 +286,9 @@ class TestAutoDetectFormatter:
     def test_run_mode_returns_claude_formatter(self) -> None:
         assert isinstance(auto_detect_formatter("run"), ClaudeStreamJsonFormatter)
 
+    def test_run_mode_non_claude_provider_returns_plain_text(self) -> None:
+        assert isinstance(auto_detect_formatter("run", provider="openai"), PlainTextFormatter)
+
     @pytest.mark.parametrize("mode", ["cli", "web", None], ids=["cli", "web", "none"])
     def test_plain_text_modes(self, mode: str | None) -> None:
         """Non-run modes return the plain-text formatter."""
@@ -294,9 +297,16 @@ class TestAutoDetectFormatter:
     def test_streaming_parameter_passed_through(self) -> None:
         fmt = auto_detect_formatter("run", streaming=False)
         assert isinstance(fmt, ClaudeStreamJsonFormatter)
-        assert not fmt._streaming
+        output, _error = render_formatter(
+            fmt,
+            {"type": "content_block_start", "content_block": {"type": "text"}},
+            {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "hidden"}},
+            {"type": "content_block_stop"},
+        )
+        assert output == ""
 
     def test_color_parameter_passed_through(self) -> None:
         fmt = auto_detect_formatter("run", color=True)
         assert isinstance(fmt, ClaudeStreamJsonFormatter)
-        assert fmt._color
+        output, _error = render_formatter(fmt, SYSTEM_INIT_EVENT)
+        assert "\x1b[" in output

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -149,7 +150,7 @@ class TestConfigStack:
     ids=["yaml", "json", "yaml-empty", "json-empty-object"],
 )
 def test_scope_loaders(
-    loader,
+    loader: Callable[[str, Path], ConfigScope],
     suffix: str,
     content: str,
     expected: dict[str, object],
@@ -172,6 +173,9 @@ def test_scope_loaders(
     ],
     ids=["yaml-missing", "json-missing"],
 )
-def test_scope_loaders_missing_files(loader, path: Path) -> None:
+def test_scope_loaders_missing_files(
+    loader: Callable[[str, Path], ConfigScope],
+    path: Path,
+) -> None:
     """Missing config files are treated as empty scopes."""
     assert loader("missing", path).data == {}

@@ -294,7 +294,9 @@ def test_run_wizard(
     init_fn = Mock() if has_init_fn else None
     with (
         patch("terok.lib.wizards.new_project.collect_wizard_inputs", return_value=collect_result),
-        patch("terok.lib.wizards.new_project.generate_config", return_value=expect_result),
+        patch(
+            "terok.lib.wizards.new_project.generate_config", return_value=expect_result
+        ) as mock_generate_config,
         patch(
             "terok.lib.wizards.new_project.open_in_editor", return_value=editor_success
         ) as mock_editor,
@@ -304,10 +306,15 @@ def test_run_wizard(
 
     assert result == expect_result
     if collect_result is None:
+        mock_generate_config.assert_not_called()
         mock_editor.assert_not_called()
         return
 
-    if user_answers is not KeyboardInterrupt:
+    mock_generate_config.assert_called_once_with(collect_result)
+
+    if user_answers is KeyboardInterrupt:
+        mock_editor.assert_not_called()
+    else:
         assert mock_editor.call_count == (
             0 if user_answers and user_answers[0] in {"n", "no"} else 1
         )

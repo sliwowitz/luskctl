@@ -86,9 +86,16 @@ def test_delete_project_removes_managed_directories(
 def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     config_root = tmp_path / "config"
     state_dir = tmp_path / "state"
+    envs_dir = tmp_path / "envs"
     gate_path = state_dir / "gate" / "shared.git"
+    config_file = tmp_path / "config.yml"
     gate_path.mkdir(parents=True, exist_ok=True)
+    envs_dir.mkdir(parents=True, exist_ok=True)
     config_root.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(
+        f"paths:\n  build_root: {state_dir / 'build'}\nenvs:\n  base_dir: {envs_dir}\n",
+        encoding="utf-8",
+    )
 
     for project_id, upstream in (("proj-a", "a"), ("proj-b", "b")):
         write_project(
@@ -100,6 +107,7 @@ def test_delete_project_skips_shared_gate(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.setenv("TEROK_CONFIG_DIR", str(config_root))
     monkeypatch.setenv("TEROK_STATE_DIR", str(state_dir))
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(config_file))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
 
     result = delete_project("proj-a")

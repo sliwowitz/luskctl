@@ -43,6 +43,7 @@ def assert_login_error(
     container_state: str | None = None,
 ) -> None:
     """Assert that ``task_login`` fails with a specific error message."""
+    task_id = "999" if project_id.endswith("unknown") else "1"
     with project_env(project_yaml(project_id), project_id=project_id) as ctx:
         setup_task_with_mode(ctx, project_id, mode=mode)
         with unittest.mock.patch(
@@ -50,9 +51,7 @@ def assert_login_error(
             return_value=container_state,
         ):
             with pytest.raises(SystemExit, match=error_text):
-                task_login(
-                    project_id, "1" if mode else "999" if project_id.endswith("unknown") else "1"
-                )
+                task_login(project_id, task_id)
 
 
 LOGIN_COMMAND = [
@@ -124,7 +123,6 @@ class TestLogin:
         mode: str,
         expected_container: str,
     ) -> None:
-        project_id = expected_container.split("-")[0] if mode == "cli" else "proj_loginweb"
         project_id = "proj_logincmd" if mode == "cli" else "proj_loginweb"
         with project_env(project_yaml(project_id), project_id=project_id) as ctx:
             setup_task_with_mode(ctx, project_id, mode=mode)

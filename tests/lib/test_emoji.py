@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
 
 import pytest
 from rich.cells import cell_len
@@ -49,7 +49,7 @@ LABEL_COLLECTIONS = [
 
 
 @pytest.fixture(autouse=True)
-def reset_emoji_mode() -> None:
+def reset_emoji_mode() -> Generator[None, None, None]:
     """Reset emoji rendering mode before and after each test."""
     set_emoji_enabled(True)
     yield

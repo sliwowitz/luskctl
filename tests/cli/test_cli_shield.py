@@ -44,21 +44,45 @@ def shield_parser() -> argparse.ArgumentParser:
             id="allow",
         ),
         pytest.param(
-            ["shield", "deny", "proj", "task1", "example.com"], {"shield_cmd": "deny"}, id="deny"
+            ["shield", "deny", "proj", "task1", "example.com"],
+            {
+                "shield_cmd": "deny",
+                "project_id": "proj",
+                "task_id": "task1",
+                "target": "example.com",
+            },
+            id="deny",
         ),
         pytest.param(
             ["shield", "down", "proj", "task1", "--all"],
-            {"shield_cmd": "down", "allow_all": True},
+            {
+                "shield_cmd": "down",
+                "project_id": "proj",
+                "task_id": "task1",
+                "allow_all": True,
+            },
             id="down-all",
         ),
-        pytest.param(["shield", "up", "proj", "task1"], {"shield_cmd": "up"}, id="up"),
-        pytest.param(["shield", "rules", "proj", "task1"], {"shield_cmd": "rules"}, id="rules"),
+        pytest.param(
+            ["shield", "up", "proj", "task1"],
+            {"shield_cmd": "up", "project_id": "proj", "task_id": "task1"},
+            id="up",
+        ),
+        pytest.param(
+            ["shield", "rules", "proj", "task1"],
+            {"shield_cmd": "rules", "project_id": "proj", "task_id": "task1"},
+            id="rules",
+        ),
         pytest.param(
             ["shield", "profiles"],
             {"shield_cmd": "profiles", "project_id": None},
             id="profiles",
         ),
-        pytest.param(["shield", "setup"], {"shield_cmd": "setup"}, id="setup"),
+        pytest.param(
+            ["shield", "setup"],
+            {"shield_cmd": "setup", "root": False, "user": False},
+            id="setup",
+        ),
         pytest.param(
             ["shield", "setup", "--root"],
             {"shield_cmd": "setup", "root": True, "user": False},
@@ -102,7 +126,7 @@ def test_dispatch_returns_false_for_non_shield_commands() -> None:
 
 @patch("terok.cli.commands.shield.make_shield")
 def test_dispatch_status_without_task(mock_make: MagicMock) -> None:
-    """Bare ``shield status`` renders the configured shield status."""
+    """Bare ``shield status`` shows the runtime/available shield status."""
     mock_shield = MagicMock()
     mock_shield.status.return_value = {
         "mode": "hook",
@@ -137,7 +161,7 @@ def test_dispatch_partial_task_selector_exits() -> None:
         pytest.param("status", "state", MagicMock(value="up"), "up", id="task-status"),
     ],
 )
-@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", str(MOCK_TASK_DIR_1)))
+@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
 @patch("terok.cli.commands.shield.make_shield")
 def test_dispatch_task_scoped_commands(
     mock_make: MagicMock,
@@ -178,7 +202,7 @@ def test_dispatch_preview_all_without_down_prints_error(mock_make: MagicMock) ->
     assert "--all requires --down" in err.getvalue()
 
 
-@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", str(MOCK_TASK_DIR_1)))
+@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
 @patch("terok.cli.commands.shield.make_shield")
 def test_dispatch_exec_error_prints_not_running(
     mock_make: MagicMock,
@@ -200,7 +224,7 @@ def test_dispatch_exec_error_prints_not_running(
     assert "not running" in err.getvalue()
 
 
-@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", str(MOCK_TASK_DIR_1)))
+@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
 @patch("terok.cli.commands.shield.make_shield")
 def test_dispatch_runtime_error_prints_message(
     mock_make: MagicMock,

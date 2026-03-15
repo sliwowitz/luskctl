@@ -252,4 +252,4 @@ def test_task_new_uses_project_categories() -> None:
 
     assert len(tasks) == 1
     assert tasks[0].name is not None
-    assert re.search(r"^[a-z]+-[a-z]+$", tasks[0].name)
+    assert re.search(SLUG_PATTERN, tasks[0].name)

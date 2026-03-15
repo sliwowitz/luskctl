@@ -72,11 +72,12 @@ def make_request(
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         token_file = base / "tokens.json"
-        token_file.write_text(
-            json.dumps(VALID_TOKEN_DATA if token_data is None else token_data)
-            if not isinstance(token_data, str)
-            else token_data
-        )
+        if isinstance(token_data, str):
+            serialized = token_data
+        else:
+            payload = VALID_TOKEN_DATA if token_data is None else token_data
+            serialized = json.dumps(payload)
+        token_file.write_text(serialized)
         store = TokenStore(token_file)
         handler_class = _make_handler_class(base, store)
 

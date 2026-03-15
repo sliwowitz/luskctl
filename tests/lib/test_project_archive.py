@@ -9,7 +9,9 @@ import re
 import tarfile
 import tempfile
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -57,13 +59,13 @@ class TestArchiveTimestamp:
     def test_returns_utc_timestamp_string(self) -> None:
         assert re.search(r"^\d{8}T\d{6}\d+Z$", archive_timestamp())
 
-    def test_unique_values(self) -> None:
-        first = archive_timestamp()
-        second = first
-        for _ in range(5):
+    def test_changes_when_time_changes(self) -> None:
+        first_dt = datetime(2026, 3, 15, 12, 0, 0, 123456, tzinfo=UTC)
+        second_dt = datetime(2026, 3, 15, 12, 0, 0, 123457, tzinfo=UTC)
+        with patch("terok.lib.util.fs.datetime") as mock_datetime:
+            mock_datetime.now.side_effect = [first_dt, second_dt]
+            first = archive_timestamp()
             second = archive_timestamp()
-            if second != first:
-                break
         assert first != second
 
 
@@ -176,11 +178,16 @@ class TestDeleteProjectArchive:
 
     def test_delete_creates_archive_before_deleting(self) -> None:
         with project_env(project_yaml("del-arch"), project_id="del-arch"):
+            create_task_state("del-arch")
+            create_build_dir("del-arch")
             result = delete_project("del-arch")
-            archive_path = Path(result["archive"])
             assert "archive" in result
+            archive_path = Path(result["archive"])
+            members = archive_member_names(result["archive"])
             assert archive_path.is_file()
             assert archive_path.suffixes[-2:] == [".tar", ".gz"]
+            assert "state/tasks/1.yml" in members
+            assert "build/L2.Dockerfile" in members
 
     def test_archive_survives_deletion(self) -> None:
         with project_env(project_yaml("del-surv"), project_id="del-surv"):

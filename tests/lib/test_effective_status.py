@@ -20,7 +20,7 @@ from terok.lib.containers.task_display import (
 from terok.lib.containers.tasks import TaskMeta, get_all_task_states
 
 
-def _task(**kwargs) -> TaskMeta:
+def _task(**kwargs: object) -> TaskMeta:
     """Build a ``TaskMeta`` with sensible defaults overridden by *kwargs*."""
     defaults = {
         "task_id": "1",
@@ -131,6 +131,12 @@ def test_all_known_backends_use_their_registered_mode_info() -> None:
             },
             id="parsed-output",
         ),
+        pytest.param(
+            "proj-cli-1 Running\nproj-web-2 Exited\n",
+            None,
+            {"proj-cli-1": "running", "proj-web-2": "exited"},
+            id="parsed-output-normalizes-case",
+        ),
         pytest.param("", None, {}, id="empty-output"),
         pytest.param(None, FileNotFoundError(), {}, id="podman-missing"),
         pytest.param(
@@ -182,5 +188,6 @@ def test_get_all_task_states_maps_project_container_lookup(
     with patch(
         "terok.lib.containers.tasks.get_project_container_states",
         return_value=container_states,
-    ):
+    ) as mocked_get_states:
         assert get_all_task_states("proj", tasks) == expected
+    mocked_get_states.assert_called_once_with("proj")

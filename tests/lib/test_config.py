@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
+# SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for core config helpers."""
@@ -35,6 +35,7 @@ def test_global_config_search_paths_respects_env_override(monkeypatch, tmp_path:
 
 
 def test_global_config_path_prefers_xdg(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("TEROK_CONFIG_FILE", raising=False)
     config_file = tmp_path / "terok" / "config.yml"
     config_file.parent.mkdir(parents=True, exist_ok=True)
     config_file.write_text("ui:\n  base_port: 7000\n", encoding="utf-8")

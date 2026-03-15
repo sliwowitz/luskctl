@@ -7,13 +7,15 @@ import json
 import os
 import tempfile
 import unittest.mock
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from terok.lib.containers.agent_config import build_agent_config_stack, resolve_agent_config
-from terok.lib.core.projects import list_presets, load_preset, load_project
+from terok.lib.core.projects import ProjectConfig, list_presets, load_preset, load_project
+from terok.lib.util.config_stack import ConfigStack
 from test_utils import mock_git_config, write_project
 from testfs import CONTAINER_INSTRUCTIONS_PATH
 
@@ -32,6 +34,7 @@ def _env(
     env: dict[str, str] = {
         "TEROK_CONFIG_DIR": str(config_root),
         "TEROK_STATE_DIR": str(state_root),
+        "TEROK_CONFIG_FILE": "",
         "XDG_CONFIG_HOME": str(xdg_config_home or config_root.parent / "xdg"),
     }
     if global_config:
@@ -114,7 +117,7 @@ def _patched_env(
     *,
     global_config: Path | None = None,
     xdg_config_home: Path | None = None,
-) -> unittest.mock._patch_dict:
+) -> AbstractContextManager[dict[str, str]]:
     """Patch TEROK_* and XDG env vars for the given layout."""
     return unittest.mock.patch.dict(
         os.environ,
@@ -166,7 +169,7 @@ def load_test_preset(
             return load_preset(project_id, preset_name)
 
 
-def load_test_project(layout: AgentConfigLayout, project_id: str) -> object:
+def load_test_project(layout: AgentConfigLayout, project_id: str) -> ProjectConfig:
     """Load a project inside the isolated test environment."""
     with _patched_env(layout):
         with mock_git_config():
@@ -179,7 +182,7 @@ def build_test_agent_stack(
     *,
     preset: str,
     xdg_config_home: Path | None = None,
-) -> object:
+) -> ConfigStack:
     """Build an agent config stack inside the isolated test environment."""
     with _patched_env(layout, xdg_config_home=xdg_config_home):
         with mock_git_config():

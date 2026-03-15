@@ -16,6 +16,8 @@ BASE_IMAGE_FUNCS: list[tuple[Callable[[str], str], str]] = [
     (images.agent_cli_image, "terok-l1-cli"),
     (images.agent_ui_image, "terok-l1-ui"),
 ]
+BASE_IMAGE_IDS = [prefix for _, prefix in BASE_IMAGE_FUNCS]
+BASE_IMAGE_CALLABLES = [func for func, _ in BASE_IMAGE_FUNCS]
 
 
 @pytest.mark.parametrize(
@@ -65,7 +67,10 @@ def test_base_tag_length_and_hash(name: str, prefix_len: int, suffix_len: int) -
     assert len(result) == 120
     assert len(hash_part) == suffix_len
     assert hash_part.isalnum()
-    assert result.startswith("a" * prefix_len) or "@" not in result
+    if "@" in name:
+        assert "@" not in result
+    else:
+        assert result.startswith("a" * prefix_len)
 
 
 def test_base_tag_long_name_hash_is_stable() -> None:
@@ -110,9 +115,7 @@ def test_project_image_functions(func: Callable[[str], str], expected: str) -> N
     assert func("my-project") == expected
 
 
-@pytest.mark.parametrize(
-    "func,prefix", BASE_IMAGE_FUNCS, ids=[prefix for _, prefix in BASE_IMAGE_FUNCS]
-)
+@pytest.mark.parametrize(("func", "prefix"), BASE_IMAGE_FUNCS, ids=BASE_IMAGE_IDS)
 def test_base_image_functions_handle_empty_input(
     func: Callable[[str], str],
     prefix: str,
@@ -120,9 +123,7 @@ def test_base_image_functions_handle_empty_input(
     assert func("") == f"{prefix}:ubuntu-24.04"
 
 
-@pytest.mark.parametrize(
-    "func", [func for func, _ in BASE_IMAGE_FUNCS], ids=[prefix for _, prefix in BASE_IMAGE_FUNCS]
-)
+@pytest.mark.parametrize("func", BASE_IMAGE_CALLABLES, ids=BASE_IMAGE_IDS)
 def test_base_image_functions_share_long_tag_generation(func: Callable[[str], str]) -> None:
     assert len(func("x" * 150).split(":", 1)[1]) == 120
 

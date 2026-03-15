@@ -148,9 +148,16 @@ def prepare_agent_config(
     from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
 
     (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
-    return prepare_agent_config_dir(
-        AgentConfigSpec(project, task_id, subagents=[], instructions=instructions)
-    )
+    with (
+        tempfile.TemporaryDirectory() as td,
+        unittest.mock.patch(
+            "terok.lib.containers.agents.get_envs_base_dir",
+            return_value=Path(td),
+        ),
+    ):
+        return prepare_agent_config_dir(
+            AgentConfigSpec(project, task_id, subagents=[], instructions=instructions)
+        )
 
 
 def run_headless_request(

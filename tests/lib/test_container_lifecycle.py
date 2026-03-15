@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import yaml
@@ -56,7 +57,7 @@ def completed_process() -> subprocess.CompletedProcess[None]:
     return subprocess.CompletedProcess(args=[], returncode=0)
 
 
-def capture_stdout(func, /, *args, **kwargs) -> str:
+def capture_stdout(func: Callable[..., object], /, *args: object, **kwargs: object) -> str:
     """Run *func* and return its captured stdout."""
     output = StringIO()
     with redirect_stdout(output):
@@ -64,7 +65,7 @@ def capture_stdout(func, /, *args, **kwargs) -> str:
     return output.getvalue()
 
 
-def run_podman_args(run_mock, *, call_index: int = 0) -> list[str]:
+def run_podman_args(run_mock: Mock, *, call_index: int = 0) -> list[str]:
     """Return the Podman argv for a mocked ``subprocess.run`` invocation."""
     return run_mock.call_args_list[call_index].args[0]
 

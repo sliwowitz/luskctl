@@ -110,11 +110,11 @@ class TestAtomicWrite:
             assert read_token_json(token_path) == {"abc": {"project": "p", "task": "1"}}
 
     @pytest.mark.parametrize(
-        ("path", "content"),
+        ("path", "content", "expected"),
         [
-            (NONEXISTENT_TOKENS_PATH, None),
-            (Path("tokens.json"), "not json{{{"),
-            (Path("tokens.json"), json.dumps(["not", "a", "dict"])),
+            (Path(NONEXISTENT_TOKENS_PATH.name), None, {}),
+            (Path("tokens.json"), "not json{{{", {}),
+            (Path("tokens.json"), json.dumps(["not", "a", "dict"]), {}),
             (
                 Path("tokens.json"),
                 json.dumps(
@@ -125,21 +125,24 @@ class TestAtomicWrite:
                         "int_project": {"project": 123, "task": "1"},
                     }
                 ),
+                {"good": {"project": "p", "task": "1"}},
             ),
         ],
         ids=["missing", "corrupt-json", "non-dict-json", "malformed-entries"],
     )
-    def test_read_tokens_handles_invalid_inputs(self, path: Path, content: str | None) -> None:
+    def test_read_tokens_handles_invalid_inputs(
+        self,
+        path: Path,
+        content: str | None,
+        expected: dict[str, dict[str, str]],
+    ) -> None:
         """Invalid token files are treated as empty or sanitized."""
         with tempfile.TemporaryDirectory() as td:
             token_path = Path(td) / path
             if content is not None:
                 token_path.write_text(content)
             result = _read_tokens(token_path)
-        if content and "good" in content:
-            assert result == {"good": {"project": "p", "task": "1"}}
-        else:
-            assert result == {}
+        assert result == expected
 
     def test_atomic_write_uses_replace(self) -> None:
         """Verify that _write_tokens uses atomic replacement semantics."""

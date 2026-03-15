@@ -61,6 +61,8 @@ def _assert_volume_mount(volumes: list[str], expected_base: str, expected_suffix
 
 
 class TestTask:
+    """Tests for task lifecycle, listing filters, and task runner environment behavior."""
+
     def test_copy_to_clipboard_no_helpers_provides_install_hint(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}):
             with unittest.mock.patch("terok.tui.clipboard.shutil.which", return_value=None):

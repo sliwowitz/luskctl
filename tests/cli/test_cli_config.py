@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,13 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.cli.main import main
-
-
-def run_cli(*argv: str) -> None:
-    """Run the CLI entrypoint with a temporary argv."""
-    with patch.object(sys, "argv", ["terok", *argv]):
-        main()
+from testcli import run_cli
 
 
 def make_config_layout(tmp_path: Path) -> SimpleNamespace:

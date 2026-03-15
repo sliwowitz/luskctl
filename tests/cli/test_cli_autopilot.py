@@ -5,21 +5,14 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from terok.cli.main import main
 from terok.lib.containers.task_runners import HeadlessRunRequest
+from testcli import run_cli
 from testfs import NONEXISTENT_MARKDOWN_PATH
-
-
-def run_cli(*argv: str) -> None:
-    """Run the CLI entrypoint with a temporary argv."""
-    with patch.object(sys, "argv", ["terok", *argv]):
-        main()
 
 
 def capture_headless_request(*argv: str) -> HeadlessRunRequest:
