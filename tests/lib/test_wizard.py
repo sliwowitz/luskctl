@@ -130,7 +130,9 @@ def test_collect_wizard_inputs_success(
         pytest.param(EOFError, id="eof"),
     ],
 )
-def test_collect_wizard_inputs_cancellation_paths(side_effect: object) -> None:
+def test_collect_wizard_inputs_cancellation_paths(
+    side_effect: list[str] | type[BaseException],
+) -> None:
     """Invalid template selection or user cancellation returns ``None``."""
     with patch("builtins.input", side_effect=side_effect):
         assert collect_wizard_inputs() is None
@@ -284,7 +286,7 @@ def test_generate_config_replaces_all_placeholders() -> None:
 )
 def test_run_wizard(
     collect_result: dict[str, object] | None,
-    user_answers: list[str] | BaseException,
+    user_answers: list[str] | type[BaseException],
     has_init_fn: bool,
     editor_success: bool,
     expect_init: bool,

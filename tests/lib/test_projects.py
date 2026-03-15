@@ -37,13 +37,6 @@ def project_yaml(
     return "\n".join(lines) + "\n"
 
 
-def load_project_in_env(project_id: str, yaml_text: str):
-    """Load a project inside an isolated temp config and return it."""
-    with project_env(yaml_text, project_id=project_id):
-        project = load_project(project_id)
-    return project
-
-
 class TestProject:
     """Tests for project loading/listing."""
 
@@ -62,20 +55,30 @@ class TestProject:
             assert project.git_authorship == "agent-human"
 
     @pytest.mark.parametrize(
-        ("yaml_text", "config_text", "expected"),
+        ("project_id", "yaml_text", "config_text", "expected"),
         [
-            (project_yaml("proj-authorship", authorship="human-agent"), None, "human-agent"),
-            (project_yaml("proj-global-authorship"), "git:\n  authorship: human\n", "human"),
+            (
+                "proj-authorship",
+                project_yaml("proj-authorship", authorship="human-agent"),
+                None,
+                "human-agent",
+            ),
+            (
+                "proj-global-authorship",
+                project_yaml("proj-global-authorship"),
+                "git:\n  authorship: human\n",
+                "human",
+            ),
         ],
         ids=["project-authorship", "global-authorship"],
     )
     def test_git_authorship_resolution(
         self,
+        project_id: str,
         yaml_text: str,
         config_text: str | None,
         expected: str,
     ) -> None:
-        project_id = yaml_text.split("\n", 2)[1].split(": ", 1)[1]
         with project_env(yaml_text, project_id=project_id) as ctx:
             if config_text is None:
                 project = load_project(project_id)
@@ -121,39 +124,23 @@ class TestProject:
         assert projects[0].upstream_url == "https://user.example/repo.git"
         assert projects[0].root == (user_projects / "proj2").resolve()
 
-    @pytest.mark.parametrize(
-        ("writer", "callable_under_test", "expected"),
-        [
-            (
-                lambda root: write_project(
-                    root,
-                    "good",
-                    "project:\n  id: good\ngit:\n  upstream_url: https://example.com/good.git\n",
-                ),
-                list_projects,
-                "good",
-            ),
-        ],
-        ids=["list-projects-skips-bad-yaml"],
-    )
-    def test_list_projects_skips_malformed_yaml(
-        self,
-        writer,
-        callable_under_test,
-        expected: str,
-    ) -> None:
+    def test_list_projects_skips_malformed_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             config_dir = base / "config"
-            writer(config_dir)
+            write_project(
+                config_dir,
+                "good",
+                "project:\n  id: good\ngit:\n  upstream_url: https://example.com/good.git\n",
+            )
             write_project(config_dir, "bad", "project:\n  id: bad\n  foo: [invalid\n")
             with unittest.mock.patch.dict(
                 os.environ,
                 {"TEROK_CONFIG_DIR": str(config_dir), "XDG_CONFIG_HOME": str(base / "empty")},
             ):
-                projects = callable_under_test()
+                projects = list_projects()
         assert len(projects) == 1
-        assert projects[0].id == expected
+        assert projects[0].id == "good"
 
     def test_load_project_malformed_yaml(self) -> None:
         malformed = "project:\n  id: bad-yaml\n  foo: [invalid yaml\n"

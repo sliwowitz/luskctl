@@ -3,6 +3,7 @@
 
 """Tests for log_format module (agent log formatters)."""
 
+import copy
 import json
 from collections.abc import Iterable
 from contextlib import redirect_stderr, redirect_stdout
@@ -178,7 +179,7 @@ class TestClaudeStreamJsonFormatterStreaming:
         self, tool_result: dict[str, Any], expected: tuple[str, str]
     ) -> None:
         """User tool_result messages are rendered with the expected label."""
-        payload = json.loads(json.dumps(TOOL_RESULT_BASE))
+        payload = copy.deepcopy(TOOL_RESULT_BASE)
         payload["message"]["content"][0].update(tool_result)
         output, _error = render_formatter(make_formatter(), payload)
         assert_contains_all(output, expected)
@@ -250,7 +251,7 @@ class TestClaudeStreamJsonFormatterEdgeCase:
 
     def test_long_tool_result_truncated(self) -> None:
         """Long tool results are truncated to 500 chars."""
-        payload = json.loads(json.dumps(TOOL_RESULT_BASE))
+        payload = copy.deepcopy(TOOL_RESULT_BASE)
         payload["message"]["content"][0]["content"] = "x" * 1000
         output, _error = render_formatter(make_formatter(), payload)
         assert "..." in output

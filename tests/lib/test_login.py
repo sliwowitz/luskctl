@@ -35,25 +35,6 @@ def setup_task_with_mode(
         meta_path.write_text(yaml.safe_dump(meta))
 
 
-def assert_login_error(
-    project_id: str,
-    error_text: str,
-    *,
-    mode: str | None = None,
-    container_state: str | None = None,
-) -> None:
-    """Assert that ``task_login`` fails with a specific error message."""
-    task_id = "999" if project_id.endswith("unknown") else "1"
-    with project_env(project_yaml(project_id), project_id=project_id) as ctx:
-        setup_task_with_mode(ctx, project_id, mode=mode)
-        with unittest.mock.patch(
-            "terok.lib.containers.tasks.get_container_state",
-            return_value=container_state,
-        ):
-            with pytest.raises(SystemExit, match=error_text):
-                task_login(project_id, task_id)
-
-
 LOGIN_COMMAND = [
     "podman",
     "exec",
@@ -132,7 +113,7 @@ class TestLogin:
             ):
                 command = get_login_command(project_id, "1")
         assert command[3] == expected_container
-        assert command[-4:] == ["tmux", "new-session", "-A", "-s", "main"][-4:]
+        assert command[-5:] == ["tmux", "new-session", "-A", "-s", "main"]
 
     def test_login_no_longer_injects_agent_config(self) -> None:
         """get_login_command does NOT inject agent config (handled via mount)."""

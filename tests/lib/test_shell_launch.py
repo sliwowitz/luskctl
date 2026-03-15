@@ -205,6 +205,23 @@ class TestSpawnTerminal:
         ):
             assert not spawn_terminal_with_command(["echo", "hello"])
 
+    @pytest.mark.parametrize(
+        "side_effect",
+        [OSError("boom"), FileNotFoundError("gnome-terminal")],
+        ids=["os-error", "not-found"],
+    )
+    def test_spawn_terminal_returns_false_on_popen_error(self, side_effect: Exception) -> None:
+        with (
+            unittest.mock.patch.dict("os.environ", terminal_env("gnome-terminal"), clear=True),
+            unittest.mock.patch(
+                "terok.tui.shell_launch._parent_process_has_name",
+                return_value=False,
+            ),
+            unittest.mock.patch("terok.tui.shell_launch.subprocess.Popen") as mock_popen,
+        ):
+            mock_popen.side_effect = side_effect
+            assert not spawn_terminal_with_command(SHELL_COMMAND, title="login:c1")
+
 
 class TestLaunchLogin:
     """Tests for the launch_login orchestrator."""

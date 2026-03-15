@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 from collections.abc import Callable
@@ -86,7 +87,11 @@ from testfs import NONEXISTENT_CONFIG_JSON, NONEXISTENT_CONFIG_YAML
 )
 def test_deep_merge(base: dict, override: dict, expected: dict) -> None:
     """deep_merge handles overrides, deletions, inheritance, and recursion."""
+    base_before = copy.deepcopy(base)
+    override_before = copy.deepcopy(override)
     assert deep_merge(base, override) == expected
+    assert base == base_before
+    assert override == override_before
 
 
 class TestConfigStack:

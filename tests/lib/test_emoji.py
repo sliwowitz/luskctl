@@ -91,7 +91,9 @@ def test_project_display_emojis_are_natively_two_cells(
 ) -> None:
     """Every registered project emoji is natively two cells wide."""
     assert all(is_width_two(info.emoji) for info in infos), name
+    assert all("\ufe0f" not in info.emoji for info in infos), name
     assert is_width_two(WEB_BACKEND_DEFAULT.emoji)
+    assert "\ufe0f" not in WEB_BACKEND_DEFAULT.emoji
 
 
 @pytest.mark.parametrize(("name", "infos"), LABEL_COLLECTIONS)

@@ -97,19 +97,20 @@ def test_unique_archive_path(
 
 
 @pytest.mark.parametrize(
-    ("factory", "suffix", "expected_name", "setup_existing"),
+    ("factory", "suffix", "name", "expected_name", "setup_existing"),
     [
-        (create_archive_dir, None, "myarchive", None),
-        (create_archive_dir, None, "test_1", "test"),
-        (create_archive_file, None, "myarchive.tar.gz", None),
-        (create_archive_file, None, "test_1.tar.gz", "test.tar.gz"),
-        (create_archive_file, ".zip", "myarchive.zip", None),
+        (create_archive_dir, None, "myarchive", "myarchive", None),
+        (create_archive_dir, None, "test", "test_1", "test"),
+        (create_archive_file, None, "myarchive", "myarchive.tar.gz", None),
+        (create_archive_file, None, "test", "test_1.tar.gz", "test.tar.gz"),
+        (create_archive_file, ".zip", "myarchive", "myarchive.zip", None),
     ],
     ids=["dir", "dir-collision", "file", "file-collision", "file-custom-suffix"],
 )
 def test_archive_factories(
     factory: Callable[..., Path],
     suffix: str | None,
+    name: str,
     expected_name: str,
     setup_existing: str | None,
 ) -> None:
@@ -122,9 +123,7 @@ def test_archive_factories(
             else:
                 existing.mkdir()
         kwargs = {} if suffix is None else {"suffix": suffix}
-        path = factory(
-            root, "myarchive" if suffix == ".zip" or setup_existing is None else "test", **kwargs
-        )
+        path = factory(root, name, **kwargs)
         assert path.name == expected_name
         assert path.exists()
 

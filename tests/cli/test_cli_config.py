@@ -102,8 +102,10 @@ def patch_config_command(layout: SimpleNamespace):
 
 
 def run_import(file_path: Path, envs_root: Path) -> None:
-    """Invoke ``terok config import-opencode`` with a patched env root."""
-    with patch("terok.cli.commands.info._get_envs_base_dir", return_value=envs_root):
+    """Invoke ``terok config import-opencode`` through a temporary config file."""
+    config_file = envs_root.parent / "config.yml"
+    config_file.write_text(f"envs:\n  base_dir: {envs_root}\n", encoding="utf-8")
+    with patch.dict(os.environ, {"TEROK_CONFIG_FILE": str(config_file)}):
         run_cli("config", "import-opencode", str(file_path))
 
 
