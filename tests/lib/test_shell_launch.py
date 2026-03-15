@@ -235,7 +235,7 @@ class TestLaunchLogin:
     """Tests for the launch_login orchestrator."""
 
     @pytest.mark.parametrize(
-        ("patches", "expected", "expected_launcher"),
+        ("patches", "expected"),
         [
             (
                 {
@@ -246,7 +246,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": None,
                 },
                 ("tmux", None),
-                "tmux_new_window",
             ),
             (
                 {
@@ -257,7 +256,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": None,
                 },
                 ("terminal", None),
-                "spawn_terminal_with_command",
             ),
             (
                 {
@@ -268,7 +266,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": None,
                 },
                 ("terminal", None),
-                "spawn_terminal_with_command",
             ),
             (
                 {
@@ -279,7 +276,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": None,
                 },
                 ("none", None),
-                None,
             ),
             (
                 {
@@ -290,7 +286,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": 12345,
                 },
                 ("web", 12345),
-                "spawn_ttyd",
             ),
             (
                 {
@@ -301,7 +296,6 @@ class TestLaunchLogin:
                     "spawn_ttyd": None,
                 },
                 ("none", None),
-                None,
             ),
         ],
         ids=[
@@ -317,7 +311,6 @@ class TestLaunchLogin:
         self,
         patches: dict[str, object],
         expected: tuple[str, int | None],
-        expected_launcher: str | None,
     ) -> None:
         with (
             unittest.mock.patch(
@@ -345,10 +338,11 @@ class TestLaunchLogin:
 
         mock_inside_tmux.assert_called_once_with()
 
-        if expected_launcher == "tmux_new_window":
+        if expected == ("tmux", None):
             mock_tmux.assert_called_once_with(SHELL_COMMAND, title="login:c1")
             mock_spawn_terminal.assert_not_called()
             mock_spawn_ttyd.assert_not_called()
+            mock_is_web_mode.assert_not_called()
             return
 
         if patches["is_inside_tmux"]:
@@ -356,19 +350,12 @@ class TestLaunchLogin:
         else:
             mock_tmux.assert_not_called()
 
-        if expected_launcher == "spawn_terminal_with_command":
-            mock_spawn_terminal.assert_called_once_with(SHELL_COMMAND, title="login:c1")
-            mock_spawn_ttyd.assert_not_called()
-        elif expected_launcher == "spawn_ttyd":
+        expected_is_web_mode_calls = 1 if expected == ("terminal", None) else 2
+        if patches["is_web_mode"]:
+            assert mock_is_web_mode.call_count == expected_is_web_mode_calls
             mock_spawn_terminal.assert_not_called()
             mock_spawn_ttyd.assert_called_once_with(SHELL_COMMAND)
         else:
-            if patches["is_web_mode"]:
-                mock_spawn_terminal.assert_not_called()
-                mock_spawn_ttyd.assert_called_once_with(SHELL_COMMAND)
-            else:
-                mock_spawn_terminal.assert_called_once_with(SHELL_COMMAND, title="login:c1")
-                mock_spawn_ttyd.assert_not_called()
-
-        if patches["is_web_mode"]:
-            assert mock_is_web_mode.call_count >= 1
+            assert mock_is_web_mode.call_count == expected_is_web_mode_calls
+            mock_spawn_terminal.assert_called_once_with(SHELL_COMMAND, title="login:c1")
+            mock_spawn_ttyd.assert_not_called()

@@ -5,7 +5,9 @@
 
 import asyncio
 import contextlib
+import inspect
 import sys
+from collections.abc import Callable
 from unittest import mock
 
 import pytest
@@ -73,9 +75,22 @@ def run(coro: object) -> object:
     return asyncio.run(coro)
 
 
-async def fake_push_screen(_screen: object, callback: object) -> None:
+def assert_rendered_needles(text: str, present: list[str], absent: list[str]) -> None:
+    """Assert that required needles are present and forbidden ones absent."""
+    for needle in present:
+        assert needle in text
+    for needle in absent:
+        assert needle not in text
+
+
+async def fake_push_screen(
+    _screen: object,
+    callback: Callable[[str], object],
+) -> None:
     """Simulate a modal that immediately returns a generated task name."""
-    await callback("test-name")
+    result = callback("test-name")
+    if inspect.isawaitable(result):
+        await result
 
 
 def make_creation_app(app_class: type) -> object:
@@ -254,11 +269,7 @@ class TestRenderHelpers:
     def test_render_task_details_work_status_variants(
         self, overrides: dict[str, object], present: list[str], absent: list[str]
     ) -> None:
-        text = render_task_details_text(**overrides)
-        for needle in present:
-            assert needle in text
-        for needle in absent:
-            assert needle not in text
+        assert_rendered_needles(render_task_details_text(**overrides), present, absent)
 
     @pytest.mark.parametrize(
         ("overrides", "present", "absent"),
@@ -280,11 +291,7 @@ class TestRenderHelpers:
     def test_render_task_details_permission_variants(
         self, overrides: dict[str, object], present: list[str], absent: list[str]
     ) -> None:
-        text = render_task_details_text(**overrides)
-        for needle in present:
-            assert needle in text
-        for needle in absent:
-            assert needle not in text
+        assert_rendered_needles(render_task_details_text(**overrides), present, absent)
 
     @pytest.mark.parametrize(
         ("shield_state", "present", "absent"),
@@ -312,11 +319,11 @@ class TestRenderHelpers:
     def test_render_task_details_shield_variants(
         self, shield_state: str, present: list[str], absent: list[str]
     ) -> None:
-        text = render_task_details_text(task_id="99", shield_state=shield_state)
-        for needle in present:
-            assert needle in text
-        for needle in absent:
-            assert needle not in text
+        assert_rendered_needles(
+            render_task_details_text(task_id="99", shield_state=shield_state),
+            present,
+            absent,
+        )
 
     @pytest.mark.parametrize(
         ("overrides", "present", "absent"),
@@ -344,11 +351,7 @@ class TestRenderHelpers:
     def test_format_task_label_variants(
         self, overrides: dict[str, object], present: list[str], absent: list[str]
     ) -> None:
-        label = format_task_label(**overrides)
-        for needle in present:
-            assert needle in label
-        for needle in absent:
-            assert needle not in label
+        assert_rendered_needles(format_task_label(**overrides), present, absent)
 
     @pytest.mark.parametrize(
         ("overrides", "expected"),
@@ -607,66 +610,66 @@ class TestActionDispatch:
     """Tests for action dispatch routing in the app."""
 
     def test_project_action_dispatch_project_init(self) -> None:
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
 
-        run(AppClass._handle_project_action(instance, "project_init"))
+        run(app_class._handle_project_action(instance, "project_init"))
 
         instance._action_project_init.assert_called_once()
 
     @pytest.mark.parametrize("provider", _auth_providers())
     def test_project_action_dispatch_auth_providers(self, provider: str) -> None:
         """Auth dispatch extracts the provider name from the action string."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._handle_project_action(instance, f"auth_{provider}"))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._handle_project_action(instance, f"auth_{provider}"))
         instance._action_auth.assert_called_once_with(provider)
 
     def test_project_action_dispatch_import_opencode(self) -> None:
         """Import opencode config action routes to the handler."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._handle_project_action(instance, "import_opencode_config"))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._handle_project_action(instance, "import_opencode_config"))
         instance._action_import_opencode_config.assert_called_once()
 
     @pytest.mark.parametrize(("action", "handler"), _task_action_cases())
     def test_task_action_dispatch_all(self, action: str, handler: str) -> None:
         """Every entry in TASK_ACTION_HANDLERS routes to its handler."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._handle_task_action(instance, action))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._handle_task_action(instance, action))
         getattr(instance, handler).assert_called_once()
 
     @pytest.mark.parametrize(("action", "handler"), _project_action_cases())
     def test_project_action_dispatch_all(self, action: str, handler: str) -> None:
         """Every entry in PROJECT_ACTION_HANDLERS routes to its handler."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._handle_project_action(instance, action))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._handle_project_action(instance, action))
         getattr(instance, handler).assert_called_once()
 
     def test_action_run_cli_from_main(self) -> None:
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass.action_run_cli_from_main(instance))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class.action_run_cli_from_main(instance))
         instance._action_task_start_cli.assert_called_once()
 
     def test_action_delete_task_from_main(self) -> None:
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass.action_delete_task_from_main(instance))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class.action_delete_task_from_main(instance))
         instance.action_delete_task.assert_called_once()
 
     def test_action_run_autopilot_from_main(self) -> None:
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass.action_run_autopilot_from_main(instance))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class.action_run_autopilot_from_main(instance))
         instance._action_task_start_autopilot.assert_called_once()
 
     def test_action_follow_logs_from_main(self) -> None:
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass.action_follow_logs_from_main(instance))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class.action_follow_logs_from_main(instance))
         instance._action_follow_logs.assert_called_once()
 
 
@@ -674,10 +677,10 @@ class TestActionSelection:
     """Tests for task selection after task creation flows."""
 
     def test_action_new_task_selects_created_task(self) -> None:
-        _, AppClass = import_app()
-        instance = make_creation_app(AppClass)
+        _, app_class = import_app()
+        instance = make_creation_app(app_class)
         fake_task_new = mock.Mock(return_value="7")
-        action_globals = AppClass.action_new_task.__globals__
+        action_globals = app_class.action_new_task.__globals__
 
         with (
             mock.patch.dict(
@@ -686,7 +689,7 @@ class TestActionSelection:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            run(AppClass.action_new_task(instance))
+            run(app_class.action_new_task(instance))
 
         assert instance._last_selected_tasks.get("proj1") == "7"
         fake_task_new.assert_called_once_with("proj1", name="test-name")
@@ -694,10 +697,10 @@ class TestActionSelection:
         instance.refresh_tasks.assert_awaited_once()
 
     def test_action_new_task_calls_focus_helper(self) -> None:
-        _, AppClass = import_app()
-        instance = make_creation_app(AppClass)
+        _, app_class = import_app()
+        instance = make_creation_app(app_class)
         fake_task_new = mock.Mock(return_value="8")
-        action_globals = AppClass.action_new_task.__globals__
+        action_globals = app_class.action_new_task.__globals__
         original_focus = instance._focus_task_after_creation
         instance._focus_task_after_creation = mock.Mock(wraps=original_focus)
 
@@ -708,7 +711,7 @@ class TestActionSelection:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            run(AppClass.action_new_task(instance))
+            run(app_class.action_new_task(instance))
 
         fake_task_new.assert_called_once_with("proj1", name="test-name")
         instance._focus_task_after_creation.assert_called_once_with("proj1", "8")
@@ -716,11 +719,11 @@ class TestActionSelection:
         instance.refresh_tasks.assert_awaited_once()
 
     def test_task_start_cli_selects_created_task(self) -> None:
-        _, AppClass = import_app()
-        instance = make_creation_app(AppClass)
+        _, app_class = import_app()
+        instance = make_creation_app(app_class)
         fake_task_new = mock.Mock(return_value="42")
         fake_task_run_cli = mock.Mock()
-        action_globals = AppClass._action_task_start_cli.__globals__
+        action_globals = app_class._action_task_start_cli.__globals__
 
         with (
             mock.patch.dict(
@@ -733,7 +736,7 @@ class TestActionSelection:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            run(AppClass._action_task_start_cli(instance))
+            run(app_class._action_task_start_cli(instance))
 
         assert instance._last_selected_tasks.get("proj1") == "42"
         fake_task_new.assert_called_once_with("proj1", name="test-name")
@@ -746,12 +749,12 @@ class TestActionSelection:
 
         set_experimental(True)
         try:
-            _, AppClass = import_app()
-            instance = make_creation_app(AppClass)
+            _, app_class = import_app()
+            instance = make_creation_app(app_class)
             instance._prompt_ui_backend = mock.Mock(return_value="codex")
             fake_task_new = mock.Mock(return_value="99")
             fake_task_run_web = mock.Mock()
-            action_globals = AppClass._action_task_start_web.__globals__
+            action_globals = app_class._action_task_start_web.__globals__
 
             with (
                 mock.patch.dict(
@@ -764,7 +767,7 @@ class TestActionSelection:
                 ),
                 mock.patch("builtins.input", return_value=""),
             ):
-                run(AppClass._action_task_start_web(instance))
+                run(app_class._action_task_start_web(instance))
 
             assert instance._last_selected_tasks.get("proj1") == "99"
             fake_task_new.assert_called_once_with("proj1", name="test-name")
@@ -775,9 +778,9 @@ class TestActionSelection:
             set_experimental(False)
 
     def test_autopilot_launch_selects_created_task(self) -> None:
-        app_mod, AppClass = import_app()
+        app_mod, app_class = import_app()
 
-        instance = AppClass()
+        instance = app_class()
         instance.current_project_id = "proj1"
         instance._last_selected_tasks = {}
         instance.notify = mock.Mock()
@@ -792,7 +795,7 @@ class TestActionSelection:
         event.worker = worker
         event.state = app_mod.WorkerState.SUCCESS
 
-        run(AppClass.handle_worker_state_changed(instance, event))
+        run(app_class.handle_worker_state_changed(instance, event))
 
         assert instance._last_selected_tasks.get("proj1") == "123"
         instance._save_selection_state.assert_called_once()
@@ -804,11 +807,11 @@ class TestGateSyncAction:
     """Tests for gate sync action behavior in suspended terminal mode."""
 
     def test_action_sync_gate_handles_system_exit_without_exiting_tui(self) -> None:
-        _, AppClass = import_app()
-        instance = make_sync_gate_app(AppClass)
+        _, app_class = import_app()
+        instance = make_sync_gate_app(app_class)
         fake_gate = mock.Mock()
         fake_gate.sync = mock.Mock(side_effect=SystemExit("auth failed"))
-        action_globals = AppClass._action_sync_gate.__globals__
+        action_globals = app_class._action_sync_gate.__globals__
 
         with (
             mock.patch.dict(
@@ -820,7 +823,7 @@ class TestGateSyncAction:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            run(AppClass._action_sync_gate(instance))
+            run(app_class._action_sync_gate(instance))
 
         fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_called_once_with("proj1")
@@ -828,11 +831,11 @@ class TestGateSyncAction:
         instance._refresh_project_state.assert_called_once()
 
     def test_action_sync_gate_success_notifies_and_refreshes(self) -> None:
-        _, AppClass = import_app()
-        instance = make_sync_gate_app(AppClass)
+        _, app_class = import_app()
+        instance = make_sync_gate_app(app_class)
         fake_gate = mock.Mock()
         fake_gate.sync = mock.Mock(return_value={"success": True, "created": False, "errors": []})
-        action_globals = AppClass._action_sync_gate.__globals__
+        action_globals = app_class._action_sync_gate.__globals__
 
         with (
             mock.patch.dict(
@@ -844,7 +847,7 @@ class TestGateSyncAction:
             ),
             mock.patch("builtins.input", return_value=""),
         ):
-            run(AppClass._action_sync_gate(instance))
+            run(app_class._action_sync_gate(instance))
 
         fake_gate.sync.assert_called_once()
         instance._print_sync_gate_ssh_help.assert_not_called()
@@ -908,12 +911,12 @@ class TestCommandPalette:
         from tui_test_helpers import build_textual_stubs
 
         stubs = build_textual_stubs()
-        _, AppClass = import_app(stubs)
-        instance = AppClass()
+        _, app_class = import_app(stubs)
+        instance = app_class()
         # get_system_commands imports SystemCommand at call time, so we need
         # textual.app in sys.modules during the call.
         with mock.patch.dict(sys.modules, stubs):
-            commands = list(AppClass.get_system_commands(instance, screen=mock.Mock()))
+            commands = list(app_class.get_system_commands(instance, screen=mock.Mock()))
         titles = [cmd.title for cmd in commands]
         assert "Git Gate Server" in titles
 
@@ -1004,16 +1007,16 @@ class TestGateServerActionDispatch:
     @pytest.mark.parametrize(("action", "handler"), _gate_server_action_cases())
     def test_gate_server_action_dispatch_all(self, action: str, handler: str) -> None:
         """Every entry in GATE_SERVER_ACTION_HANDLERS routes to its handler."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._on_gate_server_action_result(instance, action))
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._on_gate_server_action_result(instance, action))
         getattr(instance, handler).assert_called_once()
 
     def test_gate_server_action_dispatch_none(self) -> None:
         """None result does not dispatch any handler."""
-        app_mod, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
-        run(AppClass._on_gate_server_action_result(instance, None))
+        app_mod, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
+        run(app_class._on_gate_server_action_result(instance, None))
         # No action handler should have been called
         for handler in app_mod.GATE_SERVER_ACTION_HANDLERS.values():
             getattr(instance, handler).assert_not_called()
@@ -1026,15 +1029,15 @@ class TestDeleteTaskResult:
         self, side_effect: BaseException | None = None, **kwargs: str
     ) -> tuple[str, str, str, str | None]:
         """Import app, mock task_delete, and call _delete_task."""
-        _, AppClass = import_app()
-        instance = mock.Mock(spec=AppClass)
+        _, app_class = import_app()
+        instance = mock.Mock(spec=app_class)
         # Patch task_delete in the method's own globals (the reimported module dict).
-        fn_globals = AppClass._delete_task.__globals__
+        fn_globals = app_class._delete_task.__globals__
         orig = fn_globals["task_delete"]
         fake = mock.Mock(side_effect=side_effect) if side_effect else mock.Mock()
         fn_globals["task_delete"] = fake
         try:
-            return AppClass._delete_task(
+            return app_class._delete_task(
                 instance,
                 kwargs.get("project_id", "proj1"),
                 kwargs.get("task_id", "3"),
