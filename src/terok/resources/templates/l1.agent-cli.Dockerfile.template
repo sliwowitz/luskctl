@@ -44,47 +44,26 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/b
 # Owned by dev so no sudo is needed at runtime.
 RUN mkdir -p /etc/claude-code && chown dev:dev /etc/claude-code
 
-# Configure shell environment and PATH for agent CLIs.
-# This generates static text referencing scripts by path (resolved at runtime,
-# not build time), so it can safely live above the cache bust point.
-RUN set -eux; \
-    printf '%s\n' \
-      '# Add user-installed agent CLIs to PATH' \
-      'export PATH="$HOME/.npm-packages/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH"' \
-      '' \
-      '# Shared terok Git identity helper' \
-      '[ -r /usr/local/share/terok/terok-git-identity.sh ] && . /usr/local/share/terok/terok-git-identity.sh' \
-      '' \
-      '# Git identity wrappers for non-agent CLIs (agent wrappers are in zz-terok-project.sh)' \
-      'gh() {' \
-      '  (' \
-      '    _terok_apply_git_identity "GitHub CLI" "gh@github.com"' \
-      '    command gh "$@"' \
-      '  )' \
-      '}' \
-      'glab() {' \
-      '  (' \
-      '    _terok_apply_git_identity "GitLab CLI" "glab@gitlab.com"' \
-      '    command glab "$@"' \
-      '  )' \
-      '}' \
-      '' \
-      '# Print help banner on interactive login' \
-      'if [ -t 1 ] && [ -z "$_TEROK_BANNER_SHOWN" ]; then' \
-      '  export _TEROK_BANNER_SHOWN=1' \
-      '  _TEROK_LOGIN=1 hilfe --kurz 2>/dev/null || true' \
-      'fi' \
-      '' \
-      '# Source terok project config (agent wrapper functions)' \
-      '[ -r /etc/profile.d/zz-terok-project.sh ] && . /etc/profile.d/zz-terok-project.sh' \
-      > /etc/profile.d/terok-agent-aliases.sh; \
+# Shell environment: terok-env.sh is the single source of truth for PATH,
+# git identity helpers, gh/glab wrappers, and per-project agent wrappers.
+# It's sourced by all three shell modes:
+#   - Non-interactive (bash -c): via BASH_ENV (set below)
+#   - Interactive:               via /etc/bash.bashrc
+#   - Login:                     via /etc/profile.d/
+# The script guards against double-sourcing internally.
+# The COPY + RUN here set up the wiring; the script itself is also refreshed
+# below the cache bust point so `terokctl build --agents` picks up changes.
+COPY scripts/terok-env.sh /usr/local/share/terok/terok-env.sh
+RUN chmod +x /usr/local/share/terok/terok-env.sh; \
+    ln -sf /usr/local/share/terok/terok-env.sh /etc/profile.d/terok-env.sh; \
     if [ -f /etc/bash.bashrc ]; then \
-      printf '\n# terok agent aliases\n. /etc/profile.d/terok-agent-aliases.sh\n' >> /etc/bash.bashrc; \
+      printf '\n# terok environment (PATH, git identity, agent wrappers)\n. /usr/local/share/terok/terok-env.sh\n' >> /etc/bash.bashrc; \
     else \
-      printf '# terok agent aliases\n. /etc/profile.d/terok-agent-aliases.sh\n' > /etc/bash.bashrc; \
+      printf '# terok environment (PATH, git identity, agent wrappers)\n. /usr/local/share/terok/terok-env.sh\n' > /etc/bash.bashrc; \
     fi; \
-    # Add Mistral model sync to bashrc (only for interactive shells)
-    printf '\n# Mistral model sync (checks for new models on login)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
+    # Interactive-only: help banner and model sync (login shells only)
+    printf '\n# Help banner (interactive login only)\nif [ -t 1 ] && [ -z "$_TEROK_BANNER_SHOWN" ]; then\n  export _TEROK_BANNER_SHOWN=1\n  _TEROK_LOGIN=1 hilfe --kurz 2>/dev/null || true\nfi\n' >> /etc/bash.bashrc; \
+    printf '\n# Mistral model sync (interactive login only)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
 # Symlink for terok project config (resolved at runtime via mount).
 RUN ln -s /home/dev/.terok/terok-agent.sh /etc/profile.d/zz-terok-project.sh
@@ -103,6 +82,7 @@ RUN mkdir -p /usr/local/share/terok && echo "cache-bust: ${AGENT_CACHE_BUST}" > 
 COPY scripts/setup-codex-auth.sh /usr/local/bin/setup-codex-auth.sh
 COPY scripts/opencode-session-plugin.mjs /usr/local/share/terok/opencode-session-plugin.mjs
 COPY scripts/terok-git-identity.sh /usr/local/share/terok/terok-git-identity.sh
+COPY scripts/terok-env.sh /usr/local/share/terok/terok-env.sh
 COPY scripts/hilfe /usr/local/bin/hilfe
 COPY scripts/blablador /usr/local/bin/blablador
 COPY scripts/blablador-acp /usr/local/bin/blablador-acp
@@ -157,7 +137,8 @@ RUN set -eux; \
 # === User operations (agent installs) ===
 ENV HOME=/home/dev
 ENV NPM_CONFIG_PREFIX=/home/dev/.npm-packages \
-    PATH=/home/dev/.npm-packages/bin:/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH
+    PATH=/home/dev/.npm-packages/bin:/home/dev/.local/bin:/home/dev/.opencode/bin:$PATH \
+    BASH_ENV=/usr/local/share/terok/terok-env.sh
 USER dev
 WORKDIR /home/dev
 
