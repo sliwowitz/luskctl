@@ -44,8 +44,9 @@ _terok_notes() {
     printf '  - \033[36m/home/dev\033[0m  home dir; several config dirs here are mounted from the host\n'
     printf '                 (.claude, .codex, gh/glab, opencode, optional .ssh)\n'
     printf '  - agent CLI commands above are terok wrappers with git/session defaults\n'
-    printf '  - \033[36msudo update-all-the-things\033[0m updates this running container only\n'
-    printf '  - host/TUI: \033[36mRebuild from L0 with fresh agents\033[0m / \033[36mterokctl build --agents <project>\033[0m\n'
+    printf '  - \033[36msudo update-all-the-things\033[0m updates system packages and agent installs\n'
+    printf '    in this running container only\n'
+    printf '  - host/TUI: \033[36mRebuild from L1 with fresh agents\033[0m / \033[36mterokctl build --agents <project>\033[0m\n'
     printf '    refreshes agent installs for new containers only\n'
     printf '  - host/TUI: \033[36mRebuild from L0 (no cache)\033[0m / \033[36mterokctl build --full-rebuild <project>\033[0m\n'
     printf '    refreshes the base image + apt packages for new containers only\n'
@@ -57,12 +58,7 @@ _terok_permission_mode
 _terok_agents
 
 if [[ "$_mode" == "--kurz" ]]; then
-    if [[ -n "${_TEROK_LOGIN:-}" ]]; then
-        printf '\nRun \033[1mhilfe\033[0m for container tips.\n'
-    else
-        printf '\nRun \033[1mhilfe\033[0m for more container tips.\n'
-    fi
-    printf '\n'
+    printf '\nRun \033[1mhilfe\033[0m for more container tips.\n\n'
     exit 0
 fi
 

@@ -46,19 +46,17 @@ def test_hilfe_kurz_keeps_banner_compact() -> None:
     assert "Available AI agents:" in text
     assert "OpenCode with Helmholtz Blablador" in text
     assert "Run hilfe for more container tips." in text
-    assert "Run hilfe for container tips." not in text
     assert "/workspace" not in text
     assert "update-all-the-things" not in text
 
 
 def test_hilfe_kurz_login_flow_message() -> None:
-    """``hilfe --kurz`` uses the shorter hint on login."""
+    """``hilfe --kurz`` uses the same hint on login."""
     result = _run_hilfe("--kurz", _TEROK_LOGIN="1")
     text = _plain(result.stdout)
 
     assert result.returncode == 0
-    assert "Run hilfe for container tips." in text
-    assert "Run hilfe for more container tips." not in text
+    assert "Run hilfe for more container tips." in text
 
 
 def test_hilfe_full_includes_container_notes() -> None:
@@ -70,7 +68,8 @@ def test_hilfe_full_includes_container_notes() -> None:
     assert "/workspace" in text
     assert "/home/dev" in text
     assert "update-all-the-things" in text
-    assert "Rebuild from L0 with fresh agents" in text
+    assert "system packages and agent installs" in text
+    assert "Rebuild from L1 with fresh agents" in text
     assert "Rebuild from L0 (no cache)" in text
     assert "new containers only" in text
     assert "^a" in text
