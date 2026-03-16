@@ -68,7 +68,8 @@ RUN chmod +x /etc/profile.d/terok-env.sh; \
     printf '\n# Mistral model sync (interactive login only)\nif [ -t 1 ] && [ -z "$_MISTRAL_MODEL_SYNC_RUN" ]; then\n  export _MISTRAL_MODEL_SYNC_RUN=1\n  if command -v vibe-model-sync >/dev/null 2>&1; then\n    vibe-model-sync >/dev/null 2>&1 || true\n  fi\nfi\n' >> /etc/bash.bashrc
 
 # Symlink for per-task agent wrappers (resolved at runtime via mount).
-RUN ln -s /home/dev/.terok/terok-agent.sh /usr/local/share/terok/terok-env-wrappers.sh
+RUN mkdir -p /usr/local/share/terok && \
+    ln -s /home/dev/.terok/terok-agent.sh /usr/local/share/terok/terok-env-wrappers.sh
 
 # === Cache bust point ===
 # Changing AGENT_CACHE_BUST invalidates all layers below: terok scripts,
