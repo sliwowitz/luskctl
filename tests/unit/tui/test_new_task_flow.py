@@ -6,6 +6,8 @@
 import asyncio
 from unittest import mock
 
+import pytest
+
 from tests.unit.tui.tui_test_helpers import import_app, import_screens
 
 
@@ -431,3 +433,235 @@ class TestTaskListNewBinding:
         bindings = widgets.TaskList.BINDINGS
         binding_keys = [b[0] if isinstance(b, tuple) else b.key for b in bindings]
         assert "n" in binding_keys
+
+
+# ---------------------------------------------------------------------------
+# _login_title helper
+# ---------------------------------------------------------------------------
+
+
+class TestLoginTitle:
+    """Tests for the _login_title helper that unifies terminal/tmux titles."""
+
+    def _import_helper(self):
+        _, app_class = import_app()
+        return app_class._start_cli_task_background.__globals__["_login_title"]
+
+    def test_basic_format(self) -> None:
+        login_title = self._import_helper()
+        assert login_title("myproj", "3", "fix-auth-bug") == "myproj:3:fix-auth-bug"
+
+    def test_name_equals_id_when_unnamed(self) -> None:
+        login_title = self._import_helper()
+        assert login_title("proj", "7", "7") == "proj:7:7"
+
+    @pytest.mark.parametrize(
+        ("pid", "tid", "name", "expected"),
+        [
+            ("a", "1", "x", "a:1:x"),
+            ("long-project-name", "42", "refactor-db", "long-project-name:42:refactor-db"),
+        ],
+        ids=["short", "long"],
+    )
+    def test_parametrized(self, pid: str, tid: str, name: str, expected: str) -> None:
+        login_title = self._import_helper()
+        assert login_title(pid, tid, name) == expected
+
+
+# ---------------------------------------------------------------------------
+# TaskLaunchScreen — task_name propagation
+# ---------------------------------------------------------------------------
+
+
+class TestTaskLaunchScreenNamePropagation:
+    """Tests for task_name flowing through TaskLaunchScreen."""
+
+    def test_empty_name_falls_back_to_task_id(self) -> None:
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(
+            container_name="c", project_id="p", task_id="42", task_name=""
+        )
+        assert screen._task_name == "42"
+
+    def test_none_name_falls_back_to_task_id(self) -> None:
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(
+            container_name="c", project_id="p", task_id="5", task_name=None
+        )
+        assert screen._task_name == "5"
+
+    def test_explicit_name_preserved(self) -> None:
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(
+            container_name="c", project_id="p", task_id="1", task_name="fix-login"
+        )
+        assert screen._task_name == "fix-login"
+
+    def test_do_login_result_includes_name(self) -> None:
+        """The 6-tuple dismiss result includes task_name at position 2."""
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(
+            container_name="ctr", project_id="proj", task_id="9", task_name="deploy-fix"
+        )
+        screen.dismiss = mock.Mock()
+
+        mock_select = mock.Mock()
+        mock_select.value = "vibe"
+        mock_input = mock.Mock()
+        mock_input.value = "refactor auth"
+
+        screen.query_one = lambda sel, cls=None: mock_select if "login-agent" in sel else mock_input
+
+        screen._do_login()
+        result = screen.dismiss.call_args[0][0]
+        assert len(result) == 6
+        assert result == ("proj", "9", "deploy-fix", "ctr", "vibe", "refactor auth")
+
+    def test_do_login_unnamed_task_uses_id(self) -> None:
+        """When no task_name given, the result falls back to task_id."""
+        screens, _ = import_screens()
+        screen = screens.TaskLaunchScreen(container_name="c", project_id="p", task_id="11")
+        screen.dismiss = mock.Mock()
+
+        mock_select = mock.Mock()
+        mock_select.value = "bash"
+        mock_input = mock.Mock()
+        mock_input.value = ""
+
+        screen.query_one = lambda sel, cls=None: mock_select if "login-agent" in sel else mock_input
+
+        screen._do_login()
+        result = screen.dismiss.call_args[0][0]
+        # task_name should fall back to task_id "11"
+        assert result[2] == "11"
+
+
+# ---------------------------------------------------------------------------
+# _start_cli_task_background passes name to TaskLaunchScreen
+# ---------------------------------------------------------------------------
+
+
+class TestStartCliTaskBackgroundPassesName:
+    """Verify _start_cli_task_background forwards the task name to TaskLaunchScreen."""
+
+    def test_task_name_forwarded_to_launch_screen(self) -> None:
+        _, app_class = import_app()
+        instance = app_class()
+        instance.current_project_id = "proj1"
+        instance._last_selected_tasks = {}
+        instance._save_selection_state = mock.Mock()
+        instance.notify = mock.Mock()
+        instance.run_worker = mock.Mock()
+        instance.push_screen = mock.AsyncMock()
+        instance.refresh_tasks = mock.AsyncMock()
+
+        fake_project = mock.Mock()
+        fake_project.default_login = "claude"
+        action_globals = app_class._start_cli_task_background.__globals__
+
+        with mock.patch.dict(
+            action_globals,
+            {
+                "task_new": mock.Mock(return_value="7"),
+                "load_project": mock.Mock(return_value=fake_project),
+                "container_name": lambda *a: "terok-proj1-cli-7",
+            },
+        ):
+            run(app_class._start_cli_task_background(instance, "deploy-hotfix"))
+
+        # Verify push_screen was called with a TaskLaunchScreen
+        instance.push_screen.assert_awaited_once()
+        launch_screen = instance.push_screen.call_args[0][0]
+        assert launch_screen._task_name == "deploy-hotfix"
+        assert launch_screen._task_id == "7"
+        assert launch_screen._project_id == "proj1"
+        assert launch_screen._default_login == "claude"
+
+
+# ---------------------------------------------------------------------------
+# _on_launch_screen_result terminal title
+# ---------------------------------------------------------------------------
+
+
+class TestOnLaunchScreenResultTitle:
+    """Verify _on_launch_screen_result uses the unified login title."""
+
+    def test_bash_login_title_includes_task_name(self) -> None:
+        _, app_class = import_app()
+        instance = app_class()
+        instance.current_project_id = "proj1"
+        instance.refresh_tasks = mock.AsyncMock()
+        instance._launch_terminal_session = mock.AsyncMock()
+
+        action_globals = app_class._on_launch_screen_result.__globals__
+
+        with mock.patch.dict(
+            action_globals,
+            {"get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c", "bash"])},
+        ):
+            result = ("proj1", "3", "fix-auth", "proj1-cli-3", "bash", None)
+            run(app_class._on_launch_screen_result(instance, result))
+
+        instance._launch_terminal_session.assert_awaited_once()
+        call_kwargs = instance._launch_terminal_session.call_args[1]
+        assert call_kwargs["title"] == "proj1:3:fix-auth"
+        assert call_kwargs["cname"] == "proj1-cli-3"
+
+    def test_agent_login_title_includes_task_name(self) -> None:
+        _, app_class = import_app()
+        instance = app_class()
+        instance.current_project_id = "proj1"
+        instance.refresh_tasks = mock.AsyncMock()
+        instance._launch_terminal_session = mock.AsyncMock()
+
+        fake_provider = mock.Mock()
+        fake_provider.binary = "claude"
+
+        action_globals = app_class._on_launch_screen_result.__globals__
+
+        with mock.patch.dict(
+            action_globals,
+            {
+                "get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"]),
+                "HEADLESS_PROVIDERS": {"claude": fake_provider},
+            },
+        ):
+            result = ("proj1", "5", "my-task", "proj1-cli-5", "claude", "fix it")
+            run(app_class._on_launch_screen_result(instance, result))
+
+        call_kwargs = instance._launch_terminal_session.call_args[1]
+        assert call_kwargs["title"] == "proj1:5:my-task"
+
+    def test_none_result_refreshes_tasks(self) -> None:
+        _, app_class = import_app()
+        instance = app_class()
+        instance.refresh_tasks = mock.AsyncMock()
+        instance._launch_terminal_session = mock.AsyncMock()
+
+        run(app_class._on_launch_screen_result(instance, None))
+
+        instance.refresh_tasks.assert_awaited_once()
+        instance._launch_terminal_session.assert_not_awaited()
+
+    def test_unknown_agent_notifies(self) -> None:
+        _, app_class = import_app()
+        instance = app_class()
+        instance.current_project_id = "proj1"
+        instance.refresh_tasks = mock.AsyncMock()
+        instance.notify = mock.Mock()
+        instance._launch_terminal_session = mock.AsyncMock()
+
+        action_globals = app_class._on_launch_screen_result.__globals__
+
+        with mock.patch.dict(
+            action_globals,
+            {
+                "get_login_command": mock.Mock(return_value=["podman", "exec", "-it", "c"]),
+                "HEADLESS_PROVIDERS": {},
+            },
+        ):
+            result = ("proj1", "5", "my-task", "proj1-cli-5", "nonexistent", "hi")
+            run(app_class._on_launch_screen_result(instance, result))
+
+        instance.notify.assert_called_once_with("Unknown agent: nonexistent")
+        instance._launch_terminal_session.assert_not_awaited()
