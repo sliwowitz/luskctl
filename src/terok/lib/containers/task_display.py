@@ -41,7 +41,8 @@ class ModeInfo:
 
 STATUS_DISPLAY: dict[str, StatusInfo] = {
     "running": StatusInfo(label="running", emoji="\U0001f7e2", color="green"),
-    "stopped": StatusInfo(label="stopped", emoji="\U0001f7e1", color="yellow"),
+    "init": StatusInfo(label="init", emoji="\U0001f7e1", color="yellow"),
+    "stopped": StatusInfo(label="stopped", emoji="\U0001f534", color="red"),
     "completed": StatusInfo(label="completed", emoji="\u2705", color="green"),
     "failed": StatusInfo(label="failed", emoji="\u274c", color="red"),
     "created": StatusInfo(label="created", emoji="\U0001f195", color="yellow"),
@@ -118,8 +119,9 @@ def effective_status(task: TaskMeta) -> str:
     - ``exit_code`` (int | None): process exit code, or None
     - ``deleting`` (bool): persisted to YAML before deletion starts
 
-    Returns one of: ``"deleting"``, ``"running"``, ``"stopped"``,
-    ``"completed"``, ``"failed"``, ``"created"``, ``"not found"``.
+    Returns one of: ``"deleting"``, ``"running"``, ``"init"``,
+    ``"stopped"``, ``"completed"``, ``"failed"``, ``"created"``,
+    ``"not found"``.
     """
     if task.deleting:
         return "deleting"
@@ -133,7 +135,7 @@ def effective_status(task: TaskMeta) -> str:
         # init (mode written to YAML).  While the container is live but
         # mode is still None the task is starting up — show yellow so
         # the display progresses monotonically: new → yellow → green.
-        return "running" if mode is not None else "stopped"
+        return "running" if mode is not None else "init"
 
     if cs is not None:
         # Container exists but is not running
