@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
-import pytest
-import yaml
+import re
 
+import pytest
+
+from terok.lib.util.yaml import load as yaml_load
 from tests.testnet import TEST_UPSTREAM_URL
 
 from ..helpers import TerokIntegrationEnv
@@ -25,6 +27,28 @@ ssh:
   key_name: id_alpha
 agent:
   provider: codex
+"""
+
+# Source config with comments on every section — used to verify that
+# derive_project round-trips comments through ruamel.yaml.
+COMMENTED_PROJECT = f"""
+# === Project identity ===
+project:
+  id: alpha
+  security_class: online  # keep this online for dev
+
+# --- Git configuration ---
+git:
+  upstream_url: {TEST_UPSTREAM_URL}
+  default_branch: main  # pinned to main
+
+# SSH keys for container access
+ssh:
+  key_name: id_alpha  # custom key
+
+# Agent section (will be cleared on derive)
+agent:
+  provider: codex  # default provider
 """
 
 
@@ -64,7 +88,7 @@ class TestProjects:
         assert "Derived project 'beta' from 'alpha'" in result.stdout
         assert target.is_file()
 
-        derived = yaml.safe_load(target.read_text(encoding="utf-8"))
+        derived = yaml_load(target.read_text(encoding="utf-8"))
         assert derived["project"]["id"] == "beta"
         assert "agent" not in derived
         assert derived["git"]["upstream_url"] == TEST_UPSTREAM_URL
@@ -73,3 +97,43 @@ class TestProjects:
         listed = terok_env.run_cli("projects")
         assert "- alpha [online]" in listed.stdout
         assert "- beta [online]" in listed.stdout
+
+    def test_project_derive_preserves_yaml_comments(self, terok_env: TerokIntegrationEnv) -> None:
+        """``project-derive`` preserves user comments via ruamel.yaml round-trip.
+
+        Creates a source project.yml with inline and block comments on every
+        section, derives a new project, then inspects the raw output file to
+        confirm comments survived the load → modify → dump cycle.
+        """
+        terok_env.write_project("commented", COMMENTED_PROJECT)
+
+        terok_env.run_cli("project-derive", "commented", "derived")
+
+        target = terok_env.project_root("derived") / "project.yml"
+        raw = target.read_text(encoding="utf-8")
+        derived = yaml_load(raw)
+
+        # ── Structural correctness (same as the non-commented test) ──
+        assert derived["project"]["id"] == "derived"
+        assert derived["git"]["upstream_url"] == TEST_UPSTREAM_URL
+        assert derived["ssh"]["key_name"] == "id_alpha"
+        assert "agent" not in derived  # cleared by derive
+
+        # ── Comment preservation (the raison d'être of ruamel.yaml) ──
+        # Block comments above sections
+        assert "# === Project identity ===" in raw
+        assert "# --- Git configuration ---" in raw
+        assert "# SSH keys for container access" in raw
+
+        # Inline comments on values
+        assert "# keep this online for dev" in raw
+        assert "# pinned to main" in raw
+        assert "# custom key" in raw
+
+        # The agent section and its associated comments should be gone
+        assert re.search(r"(?m)^\s*agent\s*:", raw) is None
+        assert re.search(r"(?m)^\s*#.*\bagent\b", raw) is None
+
+        # Key order matches the source file (not alphabetically sorted)
+        keys = [m.group(1) for m in re.finditer(r"(?m)^(\w+)\s*:", raw)]
+        assert keys == ["project", "git", "ssh"]

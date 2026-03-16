@@ -9,10 +9,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import yaml  # pip install pyyaml
 from pydantic import ValidationError
 
 from ..util.config_stack import ConfigScope, ConfigStack
+from ..util.yaml import YAMLError, dump as _yaml_dump, load as _yaml_load
 from .config import (
     build_root,
     bundled_presets_dir,
@@ -34,6 +34,8 @@ from .project_model import (  # noqa: F401 — re-exported public API
 from .yaml_schema import RawGlobalGitSection, RawProjectYaml
 
 logger = logging.getLogger(__name__)
+
+_PROJECT_YML = "project.yml"
 
 
 def _get_global_git_config(key: str) -> str | None:
@@ -80,7 +82,7 @@ def _resolve_subagent_files(subagents: list[dict[str, Any]] | None, base_dir: Pa
 
 def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
     """Format a Pydantic ValidationError into a user-friendly message."""
-    lines = [f"Invalid project.yml ({cfg_path}):"]
+    lines = [f"Invalid {_PROJECT_YML} ({cfg_path}):"]
     for err in exc.errors():
         loc = " → ".join(str(p) for p in err["loc"])
         lines.append(f"  {loc}: {err['msg']}")
@@ -90,8 +92,8 @@ def _format_validation_error(exc: ValidationError, cfg_path: Path) -> str:
 def _parse_project_yaml(cfg_path: Path) -> RawProjectYaml:
     """Parse and validate a project.yml file, returning a typed model."""
     try:
-        raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raw = _yaml_load(cfg_path.read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, YAMLError) as exc:
         raise SystemExit(f"Failed to read {cfg_path}: {exc}")
     try:
         return RawProjectYaml.model_validate(raw)
@@ -222,8 +224,8 @@ def load_preset(project_id: str, preset_name: str) -> tuple[dict[str, Any], Path
         hint = f"  Available: {names}" if available else "  No presets found."
         raise SystemExit(f"Preset '{preset_name}' not found.\n{hint}")
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
+        data = _yaml_load(path.read_text(encoding="utf-8")) or {}
+    except YAMLError as exc:
         raise SystemExit(f"Failed to parse preset '{preset_name}' ({path}): {exc}")
     # Resolve subagent file: paths relative to the preset file's directory
     _resolve_subagent_files(data.get("subagents", []), path.parent)
@@ -251,8 +253,7 @@ def derive_project(source_id: str, new_id: str) -> Path:
     if target_root.exists():
         raise SystemExit(f"Project '{new_id}' already exists at {target_root}")
 
-    # Read and re-serialise via safe_load/safe_dump (comments are not preserved)
-    source_cfg = yaml.safe_load((source.root / "project.yml").read_text(encoding="utf-8")) or {}
+    source_cfg = _yaml_load((source.root / _PROJECT_YML).read_text(encoding="utf-8")) or {}
 
     # Update project ID
     if "project" not in source_cfg:
@@ -263,8 +264,8 @@ def derive_project(source_id: str, new_id: str) -> Path:
     source_cfg.pop("agent", None)
 
     target_root.mkdir(parents=True, exist_ok=True)
-    (target_root / "project.yml").write_text(
-        yaml.safe_dump(source_cfg, default_flow_style=False, sort_keys=False),
+    (target_root / _PROJECT_YML).write_text(
+        _yaml_dump(source_cfg),
         encoding="utf-8",
     )
 
@@ -275,9 +276,9 @@ def _find_project_root(project_id: str) -> Path:
     """Return the root directory for *project_id*, preferring user over system."""
     user_root = user_projects_root() / project_id
     sys_root = config_root() / project_id
-    if (user_root / "project.yml").is_file():
+    if (user_root / _PROJECT_YML).is_file():
         return user_root
-    if (sys_root / "project.yml").is_file():
+    if (sys_root / _PROJECT_YML).is_file():
         return sys_root
     raise SystemExit(f"Project '{project_id}' not found in {user_root} or {sys_root}")
 
@@ -299,7 +300,7 @@ def list_projects() -> list[ProjectConfig]:
         for d in root.iterdir():
             if not d.is_dir():
                 continue
-            if (d / "project.yml").is_file():
+            if (d / _PROJECT_YML).is_file():
                 ids.add(d.name)
 
     projects: list[ProjectConfig] = []
@@ -335,9 +336,9 @@ def _validated_global_git_section() -> dict[str, Any]:
 def load_project(project_id: str) -> ProjectConfig:
     """Load and return a fully resolved :class:`ProjectConfig` from *project_id*."""
     root = _find_project_root(project_id)
-    cfg_path = root / "project.yml"
+    cfg_path = root / _PROJECT_YML
     if not cfg_path.is_file():
-        raise SystemExit(f"Missing project.yml in {root}")
+        raise SystemExit(f"Missing {_PROJECT_YML} in {root}")
 
     raw = _parse_project_yaml(cfg_path)
 
