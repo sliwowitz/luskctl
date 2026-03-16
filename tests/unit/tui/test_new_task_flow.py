@@ -149,13 +149,16 @@ class TestBuildInteractiveAgentCommand:
         assert result == "agent -p hello"
 
     def test_prompt_with_special_chars_is_quoted(self) -> None:
+        import shlex
+
         build = self._import_helper()
         provider = mock.Mock()
         provider.binary = "claude"
         provider.prompt_flag = "-p"
-        result = build(provider, "fix 'the' bug")
-        assert "-p" in result
-        assert "fix" in result
+        prompt = "fix 'the' bug"
+        result = build(provider, prompt)
+        expected = f"claude -p {shlex.quote(prompt)}"
+        assert result == expected
 
 
 # ---------------------------------------------------------------------------

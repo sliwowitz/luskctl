@@ -1093,7 +1093,7 @@ class TaskCreateScreen(screen.ModalScreen["tuple[str, str] | None"]):
         """Submit using the currently highlighted mode option (default: cli)."""
         mode_list = self.query_one("#create-mode-list", OptionList)
         idx = mode_list.highlighted
-        if idx is not None and idx < len(mode_list.option_count):
+        if idx is not None and 0 <= idx < mode_list.option_count:
             option = mode_list.get_option_at_index(idx)
             self._submit(option.id)
         else:
@@ -1135,7 +1135,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str | None] | None"]):
     """
 
     BINDINGS = [
-        _modal_binding("escape", "action_dismiss_screen", "Dismiss"),
+        _modal_binding("escape", "dismiss_screen", "Dismiss"),
     ]
 
     CSS = """
@@ -1204,7 +1204,10 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str | None] | None"]):
             for p in HEADLESS_PROVIDERS.values():
                 choices.append((p.label, p.name))
 
-            yield Select(choices, value=self._default_login, id="login-agent")
+            # Validate default_login against available choices; fall back to "bash"
+            valid_values = {v for _, v in choices}
+            login_value = self._default_login if self._default_login in valid_values else "bash"
+            yield Select(choices, value=login_value, id="login-agent")
             yield Input(placeholder="Initial prompt (optional)", id="launch-prompt")
             with Horizontal(id="launch-buttons"):
                 yield Button("Dismiss", id="btn-dismiss", variant="default")
