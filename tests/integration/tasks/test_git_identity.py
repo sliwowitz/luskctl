@@ -71,16 +71,23 @@ _GIT_ENV_KEYS = (
 )
 
 
-def _resolve_env(terok_env: TerokIntegrationEnv, project_id: str = "git-id-test") -> dict[str, str]:
-    """Load a project and resolve the container env through the real runner path.
+def _resolve_env(
+    terok_env: TerokIntegrationEnv,
+    project_id: str = "git-id-test",
+    agent_name: str = "Claude",
+    agent_email: str = "noreply@anthropic.com",
+) -> dict[str, str]:
+    """Load a project, build the container env, and resolve git identity.
 
-    Mirrors what the production task runners do: load_project →
-    build_task_env_and_volumes → _prepare_agent_config → apply_git_identity_env.
-    The only difference is that we mock ``get_envs_base_dir`` so shared config
-    mounts don't touch the real host, and skip the podman subprocess call.
+    Exercises the real config stack (load_project → build_task_env_and_volumes)
+    for human identity loading, then applies resolve_git_identity with the
+    given agent identity.  Agent identity is a runtime concern (set by wrapper
+    functions / ACP adapters), so it's passed explicitly here.
     """
-    from terok.lib.containers.environment import apply_git_identity_env, build_task_env_and_volumes
-    from terok.lib.containers.task_runners import _prepare_agent_config
+    from terok.lib.containers.environment import (
+        apply_git_identity_env,
+        build_task_env_and_volumes,
+    )
     from terok.lib.core.projects import load_project
 
     project = load_project(project_id)
@@ -94,15 +101,9 @@ def _resolve_env(terok_env: TerokIntegrationEnv, project_id: str = "git-id-test"
     ):
         env, _volumes = build_task_env_and_volumes(project, "1")
 
-    # Use the same _prepare_agent_config the runners call to resolve the provider.
-    with unittest.mock.patch(
-        "terok.lib.containers.environment.get_envs_base_dir", return_value=envs_base
-    ):
-        _config_dir, resolved = _prepare_agent_config(
-            project, project_id, "1", agents=None, preset=None
-        )
-
-    apply_git_identity_env(env, project, resolved.git_author_name, resolved.git_author_email)
+    # Simulate what a wrapper/ACP adapter does at runtime: resolve the full
+    # git identity using the agent's name + the project's human identity.
+    apply_git_identity_env(env, project, agent_name, agent_email)
     return env
 
 
