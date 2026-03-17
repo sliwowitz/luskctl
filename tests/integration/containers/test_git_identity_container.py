@@ -159,7 +159,7 @@ class TestGitIdentityContainer:
         """``_terok_apply_git_identity`` sets correct GIT_* vars for each mode."""
         script = (
             f'_terok_apply_git_identity "{AGENT_NAME}" "{AGENT_EMAIL}"\n'
-            "echo $GIT_AUTHOR_NAME|$GIT_AUTHOR_EMAIL|$GIT_COMMITTER_NAME|$GIT_COMMITTER_EMAIL"
+            'echo "$GIT_AUTHOR_NAME|$GIT_AUTHOR_EMAIL|$GIT_COMMITTER_NAME|$GIT_COMMITTER_EMAIL"'
         )
         result = _bash(container, script, env={"TEROK_GIT_AUTHORSHIP": mode})
         assert result.returncode == 0
