@@ -61,7 +61,9 @@ code flows between them:
 ```mermaid
 graph TD
     UPSTREAM["Upstream (GitHub / GitLab)"]
-    UPSTREAM -- "sync / promote" --- GATE
+
+    UPSTREAM -- "sync (SSH)" --> GATE
+    GATE -- "promote (human)" --> UPSTREAM
 
     subgraph HOST [Host Machine]
         TEROK["terok — CLI + TUI"]
