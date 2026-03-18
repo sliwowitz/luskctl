@@ -1,11 +1,3 @@
-/* Mermaid subgraph clusters: transparent background.
-   Material's inline SVG style uses var(--md-default-fg-color--lightest)
-   for .cluster rect fill — overriding the variable is the only way to
-   win against the ID-scoped selectors inside the SVG. */
-[class*="mermaid"] {
-  --md-default-fg-color--lightest: transparent;
-}
-
 /* Ubuntu Mono renders smaller than Ubuntu at the same font size.
    Bump code font so inline and block code are easy to read. */
 :root {
