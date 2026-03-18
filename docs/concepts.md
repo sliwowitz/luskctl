@@ -242,30 +242,23 @@ with sensitive codebases.
 
 ### Mode combinations at a glance
 
-Each line shows the resulting communication pathways for a given
-configuration:
+=== "Online"
 
-```
-online (default)
-  Upstream ←SSH→ Gate ─HTTP→ Task ─SSH→ Upstream
-  (gate seeds clone, then task talks to upstream directly)
+    | Configuration | Pathway | Notes |
+    |:---|:---|:---|
+    | **default** | `Upstream ←SSH→ Gate →HTTP→ Task →SSH→ Upstream` | Gate seeds clone, then task talks to upstream directly |
+    | **no gate** | `Upstream ←SSH→ Task` | Task clones and pushes to upstream directly |
 
-online, no gate
-  Upstream ←SSH→ Task
-  (task clones and pushes to upstream directly)
+=== "Gatekeeping"
 
-gatekeeping (default)
-  Upstream ←SSH→ Gate ←HTTP→ Task       (task cannot reach upstream)
-                Gate ─human─→ Upstream  (promotion is manual)
-
-gatekeeping + expose_external_remote
-  Upstream ←SSH→ Gate ←HTTP→ Task
-                              Task ──fetch──→ Upstream (read-only)
-
-gatekeeping + ssh mount
-  Upstream ←SSH→ Gate ←HTTP→ Task
-                              Task ──SSH──→ Upstream (⚠ if key has push access)
-```
+    | Configuration | Pathway | Notes |
+    |:---|:---|:---|
+    | **default** | `Upstream ←SSH→ Gate ←HTTP→ Task` | Task cannot reach upstream |
+    | | `Gate —human→ Upstream` | Promotion is manual |
+    | **+ external remote** | `Upstream ←SSH→ Gate ←HTTP→ Task` | `origin` still points to gate |
+    | | `Task —fetch→ Upstream` | Read-only upstream visibility |
+    | **+ ssh mount** | `Upstream ←SSH→ Gate ←HTTP→ Task` | `origin` still points to gate |
+    | | `Task —SSH→ Upstream` | **Risk:** if key has push access, agent can bypass gate |
 
 ---
 
