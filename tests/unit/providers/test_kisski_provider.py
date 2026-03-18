@@ -12,9 +12,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from tests.test_utils import make_mock_http_response
 
 from terok.lib.providers.kisski_provider import KISSKIProvider
-from tests.test_utils import make_mock_http_response
 
 KISSKI_BASE_URL = "https://chat-ai.academiccloud.de/v1"
 TEST_API_KEY = "test-api-key"

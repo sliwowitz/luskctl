@@ -6,15 +6,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from tests.test_utils import make_mock_http_response
 
 from terok.lib.providers.blablador_provider import BlabladorProvider
-from tests.test_utils import make_mock_http_response
 
 BLABLADOR_BASE_URL = "https://api.helmholtz-blablador.fz-juelich.de/v1"
 TEST_API_KEY = "test-api-key"

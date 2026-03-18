@@ -322,11 +322,17 @@ path = "terok.lib.security.shield"
 layer = "services"
 depends_on = ["terok.lib.core.config", "terok.lib.core.paths"]
 
-# Git gate sync & validation
-[[modules]]
-path = "terok.lib.security.git_gate"
-layer = "services"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
+    # Git gate sync & validation
+    [[modules]]
+    path = "terok.lib.security.git_gate"
+    layer = "services"
+    depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
+
+    # OpenCode-based provider implementations
+    [[modules]]
+    path = "terok.lib.providers"
+    layer = "services"
+    depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
 
 #
 # ·· wizards ··  Interactive workflows
@@ -662,16 +668,25 @@ expose = [
 ]
 from = ["terok.lib.security.shield"]
 
-[[interfaces]]
-expose = [
-    "GateStalenessInfo",
-    "GateSyncResult",
-    "BranchSyncResult",
-    "CommitInfo",
-    "GitGate",
-    "find_projects_sharing_gate",
-]
-from = ["terok.lib.security.git_gate"]
+    [[interfaces]]
+    expose = [
+        "GateStalenessInfo",
+        "GateSyncResult",
+        "BranchSyncResult",
+        "CommitInfo",
+        "GitGate",
+        "find_projects_sharing_gate",
+    ]
+    from = ["terok.lib.security.git_gate"]
+
+    # OpenCode provider implementations
+    [[interfaces]]
+    expose = [
+        "OpenCodeProvider",
+        "BlabladorProvider",
+        "KISSKIProvider",
+    ]
+    from = ["terok.lib.providers"]
 
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
