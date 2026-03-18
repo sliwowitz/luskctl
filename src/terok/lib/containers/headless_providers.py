@@ -14,7 +14,7 @@ Custom instructions are delivered via a provider-specific channel:
 
 - **Claude**: ``--append-system-prompt`` flag (injected by the wrapper).
 - **Codex**: ``model_instructions_file`` config (``-c`` flag in the wrapper).
-- **OpenCode / Blablador**: ``"instructions"`` array in ``opencode.json``
+- **OpenCode / Blablador / KISSKI**: ``"instructions"`` array in ``opencode.json``
   pointing to ``/home/dev/.terok/instructions.md`` (injected on the host by
   :func:`~terok.lib.containers.agents._inject_opencode_instructions`).
 - **Other providers** (Copilot, Vibe, …): best-effort prompt prepending
@@ -253,6 +253,29 @@ HEADLESS_PROVIDERS: dict[str, HeadlessProvider] = {
         supports_add_dir=False,
         log_format="plain",
     ),
+    "kisski": HeadlessProvider(
+        name="kisski",
+        label="KISSKI",
+        binary="kisski",
+        git_author_name="KISSKI",
+        git_author_email="noreply@academiccloud.de",
+        headless_subcommand="run",
+        prompt_flag="",
+        auto_approve_env={"OPENCODE_PERMISSION": '{"*":"allow"}'},
+        auto_approve_flags=(),
+        output_format_flags=(),
+        model_flag=None,
+        max_turns_flag=None,
+        verbose_flag=None,
+        supports_session_resume=True,
+        resume_flag="--session",
+        continue_flag="--continue",
+        session_file="kisski-session.txt",
+        supports_agents_json=False,
+        supports_session_hook=False,
+        supports_add_dir=False,
+        log_format="plain",
+    ),
     "opencode": HeadlessProvider(
         name="opencode",
         label="OpenCode",
@@ -432,11 +455,11 @@ def apply_provider_config(
     # --- Instructions ---
     # Claude receives instructions via --append-system-prompt in the wrapper.
     # Codex receives instructions via -c model_instructions_file=... in the wrapper.
-    # OpenCode and Blablador receive instructions via opencode.json `instructions`
+    # OpenCode, Blablador and KISSKI receive instructions via opencode.json `instructions`
     # array (injected by prepare_agent_config_dir).
     # Remaining providers get best-effort prompt prepending.
     instructions = overrides.instructions
-    if instructions and provider.name not in {"claude", "codex", "opencode", "blablador"}:
+    if instructions and provider.name not in {"claude", "codex", "opencode", "blablador", "kisski"}:
         prompt_parts.insert(0, instructions)
 
     return ProviderConfig(
@@ -656,10 +679,12 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
             lines.append(f"        _approve_args+=({shlex.quote(flag)})")
         lines.append("    fi")
 
-    # OpenCode session plugin setup for opencode/blablador.
-    if provider.session_file and provider.name in {"opencode", "blablador"}:
+    # OpenCode session plugin setup for opencode/blablador/kisski.
+    if provider.session_file and provider.name in {"opencode", "blablador", "kisski"}:
         plugin_dir = (
-            "$HOME/.blablador/opencode/plugins"
+            "$HOME/.kisski/opencode/plugins"
+            if provider.name == "kisski"
+            else "$HOME/.blablador/opencode/plugins"
             if provider.name == "blablador"
             else "$HOME/.config/opencode/plugins"
         )
