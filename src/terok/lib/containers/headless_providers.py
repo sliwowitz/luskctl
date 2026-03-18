@@ -173,7 +173,7 @@ class HeadlessProvider:
 
     opencode_config: OpenCodeProviderConfig | None = None
     """Configuration for OpenCode-based providers (Blablador, KISSKI, etc.).
-    
+
     When set, this provider uses OpenCode with a custom OpenAI-compatible API.
     The configuration includes API endpoints, model preferences, and provider-specific
     settings that are injected into the container environment.

@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
-
 # Hardcoded fallbacks for manual invocation (when env vars not set)
 _FALLBACK_PROVIDERS = {
     "blablador": {
@@ -51,7 +50,7 @@ def _resolve_provider_config() -> dict[str, str]:
     """Resolve provider configuration from environment variables or fallbacks."""
     name = os.path.basename(sys.argv[0])
     prefix = f"TEROK_OC_{name.upper()}_"
-    
+
     # Try to read from environment variables first
     base_url = os.environ.get(f"{prefix}BASE_URL")
     if base_url:
@@ -65,11 +64,11 @@ def _resolve_provider_config() -> dict[str, str]:
             "env_var_prefix": os.environ.get(f"{prefix}ENV_VAR_PREFIX", name.upper()),
             "config_dir": os.environ.get(f"{prefix}CONFIG_DIR", f".{name}"),
         }
-    
+
     # Fallback to hardcoded defaults for manual invocation
     if name in _FALLBACK_PROVIDERS:
         return {**_FALLBACK_PROVIDERS[name], "name": name}
-    
+
     raise SystemExit(f"Unknown provider: {name}")
 
 
@@ -89,16 +88,16 @@ def _load_api_key(config: dict[str, str]) -> str | None:
     api_key = os.environ.get(env_var)
     if api_key:
         return api_key
-    
+
     cfg_path = _config_path(config)
     if not cfg_path.is_file():
         return None
-    
+
     try:
         data = json.loads(cfg_path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
-    
+
     val = data.get("api_key")
     return val if isinstance(val, str) and val.strip() else None
 
@@ -113,7 +112,7 @@ def _fetch_models(base_url: str, api_key: str) -> list[str] | None:
             "Accept": "application/json",
         },
     )
-    
+
     try:
         with request.urlopen(req, timeout=30) as resp:  # nosec B310
             payload = json.loads(resp.read().decode("utf-8"))
@@ -172,7 +171,7 @@ def _build_provider_update(
     }
 
 
-def _merge_provider_config(existing: dict, update: dict) -> dict:
+def _merge_provider_config(existing: dict, update: dict, config: dict) -> dict:
     """Merge provider update into existing opencode.json config."""
     merged = dict(existing)
 
@@ -219,7 +218,7 @@ def _load_opencode_config(config: dict[str, str]) -> dict | None:
     config_path = _opencode_config_path(config)
     if not config_path.is_file():
         return None
-    
+
     try:
         return json.loads(config_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -230,7 +229,7 @@ def _get_configured_models(config: dict[str, str], existing_config: dict | None)
     """Extract model IDs from existing provider config."""
     if not existing_config:
         return set()
-    
+
     try:
         models = existing_config.get("provider", {}).get(config["name"], {}).get("models", {})
         return set(models.keys()) if isinstance(models, dict) else set()
@@ -242,7 +241,7 @@ def _get_configured_options(config: dict[str, str], existing_config: dict | None
     """Extract provider options from existing config."""
     if not existing_config:
         return {}
-    
+
     try:
         options = existing_config.get("provider", {}).get(config["name"], {}).get("options", {})
         return options if isinstance(options, dict) else {}
@@ -281,7 +280,7 @@ def _write_opencode_config(config: dict[str, str], content: dict) -> Path:
 def main() -> int:
     """Main entry point for the unified provider launcher."""
     config = _resolve_provider_config()
-    
+
     parser = argparse.ArgumentParser(
         prog=config["name"],
         description=f"Run OpenCode against {config['display_name']} with full permissions.",

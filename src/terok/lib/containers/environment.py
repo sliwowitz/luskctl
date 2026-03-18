@@ -15,9 +15,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..containers.headless_providers import collect_opencode_provider_env
 from ..core.config import get_envs_base_dir
 from ..core.projects import ProjectConfig
-from ..containers.headless_providers import collect_opencode_provider_env
 from ..security.gate_server import ensure_server_reachable, get_gate_base_path, get_gate_server_port
 from ..util.fs import ensure_dir_writable
 
