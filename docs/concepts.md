@@ -110,10 +110,15 @@ running simultaneously, all against the same upstream repo.
 A **task** is a single unit of work inside a project. Each task gets:
 
 - Its own **Podman container** — fully isolated from other tasks
-- Its own **workspace directory** — a fresh clone of the repo on a
-  dedicated branch
-- Its own **git branch** — so multiple agents can work in parallel
-  without conflicts
+- Its own **workspace directory** — a fresh clone of the repo,
+  checked out at the project's configured branch
+
+The starting branch is configured per project (not per task). All tasks
+in a project begin at the same branch — agents typically create their
+own feature branches from there, but this is a convention, not an
+enforcement.
+See [#295](https://github.com/terok-ai/terok/issues/295) for planned
+per-task branch selection.
 
 Tasks are the primary unit of lifecycle management: you create, start,
 stop, follow up on, and archive tasks.
@@ -235,6 +240,33 @@ with sensitive codebases.
 | `gatekeeping.expose_external_remote: true` | Add upstream as a read-only `external` remote. The agent can pull from upstream but `origin` still points to the gate. |
 | `gatekeeping.auto_sync` | Automatically update the gate when upstream changes are detected. |
 
+### Mode combinations at a glance
+
+Each line shows the resulting communication pathways for a given
+configuration:
+
+```
+online (default)
+  Upstream ←SSH→ Gate ─HTTP→ Task ─SSH→ Upstream
+  (gate seeds clone, then task talks to upstream directly)
+
+online, no gate
+  Upstream ←SSH→ Task
+  (task clones and pushes to upstream directly)
+
+gatekeeping (default)
+  Upstream ←SSH→ Gate ←HTTP→ Task       (task cannot reach upstream)
+                Gate ─human─→ Upstream  (promotion is manual)
+
+gatekeeping + expose_external_remote
+  Upstream ←SSH→ Gate ←HTTP→ Task
+                              Task ──fetch──→ Upstream (read-only)
+
+gatekeeping + ssh mount
+  Upstream ←SSH→ Gate ←HTTP→ Task
+                              Task ──SSH──→ Upstream (⚠ if key has push access)
+```
+
 ---
 
 ## SSH Keys and Who Knows What
@@ -315,15 +347,20 @@ graph LR
 | **Down** (bypass) | All allowed | Yes | High |
 | **Disabled** | All allowed | No | Highest |
 
-The shield mitigates:
+The shield reduces exposure to:
 
 - **Secrets exfiltration** — a compromised agent cannot send your API keys
   to an external server
-- **Prompt injection** — the agent cannot fetch attacker-controlled content
-  from arbitrary URLs
-- **Internal network scanning** — RFC 1918 ranges are blocked by default
-- **Supply-chain attacks** — the agent cannot install packages from
-  untrusted sources
+- **Prompt injection surface** — the agent cannot fetch content from
+  arbitrary URLs, reducing (but not eliminating) the risk of injection
+  via attacker-controlled web content. This is a best-effort indirect
+  measure — prompt injection can occur even via legitimate allowlisted
+  sites, and reliable mitigation ultimately depends on the LLM itself
+- **Internal network scanning** — RFC 1918 (IPv4) and RFC 4193 (IPv6)
+  private ranges are blocked by default
+- **Uncontrolled package downloads** — the agent cannot freely install
+  from arbitrary registries, though this is an egress restriction, not
+  a full supply-chain security solution
 
 See the [Shield Security](shield-security.md) page for a complete
 threat model.
@@ -366,9 +403,9 @@ graph TB
 | Push malicious code to upstream | Blocks (gatekeeping) | — | — | Deploy key perms |
 | Exfiltrate secrets over network | — | Blocks | — | No keys mounted |
 | Escape to host filesystem | — | — | Blocks (rootless, namespaces) | — |
-| Scan internal network | — | Blocks (RFC 1918) | — | — |
+| Scan internal network | — | Blocks (RFC 1918/4193) | — | — |
 | Tamper with other tasks | — | — | Blocks (separate containers) | — |
-| Prompt injection via internet | — | Blocks (domain allowlist) | — | — |
+| Prompt injection via internet | — | Reduces surface (allowlist) | — | — |
 
 ---
 
@@ -424,7 +461,8 @@ No other task can see or modify another task's workspace.
 ## Multi-Task Parallel Work
 
 One of terok's core use cases is running multiple agents in parallel
-against the same repository, each working on a separate branch:
+against the same repository. Each task starts from the same project
+branch, but agents typically create their own feature branches:
 
 ```mermaid
 graph TB
@@ -456,10 +494,14 @@ graph TB
 Each task:
 
 - Runs in its own container — agents cannot interfere with each other
-- Works on its own branch — no merge conflicts during development
+- Gets its own workspace — a separate clone of the same repo
 - Has its own shield rules — network restrictions are per-container
 - Can use a different agent provider — mix Claude, Codex, and Vibe in
   the same project
+
+Branching is not enforced by terok — it is up to the agent to create a
+feature branch. Most agents do this by convention when given a task
+description.
 
 ---
 
@@ -506,7 +548,7 @@ operations.
 | Egress firewall | N/A | No | Rare | Shield |
 | No root/daemon required | N/A | N/A | Docker needs daemon | Podman rootless |
 | Multi-vendor agents | N/A | One at a time | Usually one | Claude, Codex, Copilot, Vibe, Blablador |
-| Per-task branch isolation | N/A | Manual | Varies | Automatic |
+| Per-task workspace isolation | N/A | Manual | Varies | Automatic |
 
 ---
 

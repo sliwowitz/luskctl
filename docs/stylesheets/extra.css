@@ -1,5 +1,4 @@
-/* Ubuntu Mono renders smaller than Ubuntu at the same font size.
-   Bump code font so inline and block code are easy to read. */
+/* Ubuntu Mono renders smaller than Ubuntu at the same font size. */
 :root {
-  --md-code-font-size: 0.9em;
+  --md-code-font-size: 1em;
 }
