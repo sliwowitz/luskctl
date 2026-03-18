@@ -59,44 +59,33 @@ Every terok deployment has the same core components. The arrows show how
 code flows between them:
 
 ```mermaid
-graph TB
-    subgraph HOST ["Host Machine"]
-        subgraph TEROK ["terok"]
-            CLI["terokctl<br/><i>CLI</i>"]
-            TUI["terok<br/><i>TUI</i>"]
-        end
-        GATE["Git Gate<br/><i>bare mirror repo</i>"]
-        SHIELD["Shield<br/><i>egress firewall</i>"]
-        SSH_KEYS["SSH Keys<br/><i>per-project</i>"]
-        SHARED["Shared Dirs<br/><i>credentials, config</i>"]
-    end
-
-    UPSTREAM["Upstream<br/><i>GitHub / GitLab</i>"]
-
-    subgraph TASK_A ["Task Container A"]
-        AGENT_A["Agent<br/><i>Claude, Codex, etc.</i>"]
-        WORKSPACE_A["/workspace<br/><i>full repo clone</i>"]
-    end
-
-    subgraph TASK_B ["Task Container B"]
-        AGENT_B["Agent<br/><i>Claude, Codex, etc.</i>"]
-        WORKSPACE_B["/workspace<br/><i>full repo clone</i>"]
-    end
+graph TD
+    UPSTREAM["Upstream (GitHub / GitLab)"]
 
     UPSTREAM -- "sync (SSH)" --> GATE
-    GATE -- "clone (HTTP)" --> WORKSPACE_A
-    GATE -- "clone (HTTP)" --> WORKSPACE_B
-    WORKSPACE_A -- "push" --> GATE
-    WORKSPACE_B -- "push" --> GATE
     GATE -- "promote (human)" --> UPSTREAM
+
+    subgraph HOST ["Host Machine"]
+        direction TB
+        TEROK["terok — CLI + TUI"]
+        GATE["Git Gate (bare mirror)"]
+        SHIELD["Shield (egress firewall)"]
+        SHARED["Shared Dirs (credentials)"]
+
+        TEROK --> GATE
+    end
+
+    GATE -- "clone (HTTP)" --> TASK_A
+    GATE -- "clone (HTTP)" --> TASK_B
+    TASK_A -- "push" --> GATE
+    TASK_B -- "push" --> GATE
+    SHIELD -. "nftables" .-> TASK_A
+    SHIELD -. "nftables" .-> TASK_B
     SHARED -. "mount" .-> TASK_A
     SHARED -. "mount" .-> TASK_B
-    SHIELD -. "nftables hooks" .-> TASK_A
-    SHIELD -. "nftables hooks" .-> TASK_B
-    CLI --> TASK_A
-    CLI --> TASK_B
-    TUI --> TASK_A
-    TUI --> TASK_B
+
+    TASK_A["Task Container A<br/><i>Agent + /workspace</i>"]
+    TASK_B["Task Container B<br/><i>Agent + /workspace</i>"]
 ```
 
 ---
