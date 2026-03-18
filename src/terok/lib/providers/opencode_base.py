@@ -114,7 +114,7 @@ class OpenCodeProvider(ABC):
         )
 
         try:
-            with request.urlopen(req, timeout=30) as resp:
+            with request.urlopen(req, timeout=30) as resp:  # nosec B310
                 payload = json.loads(resp.read().decode("utf-8"))
         except (error.HTTPError, error.URLError, json.JSONDecodeError):
             return None
