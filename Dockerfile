@@ -47,9 +47,13 @@ RUN chmod +x /usr/local/bin/toad-port-forward.sh
 USER podman
 RUN mkdir -p \
         ~/.config/terok \
+        ~/.config/containers \
         ~/.local/share/terok/gate \
         ~/.cache/terok \
         ~/.cache/containers \
+    && printf '%s\n' \
+        'unqualified-search-registries = ["docker.io"]' \
+        > ~/.config/containers/registries.conf \
     && printf '%s\n' \
         'hooks:' \
         '  post_ready: /usr/local/bin/toad-port-forward.sh' \
