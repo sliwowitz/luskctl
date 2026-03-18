@@ -121,7 +121,7 @@ def _check_unfired_hooks(
                         task_id=tid,
                         mode=mode,
                         cname=cname,
-                        task_dir=project.tasks_root / str(tid),
+                        task_dir=project.tasks_root / tid,
                         meta_path=meta_path,
                     )
                     results.append(("ok", label, "post_stop hook reconciled"))

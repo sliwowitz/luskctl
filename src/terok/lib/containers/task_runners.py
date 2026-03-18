@@ -930,6 +930,16 @@ def task_followup_headless(
     # which reads prompt.txt and session files from the volume)
     _podman_start(cname)
     _assert_running(cname)
+    run_hook(
+        "post_start",
+        project.hook_post_start,
+        project_id=project.id,
+        task_id=task_id,
+        mode="run",
+        cname=cname,
+        task_dir=task_dir,
+        meta_path=meta_path,
+    )
 
     # Clear previous exit_code so effective_status shows "running" until new exit
     meta["exit_code"] = None
