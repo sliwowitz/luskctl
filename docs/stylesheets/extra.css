@@ -1,6 +1,7 @@
 /* Mermaid subgraph clusters: transparent background so they don't
    clash with the Material theme's dark/light mode text colors. */
-.mermaid .cluster rect {
+.mermaid .cluster rect,
+.mermaid .cluster-bg {
   fill: transparent !important;
 }
 

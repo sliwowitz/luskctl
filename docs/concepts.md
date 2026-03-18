@@ -61,17 +61,13 @@ code flows between them:
 ```mermaid
 graph TD
     UPSTREAM["Upstream (GitHub / GitLab)"]
+    UPSTREAM -- "sync / promote" --- GATE
 
-    UPSTREAM -- "sync (SSH)" --> GATE
-    GATE -- "promote (human)" --> UPSTREAM
-
-    subgraph HOST ["Host Machine"]
-        direction TB
+    subgraph HOST [Host Machine]
         TEROK["terok — CLI + TUI"]
         GATE["Git Gate (bare mirror)"]
         SHIELD["Shield (egress firewall)"]
         SHARED["Shared Dirs (credentials)"]
-
         TEROK --> GATE
     end
 
