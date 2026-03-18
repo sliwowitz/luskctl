@@ -6,6 +6,13 @@
 This module provides a unified abstraction for providers that use OpenCode
 with different API backends, reducing code duplication while preserving
 provider-specific configuration and behavior.
+
+Security Considerations:
+- API keys are loaded from environment variables first, config files second
+- All API calls use HTTPS with certificate validation
+- API keys are never logged or exposed in error messages
+- Timeouts prevent hanging on unresponsive APIs
+- Error handling gracefully degrades when APIs are unavailable
 """
 
 import argparse
@@ -116,7 +123,17 @@ class OpenCodeProvider(ABC):
         try:
             with request.urlopen(req, timeout=30) as resp:  # nosec B310
                 payload = json.loads(resp.read().decode("utf-8"))
-        except (error.HTTPError, error.URLError, json.JSONDecodeError):
+        except (error.HTTPError, error.URLError, json.JSONDecodeError) as e:
+            # Security: Don't log API keys or sensitive error details
+            if isinstance(e, error.HTTPError):
+                if e.code == 401:
+                    print("Error: Authentication failed. Check your API key.")
+                elif e.code == 403:
+                    print("Error: Access denied. Your API key may not have sufficient permissions.")
+                else:
+                    print(f"Error: API request failed with HTTP status {e.code}")
+            else:
+                print("Error: Failed to fetch models from API")
             return None
 
         items: Iterable[object] = []
@@ -258,6 +275,13 @@ class OpenCodeProvider(ABC):
                 tmp_path = f.name
                 f.write(json.dumps(config, indent=2) + "\n")
             os.replace(tmp_path, config_path)
+            # Security: Restrict config file permissions to owner only
+            try:
+                os.chmod(config_path, 0o600)
+            except (OSError, PermissionError):
+                # Permission change may fail in some environments (e.g., read-only filesystems)
+                # This is not a security critical failure
+                pass
         except BaseException:
             if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
