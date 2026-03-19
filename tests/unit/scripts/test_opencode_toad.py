@@ -76,17 +76,19 @@ class TestSetToadTheme:
             config_path = Path(td) / "toad" / "toad.json"
             with patch.object(toad_module, "TOAD_CONFIG", config_path):
                 toad_module._set_toad_theme("dracula")
-            result = json.loads(config_path.read_text())
+            result = json.loads(config_path.read_text(encoding="utf-8"))
             assert result["ui"]["theme"] == "dracula"
 
     def test_updates_existing_config(self, toad_module) -> None:
         """Updates theme in existing config, preserving other keys."""
         with tempfile.TemporaryDirectory() as td:
             config_path = Path(td) / "toad.json"
-            config_path.write_text(json.dumps({"ui": {"theme": "monokai"}, "shell": {"x": 1}}))
+            config_path.write_text(
+                json.dumps({"ui": {"theme": "monokai"}, "shell": {"x": 1}}), encoding="utf-8"
+            )
             with patch.object(toad_module, "TOAD_CONFIG", config_path):
                 toad_module._set_toad_theme("dracula")
-            result = json.loads(config_path.read_text())
+            result = json.loads(config_path.read_text(encoding="utf-8"))
             assert result["ui"]["theme"] == "dracula"
             assert result["shell"]["x"] == 1
 
@@ -94,10 +96,10 @@ class TestSetToadTheme:
         """Recovers gracefully when config contains invalid JSON."""
         with tempfile.TemporaryDirectory() as td:
             config_path = Path(td) / "toad.json"
-            config_path.write_text("{not valid json!!!")
+            config_path.write_text("{not valid json!!!", encoding="utf-8")
             with patch.object(toad_module, "TOAD_CONFIG", config_path):
                 toad_module._set_toad_theme("dracula")
-            result = json.loads(config_path.read_text())
+            result = json.loads(config_path.read_text(encoding="utf-8"))
             assert result["ui"]["theme"] == "dracula"
 
     def test_skips_write_when_already_set(self, toad_module) -> None:
