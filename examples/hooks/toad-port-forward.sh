@@ -18,7 +18,7 @@ case "$TEROK_HOOK" in
     post_ready)
         [ "$TEROK_TASK_MODE" = "toad" ] || exit 0
         [ -n "$TEROK_WEB_PORT" ] || exit 0
-        socat TCP-LISTEN:"$TEROK_WEB_PORT",bind=0.0.0.0,fork,reuseaddr TCP:127.0.0.1:"$TEROK_WEB_PORT" &
+        socat TCP-LISTEN:"$TEROK_WEB_PORT",bind=0.0.0.0,fork,reuseaddr TCP:127.0.0.1:"$TEROK_WEB_PORT" </dev/null >/dev/null 2>&1 &
         echo $! > "$PID_FILE"
         ;;
     post_stop)
