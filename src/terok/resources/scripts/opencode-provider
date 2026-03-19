@@ -310,7 +310,7 @@ def main() -> int:
     if not api_key:
         raise SystemExit(
             f"Missing {config['env_var_prefix']}_API_KEY. Set it in the environment or write "
-            f'{{{"api_key": "..."}}} to {_config_path(config)}.'
+            f'{{"api_key": "..."}} to {_config_path(config)}.'
         )
 
     # Determine base URL

@@ -93,6 +93,66 @@ class TestCollectProviderEnv:
         )
         assert env["TEROK_OC_KISSKI_PREFERRED_MODEL"] == "devstral-2-123b-instruct-2512"
 
+    def test_to_env_all_fields_present(self) -> None:
+        """OpenCodeProviderConfig.to_env() emits all required fields."""
+        from terok.lib.containers.headless_providers import OpenCodeProviderConfig
+
+        cfg = OpenCodeProviderConfig(
+            display_name="Test",
+            base_url="https://test/v1",
+            preferred_model="m1",
+            fallback_model="m2",
+            env_var_prefix="TEST",
+            config_dir=".test",
+            auth_key_url="https://test/keys",
+        )
+        env = cfg.to_env("test")
+        assert env == {
+            "TEROK_OC_TEST_BASE_URL": "https://test/v1",
+            "TEROK_OC_TEST_PREFERRED_MODEL": "m1",
+            "TEROK_OC_TEST_FALLBACK_MODEL": "m2",
+            "TEROK_OC_TEST_DISPLAY_NAME": "Test",
+            "TEROK_OC_TEST_ENV_VAR_PREFIX": "TEST",
+            "TEROK_OC_TEST_CONFIG_DIR": ".test",
+        }
+
+
+# -- Host-side dynamic mounts and auth ----------------------------------------
+
+
+class TestDynamicRegistration:
+    """Tests for dynamic SharedMount and AuthProvider generation."""
+
+    def test_shared_mounts_include_opencode_providers(self) -> None:
+        """SHARED_MOUNTS includes dynamically generated provider mounts."""
+        from terok.lib.containers.environment import SHARED_MOUNTS
+
+        mount_keys = {m.key for m in SHARED_MOUNTS}
+        assert "blablador" in mount_keys
+        assert "kisski" in mount_keys
+
+    def test_shared_mount_paths(self) -> None:
+        """Provider mounts use correct host and container paths."""
+        from terok.lib.containers.environment import SHARED_MOUNTS
+
+        blablador = next(m for m in SHARED_MOUNTS if m.key == "blablador")
+        assert blablador.host_dir_suffix == "_blablador-config"
+        assert blablador.container_path == "/home/dev/.blablador"
+
+    def test_auth_providers_include_opencode_providers(self) -> None:
+        """AUTH_PROVIDERS includes dynamically generated OpenCode provider entries."""
+        from terok.lib.security.auth import AUTH_PROVIDERS
+
+        assert "blablador" in AUTH_PROVIDERS
+        assert "kisski" in AUTH_PROVIDERS
+
+    def test_auth_provider_key_url(self) -> None:
+        """Auth provider key URLs come from the OpenCodeProviderConfig registry."""
+        from terok.lib.security.auth import AUTH_PROVIDERS
+
+        blablador = AUTH_PROVIDERS["blablador"]
+        assert "helmholtz" in blablador.banner_hint.lower() or "codebase" in blablador.banner_hint
+
 
 # -- Provider resolution (in-process) ----------------------------------------
 
@@ -252,6 +312,81 @@ class TestCLI:
         )
         assert result.returncode == 1
         assert "Unknown provider" in result.stderr
+
+    def test_missing_api_key_error_message(self) -> None:
+        """Missing API key produces a valid JSON example in the error."""
+        mod = _load_as_module("blablador")
+        with (
+            patch.object(mod, "_load_api_key", return_value=None),
+            patch("sys.argv", ["blablador"]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            mod.main()
+        msg = str(exc_info.value)
+        assert "BLABLADOR_API_KEY" in msg
+        assert '{"api_key": "..."}' in msg
+
+    def test_model_fallback_when_both_defaults_gone(self) -> None:
+        """When both preferred and fallback models are gone, picks the first available."""
+        mod = _load_as_module("blablador")
+        mock_resp = make_mock_http_response(
+            {"data": [{"id": "new-model-x"}, {"id": "new-model-y"}]}
+        )
+        with tempfile.TemporaryDirectory() as td:
+            oc_config = Path(td) / "opencode" / "opencode.json"
+            with (
+                patch.object(mod, "_load_api_key", return_value="key"),
+                patch.object(mod.request, "urlopen", return_value=mock_resp),
+                patch.object(mod, "_opencode_config_path", return_value=oc_config),
+                patch("subprocess.call", return_value=0),
+                patch("sys.argv", ["blablador"]),
+            ):
+                mod.main()
+            import json
+
+            written = json.loads(oc_config.read_text(encoding="utf-8"))
+            # Should have picked one of the available models, not alias-huge or alias-code
+            assert written["model"].startswith("blablador/new-model-")
+
+    def test_schema_warning_goes_to_stderr(self) -> None:
+        """Schema mismatch warning is printed to stderr, not stdout."""
+        mod = _load_as_module("blablador")
+        with patch("sys.argv", ["blablador"]):
+            config = mod._resolve_provider_config()
+        update = mod._build_provider_update(config, "https://ex.com/v1", "k", "m", None)
+        with patch("sys.stderr") as mock_stderr:
+            mod._merge_provider_config({"$schema": "https://wrong.schema"}, update, config)
+        mock_stderr.write.assert_called()
+
+    def test_merge_preserves_foreign_model(self) -> None:
+        """Merging does not overwrite a model belonging to another provider."""
+        mod = _load_as_module("blablador")
+        with patch("sys.argv", ["blablador"]):
+            config = mod._resolve_provider_config()
+        update = mod._build_provider_update(config, "https://ex.com/v1", "k", "m", None)
+        existing = {"model": "openai/gpt-4"}
+        merged = mod._merge_provider_config(existing, update, config)
+        assert merged["model"] == "openai/gpt-4"
+
+    def test_get_configured_options(self) -> None:
+        """Options extraction returns baseURL and apiKey from existing config."""
+        mod = _load_as_module("blablador")
+        with patch("sys.argv", ["blablador"]):
+            config = mod._resolve_provider_config()
+        existing = {
+            "provider": {"blablador": {"options": {"baseURL": "https://x/v1", "apiKey": "k"}}}
+        }
+        opts = mod._get_configured_options(config, existing)
+        assert opts["baseURL"] == "https://x/v1"
+        assert opts["apiKey"] == "k"
+
+    def test_get_configured_options_missing(self) -> None:
+        """Options extraction returns empty dict when provider is absent."""
+        mod = _load_as_module("blablador")
+        with patch("sys.argv", ["blablador"]):
+            config = mod._resolve_provider_config()
+        assert mod._get_configured_options(config, None) == {}
+        assert mod._get_configured_options(config, {}) == {}
 
     def test_degraded_first_run_when_fetch_models_returns_none(self) -> None:
         """First run succeeds even when _fetch_models returns None (API unreachable)."""
