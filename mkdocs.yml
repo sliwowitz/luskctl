@@ -51,6 +51,7 @@ plugins:
   - gen-files:
       scripts:
         - docs/gen_brand_css.py
+        - docs/gen_mermaid_zoom.py
         - docs/gen_ref_pages.py
         - docs/gen_quality_report.py
         - docs/gen_config_reference.py
@@ -112,3 +113,6 @@ extra:
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mermaid_zoom.js
