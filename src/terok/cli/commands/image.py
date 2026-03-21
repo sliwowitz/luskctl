@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import argparse
 
-from ...lib.facade import cleanup_images, list_images
+from ...lib.domain.facade import cleanup_images, list_images
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 

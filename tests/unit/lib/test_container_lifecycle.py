@@ -15,9 +15,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from terok.lib.sandbox.runtime import get_container_state, get_task_container_state
 from terok.lib.orchestration.task_runners import task_restart
 from terok.lib.orchestration.tasks import task_new, task_status, task_stop
+from terok.lib.sandbox.runtime import get_container_state, get_task_container_state
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 

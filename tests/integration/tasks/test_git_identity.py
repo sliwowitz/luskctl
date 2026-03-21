@@ -85,8 +85,8 @@ def _build_runner_env(
     Returns the env dict containing ``HUMAN_GIT_NAME``, ``HUMAN_GIT_EMAIL``,
     ``TEROK_GIT_AUTHORSHIP``, and all other container env vars.
     """
-    from terok.lib.orchestration.environment import build_task_env_and_volumes
     from terok.lib.core.projects import load_project
+    from terok.lib.orchestration.environment import build_task_env_and_volumes
 
     project = load_project(project_id)
 

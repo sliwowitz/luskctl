@@ -6,7 +6,7 @@
 Re-exports widget classes and render helpers from focused submodules.
 """
 
-from ...lib.containers.tasks import TaskMeta  # noqa: F401 — re-exported public API
+from ...lib.orchestration.tasks import TaskMeta  # noqa: F401 — re-exported public API
 from .project_list import ProjectActions, ProjectList, ProjectListItem  # noqa: F401
 from .project_state import (  # noqa: F401
     ProjectState,

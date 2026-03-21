@@ -10,10 +10,10 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.widgets import Static
 
-from ...lib.containers.task_display import STATUS_DISPLAY, mode_info
-from ...lib.containers.tasks import TaskMeta
 from ...lib.core.config import get_public_host
-from ...lib.security.shield import SHIELD_SECURITY_HINT
+from ...lib.core.task_display import STATUS_DISPLAY, mode_info
+from ...lib.orchestration.tasks import TaskMeta
+from ...lib.sandbox.shield import SHIELD_SECURITY_HINT
 from ...lib.util.emoji import render_emoji
 
 

@@ -46,7 +46,6 @@ if _HAS_TEXTUAL:
     from textual.widgets import Footer, Header, Static
     from textual.worker import Worker, WorkerState
 
-    from ..lib.containers.tasks import get_tasks
     from ..lib.core.config import (
         get_tui_default_tmux,
         set_experimental,
@@ -59,7 +58,7 @@ if _HAS_TEXTUAL:
         get_version_info as _get_version_info,
         short_version as _short_version,
     )
-    from ..lib.facade import (
+    from ..lib.domain.facade import (
         EnvironmentCheck,
         GateServerStatus,
         GateStalenessInfo,
@@ -70,6 +69,7 @@ if _HAS_TEXTUAL:
         shield_check_environment as _shield_check_environment,
         shield_state as _shield_state,
     )
+    from ..lib.orchestration.tasks import get_tasks
 
     @dataclass(frozen=True)
     class ProjectStateResult:
@@ -621,7 +621,7 @@ if _HAS_TEXTUAL:
             try:
                 project = load_project(project_id)
                 mode = task.mode or "cli"
-                from ..lib.containers.runtime import container_name
+                from ..lib.sandbox.runtime import container_name
 
                 cname = container_name(project_id, mode, task.task_id)
                 task_dir = project.tasks_root / str(task.task_id)
@@ -868,7 +868,7 @@ if _HAS_TEXTUAL:
                     parts = (worker.name or "").split(":")
                     action = parts[1] if len(parts) >= 2 else ""
                     if action == "down":
-                        from ..lib.security.shield import SHIELD_SECURITY_HINT
+                        from ..lib.sandbox.shield import SHIELD_SECURITY_HINT
 
                         self.notify(f"Shield dropped for task {task_id}. {SHIELD_SECURITY_HINT}")
                     elif action == "up":

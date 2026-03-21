@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
-from ..lib.facade import (
+from ..lib.domain.facade import (
     GitGate,
     SSHManager,
     authenticate,
@@ -364,12 +364,12 @@ class ProjectActionsMixin:
 
         def work() -> None:
             """Resolve and print the effective instructions."""
-            from ..lib.containers.agent_config import resolve_agent_config
-            from ..lib.containers.instructions import resolve_instructions
+            from ..lib.instrumentation.agent_config import resolve_agent_config
+            from ..lib.instrumentation.instructions import resolve_instructions
 
             project = load_project(pid)
             effective = resolve_agent_config(pid)
-            from ..lib.containers.headless_providers import get_provider as _get_provider
+            from ..lib.instrumentation.headless_providers import get_provider as _get_provider
 
             provider = _get_provider(None, project)
             text = resolve_instructions(effective, provider.name, project_root=project.root)
@@ -401,7 +401,7 @@ class ProjectActionsMixin:
 
         def work() -> None:
             """Print bundled default instructions."""
-            from ..lib.containers.instructions import bundled_default_instructions
+            from ..lib.instrumentation.instructions import bundled_default_instructions
 
             text = bundled_default_instructions()
             print("=== Bundled Default Instructions ===\n")
@@ -551,7 +551,7 @@ class ProjectActionsMixin:
         """Run hook installation after shield setup modal choice."""
         if result is None:
             return
-        from ..lib.facade import shield_setup_hooks_direct
+        from ..lib.domain.facade import shield_setup_hooks_direct
 
         await self._run_suspended(
             lambda: shield_setup_hooks_direct(root=result == "root"),

@@ -11,9 +11,9 @@ from rich.style import Style
 from rich.text import Text
 from textual.widgets import Static
 
-from ...lib.containers.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
 from ...lib.core.projects import ProjectConfig
-from ...lib.facade import EnvironmentCheck, GateServerStatus, GateStalenessInfo
+from ...lib.core.task_display import GPU_DISPLAY, SECURITY_CLASS_DISPLAY, has_gpu
+from ...lib.domain.facade import EnvironmentCheck, GateServerStatus, GateStalenessInfo
 from ...lib.util.emoji import render_emoji
 from .task_detail import _get_css_variables
 

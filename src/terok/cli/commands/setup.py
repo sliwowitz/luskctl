@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 
 from ...lib.core.projects import load_project
-from ...lib.facade import (
+from ...lib.domain.facade import (
     AUTH_PROVIDERS,
     GitGate,
     SSHManager,

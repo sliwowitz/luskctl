@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import argparse
 
-from ...lib.containers.headless_providers import PROVIDER_NAMES as _PROVIDER_NAMES
 from ...lib.core.config import get_logs_partial_streaming as _get_logs_partial_streaming
-from ...lib.facade import (
+from ...lib.domain.facade import (
     HeadlessRunRequest,
     LogViewOptions,
     get_tasks as _get_tasks,
@@ -29,6 +28,7 @@ from ...lib.facade import (
     task_status,
     task_stop,
 )
+from ...lib.instrumentation.headless_providers import PROVIDER_NAMES as _PROVIDER_NAMES
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 

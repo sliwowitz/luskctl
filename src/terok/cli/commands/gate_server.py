@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ...lib.facade import (
+from ...lib.domain.facade import (
     GateServerStatus,
     check_units_outdated,
     get_server_status,

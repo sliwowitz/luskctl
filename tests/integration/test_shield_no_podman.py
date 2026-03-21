@@ -210,8 +210,8 @@ class TestTaskRunnerShieldIntegration:
                 ),
             ),
         ):
-            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
+            from terok.lib.orchestration.task_runners import _run_container
 
             project = MagicMock(spec=ProjectConfig)
 
@@ -261,8 +261,8 @@ class TestTaskRunnerShieldIntegration:
                 return_value=[],
             ),
         ):
-            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
+            from terok.lib.orchestration.task_runners import _run_container
 
             project = MagicMock(spec=ProjectConfig)
 
@@ -316,8 +316,8 @@ class TestTaskRunnerShieldIntegration:
                 side_effect=AssertionError("shield must not be called"),
             ),
         ):
-            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
+            from terok.lib.orchestration.task_runners import _run_container
 
             project = MagicMock(spec=ProjectConfig)
 

@@ -8,8 +8,8 @@ from __future__ import annotations
 import argparse
 
 from ...lib.core.projects import derive_project, list_presets, list_projects, load_project
-from ...lib.facade import delete_project, find_projects_sharing_gate
-from ...lib.wizards.new_project import run_wizard
+from ...lib.domain.facade import delete_project, find_projects_sharing_gate
+from ...lib.domain.wizards.new_project import run_wizard
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 from .setup import cmd_project_init
 

@@ -13,19 +13,10 @@ from collections.abc import Callable
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from ..lib.containers.agents import parse_md_agent
-from ..lib.containers.autopilot import wait_for_container_exit
-from ..lib.containers.runtime import container_name, get_container_state
-from ..lib.containers.task_display import effective_status
-from ..lib.containers.tasks import (
-    generate_task_name,
-    get_login_command,
-    get_workspace_git_diff,
-    mark_task_deleting,
-)
 from ..lib.core.config import get_shield_bypass_firewall_no_protection
 from ..lib.core.projects import load_project
-from ..lib.facade import (
+from ..lib.core.task_display import effective_status
+from ..lib.domain.facade import (
     HeadlessRunRequest,
     shield_down,
     shield_up,
@@ -39,6 +30,15 @@ from ..lib.facade import (
     task_run_toad,
     task_stop,
 )
+from ..lib.instrumentation.agents import parse_md_agent
+from ..lib.orchestration.autopilot import wait_for_container_exit
+from ..lib.orchestration.tasks import (
+    generate_task_name,
+    get_login_command,
+    get_workspace_git_diff,
+    mark_task_deleting,
+)
+from ..lib.sandbox.runtime import container_name, get_container_state
 from .clipboard import copy_to_clipboard_detailed
 from .screens import (
     AgentSelectionScreen,
@@ -255,7 +255,7 @@ class TaskActionsMixin:
         if agent == "bash":
             cmd = base_cmd
         else:
-            from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+            from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
             provider = HEADLESS_PROVIDERS.get(agent)
             if not provider:
@@ -376,7 +376,7 @@ class TaskActionsMixin:
         agent_name, selected_subagents = result
 
         # Only pass sub-agents if the agent supports them
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         provider = HEADLESS_PROVIDERS.get(agent_name)
         agents = selected_subagents if provider and provider.supports_agents_json else None
@@ -695,7 +695,7 @@ class TaskActionsMixin:
         """Warn the user and return ``True`` if the shield bypass is active."""
         if not get_shield_bypass_firewall_no_protection():
             return False
-        from ..lib.security.shield import SHIELD_SECURITY_HINT
+        from ..lib.sandbox.shield import SHIELD_SECURITY_HINT
 
         self.notify(f"Shield unavailable (bypass_firewall_no_protection). {SHIELD_SECURITY_HINT}")
         return True

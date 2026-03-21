@@ -8,8 +8,8 @@ from typing import Any
 from textual.message import Message
 from textual.widgets import ListItem, ListView, Static
 
-from ...lib.containers.task_display import STATUS_DISPLAY, mode_info
-from ...lib.containers.tasks import TaskMeta
+from ...lib.core.task_display import STATUS_DISPLAY, mode_info
+from ...lib.orchestration.tasks import TaskMeta
 from ...lib.util.emoji import render_emoji
 
 

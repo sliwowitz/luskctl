@@ -9,9 +9,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from terok.lib.orchestration.docker import build_images, generate_dockerfiles
 from terok.lib.core.config import build_root
 from terok.lib.core.images import base_dev_image
+from terok.lib.orchestration.docker import build_images, generate_dockerfiles
 from tests.test_utils import mock_git_config, project_env
 
 UPSTREAM_URL = "https://example.com/repo.git"

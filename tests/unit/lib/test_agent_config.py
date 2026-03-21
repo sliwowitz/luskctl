@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.instrumentation.agent_config import build_agent_config_stack, resolve_agent_config
 from terok.lib.core.projects import ProjectConfig, list_presets, load_preset, load_project
+from terok.lib.instrumentation.agent_config import build_agent_config_stack, resolve_agent_config
 from terok.lib.util.config_stack import ConfigStack
 from tests.test_utils import mock_git_config, write_project
 from tests.testfs import CONTAINER_INSTRUCTIONS_PATH

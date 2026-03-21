@@ -8,8 +8,8 @@ from importlib.resources.abc import Traversable
 
 import pytest
 
-from terok.lib.util.template_utils import render_template
 from terok.lib.domain.wizards.new_project import TEMPLATES as WIZARD_TEMPLATES
+from terok.lib.util.template_utils import render_template
 
 TEMPLATE_DIR: Traversable = resources.files("terok") / "resources" / "templates" / "projects"
 EXPECTED_TEMPLATES: list[str] = [filename for _label, filename in WIZARD_TEMPLATES]

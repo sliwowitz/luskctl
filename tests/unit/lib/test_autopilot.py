@@ -34,6 +34,7 @@ from tests.testfs import (
 if TYPE_CHECKING:
     from terok.lib.core.projects import ProjectConfig
 
+from terok.lib.core.projects import load_project
 from terok.lib.instrumentation.agents import (
     _generate_claude_wrapper,
     _subagents_to_json,
@@ -46,7 +47,6 @@ from terok.lib.orchestration.task_runners import (
     task_followup_headless,
     task_run_headless,
 )
-from terok.lib.core.projects import load_project
 from tests.test_utils import mock_git_config, write_project
 
 

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from terok_shield import COMMANDS, ArgDef, CommandDef, ExecError
 
-from ...lib.facade import make_shield
+from ...lib.domain.facade import make_shield
 
 
 def _add_arg(parser: argparse.ArgumentParser, arg: ArgDef) -> None:
@@ -41,9 +41,9 @@ def _resolve_task(project_id: str, task_id: str) -> tuple[str, Path]:
     Raises:
         ValueError: If the task has never been run (no container exists).
     """
-    from ...lib.containers.runtime import container_name
-    from ...lib.containers.tasks import load_task_meta
     from ...lib.core.projects import load_project
+    from ...lib.orchestration.tasks import load_task_meta
+    from ...lib.sandbox.runtime import container_name
 
     project = load_project(project_id)
     meta, _ = load_task_meta(project.id, task_id)
@@ -111,7 +111,7 @@ def dispatch(args: argparse.Namespace) -> bool:
 
     # setup is standalone_only and needs subprocess passthrough (no registry handler)
     if cmd_name == "setup":
-        from ...lib.facade import shield_run_setup
+        from ...lib.domain.facade import shield_run_setup
 
         shield_run_setup(root=args.root, user=args.user)
         return True

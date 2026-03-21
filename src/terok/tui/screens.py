@@ -50,15 +50,15 @@ except Exception:  # pragma: no cover - textual may be a stub module
 from rich.style import Style
 from rich.text import Text
 
-from ..lib.containers.tasks import sanitize_task_name, validate_task_name
 from ..lib.core.projects import ProjectConfig
-from ..lib.facade import (
+from ..lib.domain.facade import (
     EnvironmentCheck,
     GateServerStatus,
     GateStalenessInfo,
     check_units_outdated,
     get_gate_base_path,
 )
+from ..lib.orchestration.tasks import sanitize_task_name, validate_task_name
 from .widgets import TaskMeta, render_project_details, render_project_loading, render_task_details
 
 
@@ -200,7 +200,7 @@ class GateServerScreen(screen.Screen[str | None]):
 
     def _refresh_status(self) -> None:
         """Re-fetch status and update the display."""
-        from ..lib.facade import get_server_status
+        from ..lib.domain.facade import get_server_status
 
         try:
             self._status = get_server_status()
@@ -444,7 +444,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         """Build the numbered list of authentication providers."""
-        from ..lib.facade import AUTH_PROVIDERS
+        from ..lib.domain.facade import AUTH_PROVIDERS
 
         providers = list(AUTH_PROVIDERS.values())
         options: list[Option | None] = [
@@ -475,7 +475,7 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
 
     def on_key(self, event: events.Key) -> None:
         """Handle number-key shortcuts (1-9) to select a provider or import."""
-        from ..lib.facade import AUTH_PROVIDERS
+        from ..lib.domain.facade import AUTH_PROVIDERS
 
         if event.character and event.character.isdigit():
             idx = int(event.character) - 1
@@ -796,7 +796,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
         super().__init__()
         self._subagents = subagents or []
 
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         if default_agent in HEADLESS_PROVIDERS:
             self._default_agent = default_agent
@@ -806,7 +806,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
     def compose(self) -> ComposeResult:
         """Build the agent list, optional sub-agent checkboxes, and buttons."""
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         with Vertical(id="agent-dialog") as dialog:
             options = []
@@ -835,7 +835,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
     def on_mount(self) -> None:
         """Focus the agent list and highlight the default entry."""
         agent_list = self.query_one("#agent-list", OptionList)
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         for idx, name in enumerate(HEADLESS_PROVIDERS):
             if name == self._default_agent:
@@ -875,7 +875,7 @@ class AgentSelectionScreen(screen.ModalScreen[tuple[str, list[str] | None] | Non
 
     def on_key(self, event: events.Key) -> None:
         """Handle number-key shortcuts (1-9) to select an agent."""
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         if event.character and event.character.isdigit():
             idx = int(event.character) - 1
@@ -1196,7 +1196,7 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
 
     def compose(self) -> ComposeResult:
         """Build status, agent selector, prompt input, and action buttons."""
-        from ..lib.containers.headless_providers import HEADLESS_PROVIDERS
+        from ..lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
         with Vertical(id="launch-dialog") as dialog:
             yield Static("Status: Starting container\u2026", id="launch-status")
@@ -1239,8 +1239,8 @@ class TaskLaunchScreen(screen.ModalScreen["tuple[str, str, str, str, str, str | 
         If the container never appears after many polls, updates the status
         to indicate a likely launch failure so the user can dismiss.
         """
-        from ..lib.containers.runtime import get_container_state
-        from ..lib.containers.tasks import get_task_meta
+        from ..lib.orchestration.tasks import get_task_meta
+        from ..lib.sandbox.runtime import get_container_state
 
         self._poll_count += 1
         state = get_container_state(self._container_name)
@@ -1689,7 +1689,7 @@ class ShieldScreen(screen.Screen[str | None]):
 
     def _load_shield_info(self) -> None:
         """Fetch shield config (mode, audit, profiles) for display."""
-        from ..lib.facade import shield_status
+        from ..lib.domain.facade import shield_status
 
         try:
             self._shield_info = shield_status()
@@ -1730,7 +1730,7 @@ class ShieldScreen(screen.Screen[str | None]):
     @staticmethod
     def _fetch_status() -> tuple[EnvironmentCheck | None, dict | None]:
         """Load environment check and shield config in a thread."""
-        from ..lib.facade import shield_check_environment, shield_status
+        from ..lib.domain.facade import shield_check_environment, shield_status
 
         env: EnvironmentCheck | None = None
         info: dict | None = None

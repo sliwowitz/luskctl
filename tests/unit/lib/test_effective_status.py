@@ -10,13 +10,13 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.sandbox.runtime import get_project_container_states
 from terok.lib.core.task_display import (
     STATUS_DISPLAY,
     effective_status,
     mode_info,
 )
 from terok.lib.orchestration.tasks import TaskMeta, get_all_task_states
+from terok.lib.sandbox.runtime import get_project_container_states
 
 
 def _task(**kwargs: object) -> TaskMeta:

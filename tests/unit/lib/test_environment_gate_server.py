@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.orchestration.environment import _security_mode_env_and_volumes
 from terok.lib.core.projects import ProjectConfig, load_project
+from terok.lib.orchestration.environment import _security_mode_env_and_volumes
 from tests.test_utils import mock_git_config, project_env
 from tests.testfs import FAKE_SSH_DIR
 from tests.testnet import GATE_PORT, gate_repo_url

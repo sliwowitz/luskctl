@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.orchestration.environment import build_task_env_and_volumes
+from terok.lib.core.projects import load_project
 from terok.lib.domain.task_logs import LogViewOptions, task_logs
+from terok.lib.orchestration.environment import build_task_env_and_volumes
 from terok.lib.orchestration.task_runners import task_run_cli, task_run_toad
 from terok.lib.orchestration.tasks import (
     get_workspace_git_diff,
@@ -21,7 +22,6 @@ from terok.lib.orchestration.tasks import (
     task_list,
     task_new,
 )
-from terok.lib.core.projects import load_project
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from terok.tui.clipboard import (
     copy_to_clipboard_detailed,

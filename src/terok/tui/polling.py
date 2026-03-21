@@ -116,7 +116,7 @@ class PollingMixin:
 
     def _poll_gate_server(self) -> None:
         """Check gate server status in a background worker."""
-        from ..lib.facade import get_server_status
+        from ..lib.domain.facade import get_server_status
 
         self.run_worker(
             get_server_status,
@@ -148,7 +148,7 @@ class PollingMixin:
         """Background worker to batch-query all container states for a project."""
         import asyncio
 
-        from ..lib.containers.tasks import get_all_task_states, get_tasks
+        from ..lib.orchestration.tasks import get_all_task_states, get_tasks
 
         try:
             tasks = await asyncio.get_event_loop().run_in_executor(None, get_tasks, project_id)
@@ -183,7 +183,7 @@ class PollingMixin:
         import asyncio
 
         from ..lib.core.projects import load_project
-        from ..lib.security.git_gate import GitGate
+        from ..lib.sandbox.git_gate import GitGate
 
         try:
             # Run blocking call in thread pool
@@ -277,7 +277,7 @@ class PollingMixin:
         import asyncio
 
         from ..lib.core.projects import load_project
-        from ..lib.security.git_gate import GitGate
+        from ..lib.sandbox.git_gate import GitGate
 
         try:
             # Run blocking sync in thread pool
