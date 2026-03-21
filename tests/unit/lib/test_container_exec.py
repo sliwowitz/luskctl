@@ -20,7 +20,9 @@ class TestContainerGitDiff:
                 "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="running",
             ),
-            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch(
+                "terok.lib.orchestration.container_exec.subprocess.run"
+            ) as mock_run,
         ):
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 0
@@ -42,7 +44,9 @@ class TestContainerGitDiff:
                 "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="exited",
             ),
-            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch(
+                "terok.lib.orchestration.container_exec.subprocess.run"
+            ) as mock_run,
         ):
             # First call: podman start (success)
             # Second call: podman exec git diff (success)
@@ -107,7 +111,9 @@ class TestContainerGitDiff:
                 "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="running",
             ),
-            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch(
+                "terok.lib.orchestration.container_exec.subprocess.run"
+            ) as mock_run,
         ):
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 128

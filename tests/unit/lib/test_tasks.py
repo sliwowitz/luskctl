@@ -462,7 +462,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=[None, "running"],  # No existing container, then alive
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
                 unittest.mock.patch(
                     "terok.lib.orchestration.task_runners._supports_color",
                     return_value=True,
@@ -503,7 +505,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=[None, "running"],
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_cli(project_id, "1")
@@ -539,7 +543,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.assign_web_port",
                     return_value=7861,
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
@@ -585,7 +591,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.assign_web_port",
                     return_value=7862,
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
@@ -612,7 +620,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
             ):
                 buffer = StringIO()
                 with redirect_stdout(buffer):
@@ -647,7 +657,9 @@ class TestTask:
                     "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=["exited", "running"],  # Stopped, then alive after start
                 ),
-                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch(
+                    "terok.lib.orchestration.task_runners.subprocess.run"
+                ) as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 buffer = StringIO()

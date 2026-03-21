@@ -157,7 +157,9 @@ def test_collect_wizard_inputs_lowercases_project_id() -> None:
 def generate_into_tmp(values: dict[str, object]) -> tuple[str, str, str]:
     """Generate a project config into a temporary user-projects root and return path metadata."""
     with tempfile.TemporaryDirectory() as td:
-        with patch("terok.lib.domain.wizards.new_project.user_projects_root", return_value=Path(td)):
+        with patch(
+            "terok.lib.domain.wizards.new_project.user_projects_root", return_value=Path(td)
+        ):
             config_path = generate_config(values)
             return (
                 config_path.name,
@@ -295,7 +297,10 @@ def test_run_wizard(
     """Wizard orchestration handles edit/init prompts and cancellation paths."""
     init_fn = Mock() if has_init_fn else None
     with (
-        patch("terok.lib.domain.wizards.new_project.collect_wizard_inputs", return_value=collect_result),
+        patch(
+            "terok.lib.domain.wizards.new_project.collect_wizard_inputs",
+            return_value=collect_result,
+        ),
         patch(
             "terok.lib.domain.wizards.new_project.generate_config", return_value=expect_result
         ) as mock_generate_config,

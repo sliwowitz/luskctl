@@ -192,9 +192,7 @@ class TestProject:
             gate_dir.mkdir(parents=True, exist_ok=True)
 
             with (
-                unittest.mock.patch(
-                    "terok.lib.domain.project_state.subprocess.run"
-                ) as run_mock,
+                unittest.mock.patch("terok.lib.domain.project_state.subprocess.run") as run_mock,
                 unittest.mock.patch(
                     "terok.lib.core.projects._get_global_git_config", return_value=None
                 ),
