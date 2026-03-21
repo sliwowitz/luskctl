@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.containers.environment import _security_mode_env_and_volumes
+from terok.lib.orchestration.environment import _security_mode_env_and_volumes
 from terok.lib.core.projects import ProjectConfig, load_project
 from tests.test_utils import mock_git_config, project_env
 from tests.testfs import FAKE_SSH_DIR
@@ -53,15 +53,15 @@ def resolve_security_env(
         mock_git_config(),
         project_env(yaml_text, project_id=project_id, with_gate=with_gate) as ctx,
         patch(
-            "terok.lib.containers.environment.ensure_server_reachable",
+            "terok.lib.orchestration.environment.ensure_server_reachable",
             side_effect=ensure_side_effect,
         ),
-        patch("terok.lib.containers.environment.get_gate_server_port", return_value=GATE_PORT),
+        patch("terok.lib.orchestration.environment.get_gate_server_port", return_value=GATE_PORT),
         patch(
-            "terok.lib.containers.environment.get_gate_base_path",
+            "terok.lib.orchestration.environment.get_gate_base_path",
             return_value=ctx.state_dir / "gate",
         ),
-        patch("terok.lib.security.gate_tokens.create_token", return_value=token),
+        patch("terok.lib.sandbox.gate_tokens.create_token", return_value=token),
     ):
         project = load_project(project_id)
         env, volumes = _security_mode_env_and_volumes(project, Path(ctx.base / "ssh"), "1")

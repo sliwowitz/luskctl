@@ -6,7 +6,7 @@
 import subprocess
 import unittest.mock
 
-from terok.lib.containers.container_exec import container_git_diff
+from terok.lib.orchestration.container_exec import container_git_diff
 
 
 class TestContainerGitDiff:
@@ -17,10 +17,10 @@ class TestContainerGitDiff:
         expected = "diff --git a/f.txt b/f.txt\n+hello\n"
         with (
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.get_container_state",
+                "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="running",
             ),
-            unittest.mock.patch("terok.lib.containers.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
         ):
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 0
@@ -39,10 +39,10 @@ class TestContainerGitDiff:
         expected = " 1 file changed\n"
         with (
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.get_container_state",
+                "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="exited",
             ),
-            unittest.mock.patch("terok.lib.containers.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
         ):
             # First call: podman start (success)
             # Second call: podman exec git diff (success)
@@ -85,7 +85,7 @@ class TestContainerGitDiff:
     def test_exited_headless_container_not_restarted(self) -> None:
         """Exited headless (run mode) containers must not be restarted."""
         with unittest.mock.patch(
-            "terok.lib.containers.container_exec.get_container_state",
+            "terok.lib.orchestration.container_exec.get_container_state",
             return_value="exited",
         ):
             result = container_git_diff("proj", "1", "run", "--stat", "HEAD@{1}..HEAD")
@@ -94,7 +94,7 @@ class TestContainerGitDiff:
     def test_no_container_returns_none(self) -> None:
         """Return None when the container does not exist."""
         with unittest.mock.patch(
-            "terok.lib.containers.container_exec.get_container_state",
+            "terok.lib.orchestration.container_exec.get_container_state",
             return_value=None,
         ):
             result = container_git_diff("proj", "99", "cli")
@@ -104,10 +104,10 @@ class TestContainerGitDiff:
         """Return None when git diff fails inside the container."""
         with (
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.get_container_state",
+                "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="running",
             ),
-            unittest.mock.patch("terok.lib.containers.container_exec.subprocess.run") as mock_run,
+            unittest.mock.patch("terok.lib.orchestration.container_exec.subprocess.run") as mock_run,
         ):
             mock_result = unittest.mock.Mock()
             mock_result.returncode = 128
@@ -120,11 +120,11 @@ class TestContainerGitDiff:
         """Return None when podman start fails on a stopped container."""
         with (
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.get_container_state",
+                "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="exited",
             ),
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.subprocess.run",
+                "terok.lib.orchestration.container_exec.subprocess.run",
                 side_effect=subprocess.CalledProcessError(1, "podman start"),
             ),
         ):
@@ -135,11 +135,11 @@ class TestContainerGitDiff:
         """Return None on subprocess timeout."""
         with (
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.get_container_state",
+                "terok.lib.orchestration.container_exec.get_container_state",
                 return_value="running",
             ),
             unittest.mock.patch(
-                "terok.lib.containers.container_exec.subprocess.run",
+                "terok.lib.orchestration.container_exec.subprocess.run",
                 side_effect=subprocess.TimeoutExpired("podman", 30),
             ),
         ):

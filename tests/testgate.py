@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from terok.lib.security.gate_server import GateServerStatus
+from terok.lib.sandbox.gate_server import GateServerStatus
 from tests.testnet import GATE_PORT
 
 OUTDATED_UNITS_MESSAGE = (

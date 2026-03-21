@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from terok.lib.containers.docker import build_images, generate_dockerfiles
+from terok.lib.orchestration.docker import build_images, generate_dockerfiles
 from terok.lib.core.config import build_root
 from terok.lib.core.images import base_dev_image
 from tests.test_utils import mock_git_config, project_env
@@ -48,13 +48,13 @@ def build_commands(
         return Mock(returncode=0)
 
     image_exists_patch = (
-        patch("terok.lib.containers.docker._image_exists", side_effect=image_exists_side_effect)
+        patch("terok.lib.orchestration.docker._image_exists", side_effect=image_exists_side_effect)
         if image_exists_side_effect is not None
-        else patch("terok.lib.containers.docker._image_exists", return_value=image_exists)
+        else patch("terok.lib.orchestration.docker._image_exists", return_value=image_exists)
     )
     with (
         patch("subprocess.run", side_effect=mock_run),
-        patch("terok.lib.containers.docker._check_podman_available"),
+        patch("terok.lib.orchestration.docker._check_podman_available"),
         image_exists_patch,
         mock_git_config(),
     ):

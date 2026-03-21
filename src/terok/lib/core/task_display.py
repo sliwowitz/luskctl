@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from ..util.yaml import YAMLError, load as _yaml_load
 
 if TYPE_CHECKING:
-    from .tasks import TaskMeta
+    from ..orchestration.tasks import TaskMeta
 
 
 @dataclass(frozen=True)

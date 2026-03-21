@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.containers.tasks import (
+from terok.lib.orchestration.tasks import (
     TASK_NAME_MAX_LEN,
     _default_categories_for_project,
     _resolve_name_categories,

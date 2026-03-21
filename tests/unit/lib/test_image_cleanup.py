@@ -10,7 +10,7 @@ import unittest.mock
 
 import pytest
 
-from terok.lib.containers.image_cleanup import (
+from terok.lib.domain.image_cleanup import (
     ImageInfo,
     cleanup_images,
     find_orphaned_images,
@@ -76,7 +76,7 @@ class TestListImages:
         ],
         ids=["all-terok-images", "filtered-by-project", "dev-tag"],
     )
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
     def test_list_images(
         self,
         mock_podman: unittest.mock.Mock,
@@ -88,7 +88,7 @@ class TestListImages:
         images = list_images(project_id)
         assert {image.full_name for image in images} == expected_names
 
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
     def test_list_images_podman_failure(self, mock_podman: unittest.mock.Mock) -> None:
         mock_podman.return_value = podman_result(returncode=1)
         assert list_images() == []
@@ -139,10 +139,10 @@ class TestFindOrphanedImages:
             "skips-on-discovery-failure",
         ],
     )
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._is_terok_built_image")
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._find_dangling_terok_images")
-    @unittest.mock.patch("terok.lib.containers.image_cleanup.list_images")
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._known_project_ids")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._is_terok_built_image")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._find_dangling_terok_images")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.list_images")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._known_project_ids")
     def test_find_orphaned_images(
         self,
         mock_known: unittest.mock.Mock,
@@ -177,8 +177,8 @@ class TestCleanupImages:
         ],
         ids=["dry-run", "success", "failure"],
     )
-    @unittest.mock.patch("terok.lib.containers.image_cleanup._run_podman")
-    @unittest.mock.patch("terok.lib.containers.image_cleanup.find_orphaned_images")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup._run_podman")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.find_orphaned_images")
     def test_cleanup_images(
         self,
         mock_orphaned: unittest.mock.Mock,
@@ -199,7 +199,7 @@ class TestCleanupImages:
         else:
             mock_podman.assert_called_once_with("image", "rm", "sha256:abc")
 
-    @unittest.mock.patch("terok.lib.containers.image_cleanup.find_orphaned_images")
+    @unittest.mock.patch("terok.lib.domain.image_cleanup.find_orphaned_images")
     def test_nothing_to_clean(self, mock_orphaned: unittest.mock.Mock) -> None:
         mock_orphaned.return_value = []
         result = cleanup_images()

@@ -17,7 +17,7 @@ from terok.cli.commands.gate_server import (
     _cmd_stop,
     _cmd_uninstall,
 )
-from terok.lib.security.gate_server import GateServerStatus
+from terok.lib.sandbox.gate_server import GateServerStatus
 from tests.testgate import OUTDATED_UNITS_MESSAGE, make_gate_server_status
 
 

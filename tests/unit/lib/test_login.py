@@ -10,7 +10,7 @@ import unittest.mock
 
 import pytest
 
-from terok.lib.containers.tasks import get_login_command, task_login, task_new
+from terok.lib.orchestration.tasks import get_login_command, task_login, task_new
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
@@ -72,7 +72,7 @@ class TestLogin:
             if project_id != "proj_login_unknown":
                 setup_task_with_mode(ctx, project_id, mode=mode)
             with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_container_state",
+                "terok.lib.orchestration.tasks.get_container_state",
                 return_value=container_state,
             ):
                 with pytest.raises(SystemExit) as exc_ctx:
@@ -86,10 +86,10 @@ class TestLogin:
             setup_task_with_mode(ctx, project_id, mode="cli")
             with (
                 unittest.mock.patch(
-                    "terok.lib.containers.tasks.get_container_state",
+                    "terok.lib.orchestration.tasks.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch("terok.lib.containers.tasks.os.execvp") as mock_exec,
+                unittest.mock.patch("terok.lib.orchestration.tasks.os.execvp") as mock_exec,
             ):
                 task_login(project_id, "1")
         mock_exec.assert_called_once_with("podman", LOGIN_COMMAND)
@@ -108,7 +108,7 @@ class TestLogin:
         with project_env(project_yaml(project_id), project_id=project_id) as ctx:
             setup_task_with_mode(ctx, project_id, mode=mode)
             with unittest.mock.patch(
-                "terok.lib.containers.tasks.get_container_state",
+                "terok.lib.orchestration.tasks.get_container_state",
                 return_value="running",
             ):
                 command = get_login_command(project_id, "1")
@@ -123,11 +123,11 @@ class TestLogin:
             setup_task_with_mode(ctx, project_id, mode="cli")
             with (
                 unittest.mock.patch(
-                    "terok.lib.containers.tasks.get_container_state",
+                    "terok.lib.orchestration.tasks.get_container_state",
                     return_value="running",
                 ),
                 mock_git_config(),
-                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as mock_run,
+                unittest.mock.patch("terok.lib.orchestration.tasks.subprocess.run") as mock_run,
             ):
                 command = get_login_command(project_id, "1")
 

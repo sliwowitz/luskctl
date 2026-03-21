@@ -10,13 +10,13 @@ from collections.abc import Generator, Iterable
 import pytest
 from rich.cells import cell_len
 
-from terok.lib.containers.task_display import (
+from terok.lib.core.task_display import (
     GPU_DISPLAY,
     MODE_DISPLAY,
     SECURITY_CLASS_DISPLAY,
     STATUS_DISPLAY,
 )
-from terok.lib.containers.work_status import WORK_STATUS_DISPLAY
+from terok.lib.core.work_status import WORK_STATUS_DISPLAY
 from terok.lib.util.emoji import EmojiInfo, is_emoji_enabled, render_emoji, set_emoji_enabled
 
 

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from terok.lib.containers.environment import apply_git_identity_env, resolve_git_identity
+from terok.lib.orchestration.environment import apply_git_identity_env, resolve_git_identity
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

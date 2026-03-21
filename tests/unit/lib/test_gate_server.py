@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.security.gate_server import (
+from terok.lib.sandbox.gate_server import (
     _UNIT_VERSION,
     GateServerStatus,
     _installed_unit_version,
@@ -64,7 +64,7 @@ def patched_unit_dir(files: dict[str, str] | None = None) -> Iterator[Path]:
         for name, content in (files or {}).items():
             (unit_dir / name).write_text(content)
         with unittest.mock.patch(
-            "terok.lib.security.gate_server._systemd_unit_dir",
+            "terok.lib.sandbox.gate_server._systemd_unit_dir",
             return_value=unit_dir,
         ):
             yield unit_dir
@@ -75,16 +75,16 @@ def patched_install_env(unit_dir: Path) -> Iterator[None]:
     """Patch the standard paths used by install/uninstall/start tests."""
     with (
         unittest.mock.patch(
-            "terok.lib.security.gate_server._systemd_unit_dir",
+            "terok.lib.sandbox.gate_server._systemd_unit_dir",
             return_value=unit_dir,
         ),
-        unittest.mock.patch("terok.lib.security.gate_server._get_port", return_value=GATE_PORT),
+        unittest.mock.patch("terok.lib.sandbox.gate_server._get_port", return_value=GATE_PORT),
         unittest.mock.patch(
-            "terok.lib.security.gate_server._get_gate_base_path",
+            "terok.lib.sandbox.gate_server._get_gate_base_path",
             return_value=GATE_BASE_PATH,
         ),
         unittest.mock.patch(
-            "terok.lib.security.gate_tokens.state_root",
+            "terok.lib.sandbox.gate_tokens.state_root",
             return_value=STATE_ROOT_PATH,
         ),
     ):
@@ -97,15 +97,15 @@ def patched_daemon_paths(base: Path) -> Iterator[Path]:
     pid_file = base / "gate-server.pid"
     with (
         unittest.mock.patch(
-            "terok.lib.security.gate_server._get_gate_base_path",
+            "terok.lib.sandbox.gate_server._get_gate_base_path",
             return_value=base / "gate",
         ),
         unittest.mock.patch(
-            "terok.lib.security.gate_server._pid_file",
+            "terok.lib.sandbox.gate_server._pid_file",
             return_value=pid_file,
         ),
         unittest.mock.patch(
-            "terok.lib.security.gate_tokens.state_root",
+            "terok.lib.sandbox.gate_tokens.state_root",
             return_value=base,
         ),
     ):
@@ -169,7 +169,7 @@ class TestSocketInstalled:
 
     def test_socket_not_installed(self) -> None:
         with unittest.mock.patch(
-            "terok.lib.security.gate_server._systemd_unit_dir",
+            "terok.lib.sandbox.gate_server._systemd_unit_dir",
             return_value=MISSING_PATH,
         ):
             assert not is_socket_installed()
@@ -281,7 +281,7 @@ class TestDaemon:
 
     def test_stop_daemon_no_pidfile(self) -> None:
         with unittest.mock.patch(
-            "terok.lib.security.gate_server._pid_file",
+            "terok.lib.sandbox.gate_server._pid_file",
             return_value=MISSING_PATH / "pid",
         ):
             stop_daemon()
@@ -297,11 +297,11 @@ class TestDaemon:
             pid_file = write_pid_file(Path(td))
             with (
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server._pid_file",
+                    "terok.lib.sandbox.gate_server._pid_file",
                     return_value=pid_file,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server._is_managed_server",
+                    "terok.lib.sandbox.gate_server._is_managed_server",
                     return_value=managed,
                 ),
                 unittest.mock.patch("os.kill") as mock_kill,
@@ -318,7 +318,7 @@ class TestIsDaemonRunning:
 
     def test_no_pidfile(self) -> None:
         with unittest.mock.patch(
-            "terok.lib.security.gate_server._pid_file",
+            "terok.lib.sandbox.gate_server._pid_file",
             return_value=MISSING_PATH / "pid",
         ):
             assert not is_daemon_running()
@@ -343,11 +343,11 @@ class TestIsDaemonRunning:
             pid_file = write_pid_file(Path(td), pid)
             patches = [
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server._pid_file",
+                    "terok.lib.sandbox.gate_server._pid_file",
                     return_value=pid_file,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server._is_managed_server",
+                    "terok.lib.sandbox.gate_server._is_managed_server",
                     return_value=managed,
                 ),
                 unittest.mock.patch("os.kill", side_effect=kill_side_effect),
@@ -375,14 +375,14 @@ class TestIsManagedServer:
             fake_cmdline.write_bytes(cmdline)
             patches = [
                 unittest.mock.patch(
-                    "terok.lib.security.gate_server.Path",
+                    "terok.lib.sandbox.gate_server.Path",
                     return_value=fake_cmdline,
                 ),
             ]
             if pid_file is not None:
                 patches.append(
                     unittest.mock.patch(
-                        "terok.lib.security.gate_server._pid_file",
+                        "terok.lib.sandbox.gate_server._pid_file",
                         return_value=pid_file,
                     )
                 )
@@ -445,18 +445,18 @@ class TestGetServerStatus:
     ) -> None:
         with (
             unittest.mock.patch(
-                "terok.lib.security.gate_server.is_socket_installed",
+                "terok.lib.sandbox.gate_server.is_socket_installed",
                 return_value=socket_installed,
             ),
             unittest.mock.patch(
-                "terok.lib.security.gate_server.is_socket_active",
+                "terok.lib.sandbox.gate_server.is_socket_active",
                 return_value=socket_active,
             ),
             unittest.mock.patch(
-                "terok.lib.security.gate_server.is_daemon_running",
+                "terok.lib.sandbox.gate_server.is_daemon_running",
                 return_value=daemon_running,
             ),
-            unittest.mock.patch("terok.lib.security.gate_server._get_port", return_value=GATE_PORT),
+            unittest.mock.patch("terok.lib.sandbox.gate_server._get_port", return_value=GATE_PORT),
         ):
             assert get_server_status() == expected
 
@@ -492,15 +492,15 @@ class TestEnsureServerReachable:
     ) -> None:
         with (
             unittest.mock.patch(
-                "terok.lib.security.gate_server.get_server_status",
+                "terok.lib.sandbox.gate_server.get_server_status",
                 return_value=status,
             ),
             unittest.mock.patch(
-                "terok.lib.security.gate_server.is_systemd_available",
+                "terok.lib.sandbox.gate_server.is_systemd_available",
                 return_value=systemd_available,
             ),
             unittest.mock.patch(
-                "terok.lib.security.gate_server._installed_unit_version",
+                "terok.lib.sandbox.gate_server._installed_unit_version",
                 return_value=unit_version,
             ),
         ):
@@ -516,7 +516,7 @@ class TestInstalledUnitVersion:
 
     def test_no_file(self) -> None:
         with unittest.mock.patch(
-            "terok.lib.security.gate_server._systemd_unit_dir",
+            "terok.lib.sandbox.gate_server._systemd_unit_dir",
             return_value=MISSING_PATH,
         ):
             assert _installed_unit_version() is None
@@ -555,11 +555,11 @@ class TestCheckUnitsOutdated:
     ) -> None:
         with (
             unittest.mock.patch(
-                "terok.lib.security.gate_server.is_socket_installed",
+                "terok.lib.sandbox.gate_server.is_socket_installed",
                 return_value=socket_installed,
             ),
             unittest.mock.patch(
-                "terok.lib.security.gate_server._installed_unit_version",
+                "terok.lib.sandbox.gate_server._installed_unit_version",
                 return_value=version,
             ),
         ):

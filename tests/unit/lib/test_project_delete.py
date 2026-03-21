@@ -13,7 +13,7 @@ import pytest
 
 from terok.lib.core.config import build_root, state_root
 from terok.lib.core.projects import load_project
-from terok.lib.facade import delete_project
+from terok.lib.domain.facade import delete_project
 from tests.test_utils import project_env, write_project
 
 EnvSetup = Callable[[SimpleNamespace, str], Path]

@@ -10,13 +10,13 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.containers.runtime import get_project_container_states
-from terok.lib.containers.task_display import (
+from terok.lib.sandbox.runtime import get_project_container_states
+from terok.lib.core.task_display import (
     STATUS_DISPLAY,
     effective_status,
     mode_info,
 )
-from terok.lib.containers.tasks import TaskMeta, get_all_task_states
+from terok.lib.orchestration.tasks import TaskMeta, get_all_task_states
 
 
 def _task(**kwargs: object) -> TaskMeta:
@@ -133,7 +133,7 @@ def test_get_project_container_states_handles_output_and_errors(
 ) -> None:
     """Project-wide state lookup parses output and degrades cleanly on errors."""
     patch_kwargs = {"side_effect": error} if error else {"return_value": output}
-    with patch("terok.lib.containers.runtime.subprocess.check_output", **patch_kwargs):
+    with patch("terok.lib.sandbox.runtime.subprocess.check_output", **patch_kwargs):
         assert get_project_container_states("proj") == expected
 
 
@@ -165,7 +165,7 @@ def test_get_all_task_states_maps_project_container_lookup(
 ) -> None:
     """Task-state lookup maps batch project container states back to task IDs."""
     with patch(
-        "terok.lib.containers.tasks.get_project_container_states",
+        "terok.lib.orchestration.tasks.get_project_container_states",
         return_value=container_states,
     ) as mocked_get_states:
         assert get_all_task_states("proj", tasks) == expected

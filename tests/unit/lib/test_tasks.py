@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.containers.environment import build_task_env_and_volumes
-from terok.lib.containers.task_logs import LogViewOptions, task_logs
-from terok.lib.containers.task_runners import task_run_cli, task_run_toad
-from terok.lib.containers.tasks import (
+from terok.lib.orchestration.environment import build_task_env_and_volumes
+from terok.lib.domain.task_logs import LogViewOptions, task_logs
+from terok.lib.orchestration.task_runners import task_run_cli, task_run_toad
+from terok.lib.orchestration.tasks import (
     get_workspace_git_diff,
     task_delete,
     task_list,
@@ -118,7 +118,7 @@ class TestTask:
             assert second_id == "2"
 
             with (
-                unittest.mock.patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.tasks.subprocess.run") as run_mock,
                 mock_git_config(),
             ):
                 run_mock.return_value.returncode = 0
@@ -163,7 +163,7 @@ class TestTask:
     def _task_list_output(project_id: str, states: dict[str, str | None], **filters: str) -> str:
         """Run ``task_list`` with mocked container states and capture stdout."""
         with unittest.mock.patch(
-            "terok.lib.containers.tasks.get_all_task_states",
+            "terok.lib.orchestration.tasks.get_all_task_states",
             return_value=states,
         ):
             buf = StringIO()
@@ -333,13 +333,13 @@ class TestTask:
             output = self._task_list_output(project_id, {"1": None}, status="running")
             assert "No tasks found" in output
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_gatekeeping(self, *_mocks) -> None:
         project_id = "proj9"
@@ -363,13 +363,13 @@ class TestTask:
             ssh_mounts = [v for v in volumes if str(CONTAINER_SSH_DIR) in v]
             assert ssh_mounts == []
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_gatekeeping_with_ssh(self, *_mocks) -> None:
         """Gatekeeping mode with mount_in_gatekeeping enabled should mount SSH."""
@@ -400,13 +400,13 @@ class TestTask:
             # Verify SSH IS mounted when mount_in_gatekeeping is true
             _assert_volume_mount(volumes, f"{ssh_dir}:{CONTAINER_SSH_DIR}", ":z")
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_online(self, *_mocks) -> None:
         project_id = "proj10"
@@ -455,16 +455,16 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.orchestration.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=[None, "running"],  # No existing container, then alive
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners._supports_color",
+                    "terok.lib.orchestration.task_runners._supports_color",
                     return_value=True,
                 ),
             ):
@@ -496,14 +496,14 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.orchestration.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=[None, "running"],
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_cli(project_id, "1")
@@ -524,22 +524,22 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.orchestration.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     return_value=None,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.is_container_running",
+                    "terok.lib.orchestration.task_runners.is_container_running",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.assign_web_port",
+                    "terok.lib.orchestration.task_runners.assign_web_port",
                     return_value=7861,
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
@@ -570,22 +570,22 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.stream_initial_logs",
+                    "terok.lib.orchestration.task_runners.stream_initial_logs",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     return_value=None,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.is_container_running",
+                    "terok.lib.orchestration.task_runners.is_container_running",
                     return_value=True,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.assign_web_port",
+                    "terok.lib.orchestration.task_runners.assign_web_port",
                     return_value=7862,
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
@@ -609,10 +609,10 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     return_value="running",
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             ):
                 buffer = StringIO()
                 with redirect_stdout(buffer):
@@ -644,10 +644,10 @@ class TestTask:
             with (
                 mock_git_config(),
                 unittest.mock.patch(
-                    "terok.lib.containers.task_runners.get_container_state",
+                    "terok.lib.orchestration.task_runners.get_container_state",
                     side_effect=["exited", "running"],  # Stopped, then alive after start
                 ),
-                unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+                unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             ):
                 run_mock.return_value = subprocess.CompletedProcess(args=[], returncode=0)
                 buffer = StringIO()
@@ -693,7 +693,7 @@ class TestTask:
             project_id=project_id,
         ):
             task_new(project_id)
-            from terok.lib.containers.tasks import tasks_meta_dir
+            from terok.lib.orchestration.tasks import tasks_meta_dir
 
             meta_path = tasks_meta_dir(project_id) / "1.yml"
             meta = yaml_load(meta_path.read_text())
@@ -702,7 +702,7 @@ class TestTask:
 
             expected = "diff --git a/f.txt b/f.txt\n+line\n"
             with unittest.mock.patch(
-                "terok.lib.containers.tasks.container_git_diff",
+                "terok.lib.orchestration.tasks.container_git_diff",
                 return_value=expected,
             ) as mock_diff:
                 result = get_workspace_git_diff(project_id, "1", "HEAD")
@@ -717,7 +717,7 @@ class TestTask:
             project_id=project_id,
         ):
             task_new(project_id)
-            from terok.lib.containers.tasks import tasks_meta_dir
+            from terok.lib.orchestration.tasks import tasks_meta_dir
 
             meta_path = tasks_meta_dir(project_id) / "1.yml"
             meta = yaml_load(meta_path.read_text())
@@ -726,7 +726,7 @@ class TestTask:
 
             expected = "diff --git a/f.txt b/f.txt\n+prev\n"
             with unittest.mock.patch(
-                "terok.lib.containers.tasks.container_git_diff",
+                "terok.lib.orchestration.tasks.container_git_diff",
                 return_value=expected,
             ) as mock_diff:
                 result = get_workspace_git_diff(project_id, "1", "PREV")
@@ -741,7 +741,7 @@ class TestTask:
             project_id=project_id,
         ):
             task_new(project_id)
-            from terok.lib.containers.tasks import tasks_meta_dir
+            from terok.lib.orchestration.tasks import tasks_meta_dir
 
             meta_path = tasks_meta_dir(project_id) / "1.yml"
             meta = yaml_load(meta_path.read_text())
@@ -749,7 +749,7 @@ class TestTask:
             meta_path.write_text(yaml_dump(meta))
 
             with unittest.mock.patch(
-                "terok.lib.containers.tasks.container_git_diff",
+                "terok.lib.orchestration.tasks.container_git_diff",
                 return_value=None,
             ):
                 result = get_workspace_git_diff(project_id, "1")
@@ -873,13 +873,13 @@ class TestTask:
                 assert status.hint is not None
                 assert "xclip" in status.hint
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_gatekeeping_expose_external_remote_enabled(self, *_mocks) -> None:
         """Test expose_external_remote=true with upstream_url sets EXTERNAL_REMOTE_URL."""
@@ -902,13 +902,13 @@ class TestTask:
             assert "http://" in env["CODE_REPO"]
             assert _gate_repo_fragment(project_id) in env["CODE_REPO"]
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_gatekeeping_expose_external_remote_disabled(self, *_mocks) -> None:
         """Test expose_external_remote=false does not set EXTERNAL_REMOTE_URL."""
@@ -931,13 +931,13 @@ class TestTask:
             assert "http://" in env["CODE_REPO"]
             assert _gate_repo_fragment(project_id) in env["CODE_REPO"]
 
-    @unittest.mock.patch("terok.lib.containers.environment.ensure_server_reachable")
+    @unittest.mock.patch("terok.lib.orchestration.environment.ensure_server_reachable")
     @unittest.mock.patch(
-        "terok.lib.containers.environment.get_gate_server_port",
+        "terok.lib.orchestration.environment.get_gate_server_port",
         return_value=GATE_PORT,
     )
     @unittest.mock.patch(
-        "terok.lib.security.gate_tokens.create_token", return_value="tok" * 10 + "ab"
+        "terok.lib.sandbox.gate_tokens.create_token", return_value="tok" * 10 + "ab"
     )
     def test_build_task_env_gatekeeping_expose_external_remote_no_upstream(self, *_mocks) -> None:
         """Test expose_external_remote=true without upstream_url does not set EXTERNAL_REMOTE_URL."""
@@ -1008,7 +1008,7 @@ class TestTaskLogs:
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs3", "run")
                 with unittest.mock.patch(
-                    "terok.lib.containers.task_logs.get_container_state", return_value=None
+                    "terok.lib.domain.task_logs.get_container_state", return_value=None
                 ):
                     with pytest.raises(SystemExit) as cm:
                         task_logs("proj_logs3", task_id)
@@ -1023,7 +1023,7 @@ class TestTaskLogs:
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs4", "run")
                 with unittest.mock.patch(
-                    "terok.lib.containers.task_logs.get_container_state",
+                    "terok.lib.domain.task_logs.get_container_state",
                     return_value="running",
                 ):
                     with pytest.raises(SystemExit) as cm:
@@ -1048,11 +1048,11 @@ class TestTaskLogs:
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.os.execvp", side_effect=fake_execvp
+                        "terok.lib.domain.task_logs.os.execvp", side_effect=fake_execvp
                     ),
                 ):
                     with pytest.raises(SystemExit):
@@ -1071,11 +1071,11 @@ class TestTaskLogs:
                 task_id = self._setup_task_with_mode("proj_logs6", "cli")
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.os.execvp",
+                        "terok.lib.domain.task_logs.os.execvp",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
@@ -1111,15 +1111,15 @@ class TestTaskLogs:
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value="exited",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.subprocess.Popen",
+                        "terok.lib.domain.task_logs.subprocess.Popen",
                         return_value=mock_proc,
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.auto_detect_formatter",
+                        "terok.lib.domain.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                     unittest.mock.patch("select.select") as mock_select,
@@ -1142,11 +1142,11 @@ class TestTaskLogs:
                 task_id = self._setup_task_with_mode("proj_logs8", "run")
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value="running",
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.subprocess.Popen",
+                        "terok.lib.domain.task_logs.subprocess.Popen",
                         side_effect=FileNotFoundError("podman"),
                     ),
                 ):
@@ -1176,11 +1176,11 @@ class TestTaskLogs:
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value=None,
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.auto_detect_formatter",
+                        "terok.lib.domain.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                 ):
@@ -1213,11 +1213,11 @@ class TestTaskLogs:
 
                 with (
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.get_container_state",
+                        "terok.lib.domain.task_logs.get_container_state",
                         return_value=None,
                     ),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_logs.auto_detect_formatter",
+                        "terok.lib.domain.task_logs.auto_detect_formatter",
                         return_value=mock_formatter,
                     ),
                 ):
@@ -1233,7 +1233,7 @@ class TestTaskLogs:
             with mock_git_config():
                 task_id = self._setup_task_with_mode("proj_logs_nolog", "run")
                 with unittest.mock.patch(
-                    "terok.lib.containers.task_logs.get_container_state",
+                    "terok.lib.domain.task_logs.get_container_state",
                     return_value=None,
                 ):
                     with pytest.raises(SystemExit) as cm:
@@ -1257,7 +1257,7 @@ class TestTaskLogs:
                 (logs_dir / "container.log").write_text("a\nb\n")
 
                 with unittest.mock.patch(
-                    "terok.lib.containers.task_logs.get_container_state",
+                    "terok.lib.domain.task_logs.get_container_state",
                     return_value=None,
                 ):
                     with pytest.raises(SystemExit) as cm:
@@ -1304,7 +1304,7 @@ class TestTaskArchive:
                     return result
 
                 with unittest.mock.patch(
-                    "terok.lib.containers.tasks.subprocess.run",
+                    "terok.lib.orchestration.tasks.subprocess.run",
                     side_effect=fake_run,
                 ):
                     task_delete(project_id, task_id)
@@ -1352,7 +1352,7 @@ class TestTaskArchive:
                     return result
 
                 with unittest.mock.patch(
-                    "terok.lib.containers.tasks.subprocess.run",
+                    "terok.lib.orchestration.tasks.subprocess.run",
                     side_effect=fake_run,
                 ):
                     task_delete(project_id, task_id)
@@ -1369,7 +1369,7 @@ class TestTaskArchive:
 
     def test_list_archived_tasks(self) -> None:
         """list_archived_tasks returns archived tasks sorted newest-first."""
-        from terok.lib.containers.tasks import list_archived_tasks, tasks_archive_dir
+        from terok.lib.orchestration.tasks import list_archived_tasks, tasks_archive_dir
 
         project_id = "proj_archive3"
         with project_env(
@@ -1404,7 +1404,7 @@ class TestTaskArchive:
 
     def test_task_archive_logs(self) -> None:
         """task_archive_logs returns log file path for matching archive."""
-        from terok.lib.containers.tasks import task_archive_logs, tasks_archive_dir
+        from terok.lib.orchestration.tasks import task_archive_logs, tasks_archive_dir
 
         project_id = "proj_archive4"
         with project_env(
@@ -1432,7 +1432,7 @@ class TestTaskArchive:
 
     def test_task_archive_list_empty(self) -> None:
         """task_archive_list prints message when no archives exist."""
-        from terok.lib.containers.tasks import task_archive_list
+        from terok.lib.orchestration.tasks import task_archive_list
 
         project_id = "proj_archive5"
         with project_env(
@@ -1446,7 +1446,7 @@ class TestTaskArchive:
 
     def test_capture_task_logs(self) -> None:
         """capture_task_logs writes podman logs to host filesystem."""
-        from terok.lib.containers.tasks import capture_task_logs
+        from terok.lib.orchestration.tasks import capture_task_logs
 
         project_id = "proj_capture1"
         with project_env(
@@ -1467,7 +1467,7 @@ class TestTaskArchive:
                     return result
 
                 with unittest.mock.patch(
-                    "terok.lib.containers.tasks.subprocess.run",
+                    "terok.lib.orchestration.tasks.subprocess.run",
                     side_effect=fake_run,
                 ):
                     log_file = capture_task_logs(project_id, task_id, "run")
@@ -1478,7 +1478,7 @@ class TestTaskArchive:
 
     def test_capture_task_logs_podman_not_found(self) -> None:
         """capture_task_logs returns None when podman is not available."""
-        from terok.lib.containers.tasks import capture_task_logs
+        from terok.lib.orchestration.tasks import capture_task_logs
 
         project_id = "proj_capture2"
         with project_env(
@@ -1489,7 +1489,7 @@ class TestTaskArchive:
                 task_id = task_new(project_id)
 
                 with unittest.mock.patch(
-                    "terok.lib.containers.tasks.subprocess.run",
+                    "terok.lib.orchestration.tasks.subprocess.run",
                     side_effect=FileNotFoundError("podman"),
                 ):
                     result = capture_task_logs(project_id, task_id, "run")

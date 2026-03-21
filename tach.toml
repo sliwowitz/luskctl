@@ -43,18 +43,18 @@ exclude = ["pydevd_pycharm", "pydevd"]
 path = "terok.cli"
 layer = "presentation"
 depends_on = [
-    "terok.lib.containers.agent_config",
-    "terok.lib.containers.headless_providers",
-    "terok.lib.containers.hooks",
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.tasks",
+    "terok.lib.instrumentation.agent_config",
+    "terok.lib.instrumentation.headless_providers",
+    "terok.lib.orchestration.hooks",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.core.version",
-    "terok.lib.facade",
+    "terok.lib.domain.facade",
     "terok.lib.util.emoji",
     "terok.lib.util.yaml",
-    "terok.lib.wizards.new_project",
+    "terok.lib.domain.wizards.new_project",
     "terok.ui_utils.terminal",
 ]
 
@@ -63,18 +63,18 @@ depends_on = [
 path = "terok.tui"
 layer = "presentation"
 depends_on = [
-    "terok.lib.containers.agents",
-    "terok.lib.containers.autopilot",
-    "terok.lib.containers.headless_providers",
-    "terok.lib.containers.instructions",
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.task_display",
-    "terok.lib.containers.tasks",
+    "terok.lib.instrumentation.agents",
+    "terok.lib.orchestration.autopilot",
+    "terok.lib.instrumentation.headless_providers",
+    "terok.lib.instrumentation.instructions",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.core.task_display",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.projects",
     "terok.lib.core.version",
-    "terok.lib.facade",
-    "terok.lib.security.shield",
+    "terok.lib.domain.facade",
+    "terok.lib.sandbox.shield",
     "terok.lib.util.emoji",
     "terok.lib.util.yaml",
 ]
@@ -86,95 +86,95 @@ depends_on = [
 
 # Service facade (aggregates shared cross-cutting operations)
 [[modules]]
-path = "terok.lib.facade"
+path = "terok.lib.domain.facade"
 layer = "domain"
 depends_on = [
-    "terok.lib.containers.docker",
-    "terok.lib.containers.environment",
-    "terok.lib.containers.image_cleanup",
-    "terok.lib.containers.project_state",
-    "terok.lib.containers.task_logs",
-    "terok.lib.containers.task_runners",
-    "terok.lib.containers.tasks",
+    "terok.lib.orchestration.docker",
+    "terok.lib.orchestration.environment",
+    "terok.lib.domain.image_cleanup",
+    "terok.lib.domain.project_state",
+    "terok.lib.domain.task_logs",
+    "terok.lib.orchestration.task_runners",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.projects",
-    "terok.lib.project",
-    "terok.lib.security.auth",
-    "terok.lib.security.gate_server",
-    "terok.lib.security.git_gate",
-    "terok.lib.security.shield",
-    "terok.lib.security.ssh",
-    "terok.lib.task",
+    "terok.lib.domain.project",
+    "terok.lib.instrumentation.auth",
+    "terok.lib.sandbox.gate_server",
+    "terok.lib.sandbox.git_gate",
+    "terok.lib.sandbox.shield",
+    "terok.lib.sandbox.ssh",
+    "terok.lib.domain.task",
 ]
 
 # Rich domain object: Project (Aggregate Root)
 [[modules]]
-path = "terok.lib.project"
+path = "terok.lib.domain.project"
 layer = "domain"
 depends_on = [
-    "terok.lib.containers.agent_config",
-    "terok.lib.containers.docker",
-    "terok.lib.containers.headless_providers",
-    "terok.lib.containers.instructions",
-    "terok.lib.containers.project_state",
-    "terok.lib.containers.task_runners",
-    "terok.lib.containers.tasks",
+    "terok.lib.instrumentation.agent_config",
+    "terok.lib.orchestration.docker",
+    "terok.lib.instrumentation.headless_providers",
+    "terok.lib.instrumentation.instructions",
+    "terok.lib.domain.project_state",
+    "terok.lib.orchestration.task_runners",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.project_model",
     "terok.lib.core.projects",
-    "terok.lib.security.git_gate",
-    "terok.lib.security.ssh",
-    "terok.lib.task",
+    "terok.lib.sandbox.git_gate",
+    "terok.lib.sandbox.ssh",
+    "terok.lib.domain.task",
     "terok.lib.util.fs",
 ]
 
 # Rich domain object: Task (Entity)
 [[modules]]
-path = "terok.lib.task"
+path = "terok.lib.domain.task"
 layer = "domain"
 depends_on = [
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.task_logs",
-    "terok.lib.containers.task_runners",
-    "terok.lib.containers.tasks",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.domain.task_logs",
+    "terok.lib.orchestration.task_runners",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.project_model",
 ]
 
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
-path = "terok.lib.containers.autopilot"
+path = "terok.lib.orchestration.autopilot"
 layer = "orchestration"
-depends_on = ["terok.lib.containers.tasks"]
+depends_on = ["terok.lib.orchestration.tasks"]
 
 # Task log viewing and streaming
 [[modules]]
-path = "terok.lib.containers.task_logs"
+path = "terok.lib.domain.task_logs"
 layer = "domain"
 depends_on = [
-    "terok.lib.containers.log_format",
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.tasks",
+    "terok.lib.domain.log_format",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.projects",
     "terok.lib.util.yaml",
 ]
 
 # Agent log formatters (Claude stream-json, plain text)
 [[modules]]
-path = "terok.lib.containers.log_format"
+path = "terok.lib.domain.log_format"
 layer = "domain"
 depends_on = ["terok.lib.util.ansi"]
 
 # Image listing & cleanup
 [[modules]]
-path = "terok.lib.containers.image_cleanup"
+path = "terok.lib.domain.image_cleanup"
 layer = "domain"
 depends_on = ["terok.lib.core.projects"]
 
 # Project infrastructure state (queries podman & filesystem)
 [[modules]]
-path = "terok.lib.containers.project_state"
+path = "terok.lib.domain.project_state"
 layer = "domain"
 depends_on = [
-    "terok.lib.containers.docker",
+    "terok.lib.orchestration.docker",
     "terok.lib.core.config",
     "terok.lib.core.images",
     "terok.lib.core.projects",
@@ -182,7 +182,7 @@ depends_on = [
 
 # Interactive project creation
 [[modules]]
-path = "terok.lib.wizards.new_project"
+path = "terok.lib.domain.wizards.new_project"
 layer = "domain"
 depends_on = [
     "terok.lib.core.config",
@@ -198,23 +198,23 @@ depends_on = [
 
 # Task container runners (CLI, headless, toad, restart)
 [[modules]]
-path = "terok.lib.containers.task_runners"
+path = "terok.lib.orchestration.task_runners"
 layer = "orchestration"
 depends_on = [
-    "terok.lib.containers.agent_config",
-    "terok.lib.containers.agents",
-    "terok.lib.containers.container_exec",
-    "terok.lib.containers.environment",
-    "terok.lib.containers.headless_providers",
-    "terok.lib.containers.hooks",
-    "terok.lib.containers.instructions",
-    "terok.lib.containers.ports",
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.tasks",
+    "terok.lib.instrumentation.agent_config",
+    "terok.lib.instrumentation.agents",
+    "terok.lib.orchestration.container_exec",
+    "terok.lib.orchestration.environment",
+    "terok.lib.instrumentation.headless_providers",
+    "terok.lib.orchestration.hooks",
+    "terok.lib.instrumentation.instructions",
+    "terok.lib.orchestration.ports",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.orchestration.tasks",
     "terok.lib.core.config",
     "terok.lib.core.images",
     "terok.lib.core.projects",
-    "terok.lib.security.shield",
+    "terok.lib.sandbox.shield",
     "terok.lib.util.ansi",
     "terok.lib.util.podman",
     "terok.lib.util.yaml",
@@ -222,17 +222,17 @@ depends_on = [
 
 # Task metadata, lifecycle, and queries
 [[modules]]
-path = "terok.lib.containers.tasks"
+path = "terok.lib.orchestration.tasks"
 layer = "orchestration"
 depends_on = [
-    "terok.lib.containers.container_exec",
-    "terok.lib.containers.hooks",
-    "terok.lib.containers.runtime",
-    "terok.lib.containers.task_display",
-    "terok.lib.containers.work_status",
+    "terok.lib.orchestration.container_exec",
+    "terok.lib.orchestration.hooks",
+    "terok.lib.sandbox.runtime",
+    "terok.lib.core.task_display",
+    "terok.lib.core.work_status",
     "terok.lib.core.config",
     "terok.lib.core.projects",
-    "terok.lib.security.gate_tokens",
+    "terok.lib.sandbox.gate_tokens",
     "terok.lib.util.ansi",
     "terok.lib.util.emoji",
     "terok.lib.util.fs",
@@ -243,33 +243,33 @@ depends_on = [
 
 # Task environment & volume mounts
 [[modules]]
-path = "terok.lib.containers.environment"
+path = "terok.lib.orchestration.environment"
 layer = "orchestration"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.security.gate_server", "terok.lib.security.gate_tokens", "terok.lib.util.fs", "terok.lib.containers.headless_providers", "terok.lib.util.host_cmd"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.projects", "terok.lib.sandbox.gate_server", "terok.lib.sandbox.gate_tokens", "terok.lib.util.fs", "terok.lib.instrumentation.headless_providers", "terok.lib.util.host_cmd"]
 
 # Dockerfile generation & image building
 [[modules]]
-path = "terok.lib.containers.docker"
+path = "terok.lib.orchestration.docker"
 layer = "orchestration"
 depends_on = ["terok.lib.core.config", "terok.lib.core.images", "terok.lib.core.projects", "terok.lib.util.fs"]
 
 # Task port allocation
 [[modules]]
-path = "terok.lib.containers.ports"
+path = "terok.lib.orchestration.ports"
 layer = "orchestration"
 depends_on = ["terok.lib.core.config", "terok.lib.util.yaml"]
 
 # Task lifecycle hooks (host-side)
 [[modules]]
-path = "terok.lib.containers.hooks"
+path = "terok.lib.orchestration.hooks"
 layer = "orchestration"
 depends_on = ["terok.lib.util.yaml"]
 
 # Container-based command execution (sandboxed git via podman exec)
 [[modules]]
-path = "terok.lib.containers.container_exec"
+path = "terok.lib.orchestration.container_exec"
 layer = "orchestration"
-depends_on = ["terok.lib.containers.runtime", "terok.lib.util.logging_utils"]
+depends_on = ["terok.lib.sandbox.runtime", "terok.lib.util.logging_utils"]
 
 # ── INSTRUMENTATION LAYER ─────────────────────────────────────────
 #
@@ -278,31 +278,31 @@ depends_on = ["terok.lib.containers.runtime", "terok.lib.util.logging_utils"]
 
 # Agent configuration (parsing, filtering, wrapper generation)
 [[modules]]
-path = "terok.lib.containers.agents"
+path = "terok.lib.instrumentation.agents"
 layer = "instrumentation"
-depends_on = ["terok.lib.containers.headless_providers", "terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs", "terok.lib.util.yaml"]
+depends_on = ["terok.lib.instrumentation.headless_providers", "terok.lib.core.config", "terok.lib.core.projects", "terok.lib.util.fs", "terok.lib.util.yaml"]
 
 # Headless provider registry (multi-agent autopilot support)
 [[modules]]
-path = "terok.lib.containers.headless_providers"
+path = "terok.lib.instrumentation.headless_providers"
 layer = "instrumentation"
-depends_on = ["terok.lib.containers.agent_config", "terok.lib.core.projects"]
+depends_on = ["terok.lib.instrumentation.agent_config", "terok.lib.core.projects"]
 
 # Agent config resolution (layered merging across scopes)
 [[modules]]
-path = "terok.lib.containers.agent_config"
+path = "terok.lib.instrumentation.agent_config"
 layer = "instrumentation"
 depends_on = ["terok.lib.util.config_stack", "terok.lib.core.config", "terok.lib.core.projects"]
 
 # Agent instruction resolution (layered merging with bundled defaults)
 [[modules]]
-path = "terok.lib.containers.instructions"
+path = "terok.lib.instrumentation.instructions"
 layer = "instrumentation"
-depends_on = ["terok.lib.containers.agent_config"]
+depends_on = ["terok.lib.instrumentation.agent_config"]
 
 # API key authentication workflows
 [[modules]]
-path = "terok.lib.security.auth"
+path = "terok.lib.instrumentation.auth"
 layer = "instrumentation"
 depends_on = [
     "terok.lib.util.podman",
@@ -310,7 +310,7 @@ depends_on = [
     "terok.lib.core.images",
     "terok.lib.core.projects",
     "terok.lib.util.fs",
-    "terok.lib.containers.headless_providers",
+    "terok.lib.instrumentation.headless_providers",
 ]
 
 # ── SANDBOX LAYER ─────────────────────────────────────────────────
@@ -320,25 +320,25 @@ depends_on = [
 
 # Container state, GPU args, log streaming
 [[modules]]
-path = "terok.lib.containers.runtime"
+path = "terok.lib.sandbox.runtime"
 layer = "sandbox"
 depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils", "terok.lib.util.yaml"]
 
 # Shield egress firewall adapter
 [[modules]]
-path = "terok.lib.security.shield"
+path = "terok.lib.sandbox.shield"
 layer = "sandbox"
 depends_on = ["terok.lib.core.config", "terok.lib.core.paths"]
 
 # Gate server lifecycle management
 [[modules]]
-path = "terok.lib.security.gate_server"
+path = "terok.lib.sandbox.gate_server"
 layer = "sandbox"
-depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.security.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
+depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.sandbox.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
 
 # Gate token CRUD
 [[modules]]
-path = "terok.lib.security.gate_tokens"
+path = "terok.lib.sandbox.gate_tokens"
 layer = "sandbox"
 depends_on = ["terok.lib.core.config"]
 
@@ -351,7 +351,7 @@ utility = true
 
 # SSH key management
 [[modules]]
-path = "terok.lib.security.ssh"
+path = "terok.lib.sandbox.ssh"
 layer = "sandbox"
 depends_on = [
     "terok.lib.core.config",
@@ -362,7 +362,7 @@ depends_on = [
 
 # Git gate sync & validation
 [[modules]]
-path = "terok.lib.security.git_gate"
+path = "terok.lib.sandbox.git_gate"
 layer = "sandbox"
 depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
 
@@ -434,13 +434,13 @@ depends_on = []
 
 # Task display types and status computation
 [[modules]]
-path = "terok.lib.containers.task_display"
+path = "terok.lib.core.task_display"
 layer = "core"
 depends_on = ["terok.lib.util.yaml"]
 
 # Agent work status reading
 [[modules]]
-path = "terok.lib.containers.work_status"
+path = "terok.lib.core.work_status"
 layer = "core"
 depends_on = ["terok.lib.util.yaml"]
 
@@ -568,7 +568,7 @@ expose = [
     "mode_info",
     "has_gpu",
 ]
-from = ["terok.lib.containers.task_display"]
+from = ["terok.lib.core.task_display"]
 
 [[interfaces]]
 expose = [
@@ -585,11 +585,11 @@ expose = [
     "write_pending_phase",
     "clear_pending_phase",
 ]
-from = ["terok.lib.containers.work_status"]
+from = ["terok.lib.core.work_status"]
 
 [[interfaces]]
 expose = ["task_logs", "LogViewOptions"]
-from = ["terok.lib.containers.task_logs"]
+from = ["terok.lib.domain.task_logs"]
 
 [[interfaces]]
 expose = [
@@ -621,35 +621,35 @@ expose = [
     "tasks_meta_dir",
     "tasks_archive_dir",
 ]
-from = ["terok.lib.containers.tasks"]
+from = ["terok.lib.orchestration.tasks"]
 
 [[interfaces]]
 expose = ["run_hook", "HOOK_NAMES"]
-from = ["terok.lib.containers.hooks"]
+from = ["terok.lib.orchestration.hooks"]
 
 [[interfaces]]
 expose = ["task_run_cli", "task_run_toad", "task_run_headless", "task_restart", "task_followup_headless", "HeadlessRunRequest", "DetachedSummary"]
-from = ["terok.lib.containers.task_runners"]
+from = ["terok.lib.orchestration.task_runners"]
 
 [[interfaces]]
 expose = ["parse_md_agent", "prepare_agent_config_dir", "AgentConfigSpec"]
-from = ["terok.lib.containers.agents"]
+from = ["terok.lib.instrumentation.agents"]
 
 [[interfaces]]
 expose = ["HeadlessProvider", "HEADLESS_PROVIDERS", "PROVIDER_NAMES", "ProviderConfig", "CLIOverrides", "WrapperConfig", "get_provider", "apply_provider_config", "build_headless_command", "generate_agent_wrapper", "generate_all_wrappers", "collect_all_auto_approve_env", "OpenCodeProviderConfig", "collect_opencode_provider_env"]
-from = ["terok.lib.containers.headless_providers"]
+from = ["terok.lib.instrumentation.headless_providers"]
 
 [[interfaces]]
 expose = ["build_agent_config_stack", "resolve_agent_config", "resolve_provider_value"]
-from = ["terok.lib.containers.agent_config"]
+from = ["terok.lib.instrumentation.agent_config"]
 
 [[interfaces]]
 expose = ["resolve_instructions", "bundled_default_instructions", "has_custom_instructions"]
-from = ["terok.lib.containers.instructions"]
+from = ["terok.lib.instrumentation.instructions"]
 
 [[interfaces]]
 expose = ["AUTH_PROVIDERS", "AuthProvider", "authenticate"]
-from = ["terok.lib.security.auth"]
+from = ["terok.lib.instrumentation.auth"]
 
 [[interfaces]]
 expose = [
@@ -658,11 +658,11 @@ expose = [
     "build_context_hash",
     "dockerfiles_match_templates",
 ]
-from = ["terok.lib.containers.docker"]
+from = ["terok.lib.orchestration.docker"]
 
 [[interfaces]]
 expose = ["list_images", "find_orphaned_images", "cleanup_images", "ImageInfo", "CleanupResult"]
-from = ["terok.lib.containers.image_cleanup"]
+from = ["terok.lib.domain.image_cleanup"]
 
 [[interfaces]]
 expose = [
@@ -679,15 +679,15 @@ expose = [
     "is_systemd_available",
     "ensure_server_reachable",
 ]
-from = ["terok.lib.security.gate_server"]
+from = ["terok.lib.sandbox.gate_server"]
 
 [[interfaces]]
 expose = ["token_file_path", "create_token", "revoke_token_for_task"]
-from = ["terok.lib.security.gate_tokens"]
+from = ["terok.lib.sandbox.gate_tokens"]
 
 [[interfaces]]
 expose = ["SSHManager", "SSHInitResult"]
-from = ["terok.lib.security.ssh"]
+from = ["terok.lib.sandbox.ssh"]
 
 [[interfaces]]
 expose = [
@@ -706,7 +706,7 @@ expose = [
     "status",
     "up",
 ]
-from = ["terok.lib.security.shield"]
+from = ["terok.lib.sandbox.shield"]
 
 [[interfaces]]
 expose = [
@@ -717,11 +717,11 @@ expose = [
     "GitGate",
     "find_projects_sharing_gate",
 ]
-from = ["terok.lib.security.git_gate"]
+from = ["terok.lib.sandbox.git_gate"]
 
 [[interfaces]]
 expose = ["get_project_state", "is_task_image_old"]
-from = ["terok.lib.containers.project_state"]
+from = ["terok.lib.domain.project_state"]
 
 # Core module interfaces
 
@@ -777,7 +777,7 @@ expose = [
     "apply_git_identity_env",
     "build_task_env_and_volumes",
 ]
-from = ["terok.lib.containers.environment"]
+from = ["terok.lib.orchestration.environment"]
 
 [[interfaces]]
 expose = [
@@ -791,19 +791,19 @@ expose = [
     "wait_for_exit",
     "get_project_container_states",
 ]
-from = ["terok.lib.containers.runtime"]
+from = ["terok.lib.sandbox.runtime"]
 
 [[interfaces]]
 expose = ["auto_detect_formatter", "ClaudeStreamJsonFormatter", "PlainTextFormatter"]
-from = ["terok.lib.containers.log_format"]
+from = ["terok.lib.domain.log_format"]
 
 [[interfaces]]
 expose = ["wait_for_container_exit", "follow_container_logs_cmd"]
-from = ["terok.lib.containers.autopilot"]
+from = ["terok.lib.orchestration.autopilot"]
 
 [[interfaces]]
 expose = ["run_wizard", "collect_wizard_inputs", "generate_config"]
-from = ["terok.lib.wizards.new_project"]
+from = ["terok.lib.domain.wizards.new_project"]
 
 # Facade interface (stable boundary for presentation layer)
 
@@ -873,15 +873,15 @@ expose = [
     "shield_state",
     "shield_status",
 ]
-from = ["terok.lib.facade"]
+from = ["terok.lib.domain.facade"]
 
 [[interfaces]]
 expose = ["Project", "AgentManager", "DeleteProjectResult", "delete_project"]
-from = ["terok.lib.project"]
+from = ["terok.lib.domain.project"]
 
 [[interfaces]]
 expose = ["Task"]
-from = ["terok.lib.task"]
+from = ["terok.lib.domain.task"]
 
 # Utility interfaces
 
@@ -891,7 +891,7 @@ from = ["terok.lib.util.host_cmd"]
 
 [[interfaces]]
 expose = ["container_git_diff"]
-from = ["terok.lib.containers.container_exec"]
+from = ["terok.lib.orchestration.container_exec"]
 
 [[interfaces]]
 expose = ["load", "dump", "YAMLError"]
@@ -911,7 +911,7 @@ from = ["terok.lib.util.fs"]
 
 [[interfaces]]
 expose = ["assign_web_port"]
-from = ["terok.lib.containers.ports"]
+from = ["terok.lib.orchestration.ports"]
 
 [[interfaces]]
 expose = ["config_root", "state_root", "runtime_root"]

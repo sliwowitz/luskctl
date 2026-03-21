@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from terok.cli.commands.image import _cmd_cleanup, _cmd_list
-from terok.lib.containers.image_cleanup import CleanupResult, ImageInfo
+from terok.lib.domain.image_cleanup import CleanupResult, ImageInfo
 
 IMAGES = [
     ImageInfo("terok-l0", "ubuntu-24.04", "sha256:aaa", "500MB", "2 days ago"),

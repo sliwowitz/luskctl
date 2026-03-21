@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.containers.docker import generate_dockerfiles
+from terok.lib.orchestration.docker import generate_dockerfiles
 from terok.lib.core.config import build_root
 from tests.test_utils import project_env
 

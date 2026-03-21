@@ -85,7 +85,7 @@ def _build_runner_env(
     Returns the env dict containing ``HUMAN_GIT_NAME``, ``HUMAN_GIT_EMAIL``,
     ``TEROK_GIT_AUTHORSHIP``, and all other container env vars.
     """
-    from terok.lib.containers.environment import build_task_env_and_volumes
+    from terok.lib.orchestration.environment import build_task_env_and_volumes
     from terok.lib.core.projects import load_project
 
     project = load_project(project_id)
@@ -93,7 +93,7 @@ def _build_runner_env(
     envs_base = terok_env.state_root / "envs"
     envs_base.mkdir(parents=True, exist_ok=True)
     with unittest.mock.patch(
-        "terok.lib.containers.environment.get_envs_base_dir", return_value=envs_base
+        "terok.lib.orchestration.environment.get_envs_base_dir", return_value=envs_base
     ):
         env, _volumes = build_task_env_and_volumes(project, "1")
     return env
@@ -108,7 +108,7 @@ def _apply_agent_identity(
 
     Returns just the four ``GIT_*`` vars.
     """
-    from terok.lib.containers.environment import resolve_git_identity
+    from terok.lib.orchestration.environment import resolve_git_identity
 
     identity = resolve_git_identity(
         agent_name=agent_name,

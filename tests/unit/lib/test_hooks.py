@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.containers.hooks import _build_hook_env, _record_hook, run_hook
+from terok.lib.orchestration.hooks import _build_hook_env, _record_hook, run_hook
 
 
 class TestBuildHookEnv:
@@ -105,7 +105,7 @@ class TestRunHook:
 
     def test_command_is_executed(self) -> None:
         """Verify a hook command is executed via sh -c with correct env."""
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run") as mock_run:
             run_hook(
                 "post_start",
                 "echo hello",
@@ -124,7 +124,7 @@ class TestRunHook:
 
     def test_post_stop_has_timeout(self) -> None:
         """Verify post_stop hooks have a 30s timeout."""
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run") as mock_run:
             run_hook(
                 "post_stop",
                 "cleanup.sh",
@@ -137,7 +137,7 @@ class TestRunHook:
 
     def test_pre_start_has_startup_timeout(self) -> None:
         """Verify pre_start hooks use the startup timeout (120s)."""
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run") as mock_run:
             run_hook(
                 "pre_start",
                 "setup.sh",
@@ -150,7 +150,7 @@ class TestRunHook:
 
     def test_post_start_has_startup_timeout(self) -> None:
         """Verify post_start hooks use the startup timeout (120s)."""
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run") as mock_run:
             run_hook(
                 "post_start",
                 "setup.sh",
@@ -163,7 +163,7 @@ class TestRunHook:
 
     def test_web_port_passed_to_env(self) -> None:
         """Verify web_port is forwarded to the hook environment."""
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run") as mock_run:
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run") as mock_run:
             run_hook(
                 "post_ready",
                 "fwd.sh",
@@ -179,7 +179,7 @@ class TestRunHook:
     def test_failure_does_not_raise(self) -> None:
         """Verify hook failures are swallowed (logged, not raised)."""
         with unittest.mock.patch(
-            "terok.lib.containers.hooks.subprocess.run",
+            "terok.lib.orchestration.hooks.subprocess.run",
             side_effect=OSError("boom"),
         ):
             run_hook(
@@ -194,7 +194,7 @@ class TestRunHook:
     def test_timeout_does_not_raise(self) -> None:
         """Verify hook timeouts are swallowed (logged, not raised)."""
         with unittest.mock.patch(
-            "terok.lib.containers.hooks.subprocess.run",
+            "terok.lib.orchestration.hooks.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="x", timeout=30),
         ):
             run_hook(
@@ -213,7 +213,7 @@ class TestRunHook:
         meta_path = tmp_path / "1.yml"
         meta_path.write_text(_yaml_dump({"task_id": "1", "mode": "cli"}))
 
-        with unittest.mock.patch("terok.lib.containers.hooks.subprocess.run"):
+        with unittest.mock.patch("terok.lib.orchestration.hooks.subprocess.run"):
             run_hook(
                 "post_start",
                 "echo hi",

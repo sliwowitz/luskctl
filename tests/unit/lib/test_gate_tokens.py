@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.security.gate_tokens import (
+from terok.lib.sandbox.gate_tokens import (
     _read_tokens,
     _write_tokens,
     create_token,
@@ -30,7 +30,7 @@ def patched_token_file(path: Path | None = None) -> Iterator[Path]:
     if path is not None:
         token_path = path
         with unittest.mock.patch(
-            "terok.lib.security.gate_tokens.token_file_path", return_value=token_path
+            "terok.lib.sandbox.gate_tokens.token_file_path", return_value=token_path
         ):
             yield token_path
         return
@@ -38,7 +38,7 @@ def patched_token_file(path: Path | None = None) -> Iterator[Path]:
     with tempfile.TemporaryDirectory() as td:
         token_path = Path(td) / "tokens.json"
         with unittest.mock.patch(
-            "terok.lib.security.gate_tokens.token_file_path", return_value=token_path
+            "terok.lib.sandbox.gate_tokens.token_file_path", return_value=token_path
         ):
             yield token_path
 
@@ -53,7 +53,7 @@ class TestTokenFilePath:
 
     def test_returns_path_under_state_root(self) -> None:
         with unittest.mock.patch(
-            "terok.lib.security.gate_tokens.state_root",
+            "terok.lib.sandbox.gate_tokens.state_root",
             return_value=FAKE_TEROK_STATE_DIR,
         ):
             path = token_file_path()

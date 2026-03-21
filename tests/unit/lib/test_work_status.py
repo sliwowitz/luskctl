@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from terok.lib.containers.work_status import (
+from terok.lib.core.work_status import (
     PENDING_PHASE_FILE,
     STATUS_FILE_NAME,
     WORK_STATUS_DISPLAY,

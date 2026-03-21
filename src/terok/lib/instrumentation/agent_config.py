@@ -5,7 +5,7 @@
 
 Builds a :class:`~terok.lib.util.config_stack.ConfigStack` from up to four
 layers and returns a single merged agent-config dict that can be fed directly
-into :func:`~terok.lib.containers.agents.prepare_agent_config_dir`.
+into :func:`~terok.lib.instrumentation.agents.prepare_agent_config_dir`.
 """
 
 from __future__ import annotations

@@ -35,10 +35,10 @@ central dict whose values carry both an ``emoji`` and a ``label`` attribute
 3. Guard tests can verify every emoji in every dict is natively 2 cells wide
    and has a non-empty label.
 
-Emoji definitions are centralised in ``terok.lib.containers.task_display``
+Emoji definitions are centralised in ``terok.lib.core.task_display``
 (``STATUS_DISPLAY``, ``MODE_DISPLAY``,
 ``SECURITY_CLASS_DISPLAY``, ``GPU_DISPLAY``) and
-``terok.lib.containers.work_status`` (``WORK_STATUS_DISPLAY``).
+``terok.lib.core.work_status`` (``WORK_STATUS_DISPLAY``).
 
 How to check a candidate emoji::
 

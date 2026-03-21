@@ -18,11 +18,11 @@ def _mock_shield_helpers() -> Iterator[None]:
     """Replace shield pre_start and down with no-ops."""
     with (
         patch(
-            "terok.lib.containers.task_runners._shield_pre_start_impl",
+            "terok.lib.orchestration.task_runners._shield_pre_start_impl",
             return_value=[],
         ),
         patch(
-            "terok.lib.containers.task_runners._shield_down_impl",
+            "terok.lib.orchestration.task_runners._shield_down_impl",
         ),
     ):
         yield

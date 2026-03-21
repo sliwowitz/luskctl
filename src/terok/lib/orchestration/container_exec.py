@@ -10,8 +10,8 @@ scripts executing with host privileges.
 
 import subprocess
 
+from ..sandbox.runtime import container_name, get_container_state
 from ..util.logging_utils import _log_debug
-from .runtime import container_name, get_container_state
 
 
 def _podman_start(cname: str) -> bool:

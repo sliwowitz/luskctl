@@ -3,11 +3,11 @@
 
 """Rich Task domain object — DDD Entity.
 
-Wraps a :class:`~terok.lib.containers.tasks.TaskMeta` value object with
+Wraps a :class:`~terok.lib.orchestration.tasks.TaskMeta` value object with
 lifecycle behavior (run, stop, delete, rename) and observation methods
 (logs, login, workspace diff).
 
-Tasks are always obtained through a :class:`~terok.lib.project.Project`::
+Tasks are always obtained through a :class:`~terok.lib.domain.project.Project`::
 
     project = get_project("myproj")
     task = project.create_task(name="fix-bug")
@@ -24,8 +24,8 @@ implicit I/O and consistent with how ``TaskMeta`` is used throughout the
 codebase.
 
 See Also:
-    :mod:`terok.lib.project` — the ``Project`` aggregate that contains tasks
-    :mod:`terok.lib.containers.tasks` — ``TaskMeta`` value object and
+    :mod:`terok.lib.domain.project` — the ``Project`` aggregate that contains tasks
+    :mod:`terok.lib.orchestration.tasks` — ``TaskMeta`` value object and
         low-level task functions
 """
 
@@ -33,13 +33,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .containers.task_logs import LogViewOptions, task_logs
-from .containers.task_runners import (
+from ..orchestration.task_runners import (
     task_followup_headless,
     task_restart,
     task_run_cli,
 )
-from .containers.tasks import (
+from ..orchestration.tasks import (
     TaskMeta,
     get_login_command,
     get_workspace_git_diff,
@@ -48,9 +47,10 @@ from .containers.tasks import (
     task_rename,
     task_stop,
 )
+from .task_logs import LogViewOptions, task_logs
 
 if TYPE_CHECKING:
-    from .core.project_model import ProjectConfig
+    from ..core.project_model import ProjectConfig
 
 
 class Task:
@@ -60,12 +60,12 @@ class Task:
     ``(project_id, task_id)``.  Two ``Task`` instances are equal iff they
     share this identity, regardless of metadata differences.
 
-    Obtained via :meth:`~terok.lib.project.Project.get_task`,
-    :meth:`~terok.lib.project.Project.create_task`, or
-    :meth:`~terok.lib.project.Project.list_tasks`.  Delegates lifecycle
+    Obtained via :meth:`~terok.lib.domain.project.Project.get_task`,
+    :meth:`~terok.lib.domain.project.Project.create_task`, or
+    :meth:`~terok.lib.domain.project.Project.list_tasks`.  Delegates lifecycle
     operations to the underlying task service functions in
-    :mod:`~terok.lib.containers.tasks` and
-    :mod:`~terok.lib.containers.task_runners`.
+    :mod:`~terok.lib.orchestration.tasks` and
+    :mod:`~terok.lib.orchestration.task_runners`.
     """
 
     __slots__ = ("_config", "_meta")

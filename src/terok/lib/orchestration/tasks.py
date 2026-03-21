@@ -21,6 +21,18 @@ from pathlib import Path
 
 from ..core.config import state_root
 from ..core.projects import ProjectConfig, load_project
+from ..core.task_display import (
+    STATUS_DISPLAY,
+    effective_status,
+    mode_info,
+)
+from ..core.work_status import read_work_status
+from ..sandbox.runtime import (
+    container_name,
+    get_container_state,
+    get_project_container_states,
+    stop_task_containers,
+)
 from ..util.ansi import (
     green as _green,
     red as _red,
@@ -33,18 +45,6 @@ from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 from ..util.logging_utils import _log_debug
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .container_exec import container_git_diff
-from .runtime import (
-    container_name,
-    get_container_state,
-    get_project_container_states,
-    stop_task_containers,
-)
-from .task_display import (
-    STATUS_DISPLAY,
-    effective_status,
-    mode_info,
-)
-from .work_status import read_work_status
 
 
 @dataclass
@@ -678,7 +678,7 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
         _archive_task(project, task_id, meta)
 
     _log_debug("task_delete: revoking gate tokens")
-    from ..security.gate_tokens import revoke_token_for_task
+    from ..sandbox.gate_tokens import revoke_token_for_task
 
     try:
         revoke_token_for_task(project.id, task_id)

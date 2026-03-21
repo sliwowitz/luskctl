@@ -34,14 +34,14 @@ from tests.testfs import (
 if TYPE_CHECKING:
     from terok.lib.core.projects import ProjectConfig
 
-from terok.lib.containers.agents import (
+from terok.lib.instrumentation.agents import (
     _generate_claude_wrapper,
     _subagents_to_json,
     _write_session_hook,
     parse_md_agent,
 )
-from terok.lib.containers.headless_providers import WrapperConfig
-from terok.lib.containers.task_runners import (
+from terok.lib.instrumentation.headless_providers import WrapperConfig
+from terok.lib.orchestration.task_runners import (
     HeadlessRunRequest,
     task_followup_headless,
     task_run_headless,
@@ -145,13 +145,13 @@ def prepare_agent_config(
     instructions: str | None = None,
 ) -> Path:
     """Build an agent-config directory for the given task."""
-    from terok.lib.containers.agents import AgentConfigSpec, prepare_agent_config_dir
+    from terok.lib.instrumentation.agents import AgentConfigSpec, prepare_agent_config_dir
 
     (project.tasks_root / task_id).mkdir(parents=True, exist_ok=True)
     with (
         tempfile.TemporaryDirectory() as td,
         unittest.mock.patch(
-            "terok.lib.containers.agents.get_envs_base_dir",
+            "terok.lib.instrumentation.agents.get_envs_base_dir",
             return_value=Path(td),
         ),
     ):
@@ -169,11 +169,11 @@ def run_headless_request(
     with unittest.mock.patch.dict(os.environ, runner_env_vars(base, config_file), clear=True):
         with (
             mock_git_config(),
-            unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             unittest.mock.patch(
-                "terok.lib.containers.task_runners.wait_for_exit", return_value=0
+                "terok.lib.orchestration.task_runners.wait_for_exit", return_value=0
             ) as wait_mock,
-            unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
+            unittest.mock.patch("terok.lib.orchestration.task_runners._print_run_summary"),
         ):
             run_mock.return_value = subprocess.CompletedProcess([], 0)
             buffer = StringIO()
@@ -202,16 +202,16 @@ def run_followup_request(
     ):
         with (
             mock_git_config(),
-            unittest.mock.patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
             unittest.mock.patch(
-                "terok.lib.containers.task_runners.get_container_state",
+                "terok.lib.orchestration.task_runners.get_container_state",
                 side_effect=container_state if isinstance(container_state, list) else None,
                 return_value=None if isinstance(container_state, list) else container_state,
             ),
             unittest.mock.patch(
-                "terok.lib.containers.task_runners.wait_for_exit", return_value=0
+                "terok.lib.orchestration.task_runners.wait_for_exit", return_value=0
             ) as wait_mock,
-            unittest.mock.patch("terok.lib.containers.task_runners._print_run_summary"),
+            unittest.mock.patch("terok.lib.orchestration.task_runners._print_run_summary"),
         ):
             run_mock.return_value = subprocess.CompletedProcess([], 0)
             buffer = StringIO()
@@ -612,7 +612,7 @@ class TestPrepareAgentConfigDir:
             gate_path=FAKE_PROJECT_GATE_DIR,
         )
 
-    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.instrumentation.agents._write_session_hook")
     def test_prepare_agent_config_writes_instructions(
         self,
         _mock_hook: object,
@@ -627,7 +627,7 @@ class TestPrepareAgentConfigDir:
         assert instr_path.is_file()
         assert instr_path.read_text(encoding="utf-8") == "Custom instructions here."
 
-    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.instrumentation.agents._write_session_hook")
     def test_prepare_agent_config_default_instructions_when_none(
         self,
         _mock_hook: object,
@@ -641,7 +641,7 @@ class TestPrepareAgentConfigDir:
         content = instr_path.read_text(encoding="utf-8")
         assert "conventions" in content
 
-    @unittest.mock.patch("terok.lib.containers.agents._write_session_hook")
+    @unittest.mock.patch("terok.lib.instrumentation.agents._write_session_hook")
     def test_wrapper_has_append_system_prompt_when_instructions(
         self,
         _mock_hook: object,
@@ -911,7 +911,7 @@ class TestTaskFollowupHeadless:
             state_dir = base / "state"
             config_file = write_runner_project(base, "proj_mode")
 
-            from terok.lib.containers.tasks import task_new
+            from terok.lib.orchestration.tasks import task_new
 
             with unittest.mock.patch.dict(
                 os.environ, runner_env_vars(base, config_file), clear=True
@@ -934,7 +934,7 @@ class TestTaskFollowupHeadless:
             state_dir = base / "state"
             config_file = write_runner_project(base, "proj_run")
 
-            from terok.lib.containers.tasks import task_new
+            from terok.lib.orchestration.tasks import task_new
 
             with unittest.mock.patch.dict(
                 os.environ, runner_env_vars(base, config_file), clear=True
@@ -948,7 +948,7 @@ class TestTaskFollowupHeadless:
 
                     with (
                         unittest.mock.patch(
-                            "terok.lib.containers.task_runners.get_container_state",
+                            "terok.lib.orchestration.task_runners.get_container_state",
                             return_value="running",
                         ),
                         pytest.raises(SystemExit) as ctx,
@@ -968,7 +968,7 @@ class TestTaskFollowupHeadless:
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
+                        "terok.lib.orchestration.task_runners.get_container_state",
                         return_value="running",
                     ),
                 ):
@@ -1024,7 +1024,7 @@ class TestTaskFollowupHeadless:
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
+                        "terok.lib.orchestration.task_runners.get_container_state",
                         return_value=None,
                     ),
                 ):
@@ -1044,10 +1044,10 @@ class TestTaskFollowupHeadless:
                 with (
                     mock_git_config(),
                     unittest.mock.patch(
-                        "terok.lib.containers.task_runners.subprocess.run"
+                        "terok.lib.orchestration.task_runners.subprocess.run"
                     ) as run_mock,
                     unittest.mock.patch(
-                        "terok.lib.containers.task_runners.get_container_state",
+                        "terok.lib.orchestration.task_runners.get_container_state",
                         side_effect=["exited", "exited"],
                     ),
                 ):

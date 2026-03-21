@@ -15,9 +15,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from terok.lib.containers.runtime import get_container_state, get_task_container_state
-from terok.lib.containers.task_runners import task_restart
-from terok.lib.containers.tasks import task_new, task_status, task_stop
+from terok.lib.sandbox.runtime import get_container_state, get_task_container_state
+from terok.lib.orchestration.task_runners import task_restart
+from terok.lib.orchestration.tasks import task_new, task_status, task_stop
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
@@ -86,7 +86,7 @@ def test_get_container_state_handles_success_and_errors(
 ) -> None:
     """Container state lookup lowercases successful output and ignores Podman errors."""
     patch_kwargs = {"side_effect": error} if error else {"return_value": output}
-    with patch("terok.lib.containers.runtime.subprocess.check_output", **patch_kwargs):
+    with patch("terok.lib.sandbox.runtime.subprocess.check_output", **patch_kwargs):
         assert get_container_state("test-container") == expected
 
 
@@ -113,8 +113,8 @@ def test_task_stop_uses_expected_timeout(
 
         with (
             mock_git_config(),
-            patch("terok.lib.containers.tasks.get_container_state", return_value="running"),
-            patch("terok.lib.containers.tasks.subprocess.run") as run_mock,
+            patch("terok.lib.orchestration.tasks.get_container_state", return_value="running"),
+            patch("terok.lib.orchestration.tasks.subprocess.run") as run_mock,
         ):
             run_mock.return_value = completed_process()
             capture_stdout(
@@ -151,10 +151,10 @@ def test_task_restart_starts_exited_container() -> None:
         with (
             mock_git_config(),
             patch(
-                "terok.lib.containers.task_runners.get_container_state",
+                "terok.lib.orchestration.task_runners.get_container_state",
                 side_effect=["exited", "running"],
             ),
-            patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
         ):
             run_mock.return_value = completed_process()
             capture_stdout(task_restart, project_id, task_id)
@@ -172,10 +172,10 @@ def test_task_restart_running_container_stops_then_starts() -> None:
         with (
             mock_git_config(),
             patch(
-                "terok.lib.containers.task_runners.get_container_state",
+                "terok.lib.orchestration.task_runners.get_container_state",
                 side_effect=["running", "running"],
             ),
-            patch("terok.lib.containers.task_runners.subprocess.run") as run_mock,
+            patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
         ):
             run_mock.return_value = completed_process()
             output = capture_stdout(task_restart, project_id, task_id)
@@ -199,7 +199,7 @@ def test_task_status_reports_live_container_state() -> None:
 
         with (
             mock_git_config(),
-            patch("terok.lib.containers.tasks.get_container_state", return_value="exited"),
+            patch("terok.lib.orchestration.tasks.get_container_state", return_value="exited"),
         ):
             output = capture_stdout(task_status, project_id, task_id)
 
@@ -215,9 +215,9 @@ def test_get_task_container_state_returns_none_without_mode() -> None:
 def test_get_task_container_state_uses_project_id_and_mode() -> None:
     """Task container lookup resolves the canonical container name."""
     with (
-        patch("terok.lib.containers.runtime.load_project", return_value=SimpleNamespace(id="proj")),
+        patch("terok.lib.sandbox.runtime.load_project", return_value=SimpleNamespace(id="proj")),
         patch(
-            "terok.lib.containers.runtime.get_container_state", return_value="running"
+            "terok.lib.sandbox.runtime.get_container_state", return_value="running"
         ) as mock_state,
     ):
         assert get_task_container_state("ignored", "1", "cli") == "running"

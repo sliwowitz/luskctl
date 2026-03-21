@@ -35,8 +35,8 @@ handle the full teardown of a project including archiving, task cleanup,
 and safe removal of managed directories.
 
 See Also:
-    :mod:`terok.lib.facade` — factory functions that return ``Project``
-    :mod:`terok.lib.task` — the ``Task`` entity contained by ``Project``
+    :mod:`terok.lib.domain.facade` — factory functions that return ``Project``
+    :mod:`terok.lib.domain.task` — the ``Task`` entity contained by ``Project``
     :mod:`terok.lib.core.project_model` — the ``ProjectConfig`` value object
 """
 
@@ -48,13 +48,21 @@ import tarfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from .containers.agent_config import resolve_agent_config
-from .containers.docker import build_images, generate_dockerfiles
-from .containers.headless_providers import HeadlessProvider, get_provider
-from .containers.instructions import resolve_instructions
-from .containers.project_state import get_project_state, is_task_image_old
-from .containers.task_runners import HeadlessRunRequest, task_run_headless
-from .containers.tasks import (
+from ..core.config import (
+    build_root,
+    config_root,
+    deleted_projects_dir,
+    get_envs_base_dir,
+    state_root,
+)
+from ..core.project_model import ProjectConfig
+from ..core.projects import list_presets, load_project
+from ..instrumentation.agent_config import resolve_agent_config
+from ..instrumentation.headless_providers import HeadlessProvider, get_provider
+from ..instrumentation.instructions import resolve_instructions
+from ..orchestration.docker import build_images, generate_dockerfiles
+from ..orchestration.task_runners import HeadlessRunRequest, task_run_headless
+from ..orchestration.tasks import (
     TaskMeta,
     get_all_task_states,
     get_task_meta,
@@ -62,22 +70,14 @@ from .containers.tasks import (
     task_delete,
     task_new,
 )
-from .core.config import (
-    build_root,
-    config_root,
-    deleted_projects_dir,
-    get_envs_base_dir,
-    state_root,
-)
-from .core.project_model import ProjectConfig
-from .core.projects import list_presets, load_project
-from .security.git_gate import GitGate, find_projects_sharing_gate
-from .security.ssh import SSHManager
+from ..sandbox.git_gate import GitGate, find_projects_sharing_gate
+from ..sandbox.ssh import SSHManager
+from ..util.fs import archive_timestamp, create_archive_file
+from .project_state import get_project_state, is_task_image_old
 from .task import Task
-from .util.fs import archive_timestamp, create_archive_file
 
 if TYPE_CHECKING:
-    from .core.project_model import PresetInfo
+    from ..core.project_model import PresetInfo
 
 _logger = logging.getLogger(__name__)
 
@@ -298,8 +298,8 @@ class Project:
     efficiency; ``cached_property`` is not available because it requires
     ``__dict__``.
 
-    Obtain via :func:`~terok.lib.facade.get_project` or
-    :func:`~terok.lib.facade.list_projects`.
+    Obtain via :func:`~terok.lib.domain.facade.get_project` or
+    :func:`~terok.lib.domain.facade.list_projects`.
     """
 
     __slots__ = ("_config", "_gate", "_ssh", "_agents")
@@ -370,7 +370,7 @@ class Project:
 
     def followup_headless(self, task_id: str, prompt: str, follow: bool = True) -> None:
         """Send a follow-up prompt to a completed headless task."""
-        from .containers.task_runners import task_followup_headless
+        from ..orchestration.task_runners import task_followup_headless
 
         task_followup_headless(self._config.id, task_id, prompt, follow=follow)
 

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from terok.lib.core.projects import load_project
-from terok.lib.security.git_gate import (
+from terok.lib.sandbox.git_gate import (
     GitGate,
     _get_gate_branch_head,
     _get_upstream_head,
@@ -102,7 +102,7 @@ def test_sync_project_gate_https_clone() -> None:
             return git_result(returncode=1)
 
         with patch(
-            "terok.lib.security.git_gate.subprocess.run", side_effect=run_side_effect
+            "terok.lib.sandbox.git_gate.subprocess.run", side_effect=run_side_effect
         ) as run_mock:
             result = GitGate(load_project(project_id)).sync()
 
@@ -151,7 +151,7 @@ def test_last_commit(with_gate: bool, run_result: MagicMock | None, expected: di
         if run_result is None:
             assert gate.last_commit() is None
         else:
-            with patch("terok.lib.security.git_gate.subprocess.run", return_value=run_result):
+            with patch("terok.lib.sandbox.git_gate.subprocess.run", return_value=run_result):
                 assert gate.last_commit() == expected
 
 
@@ -233,7 +233,7 @@ def test_get_upstream_head(
         if run_behavior is None:
             assert _get_upstream_head(project, branch=branch) is None
         else:
-            with patch("terok.lib.security.git_gate.subprocess.run", **run_behavior):
+            with patch("terok.lib.sandbox.git_gate.subprocess.run", **run_behavior):
                 assert _get_upstream_head(project, branch=branch) == expected
 
 
@@ -266,7 +266,7 @@ def test_get_gate_branch_head(
         if run_result is None:
             assert _get_gate_branch_head(project, branch=branch) is None
         else:
-            with patch("terok.lib.security.git_gate.subprocess.run", return_value=run_result):
+            with patch("terok.lib.sandbox.git_gate.subprocess.run", return_value=run_result):
                 assert _get_gate_branch_head(project, branch=branch) == expected
 
 
@@ -379,10 +379,10 @@ def test_compare_gate_vs_upstream(
     project_id = "proj-compare"
     with project_env(git_project_yaml(project_id), project_id=project_id, with_gate=with_gate):
         with (
-            patch("terok.lib.security.git_gate._get_gate_branch_head", return_value=gate_head),
-            patch("terok.lib.security.git_gate._get_upstream_head", return_value=upstream_info),
-            patch("terok.lib.security.git_gate._count_commits_behind", return_value=count_behind),
-            patch("terok.lib.security.git_gate._count_commits_ahead", return_value=count_ahead),
+            patch("terok.lib.sandbox.git_gate._get_gate_branch_head", return_value=gate_head),
+            patch("terok.lib.sandbox.git_gate._get_upstream_head", return_value=upstream_info),
+            patch("terok.lib.sandbox.git_gate._count_commits_behind", return_value=count_behind),
+            patch("terok.lib.sandbox.git_gate._count_commits_ahead", return_value=count_ahead),
         ):
             result = GitGate(load_project(project_id)).compare_vs_upstream()
 
@@ -448,7 +448,7 @@ def test_sync_branches(
         if run_behavior is None:
             assert gate.sync_branches(branches) == expected
         else:
-            with patch("terok.lib.security.git_gate.subprocess.run", **run_behavior):
+            with patch("terok.lib.sandbox.git_gate.subprocess.run", **run_behavior):
                 assert gate.sync_branches(branches) == expected
 
 

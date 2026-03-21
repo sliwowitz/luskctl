@@ -9,7 +9,7 @@ reaching into internal subpackages.
 
 **Recommended entry points** for project-scoped operations::
 
-    from terok.lib.facade import get_project
+    from terok.lib.domain.facade import get_project
 
     project = get_project("myproj")  # → Project (Aggregate Root)
     task = project.create_task(name="x")  # → Task (Entity)
@@ -29,15 +29,10 @@ used by CLI commands that operate on ``project_id`` strings directly.
 
 from __future__ import annotations
 
-from .containers.docker import build_images, generate_dockerfiles
-from .containers.image_cleanup import (  # noqa: F401 — re-exported public API
-    cleanup_images,
-    find_orphaned_images,
-    list_images,
-)
-from .containers.project_state import get_project_state, is_task_image_old
-from .containers.task_logs import LogViewOptions, task_logs  # noqa: F401 — re-exported public API
-from .containers.task_runners import (  # noqa: F401 — re-exported public API
+from ..core.projects import load_project
+from ..instrumentation.auth import AUTH_PROVIDERS, AuthProvider, authenticate
+from ..orchestration.docker import build_images, generate_dockerfiles
+from ..orchestration.task_runners import (  # noqa: F401 — re-exported public API
     HeadlessRunRequest,
     task_followup_headless,
     task_restart,
@@ -45,7 +40,7 @@ from .containers.task_runners import (  # noqa: F401 — re-exported public API
     task_run_headless,
     task_run_toad,
 )
-from .containers.tasks import (  # noqa: F401 — re-exported public API
+from ..orchestration.tasks import (  # noqa: F401 — re-exported public API
     get_tasks,
     task_archive_list,
     task_archive_logs,
@@ -57,14 +52,7 @@ from .containers.tasks import (  # noqa: F401 — re-exported public API
     task_status,
     task_stop,
 )
-from .core.projects import load_project
-from .project import (  # noqa: F401 — re-exported public API
-    DeleteProjectResult,
-    Project,
-    delete_project,
-)
-from .security.auth import AUTH_PROVIDERS, AuthProvider, authenticate
-from .security.gate_server import (  # noqa: F401 — re-exported public API
+from ..sandbox.gate_server import (  # noqa: F401 — re-exported public API
     GateServerStatus,
     check_units_outdated,
     get_gate_base_path,
@@ -77,12 +65,12 @@ from .security.gate_server import (  # noqa: F401 — re-exported public API
     stop_daemon,
     uninstall_systemd_units,
 )
-from .security.git_gate import (
+from ..sandbox.git_gate import (
     GateStalenessInfo,
     GitGate,
     find_projects_sharing_gate,
 )
-from .security.shield import (  # noqa: F401 — re-exported public API
+from ..sandbox.shield import (  # noqa: F401 — re-exported public API
     EnvironmentCheck,
     NftNotFoundError,
     ShieldNeedsSetup,
@@ -96,8 +84,20 @@ from .security.shield import (  # noqa: F401 — re-exported public API
     status as shield_status,
     up as shield_up,
 )
-from .security.ssh import SSHManager
+from ..sandbox.ssh import SSHManager
+from .image_cleanup import (  # noqa: F401 — re-exported public API
+    cleanup_images,
+    find_orphaned_images,
+    list_images,
+)
+from .project import (  # noqa: F401 — re-exported public API
+    DeleteProjectResult,
+    Project,
+    delete_project,
+)
+from .project_state import get_project_state, is_task_image_old
 from .task import Task  # noqa: F401 — re-exported public API
+from .task_logs import LogViewOptions, task_logs  # noqa: F401 — re-exported public API
 
 # ---------------------------------------------------------------------------
 # Project factory functions
@@ -111,14 +111,14 @@ def get_project(project_id: str) -> Project:
 
 def list_projects() -> list[Project]:
     """Return all known projects as rich :class:`Project` aggregates."""
-    from .core.projects import list_projects as _list_projects
+    from ..core.projects import list_projects as _list_projects
 
     return [Project(cfg) for cfg in _list_projects()]
 
 
 def derive_project(source_id: str, new_id: str) -> Project:
     """Derive a new project from an existing one and return it."""
-    from .core.projects import derive_project as _derive_project
+    from ..core.projects import derive_project as _derive_project
 
     _derive_project(source_id, new_id)
     return Project(load_project(new_id))

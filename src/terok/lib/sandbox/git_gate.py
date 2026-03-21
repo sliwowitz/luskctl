@@ -343,7 +343,7 @@ class GitGate:
     This is a **stateful service** — it holds a reference to the project
     config and uses it to resolve paths, SSH credentials, and upstream
     URLs.  Access via ``project.gate`` (lazy-initialized by
-    :class:`~terok.lib.project.Project`).
+    :class:`~terok.lib.domain.project.Project`).
 
     Design patterns: **Repository** (manages a persistent git mirror on
     disk) + **Gateway** (wraps external git CLI operations).

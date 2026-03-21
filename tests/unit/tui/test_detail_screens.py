@@ -139,7 +139,7 @@ def _task_action_cases() -> list[tuple[str, str]]:
 
 
 def _auth_providers() -> list[str]:
-    from terok.lib.security.auth import AUTH_PROVIDERS
+    from terok.lib.instrumentation.auth import AUTH_PROVIDERS
 
     return list(AUTH_PROVIDERS)
 
@@ -571,7 +571,7 @@ class TestAuthScreenOptions:
 
     def test_auth_screen_number_key_triggers_import(self) -> None:
         """Verify the number key after last provider selects import option."""
-        from terok.lib.security.auth import AUTH_PROVIDERS
+        from terok.lib.instrumentation.auth import AUTH_PROVIDERS
 
         screens, _ = import_screens()
         screen = screens.AuthActionsScreen()

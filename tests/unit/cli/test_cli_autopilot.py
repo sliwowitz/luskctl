@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from terok.lib.containers.task_runners import HeadlessRunRequest
+from terok.lib.orchestration.task_runners import HeadlessRunRequest
 from tests.testcli import run_cli
 from tests.testfs import NONEXISTENT_MARKDOWN_PATH
 

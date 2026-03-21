@@ -20,7 +20,18 @@ from ..core.config import (
 )
 from ..core.images import project_cli_image
 from ..core.projects import load_project
-from ..security.shield import (
+from ..instrumentation.agent_config import resolve_agent_config, resolve_provider_value
+from ..instrumentation.agents import AgentConfigSpec, prepare_agent_config_dir
+from ..instrumentation.instructions import resolve_instructions
+from ..sandbox.runtime import (
+    container_name,
+    get_container_state,
+    gpu_run_args,
+    is_container_running,
+    stream_initial_logs,
+    wait_for_exit,
+)
+from ..sandbox.shield import (
     SHIELD_SECURITY_HINT,
     down as _shield_down_impl,
     pre_start as _shield_pre_start_impl,
@@ -34,21 +45,10 @@ from ..util.ansi import (
 )
 from ..util.podman import _podman_userns_args
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
-from .agent_config import resolve_agent_config, resolve_provider_value
-from .agents import AgentConfigSpec, prepare_agent_config_dir
 from .container_exec import container_git_diff
 from .environment import build_task_env_and_volumes
 from .hooks import run_hook
-from .instructions import resolve_instructions
 from .ports import assign_web_port
-from .runtime import (
-    container_name,
-    get_container_state,
-    gpu_run_args,
-    is_container_running,
-    stream_initial_logs,
-    wait_for_exit,
-)
 from .tasks import (
     load_task_meta,
     task_new,
@@ -130,7 +130,7 @@ def _apply_unrestricted_env(env: dict[str, str]) -> None:
     it is launched (CLI wrapper or ACP).  Setting them at the container
     level provides a single, unified permission mechanism.
     """
-    from .headless_providers import collect_all_auto_approve_env
+    from ..instrumentation.headless_providers import collect_all_auto_approve_env
 
     env["TEROK_UNRESTRICTED"] = "1"
     env.update(collect_all_auto_approve_env())
@@ -201,7 +201,7 @@ def _prepare_agent_config(
     """
     effective = resolve_agent_config(project_id, preset=preset)
     subagents = list(effective.get("subagents") or [])
-    from .headless_providers import get_provider as _get_provider
+    from ..instrumentation.headless_providers import get_provider as _get_provider
 
     resolved = _get_provider(provider_name, project)
     instr_text = resolve_instructions(effective, resolved.name, project_root=project.root)
@@ -673,7 +673,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
 
     Returns the task_id.
     """
-    from .headless_providers import (
+    from ..instrumentation.headless_providers import (
         CLIOverrides,
         apply_provider_config,
         build_headless_command,
@@ -869,7 +869,7 @@ def task_followup_headless(
     original ``task_run_headless`` invocation since ``podman start``
     re-executes the same container command.
     """
-    from .headless_providers import HEADLESS_PROVIDERS
+    from ..instrumentation.headless_providers import HEADLESS_PROVIDERS
 
     project = load_project(project_id)
     meta, meta_path = load_task_meta(project.id, task_id)

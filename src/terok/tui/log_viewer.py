@@ -8,7 +8,7 @@ widget that renders formatted, color-coded container log output inline —
 replacing the previous approach of launching an external terminal.
 
 The ``_TuiLogFormatter`` mirrors the state machine in
-``terok.lib.containers.log_format.ClaudeStreamJsonFormatter`` but
+``terok.lib.domain.log_format.ClaudeStreamJsonFormatter`` but
 produces Rich ``Text`` objects instead of ANSI ``print()`` calls.
 """
 

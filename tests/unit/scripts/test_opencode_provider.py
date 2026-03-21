@@ -75,7 +75,7 @@ class TestCollectProviderEnv:
 
     def test_contains_blablador_and_kisski(self) -> None:
         """Env dict has entries for all registered OpenCode providers."""
-        from terok.lib.containers.headless_providers import collect_opencode_provider_env
+        from terok.lib.instrumentation.headless_providers import collect_opencode_provider_env
 
         env = collect_opencode_provider_env()
         assert "TEROK_OC_BLABLADOR_BASE_URL" in env
@@ -85,7 +85,7 @@ class TestCollectProviderEnv:
 
     def test_values_match_registry(self) -> None:
         """Env var values match the HeadlessProvider registry."""
-        from terok.lib.containers.headless_providers import collect_opencode_provider_env
+        from terok.lib.instrumentation.headless_providers import collect_opencode_provider_env
 
         env = collect_opencode_provider_env()
         assert env["TEROK_OC_BLABLADOR_BASE_URL"] == (
@@ -95,7 +95,7 @@ class TestCollectProviderEnv:
 
     def test_to_env_all_fields_present(self) -> None:
         """OpenCodeProviderConfig.to_env() emits all required fields."""
-        from terok.lib.containers.headless_providers import OpenCodeProviderConfig
+        from terok.lib.instrumentation.headless_providers import OpenCodeProviderConfig
 
         cfg = OpenCodeProviderConfig(
             display_name="Test",
@@ -125,7 +125,7 @@ class TestDynamicRegistration:
 
     def test_shared_mounts_include_opencode_providers(self) -> None:
         """SHARED_MOUNTS includes dynamically generated provider mounts."""
-        from terok.lib.containers.environment import SHARED_MOUNTS
+        from terok.lib.orchestration.environment import SHARED_MOUNTS
 
         mount_keys = {m.key for m in SHARED_MOUNTS}
         assert "blablador" in mount_keys
@@ -133,7 +133,7 @@ class TestDynamicRegistration:
 
     def test_shared_mount_paths(self) -> None:
         """Provider mounts use correct host and container paths."""
-        from terok.lib.containers.environment import SHARED_MOUNTS
+        from terok.lib.orchestration.environment import SHARED_MOUNTS
 
         blablador = next(m for m in SHARED_MOUNTS if m.key == "blablador")
         assert blablador.host_dir_suffix == "_blablador-config"
@@ -141,14 +141,14 @@ class TestDynamicRegistration:
 
     def test_auth_providers_include_opencode_providers(self) -> None:
         """AUTH_PROVIDERS includes dynamically generated OpenCode provider entries."""
-        from terok.lib.security.auth import AUTH_PROVIDERS
+        from terok.lib.instrumentation.auth import AUTH_PROVIDERS
 
         assert "blablador" in AUTH_PROVIDERS
         assert "kisski" in AUTH_PROVIDERS
 
     def test_auth_provider_key_url(self) -> None:
         """Auth provider key URLs come from the OpenCodeProviderConfig registry."""
-        from terok.lib.security.auth import AUTH_PROVIDERS
+        from terok.lib.instrumentation.auth import AUTH_PROVIDERS
 
         blablador = AUTH_PROVIDERS["blablador"]
         assert "helmholtz" in blablador.banner_hint.lower() or "codebase" in blablador.banner_hint

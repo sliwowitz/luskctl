@@ -46,7 +46,7 @@ class SSHManager:
     containers as ``/home/dev/.ssh``.
 
     Access via ``project.ssh`` (lazy-initialized by
-    :class:`~terok.lib.project.Project`).
+    :class:`~terok.lib.domain.project.Project`).
     """
 
     def __init__(self, config: ProjectConfig) -> None:

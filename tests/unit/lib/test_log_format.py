@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from terok.lib.containers.log_format import (
+from terok.lib.domain.log_format import (
     ClaudeStreamJsonFormatter,
     PlainTextFormatter,
     auto_detect_formatter,

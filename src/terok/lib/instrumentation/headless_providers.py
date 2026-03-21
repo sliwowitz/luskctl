@@ -17,7 +17,7 @@ Custom instructions are delivered via a provider-specific channel:
 - **Codex**: ``model_instructions_file`` config (``-c`` flag in the wrapper).
 - **OpenCode / Blablador / KISSKI**: ``"instructions"`` array in ``opencode.json``
   pointing to ``/home/dev/.terok/instructions.md`` (injected on the host by
-  :func:`~terok.lib.containers.agents._inject_opencode_instructions`).
+  :func:`~terok.lib.instrumentation.agents._inject_opencode_instructions`).
 - **Other providers** (Copilot, Vibe, …): best-effort prompt prepending
   via ``prompt_extra`` in :class:`ProviderConfig`.
 
@@ -479,7 +479,7 @@ def apply_provider_config(
     """
     if overrides is None:
         overrides = CLIOverrides()
-    from ..containers.agent_config import resolve_provider_value
+    from .agent_config import resolve_provider_value
 
     warnings: list[str] = []
     prompt_parts: list[str] = []

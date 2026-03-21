@@ -12,10 +12,10 @@ from pathlib import Path
 
 from terok.ui_utils.editor import open_in_editor
 
-from ..core.config import user_projects_root
-from ..core.project_model import validate_project_id
-from ..util.fs import ensure_dir_writable
-from ..util.template_utils import render_template
+from ...core.config import user_projects_root
+from ...core.project_model import validate_project_id
+from ...util.fs import ensure_dir_writable
+from ...util.template_utils import render_template
 
 # Template variants: (label, filename)
 TEMPLATES: list[tuple[str, str]] = [

@@ -194,7 +194,7 @@ for _p in _ALL_PROVIDERS:
 
 def _register_opencode_auth_providers() -> None:
     """Dynamically register auth providers for OpenCode-based wrappers."""
-    from terok.lib.containers.headless_providers import HEADLESS_PROVIDERS
+    from terok.lib.instrumentation.headless_providers import HEADLESS_PROVIDERS
 
     for p in HEADLESS_PROVIDERS.values():
         if p.opencode_config is None or p.name in AUTH_PROVIDERS:

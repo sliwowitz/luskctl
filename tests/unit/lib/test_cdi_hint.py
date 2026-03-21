@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-from terok.lib.containers.task_runners import _CDI_HINT, _enrich_run_error
+from terok.lib.orchestration.task_runners import _CDI_HINT, _enrich_run_error
 
 
 def make_error(stderr: str | bytes | None, returncode: int = 1) -> subprocess.CalledProcessError:

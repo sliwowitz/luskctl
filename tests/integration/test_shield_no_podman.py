@@ -184,21 +184,21 @@ class TestTaskRunnerShieldIntegration:
 
         task_dir = shield_env.task_dir
         with (
-            patch("terok.lib.security.shield.get_global_section", return_value={}),
-            patch("terok.lib.security.shield.get_gate_server_port", return_value=GATE_PORT),
+            patch("terok.lib.sandbox.shield.get_global_section", return_value={}),
+            patch("terok.lib.sandbox.shield.get_gate_server_port", return_value=GATE_PORT),
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
-                "terok.lib.containers.task_runners._podman_userns_args",
+                "terok.lib.orchestration.task_runners._podman_userns_args",
                 return_value=[],
             ),
             patch(
-                "terok.lib.containers.task_runners.gpu_run_args",
+                "terok.lib.orchestration.task_runners.gpu_run_args",
                 return_value=[],
             ),
             # Inject MockRunner into the Shield created by _make_shield
             patch(
-                "terok.lib.security.shield.make_shield",
+                "terok.lib.sandbox.shield.make_shield",
                 return_value=Shield(
                     ShieldConfig(
                         state_dir=shield_env.state_dir,
@@ -210,7 +210,7 @@ class TestTaskRunnerShieldIntegration:
                 ),
             ),
         ):
-            from terok.lib.containers.task_runners import _run_container
+            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
 
             project = MagicMock(spec=ProjectConfig)
@@ -248,20 +248,20 @@ class TestTaskRunnerShieldIntegration:
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
-                "terok.lib.containers.task_runners._podman_userns_args",
+                "terok.lib.orchestration.task_runners._podman_userns_args",
                 return_value=[],
             ),
             patch(
-                "terok.lib.containers.task_runners.gpu_run_args",
+                "terok.lib.orchestration.task_runners.gpu_run_args",
                 return_value=[],
             ),
             # Mock shield away to isolate terok's own --security-opt logic
             patch(
-                "terok.lib.containers.task_runners._shield_pre_start_impl",
+                "terok.lib.orchestration.task_runners._shield_pre_start_impl",
                 return_value=[],
             ),
         ):
-            from terok.lib.containers.task_runners import _run_container
+            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
 
             project = MagicMock(spec=ProjectConfig)
@@ -291,32 +291,32 @@ class TestTaskRunnerShieldIntegration:
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
-                "terok.lib.containers.task_runners._podman_userns_args",
+                "terok.lib.orchestration.task_runners._podman_userns_args",
                 return_value=[],
             ),
             patch(
-                "terok.lib.containers.task_runners.gpu_run_args",
+                "terok.lib.orchestration.task_runners.gpu_run_args",
                 return_value=[],
             ),
             patch(
-                "terok.lib.containers.task_runners.get_shield_bypass_firewall_no_protection",
+                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
                 return_value=True,
             ),
             patch(
-                "terok.lib.containers.task_runners.get_gate_server_port",
+                "terok.lib.orchestration.task_runners.get_gate_server_port",
                 return_value=GATE_PORT,
             ),
             patch(
-                "terok.lib.containers.task_runners._detect_rootless_network_mode",
+                "terok.lib.orchestration.task_runners._detect_rootless_network_mode",
                 return_value=network_mode,
             ),
             # Shield must NOT be called at all when bypass is active
             patch(
-                "terok.lib.containers.task_runners._shield_pre_start_impl",
+                "terok.lib.orchestration.task_runners._shield_pre_start_impl",
                 side_effect=AssertionError("shield must not be called"),
             ),
         ):
-            from terok.lib.containers.task_runners import _run_container
+            from terok.lib.orchestration.task_runners import _run_container
             from terok.lib.core.projects import ProjectConfig
 
             project = MagicMock(spec=ProjectConfig)
