@@ -142,7 +142,7 @@ depends_on = [
 # Autopilot container lifecycle (wait, logs)
 [[modules]]
 path = "terok.lib.containers.autopilot"
-layer = "domain"
+layer = "orchestration"
 depends_on = ["terok.lib.containers.tasks"]
 
 # Task log viewing and streaming
