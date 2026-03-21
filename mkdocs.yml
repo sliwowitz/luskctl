@@ -48,15 +48,23 @@ plugins:
             show_symbol_type_toc: true
             members_order: source
             merge_init_into_class: true
+  - terok:
+      ci_map: true
+      ci_map_path: ci_map.md
+      quality_report: true
+      quality_report_path: quality-report.md
+      quality_report_include_layer_overview: true
+      quality_report_include_graph_coarsening: true
+      quality_report_codecov_treemap_path: docs/assets/coverage_treemap.svg
+      quality_report_src_label: "Source (`src/terok/`)"
+      quality_report_tests_label: "Tests (`tests/`)"
+      test_map: true
+      test_map_path: test_map.md
+      test_map_show_markers: false
+      ref_pages: true
   - gen-files:
       scripts:
-        - docs/gen_brand_css.py
-        - docs/gen_mermaid_zoom.py
-        - docs/gen_ref_pages.py
-        - docs/gen_quality_report.py
         - docs/gen_config_reference.py
-        - docs/gen_ci_map.py
-        - docs/gen_test_map.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
@@ -113,6 +121,3 @@ extra:
 extra_css:
   - https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Mono:wght@400;700&display=swap
   - stylesheets/extra.css
-
-extra_javascript:
-  - javascripts/mermaid_zoom.js
