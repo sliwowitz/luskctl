@@ -52,11 +52,10 @@ class TestTokenFilePath:
     """Tests for token_file_path."""
 
     def test_returns_path_under_state_root(self) -> None:
-        with unittest.mock.patch(
-            "terok.lib.sandbox.gate_tokens.state_root",
-            return_value=FAKE_TEROK_STATE_DIR,
-        ):
-            path = token_file_path()
+        from terok.lib.sandbox.config import SandboxConfig
+
+        cfg = SandboxConfig(state_dir=FAKE_TEROK_STATE_DIR)
+        path = token_file_path(cfg=cfg)
         assert path == FAKE_TEROK_STATE_DIR / "gate" / "tokens.json"
 
 

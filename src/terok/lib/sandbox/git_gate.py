@@ -8,14 +8,11 @@ In **gatekeeping mode**, it is the *only* repository the container can access,
 enforcing human review before changes reach upstream.  In **online mode**, it
 serves as a read-only clone accelerator (faster than cloning over the network).
 
-:class:`GitGate` is the main service class — a project-scoped **Repository +
-Gateway** (DDD patterns) that wraps git CLI operations for syncing, comparing,
-and querying the mirror.  Access it via ``project.gate``::
+:class:`GitGate` is the main service class — wraps git CLI operations for
+syncing, comparing, and querying the mirror.
 
-    project = get_project("myproj")
-    result = project.gate.sync()  # fetch from upstream
-    staleness = project.gate.compare_vs_upstream()
-    commit = project.gate.last_commit()
+All constructor parameters are plain values (strings, paths) — no
+terok-specific types like ``ProjectConfig``.
 
 Value types returned by ``GitGate`` methods:
 
@@ -23,11 +20,6 @@ Value types returned by ``GitGate`` methods:
 - :class:`BranchSyncResult` — selective branch sync outcome
 - :class:`CommitInfo` — single commit metadata (hash, date, author, message)
 - :class:`GateStalenessInfo` — frozen comparison of gate HEAD vs upstream HEAD
-
-Module-level utilities:
-
-- :func:`find_projects_sharing_gate` — discover projects that share a gate path
-- :func:`validate_gate_upstream_match` — prevent upstream URL conflicts
 """
 
 import os
@@ -39,8 +31,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
-from ..core.config import get_envs_base_dir
-from ..core.projects import ProjectConfig, effective_ssh_key_name, list_projects, load_project
+from .ssh import effective_ssh_key_name
 
 # ---------- Staleness dataclass ----------
 
@@ -87,100 +78,35 @@ class GateStalenessInfo:
     error: str | None
 
 
-# ---------- Gate sharing validation ----------
-
-
-def find_projects_sharing_gate(
-    gate_path: Path, exclude_project: str | None = None
-) -> list[tuple[str, str | None]]:
-    """Find all projects configured to use the same gate path.
-
-    Args:
-        gate_path: The gate path to check for
-        exclude_project: Project ID to exclude from results (usually the current project)
-
-    Returns:
-        List of (project_id, upstream_url) tuples for projects sharing this gate
-    """
-    gate_path = gate_path.resolve()
-    sharing = []
-
-    for project in list_projects():
-        if exclude_project and project.id == exclude_project:
-            continue
-        if project.gate_path.resolve() == gate_path:
-            sharing.append((project.id, project.upstream_url))
-
-    return sharing
-
-
-def validate_gate_upstream_match(project_id: str) -> None:
-    """Validate that no other project uses the same gate with a different upstream.
-
-    Raises SystemExit if another project uses the same gate path but has a
-    different upstream_url configured.
-
-    Args:
-        project_id: The project to validate
-    """
-    project = load_project(project_id)
-    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
-
-    for other_id, other_url in sharing:
-        # Treat any difference, including missing upstream_url on either side, as a conflict.
-        if other_url is None or project.upstream_url is None or other_url != project.upstream_url:
-            this_display = (
-                project.upstream_url if project.upstream_url is not None else "<not configured>"
-            )
-            other_display = other_url if other_url is not None else "<not configured>"
-            missing_note = ""
-            if other_url is None or project.upstream_url is None:
-                missing_note = (
-                    "\nNote: One or more projects sharing this gate do not have an "
-                    "upstream_url configured in project.yml.\n"
-                )
-            raise SystemExit(
-                f"Gate path conflict detected!\n"
-                f"\n"
-                f"  Gate path: {project.gate_path}\n"
-                f"\n"
-                f"  This project ({project_id}):\n"
-                f"    upstream_url: {this_display}\n"
-                f"\n"
-                f"  Conflicting project ({other_id}):\n"
-                f"    upstream_url: {other_display}\n"
-                f"\n"
-                f"Projects sharing a gate must have the same upstream_url.\n"
-                f"Either change the gate.path in one project's project.yml,\n"
-                f"or ensure both projects point to the same upstream repository.\n"
-                f"{missing_note}"
-            )
-
-
 # ---------- Private helpers ----------
 
 
-def _git_env_with_ssh(project: ProjectConfig) -> dict:
+def _git_env_with_ssh(
+    *,
+    project_id: str,
+    ssh_host_dir: Path | None,
+    ssh_key_name: str | None,
+    envs_base_dir: Path | None,
+) -> dict:
     """Return an env that forces git to use the project's SSH config only.
 
-    - Sets GIT_SSH_COMMAND to use the per-project ssh config via `-F <config>`.
-    - Adds `-o IdentitiesOnly=yes` to prevent fallback to keys in ~/.ssh or agent.
-    - If a specific private key exists in the project ssh dir (derived from
-      project.ssh_key_name), also adds `-o IdentityFile=<that key>` explicitly.
+    - Sets GIT_SSH_COMMAND to use the per-project ssh config via ``-F <config>``.
+    - Adds ``-o IdentitiesOnly=yes`` to prevent fallback to keys in ``~/.ssh`` or agent.
+    - If a specific private key exists in the ssh dir, adds ``-o IdentityFile=<key>``.
 
-    If the ssh host dir or config is missing, we return the current env.
+    If the ssh host dir or config is missing, returns the current env.
     """
     env = os.environ.copy()
-    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+    if envs_base_dir is None:
+        from .config import SandboxConfig
+
+        envs_base_dir = SandboxConfig().effective_envs_dir
+    ssh_dir = ssh_host_dir or (envs_base_dir / f"_ssh-config-{project_id}")
     cfg = Path(ssh_dir) / "config"
     if cfg.is_file():
         ssh_cmd = ["ssh", "-F", str(cfg), "-o", "IdentitiesOnly=yes"]
-        # Prefer explicit IdentityFile if we can resolve it. Use the same
-        # effective key name logic as ssh-init / containers so that even when
-        # ssh.key_name is omitted we still look for the derived default
-        # (id_<type>_<project_id>), while keeping this best-effort.
-        effective_name = effective_ssh_key_name(project, key_type="ed25519")
-        key_path = Path(ssh_dir) / effective_name
+        eff_name = effective_ssh_key_name(project_id, ssh_key_name=ssh_key_name, key_type="ed25519")
+        key_path = Path(ssh_dir) / eff_name
         if key_path.is_file():
             ssh_cmd += ["-o", f"IdentityFile={key_path}"]
         env["GIT_SSH_COMMAND"] = shlex.join(ssh_cmd)
@@ -189,27 +115,34 @@ def _git_env_with_ssh(project: ProjectConfig) -> dict:
     return env
 
 
-def _require_project_ssh_config(project: ProjectConfig) -> None:
-    """Raise SystemExit if the project uses an SSH upstream but SSH config is missing."""
-    upstream = project.upstream_url or ""
-    is_ssh_upstream = upstream.startswith("git@") or upstream.startswith("ssh://")
-    if not is_ssh_upstream:
+def _require_ssh_config(
+    *,
+    project_id: str,
+    upstream_url: str | None,
+    ssh_host_dir: Path | None,
+    envs_base_dir: Path | None,
+) -> None:
+    """Raise SystemExit if an SSH upstream is configured but SSH config is missing."""
+    upstream = upstream_url or ""
+    if not (upstream.startswith("git@") or upstream.startswith("ssh://")):
         return
+    if envs_base_dir is None:
+        from .config import SandboxConfig
 
-    ssh_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+        envs_base_dir = SandboxConfig().effective_envs_dir
+    ssh_dir = ssh_host_dir or (envs_base_dir / f"_ssh-config-{project_id}")
     ssh_cfg_path = Path(ssh_dir) / "config"
     if not ssh_cfg_path.is_file():
         raise SystemExit(
             "SSH upstream detected but project SSH config is missing.\n"
             f"Expected SSH config at: {ssh_cfg_path}\n"
-            f"Run 'terokctl ssh-init {project.id}' first to generate keys and config."
+            f"Run 'terokctl ssh-init {project_id}' first to generate keys and config."
         )
 
 
-def _clone_gate_mirror(project: ProjectConfig, gate_dir: Path) -> None:
+def _clone_gate_mirror(upstream_url: str, gate_dir: Path, env: dict) -> None:
     """Clone the upstream repository as a bare mirror into *gate_dir*."""
-    env = _git_env_with_ssh(project)
-    cmd = ["git", "clone", "--mirror", project.upstream_url, str(gate_dir)]
+    cmd = ["git", "clone", "--mirror", upstream_url, str(gate_dir)]
     try:
         subprocess.run(cmd, check=True, env=env)
     except FileNotFoundError:
@@ -218,34 +151,20 @@ def _clone_gate_mirror(project: ProjectConfig, gate_dir: Path) -> None:
         raise SystemExit(f"git clone --mirror failed: {e}")
 
 
-def _get_upstream_head(project: ProjectConfig, branch: str | None = None) -> dict | None:
+def _get_upstream_head(upstream_url: str, branch: str, env: dict) -> dict | None:
     """Query upstream HEAD ref using git ls-remote (cheap, no object download).
-
-    Args:
-        project: Resolved project configuration
-        branch: Specific branch to check (default: project's default_branch)
 
     Returns:
         Dict with keys: commit_hash, ref_name, upstream_url
-        or None if query fails
+        or None if query fails.
     """
     try:
-        if not project.upstream_url:
-            return None
-
-        branch = branch or project.default_branch
-        if not branch:
-            return None
-        env = _git_env_with_ssh(project)
-
-        # git ls-remote only queries refs, doesn't download objects
-        cmd = ["git", "ls-remote", project.upstream_url, f"refs/heads/{branch}"]
+        cmd = ["git", "ls-remote", upstream_url, f"refs/heads/{branch}"]
         result = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=30)
 
         if result.returncode != 0:
             return None
 
-        # Parse output: "<commit_hash>\t<ref_name>"
         line = result.stdout.strip()
         if not line:
             return None
@@ -255,59 +174,44 @@ def _get_upstream_head(project: ProjectConfig, branch: str | None = None) -> dic
             return {
                 "commit_hash": parts[0],
                 "ref_name": parts[1],
-                "upstream_url": project.upstream_url,
+                "upstream_url": upstream_url,
             }
         return None
-
     except (subprocess.TimeoutExpired, Exception):
         return None
 
 
-def _get_gate_branch_head(project: ProjectConfig, branch: str | None = None) -> str | None:
+def _get_gate_branch_head(gate_dir: Path, branch: str, env: dict) -> str | None:
     """Get the commit hash for a specific branch in the gate.
 
-    Args:
-        project: Resolved project configuration
-        branch: Branch name (default: project's default_branch)
-
     Returns:
-        Commit hash string or None if not found
+        Commit hash string or None if not found.
     """
     try:
-        gate_dir = project.gate_path
-
         if not gate_dir.exists():
             return None
 
-        branch = branch or project.default_branch
-        if not branch:
-            return None
-        env = _git_env_with_ssh(project)
-
-        # Query the ref in the bare mirror
         cmd = ["git", "-C", str(gate_dir), "rev-parse", f"refs/heads/{branch}"]
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
         if result.returncode == 0:
             return result.stdout.strip()
         return None
-
     except Exception:
         return None
 
 
-def _count_commits_range(project: ProjectConfig, from_ref: str, to_ref: str) -> int | None:
+def _count_commits_range(gate_dir: Path, from_ref: str, to_ref: str, env: dict) -> int | None:
     """Count commits reachable from *to_ref* but not from *from_ref*.
 
     Uses ``git rev-list --count from..to``.  Returns ``None`` when the
     count cannot be determined (e.g. refs not yet fetched).
     """
     try:
-        env = _git_env_with_ssh(project)
         cmd = [
             "git",
             "-C",
-            str(project.gate_path),
+            str(gate_dir),
             "rev-list",
             "--count",
             f"{from_ref}..{to_ref}",
@@ -320,51 +224,85 @@ def _count_commits_range(project: ProjectConfig, from_ref: str, to_ref: str) -> 
         return None
 
 
-def _count_commits_behind(project: ProjectConfig, local_head: str, remote_head: str) -> int | None:
-    """Count how many commits the gate is behind upstream."""
-    return _count_commits_range(project, local_head, remote_head)
-
-
-def _count_commits_ahead(project: ProjectConfig, local_head: str, remote_head: str) -> int | None:
-    """Count how many commits the gate is ahead of upstream."""
-    return _count_commits_range(project, remote_head, local_head)
-
-
 # ---------- GitGate class (Repository + Gateway pattern) ----------
 
 
 class GitGate:
-    """Repository + Gateway for a project's host-side git gate mirror.
+    """Repository + Gateway for a host-side git gate mirror.
 
     Manages the bare git mirror that containers clone from.  Provides
     operations for initial creation, incremental sync from upstream,
     selective branch fetching, and staleness detection.
 
-    This is a **stateful service** — it holds a reference to the project
-    config and uses it to resolve paths, SSH credentials, and upstream
-    URLs.  Access via ``project.gate`` (lazy-initialized by
-    :class:`~terok.lib.domain.project.Project`).
-
-    Design patterns: **Repository** (manages a persistent git mirror on
-    disk) + **Gateway** (wraps external git CLI operations).
+    Constructor takes plain parameters — no terok-specific types.
     """
 
-    def __init__(self, config: ProjectConfig) -> None:
-        """Initialise with a resolved project configuration.
+    def __init__(
+        self,
+        *,
+        project_id: str,
+        gate_path: Path | str,
+        upstream_url: str | None = None,
+        default_branch: str | None = None,
+        ssh_host_dir: Path | str | None = None,
+        ssh_key_name: str | None = None,
+        envs_base_dir: Path | str | None = None,
+        validate_gate_fn: "callable | None" = None,
+    ) -> None:
+        """Initialise with plain parameters.
 
-        Args:
-            config: The project configuration to operate on.
+        Parameters
+        ----------
+        project_id:
+            Identifier for this gate's owner.
+        gate_path:
+            Path to the bare git mirror on the host.
+        upstream_url:
+            Git upstream URL to sync from.
+        default_branch:
+            Branch name used for staleness comparisons.
+        ssh_host_dir:
+            Explicit SSH directory for git operations.
+        ssh_key_name:
+            Explicit SSH key filename.
+        envs_base_dir:
+            Base directory for environment data.
+        validate_gate_fn:
+            Optional callback ``(project_id) -> None`` that validates no other
+            project uses the same gate with a different upstream.  Injected by
+            the orchestration layer; omitted for standalone use.
         """
-        self._config = config
+        self._project_id = project_id
+        self._gate_path = Path(gate_path)
+        self._upstream_url = upstream_url
+        self._default_branch = default_branch
+        self._ssh_host_dir = Path(ssh_host_dir) if ssh_host_dir else None
+        self._ssh_key_name = ssh_key_name
+        self._envs_base_dir = Path(envs_base_dir) if envs_base_dir else None
+        self._validate_gate_fn = validate_gate_fn
+
+    def _ssh_env(self) -> dict:
+        """Return a subprocess env dict with SSH configuration."""
+        return _git_env_with_ssh(
+            project_id=self._project_id,
+            ssh_host_dir=self._ssh_host_dir,
+            ssh_key_name=self._ssh_key_name,
+            envs_base_dir=self._envs_base_dir,
+        )
+
+    def _validate_gate(self) -> None:
+        """Run the injected gate validation callback, if any."""
+        if self._validate_gate_fn:
+            self._validate_gate_fn(self._project_id)
 
     def sync(
         self,
         branches: list[str] | None = None,
         force_reinit: bool = False,
     ) -> GateSyncResult:
-        """Sync the host-side git mirror gate for the project.
+        """Sync the host-side git mirror gate.
 
-        - Uses the project's SSH configuration (from ssh-init) via GIT_SSH_COMMAND.
+        - Uses SSH configuration via GIT_SSH_COMMAND.
         - If gate doesn't exist (or *force_reinit*), performs a fresh ``git clone --mirror``.
         - Always runs the sync logic afterward for consistent side effects.
 
@@ -372,39 +310,40 @@ class GitGate:
             Dict with keys: path, upstream_url, created (bool), success,
             updated_branches, errors.
         """
-        project = self._config
-        if not project.upstream_url:
+        if not self._upstream_url:
             raise SystemExit("Project has no git.upstream_url configured")
 
-        # Validate no other project uses this gate with a different upstream
-        validate_gate_upstream_match(project.id)
+        self._validate_gate()
 
-        gate_dir = project.gate_path
+        gate_dir = self._gate_path
         gate_exists = gate_dir.exists()
         gate_dir.parent.mkdir(parents=True, exist_ok=True)
 
-        _require_project_ssh_config(project)
+        _require_ssh_config(
+            project_id=self._project_id,
+            upstream_url=self._upstream_url,
+            ssh_host_dir=self._ssh_host_dir,
+            envs_base_dir=self._envs_base_dir,
+        )
 
+        env = self._ssh_env()
         created = False
         if force_reinit and gate_exists:
-            # Remove to ensure clean mirror
             try:
                 if gate_dir.is_dir():
                     shutil.rmtree(gate_dir)
             except Exception:
-                # Best-effort cleanup; ignore delete failures.
                 pass
             gate_exists = False
 
         if not gate_exists:
-            # Create a mirror clone
-            _clone_gate_mirror(project, gate_dir)
+            _clone_gate_mirror(self._upstream_url, gate_dir, env)
             created = True
 
         sync_result = self.sync_branches(branches)
         return {
             "path": str(gate_dir),
-            "upstream_url": project.upstream_url,
+            "upstream_url": self._upstream_url,
             "created": created,
             "success": sync_result["success"],
             "updated_branches": sync_result["updated_branches"],
@@ -420,28 +359,24 @@ class GitGate:
         Returns:
             Dict with keys: success, updated_branches, errors
         """
-        project = self._config
-        gate_dir = project.gate_path
+        gate_dir = self._gate_path
 
         if not gate_dir.exists():
             return {"success": False, "updated_branches": [], "errors": ["Gate not initialized"]}
 
-        # Validate no other project uses this gate with a different upstream
-        validate_gate_upstream_match(project.id)
+        self._validate_gate()
 
-        env = _git_env_with_ssh(project)
-        errors = []
-        updated = []
+        env = self._ssh_env()
+        errors: list[str] = []
+        updated: list[str] = []
 
         try:
-            # Use git remote update for efficiency
             cmd = ["git", "-C", str(gate_dir), "remote", "update", "--prune"]
             result = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=120)
 
             if result.returncode != 0:
                 errors.append(f"remote update failed: {result.stderr}")
             else:
-                # If specific branches requested, verify they were updated
                 updated = branches if branches else ["all"]
 
         except subprocess.TimeoutExpired:
@@ -455,13 +390,12 @@ class GitGate:
         """Compare gate HEAD vs upstream HEAD for a branch.
 
         Args:
-            branch: Branch to compare (default: project's default_branch)
+            branch: Branch to compare (default: configured default_branch)
 
         Returns:
             GateStalenessInfo with comparison results
         """
-        project = self._config
-        branch = branch or project.default_branch
+        branch = branch or self._default_branch
         now = datetime.now().isoformat()
 
         if not branch:
@@ -476,8 +410,10 @@ class GitGate:
                 error="No branch configured",
             )
 
+        env = self._ssh_env()
+
         # Get gate HEAD
-        gate_head = _get_gate_branch_head(project, branch)
+        gate_head = _get_gate_branch_head(self._gate_path, branch, env)
         if gate_head is None:
             return GateStalenessInfo(
                 branch=branch,
@@ -491,7 +427,19 @@ class GitGate:
             )
 
         # Get upstream HEAD
-        upstream_info = _get_upstream_head(project, branch)
+        if not self._upstream_url:
+            return GateStalenessInfo(
+                branch=branch,
+                gate_head=gate_head,
+                upstream_head=None,
+                is_stale=False,
+                commits_behind=None,
+                commits_ahead=None,
+                last_checked=now,
+                error="No upstream URL configured",
+            )
+
+        upstream_info = _get_upstream_head(self._upstream_url, branch, env)
         if upstream_info is None:
             return GateStalenessInfo(
                 branch=branch,
@@ -507,12 +455,11 @@ class GitGate:
         upstream_head = upstream_info["commit_hash"]
         is_stale = gate_head != upstream_head
 
-        # Count commits behind and ahead
         commits_behind = None
         commits_ahead = None
         if is_stale:
-            commits_behind = _count_commits_behind(project, gate_head, upstream_head)
-            commits_ahead = _count_commits_ahead(project, gate_head, upstream_head)
+            commits_behind = _count_commits_range(self._gate_path, gate_head, upstream_head, env)
+            commits_ahead = _count_commits_range(self._gate_path, upstream_head, gate_head, env)
 
         return GateStalenessInfo(
             branch=branch,
@@ -528,23 +475,17 @@ class GitGate:
     def last_commit(self) -> CommitInfo | None:
         """Get information about the last commit on the configured branch.
 
-        Queries the project's ``default_branch`` (falling back to HEAD if not
-        set or not present locally) so the result is consistent with
-        :meth:`compare_vs_upstream`.
-
         Returns ``None`` if the gate doesn't exist or is not accessible.
         """
         try:
-            project = self._config
-            gate_dir = project.gate_path
+            gate_dir = self._gate_path
 
             if not gate_dir.exists() or not gate_dir.is_dir():
                 return None
 
-            env = _git_env_with_ssh(project)
+            env = self._ssh_env()
 
-            # Prefer the configured branch; fall back to HEAD
-            rev = f"refs/heads/{project.default_branch}" if project.default_branch else "HEAD"
+            rev = f"refs/heads/{self._default_branch}" if self._default_branch else "HEAD"
             cmd = [
                 "git",
                 "-C",
@@ -557,14 +498,12 @@ class GitGate:
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-            if result.returncode != 0 and project.default_branch:
-                # Branch may not exist locally yet; retry with HEAD
-                cmd[4] = "HEAD"
+            if result.returncode != 0 and self._default_branch:
+                cmd[5] = "HEAD"
                 result = subprocess.run(cmd, capture_output=True, text=True, env=env)
             if result.returncode != 0:
                 return None
 
-            # Parse with null-byte delimiter (subject is last to handle | in messages)
             parts = result.stdout.strip().split("\x00", 3)
             if len(parts) == 4:
                 return {

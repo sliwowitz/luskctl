@@ -326,29 +326,41 @@ depends_on = [
 # ·· isolation ··  Container runtime, shield, gate, SSH
 #
 
+# Sandbox path resolution (vendored, zero internal deps)
+[[modules]]
+path = "terok.lib.sandbox.paths"
+layer = "sandbox"
+depends_on = []
+
+# Sandbox configuration dataclass
+[[modules]]
+path = "terok.lib.sandbox.config"
+layer = "sandbox"
+depends_on = ["terok.lib.sandbox.paths"]
+
 # Container state, GPU args, log streaming
 [[modules]]
 path = "terok.lib.sandbox.runtime"
 layer = "sandbox"
-depends_on = ["terok.lib.core.projects", "terok.lib.util.logging_utils", "terok.lib.util.yaml"]
+depends_on = ["terok.lib.util.logging_utils", "terok.lib.util.yaml"]
 
 # Shield egress firewall adapter
 [[modules]]
 path = "terok.lib.sandbox.shield"
 layer = "sandbox"
-depends_on = ["terok.lib.core.config", "terok.lib.core.paths"]
+depends_on = ["terok.lib.sandbox.config"]
 
 # Gate server lifecycle management
 [[modules]]
 path = "terok.lib.sandbox.gate_server"
 layer = "sandbox"
-depends_on = ["terok.lib.core.config", "terok.lib.core.paths", "terok.lib.sandbox.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
+depends_on = ["terok.lib.sandbox.config", "terok.lib.sandbox.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
 
 # Gate token CRUD
 [[modules]]
 path = "terok.lib.sandbox.gate_tokens"
 layer = "sandbox"
-depends_on = ["terok.lib.core.config"]
+depends_on = ["terok.lib.sandbox.config"]
 
 # Standalone HTTP gate server (zero terok imports)
 [[modules]]
@@ -362,8 +374,7 @@ utility = true
 path = "terok.lib.sandbox.ssh"
 layer = "sandbox"
 depends_on = [
-    "terok.lib.core.config",
-    "terok.lib.core.projects",
+    "terok.lib.sandbox.config",
     "terok.lib.util.fs",
     "terok.lib.util.template_utils",
 ]
@@ -372,7 +383,7 @@ depends_on = [
 [[modules]]
 path = "terok.lib.sandbox.git_gate"
 layer = "sandbox"
-depends_on = ["terok.lib.core.config", "terok.lib.core.projects"]
+depends_on = ["terok.lib.sandbox.config", "terok.lib.sandbox.ssh"]
 
 # ── CORE LAYER ────────────────────────────────────────────────────
 #
@@ -602,6 +613,9 @@ from = ["terok.lib.domain.task_logs"]
 
 [[interfaces]]
 expose = [
+    "container_name",
+    "CONTAINER_MODES",
+    "get_task_container_state",
     "task_new",
     "task_rename",
     "task_stop",
@@ -695,7 +709,7 @@ expose = ["token_file_path", "create_token", "revoke_token_for_task"]
 from = ["terok.lib.sandbox.gate_tokens"]
 
 [[interfaces]]
-expose = ["SSHManager", "SSHInitResult"]
+expose = ["SSHManager", "SSHInitResult", "effective_ssh_key_name"]
 from = ["terok.lib.sandbox.ssh"]
 
 [[interfaces]]
@@ -724,7 +738,6 @@ expose = [
     "BranchSyncResult",
     "CommitInfo",
     "GitGate",
-    "find_projects_sharing_gate",
 ]
 from = ["terok.lib.sandbox.git_gate"]
 
@@ -790,8 +803,6 @@ from = ["terok.lib.orchestration.environment"]
 
 [[interfaces]]
 expose = [
-    "container_name",
-    "get_task_container_state",
     "get_container_state",
     "gpu_run_args",
     "is_container_running",
@@ -866,6 +877,8 @@ expose = [
     "is_systemd_available",
     "GateStalenessInfo",
     "find_projects_sharing_gate",
+    "make_git_gate",
+    "make_ssh_manager",
     "get_project_state",
     "is_task_image_old",
     "make_shield",
@@ -885,7 +898,7 @@ expose = [
 from = ["terok.lib.domain.facade"]
 
 [[interfaces]]
-expose = ["Project", "AgentManager", "DeleteProjectResult", "delete_project"]
+expose = ["Project", "AgentManager", "DeleteProjectResult", "delete_project", "find_projects_sharing_gate", "validate_gate_upstream_match", "make_git_gate", "make_ssh_manager"]
 from = ["terok.lib.domain.project"]
 
 [[interfaces]]

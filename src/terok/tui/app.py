@@ -62,7 +62,6 @@ if _HAS_TEXTUAL:
         EnvironmentCheck,
         GateServerStatus,
         GateStalenessInfo,
-        GitGate,
         get_project_state,
         get_server_status,
         is_task_image_old,
@@ -545,7 +544,9 @@ if _HAS_TEXTUAL:
             """Load project infrastructure state in a background thread."""
             try:
                 project = load_project(project_id)
-                gate = GitGate(project)
+                from ..lib.domain.project import make_git_gate
+
+                gate = make_git_gate(project)
                 state = get_project_state(
                     project_id,
                     gate_commit_provider=lambda _pid, _g=gate: _g.last_commit(),
@@ -621,7 +622,7 @@ if _HAS_TEXTUAL:
             try:
                 project = load_project(project_id)
                 mode = task.mode or "cli"
-                from ..lib.sandbox.runtime import container_name
+                from ..lib.orchestration.tasks import container_name
 
                 cname = container_name(project_id, mode, task.task_id)
                 task_dir = project.tasks_root / str(task.task_id)

@@ -26,14 +26,7 @@ from terok_shield import (
     system_hooks_dir,
 )
 
-from ..core.config import (
-    get_gate_server_port,
-    get_global_section,
-    get_shield_bypass_firewall_no_protection,
-)
-from ..core.paths import config_root
-
-_DEFAULT_PROFILES = ("dev-standard",)
+from .config import SandboxConfig
 
 # Short hint appended to CLI/TUI messages when the shield is weakened.
 SHIELD_SECURITY_HINT = "See: https://terok-ai.github.io/terok/shield-security/"
@@ -48,68 +41,29 @@ _BYPASS_WARNING = (
 )
 
 
-def _state_dir(task_dir: Path) -> Path:
-    """Return the per-task shield state directory."""
-    return task_dir / "shield"
+def _cfg(cfg: SandboxConfig | None = None) -> SandboxConfig:
+    """Return *cfg* or a default :class:`SandboxConfig`."""
+    return cfg or SandboxConfig()
 
 
-def _profiles_dir() -> Path:
-    """Return the terok-managed shield profiles directory.
+def make_shield(task_dir: Path, cfg: SandboxConfig | None = None) -> Shield:
+    """Construct a per-task :class:`Shield` from sandbox configuration.
 
-    Custom ``.txt`` allowlist files placed here are visible to all
-    terok-managed Shield instances.  This is separate from the
-    standalone ``terok-shield`` CLI's own config directory.
+    Builds a :class:`ShieldConfig` with ``state_dir`` scoped to *task_dir*.
     """
-    return config_root() / "shield" / "profiles"
-
-
-def _normalize_profiles(raw: object) -> tuple[str, ...]:
-    """Normalize a profiles config value to a tuple of strings.
-
-    Raises:
-        TypeError: If *raw* is not a string or list of strings.
-    """
-    if isinstance(raw, str):
-        return (raw,)
-    if isinstance(raw, (list, tuple)):
-        for item in raw:
-            if not isinstance(item, str):
-                raise TypeError(
-                    f"shield.profiles must be a list of strings, "
-                    f"but found {type(item).__name__}: {item!r}"
-                )
-        return tuple(raw)
-    raise TypeError(
-        f"shield.profiles must be a string or a list of strings, "
-        f"but found {type(raw).__name__}: {raw!r}"
-    )
-
-
-def make_shield(task_dir: Path) -> Shield:
-    """Construct a per-task :class:`Shield` from the terok global config.
-
-    Reads the ``shield:`` section of the global config and builds a
-    :class:`ShieldConfig` with ``state_dir`` scoped to *task_dir*.
-
-    The ``Shield`` constructor validates that the ``nft`` binary is
-    available on the host and raises :class:`~terok_shield.NftNotFoundError`
-    if it is missing.
-    """
-    sec = get_global_section("shield")
-    profiles = _normalize_profiles(sec.get("profiles", _DEFAULT_PROFILES))
-
+    c = _cfg(cfg)
     config = ShieldConfig(
-        state_dir=_state_dir(task_dir),
+        state_dir=task_dir / "shield",
         mode=ShieldMode.HOOK,
-        default_profiles=profiles,
-        loopback_ports=(get_gate_server_port(),),
-        audit_enabled=bool(sec.get("audit", True)),
-        profiles_dir=_profiles_dir(),
+        default_profiles=c.shield_profiles,
+        loopback_ports=(c.gate_port,),
+        audit_enabled=c.shield_audit,
+        profiles_dir=c.shield_profiles_dir,
     )
     return Shield(config)
 
 
-def pre_start(container: str, task_dir: Path) -> list[str]:
+def pre_start(container: str, task_dir: Path, cfg: SandboxConfig | None = None) -> list[str]:
     """Return extra ``podman run`` args for egress firewalling.
 
     Returns an empty list (no firewall args) when the dangerous
@@ -118,79 +72,70 @@ def pre_start(container: str, task_dir: Path) -> list[str]:
     Raises :class:`SystemExit` with setup instructions when the
     podman environment requires one-time hook installation.
     """
-    if get_shield_bypass_firewall_no_protection():
+    if _cfg(cfg).shield_bypass:
         warnings.warn(_BYPASS_WARNING, stacklevel=2)
         return []
     try:
-        return make_shield(task_dir).pre_start(container)
+        return make_shield(task_dir, cfg).pre_start(container)
     except ShieldNeedsSetup as exc:
         raise SystemExit(f"{exc}\n\nRun 'terokctl shield setup' to install global hooks.") from None
 
 
-def down(container: str, task_dir: Path, *, allow_all: bool = False) -> None:
+def down(
+    container: str, task_dir: Path, *, allow_all: bool = False, cfg: SandboxConfig | None = None
+) -> None:
     """Set shield to bypass mode (allow egress) for a running container.
 
     When *allow_all* is True, also permits private-range (RFC 1918) traffic.
     """
-    if get_shield_bypass_firewall_no_protection():
+    if _cfg(cfg).shield_bypass:
         return
-    make_shield(task_dir).down(container, allow_all=allow_all)
+    make_shield(task_dir, cfg).down(container, allow_all=allow_all)
 
 
-def up(container: str, task_dir: Path) -> None:
+def up(container: str, task_dir: Path, cfg: SandboxConfig | None = None) -> None:
     """Set shield to deny-all mode for a running container."""
-    if get_shield_bypass_firewall_no_protection():
+    if _cfg(cfg).shield_bypass:
         return
-    make_shield(task_dir).up(container)
+    make_shield(task_dir, cfg).up(container)
 
 
-def state(container: str, task_dir: Path) -> ShieldState:
+def state(container: str, task_dir: Path, cfg: SandboxConfig | None = None) -> ShieldState:
     """Return the live shield state for a running container.
 
-    Queries actual nft state even when ``bypass_firewall_no_protection``
-    is set, because containers started *before* bypass was enabled may
-    still have active firewall rules.
+    Queries actual nft state even when bypass is set, because containers
+    started *before* bypass was enabled may still have active rules.
     """
-    return make_shield(task_dir).state(container)
+    return make_shield(task_dir, cfg).state(container)
 
 
-def status() -> dict:
-    """Return shield status dict from the global config.
-
-    This reads the terok config directly rather than constructing a
-    :class:`Shield`, because ``Shield.status()`` returns *available*
-    profiles (filesystem scan) while terok needs *configured* profiles.
-    """
-    bypassed = get_shield_bypass_firewall_no_protection()
-    sec = get_global_section("shield")
-    profiles = _normalize_profiles(sec.get("profiles", _DEFAULT_PROFILES))
+def status(cfg: SandboxConfig | None = None) -> dict:
+    """Return shield status dict from the sandbox configuration."""
+    c = _cfg(cfg)
     result: dict = {
         "mode": "hook",
-        "profiles": list(profiles),
-        "audit_enabled": bool(sec.get("audit", True)),
+        "profiles": list(c.shield_profiles),
+        "audit_enabled": c.shield_audit,
     }
-    if bypassed:
-        # DANGEROUS TRANSITIONAL OVERRIDE — surface prominently in status output
+    if c.shield_bypass:
         result["bypass_firewall_no_protection"] = True
     return result
 
 
-def check_environment() -> EnvironmentCheck:
+def check_environment(cfg: SandboxConfig | None = None) -> EnvironmentCheck:
     """Check the podman environment for shield compatibility.
 
-    Constructs a temporary :class:`Shield` and calls
-    :meth:`Shield.check_environment`.  Returns a synthetic
-    :class:`EnvironmentCheck` with bypass info when the dangerous
-    ``bypass_firewall_no_protection`` override is active.
+    Returns a synthetic :class:`EnvironmentCheck` with bypass info when the
+    dangerous bypass override is active.
     """
-    if get_shield_bypass_firewall_no_protection():
+    if _cfg(cfg).shield_bypass:
         return EnvironmentCheck(
             ok=False,
             health="bypass",
             issues=["bypass_firewall_no_protection is set — egress firewall disabled"],
         )
     with tempfile.TemporaryDirectory() as tmp:
-        return make_shield(Path(tmp)).check_environment()
+        return make_shield(Path(tmp), cfg).check_environment()
 
 
 def run_setup(*, root: bool = False, user: bool = False) -> None:

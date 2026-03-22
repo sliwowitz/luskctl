@@ -192,8 +192,7 @@ class TestTaskRunnerShieldIntegration:
 
         task_dir = shield_env.task_dir
         with (
-            patch("terok.lib.sandbox.shield.get_global_section", return_value={}),
-            patch("terok.lib.sandbox.shield.get_gate_server_port", return_value=GATE_PORT),
+            patch("terok.lib.sandbox.paths.state_root", return_value=shield_env.state_dir),
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
@@ -223,7 +222,7 @@ class TestTaskRunnerShieldIntegration:
             from terok.lib.core.projects import ProjectConfig
             from terok.lib.orchestration.task_runners import _run_container
 
-            project = MagicMock(spec=ProjectConfig)
+            project = MagicMock(spec=ProjectConfig, root=task_dir)
 
             _run_container(
                 cname="integ-test-ctr",
@@ -274,7 +273,7 @@ class TestTaskRunnerShieldIntegration:
             from terok.lib.core.projects import ProjectConfig
             from terok.lib.orchestration.task_runners import _run_container
 
-            project = MagicMock(spec=ProjectConfig)
+            project = MagicMock(spec=ProjectConfig, root=task_dir)
 
             _run_container(
                 cname="integ-test-ctr",
@@ -329,7 +328,7 @@ class TestTaskRunnerShieldIntegration:
             from terok.lib.core.projects import ProjectConfig
             from terok.lib.orchestration.task_runners import _run_container
 
-            project = MagicMock(spec=ProjectConfig)
+            project = MagicMock(spec=ProjectConfig, root=task_dir)
 
             _run_container(
                 cname="bypass-test-ctr",

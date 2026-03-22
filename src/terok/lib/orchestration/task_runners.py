@@ -24,7 +24,6 @@ from ..instrumentation.agent_config import resolve_agent_config, resolve_provide
 from ..instrumentation.agents import AgentConfigSpec, prepare_agent_config_dir
 from ..instrumentation.instructions import resolve_instructions
 from ..sandbox.runtime import (
-    container_name,
     get_container_state,
     gpu_run_args,
     is_container_running,
@@ -50,6 +49,7 @@ from .environment import build_task_env_and_volumes
 from .hooks import run_hook
 from .ports import assign_web_port
 from .tasks import (
+    container_name,
     load_task_meta,
     task_new,
     update_task_exit_code,
@@ -340,7 +340,7 @@ def _run_container(
     else:
         cmd += _shield_pre_start_impl(cname, task_dir)
 
-    cmd += gpu_run_args(project)
+    cmd += gpu_run_args(project.root)
     if extra_args:
         cmd += extra_args
     for v in volumes:

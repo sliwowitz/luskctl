@@ -10,8 +10,13 @@ scripts executing with host privileges.
 
 import subprocess
 
-from ..sandbox.runtime import container_name, get_container_state
+from ..sandbox.runtime import get_container_state
 from ..util.logging_utils import _log_debug
+
+
+def _container_name(project_id: str, mode: str, task_id: str) -> str:
+    """Inline container naming to avoid circular import with tasks."""
+    return f"{project_id}-{mode}-{task_id}"
 
 
 def _podman_start(cname: str) -> bool:
@@ -67,7 +72,7 @@ def container_git_diff(
     ``/workspace`` path — the host ``workspace-dangerous`` path is never
     passed to any subprocess.
     """
-    cname = container_name(project_id, mode, task_id)
+    cname = _container_name(project_id, mode, task_id)
     state = get_container_state(cname)
 
     if state is None:

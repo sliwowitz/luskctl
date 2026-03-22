@@ -1,18 +1,16 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Per-project SSH keypair generation and config directory setup.
+"""SSH keypair generation and config directory setup.
 
-Each project that accesses a private upstream repository needs its own
-SSH keypair and config.  :class:`SSHManager` manages this — generating
-keys, rendering the SSH config from a template, and setting permissions
-so that the container's ``/home/dev/.ssh`` mount works correctly.
+Manages the lifecycle of SSH keypairs and config for sandboxed containers.
+:class:`SSHManager` generates keys, renders the SSH config from a template,
+and sets permissions so that the container's ``/home/dev/.ssh`` mount works
+correctly.
 
-Access via ``project.ssh``::
-
-    project = get_project("myproj")
-    result = project.ssh.init()  # generate keypair + config
-    print(result["public_key"])  # copy to git remote as deploy key
+All constructor parameters are plain values (strings, paths) — no
+terok-specific types.  The orchestration layer constructs the manager
+from project configuration.
 """
 
 import os
@@ -21,10 +19,24 @@ from importlib import resources
 from pathlib import Path
 from typing import TypedDict
 
-from ..core.config import get_envs_base_dir
-from ..core.projects import ProjectConfig, effective_ssh_key_name
 from ..util.fs import ensure_dir_writable
 from ..util.template_utils import render_template
+from .config import SandboxConfig
+
+
+def effective_ssh_key_name(
+    project_id: str, *, ssh_key_name: str | None = None, key_type: str = "ed25519"
+) -> str:
+    """Return the SSH key filename to use.
+
+    Precedence:
+      1. Explicit *ssh_key_name* (from project config)
+      2. Derived default: ``id_<type>_<project_id>``
+    """
+    if ssh_key_name:
+        return ssh_key_name
+    algo = "ed25519" if key_type == "ed25519" else "rsa"
+    return f"id_{algo}_{project_id}"
 
 
 class SSHInitResult(TypedDict):
@@ -38,31 +50,53 @@ class SSHInitResult(TypedDict):
 
 
 class SSHManager:
-    """Project-scoped service for SSH keypair generation and config.
+    """SSH keypair generation and config directory management.
 
     Handles the full SSH setup lifecycle: directory creation, keypair
     generation (ed25519 or RSA), config file rendering from templates, and
     permission hardening.  The generated directory is bind-mounted into task
     containers as ``/home/dev/.ssh``.
-
-    Access via ``project.ssh`` (lazy-initialized by
-    :class:`~terok.lib.domain.project.Project`).
     """
 
-    def __init__(self, config: ProjectConfig) -> None:
-        """Initialize the manager with a resolved project configuration.
+    def __init__(
+        self,
+        *,
+        project_id: str,
+        ssh_host_dir: Path | str | None = None,
+        ssh_key_name: str | None = None,
+        ssh_config_template: Path | str | None = None,
+        envs_base_dir: Path | str | None = None,
+    ) -> None:
+        """Initialize with plain parameters.
 
         Parameters
         ----------
-        config:
-            A fully loaded :class:`ProjectConfig` instance.
+        project_id:
+            Identifier used for key naming and directory layout.
+        ssh_host_dir:
+            Explicit SSH directory (overrides default ``<envs_base>/_ssh-config-<id>``).
+        ssh_key_name:
+            Explicit key filename (overrides derived ``id_<type>_<id>``).
+        ssh_config_template:
+            Path to a user-provided SSH config template file.
+        envs_base_dir:
+            Base directory for environment data.  Falls back to
+            ``SandboxConfig().effective_envs_dir`` when not provided.
         """
-        self._config = config
+        self._project_id = project_id
+        self._ssh_host_dir = Path(ssh_host_dir) if ssh_host_dir else None
+        self._ssh_key_name = ssh_key_name
+        self._ssh_config_template = Path(ssh_config_template) if ssh_config_template else None
+        self._envs_base_dir = Path(envs_base_dir) if envs_base_dir else None
 
     @property
     def key_name(self) -> str:
-        """Return the effective SSH key name for this project."""
-        return effective_ssh_key_name(self._config)
+        """Return the effective SSH key name."""
+        return effective_ssh_key_name(self._project_id, ssh_key_name=self._ssh_key_name)
+
+    def _resolve_envs_base(self) -> Path:
+        """Return the envs base directory, falling back to sandbox defaults."""
+        return self._envs_base_dir or SandboxConfig().effective_envs_dir
 
     def init(
         self,
@@ -70,14 +104,10 @@ class SSHManager:
         key_name: str | None = None,
         force: bool = False,
     ) -> SSHInitResult:
-        """Initialize the shared SSH directory for a project and generate a keypair.
-
-        This prepares the host directory that containers mount read-write at
-        ``/home/dev/.ssh`` and creates an SSH keypair plus a minimal config
-        file if missing.
+        """Initialize the SSH directory and generate a keypair.
 
         Location resolution:
-          - If project.yml defines ``ssh.host_dir``, use that path.
+          - If *ssh_host_dir* was provided, use that path.
           - Otherwise: ``<envs_base>/_ssh-config-<project_id>``
 
         Key name defaults to ``id_<type>_<project_id>`` (e.g. ``id_ed25519_proj``).
@@ -85,14 +115,16 @@ class SSHManager:
         if key_type not in ("ed25519", "rsa"):
             raise SystemExit("Unsupported --key-type. Use 'ed25519' or 'rsa'.")
 
-        project = self._config
-
-        target_dir = project.ssh_host_dir or (get_envs_base_dir() / f"_ssh-config-{project.id}")
+        target_dir = self._ssh_host_dir or (
+            self._resolve_envs_base() / f"_ssh-config-{self._project_id}"
+        )
         target_dir = Path(target_dir).expanduser().resolve()
         ensure_dir_writable(target_dir, "SSH host dir")
 
         if not key_name:
-            key_name = effective_ssh_key_name(project, key_type=key_type)
+            key_name = effective_ssh_key_name(
+                self._project_id, ssh_key_name=self._ssh_key_name, key_type=key_type
+            )
 
         # Reject path-like or reserved key names
         _RESERVED_NAMES = {"config", "known_hosts", "authorized_keys"}
@@ -123,10 +155,12 @@ class SSHManager:
                     )
 
         if force or not priv_path.exists() or not pub_path.exists():
-            self._generate_keypair(key_type, priv_path, pub_path, project.id)
+            self._generate_keypair(key_type, priv_path, pub_path, self._project_id)
 
         if force or not cfg_path.exists():
-            self._render_config(cfg_path, key_name, priv_path, project)
+            self._render_config(
+                cfg_path, key_name, priv_path, self._project_id, self._ssh_config_template
+            )
 
         try:
             _harden_permissions(target_dir, priv_path, pub_path, cfg_path)
@@ -167,15 +201,19 @@ class SSHManager:
 
     @staticmethod
     def _render_config(
-        cfg_path: Path, key_name: str, priv_path: Path, project: ProjectConfig
+        cfg_path: Path,
+        key_name: str,
+        priv_path: Path,
+        project_id: str,
+        config_template: Path | None = None,
     ) -> None:
         """Render the SSH config from a user or packaged template."""
         variables = {
             "KEY_NAME": key_name,
             "IDENTITY_FILE": str(priv_path),
-            "PROJECT_ID": project.id,
+            "PROJECT_ID": project_id,
         }
-        user_config = _try_render_user_template(project, variables)
+        user_config = _try_render_user_template(config_template, variables)
         config_text = (
             user_config if user_config is not None else _try_render_packaged_template(variables)
         )
@@ -195,14 +233,13 @@ class SSHManager:
 # ---------------------------------------------------------------------------
 
 
-def _try_render_user_template(project: ProjectConfig, variables: dict[str, str]) -> str | None:
+def _try_render_user_template(template_path: Path | None, variables: dict[str, str]) -> str | None:
     """Render the user-provided SSH config template, if configured.
 
     Raises ``SystemExit`` if the template path is configured but the file
     is missing or rendering fails — explicit misconfiguration should fail
     fast rather than silently falling back to the packaged template.
     """
-    template_path = getattr(project, "ssh_config_template", None)
     if not template_path:
         return None
     p = Path(template_path)

@@ -11,7 +11,7 @@ import unittest.mock
 from pathlib import Path
 
 from terok.lib.core.projects import load_project
-from terok.lib.sandbox.ssh import SSHManager
+from terok.lib.domain.project import make_ssh_manager
 from tests.test_utils import mock_git_config, write_project
 
 
@@ -50,7 +50,7 @@ class TestSsh:
                 mock_git_config(),
                 unittest.mock.patch("terok.lib.sandbox.ssh.subprocess.run") as run_mock,
             ):
-                result = SSHManager(load_project(project_id)).init(key_name=key_name)
+                result = make_ssh_manager(load_project(project_id)).init(key_name=key_name)
 
             run_mock.assert_not_called()
             config_path = Path(result["config_path"])
@@ -69,7 +69,7 @@ class TestSsh:
                 unittest.mock.patch("terok.lib.sandbox.ssh.subprocess.run") as run_mock,
                 unittest.mock.patch("builtins.print") as print_mock,
             ):
-                SSHManager(load_project(project_id)).init()
+                make_ssh_manager(load_project(project_id)).init()
 
             run_mock.assert_not_called()
             printed_lines = [

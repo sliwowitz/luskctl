@@ -19,13 +19,13 @@ def _patch_init_steps[T](func: Callable[..., T]) -> Callable[..., T]:
     Mock args are injected as: mock_ssh_cls, mock_pause, mock_gen, mock_build, mock_gate_cls,
     mock_load.
     """
-    func = unittest.mock.patch("terok.cli.commands.setup.SSHManager")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.make_ssh_manager")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.maybe_pause_for_ssh_key_registration")(
         func
     )
     func = unittest.mock.patch("terok.cli.commands.setup.generate_dockerfiles")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.build_images")(func)
-    func = unittest.mock.patch("terok.cli.commands.setup.GitGate")(func)
+    func = unittest.mock.patch("terok.cli.commands.setup.make_git_gate")(func)
     func = unittest.mock.patch("terok.cli.commands.setup.load_project")(func)
     return func
 

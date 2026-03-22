@@ -10,13 +10,12 @@ import argparse
 from ...lib.core.projects import load_project
 from ...lib.domain.facade import (
     AUTH_PROVIDERS,
-    GitGate,
-    SSHManager,
     authenticate,
     build_images,
     generate_dockerfiles,
     maybe_pause_for_ssh_key_registration,
 )
+from ...lib.domain.project import make_git_gate, make_ssh_manager
 from ._completers import complete_project_ids as _complete_project_ids, set_completer
 
 
@@ -118,14 +117,14 @@ def dispatch(args: argparse.Namespace) -> bool:
         )
         return True
     if args.cmd == "ssh-init":
-        SSHManager(load_project(args.project_id)).init(
+        make_ssh_manager(load_project(args.project_id)).init(
             key_type=getattr(args, "key_type", "ed25519"),
             key_name=getattr(args, "key_name", None),
             force=getattr(args, "force", False),
         )
         return True
     if args.cmd == "gate-sync":
-        res = GitGate(load_project(args.project_id)).sync(
+        res = make_git_gate(load_project(args.project_id)).sync(
             force_reinit=getattr(args, "force_reinit", False),
         )
         if not res["success"]:
@@ -149,7 +148,7 @@ def cmd_project_init(project_id: str) -> None:
     project = load_project(project_id)
 
     print("==> Initializing SSH...")
-    SSHManager(project).init()
+    make_ssh_manager(project).init()
     maybe_pause_for_ssh_key_registration(project_id)
 
     print("==> Generating Dockerfiles...")
@@ -159,7 +158,7 @@ def cmd_project_init(project_id: str) -> None:
     build_images(project_id)
 
     print("==> Syncing git gate...")
-    res = GitGate(project).sync()
+    res = make_git_gate(project).sync()
     if not res["success"]:
         raise SystemExit(f"Gate sync failed: {', '.join(res['errors'])}")
     print(f"Gate ready at {res['path']}")

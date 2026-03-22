@@ -42,8 +42,7 @@ def _resolve_task(project_id: str, task_id: str) -> tuple[str, Path]:
         ValueError: If the task has never been run (no container exists).
     """
     from ...lib.core.projects import load_project
-    from ...lib.orchestration.tasks import load_task_meta
-    from ...lib.sandbox.runtime import container_name
+    from ...lib.orchestration.tasks import container_name, load_task_meta
 
     project = load_project(project_id)
     meta, _ = load_task_meta(project.id, task_id)

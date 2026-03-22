@@ -17,8 +17,6 @@ from collections.abc import Callable
 from ..lib.core.config import get_envs_base_dir
 from ..lib.core.projects import effective_ssh_key_name, load_project
 from ..lib.domain.facade import (
-    GitGate,
-    SSHManager,
     authenticate,
     build_images,
     delete_project,
@@ -30,6 +28,7 @@ from ..lib.domain.facade import (
     stop_daemon,
     uninstall_systemd_units,
 )
+from ..lib.domain.project import make_git_gate, make_ssh_manager
 from .shell_launch import launch_login
 
 
@@ -170,7 +169,7 @@ class ProjectActionsMixin:
             return
         pid = self.current_project_id
         await self._run_suspended(
-            lambda: SSHManager(load_project(pid)).init(),
+            lambda: make_ssh_manager(load_project(pid)).init(),
             success_msg=f"Initialized SSH dir for {pid}",
         )
 
@@ -210,14 +209,14 @@ class ProjectActionsMixin:
             nonlocal gate_ok
             print(f"=== Full Setup for {pid} ===\n")
             print("Step 1/4: Initializing SSH...")
-            SSHManager(load_project(pid)).init()
+            make_ssh_manager(load_project(pid)).init()
             maybe_pause_for_ssh_key_registration(pid)
             print("\nStep 2/4: Generating Dockerfiles...")
             generate_dockerfiles(pid)
             print("\nStep 3/4: Building images...")
             build_images(pid)
             print("\nStep 4/4: Syncing git gate...")
-            res = GitGate(load_project(pid)).sync()
+            res = make_git_gate(load_project(pid)).sync()
             if not res["success"]:
                 print(f"\nGate sync warnings: {', '.join(res['errors'])}")
             else:
@@ -261,7 +260,7 @@ class ProjectActionsMixin:
         with self.suspend():
             try:
                 print(f"Syncing gate for {project_id}...")
-                result = GitGate(load_project(project_id)).sync()
+                result = make_git_gate(load_project(project_id)).sync()
                 if result["success"]:
                     sync_ok = True
                     if result["created"]:

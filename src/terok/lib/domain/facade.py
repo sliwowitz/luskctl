@@ -68,7 +68,6 @@ from ..sandbox.gate_server import (  # noqa: F401 — re-exported public API
 from ..sandbox.git_gate import (
     GateStalenessInfo,
     GitGate,
-    find_projects_sharing_gate,
 )
 from ..sandbox.shield import (  # noqa: F401 — re-exported public API
     EnvironmentCheck,
@@ -94,6 +93,9 @@ from .project import (  # noqa: F401 — re-exported public API
     DeleteProjectResult,
     Project,
     delete_project,
+    find_projects_sharing_gate,
+    make_git_gate,
+    make_ssh_manager,
 )
 from .project_state import get_project_state, is_task_image_old
 from .task import Task  # noqa: F401 — re-exported public API
@@ -187,6 +189,8 @@ __all__ = [
     # Security setup
     "SSHManager",
     "GitGate",
+    "make_ssh_manager",
+    "make_git_gate",
     # Workflow helpers
     "maybe_pause_for_ssh_key_registration",
     # Auth

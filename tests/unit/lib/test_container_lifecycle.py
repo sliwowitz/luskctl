@@ -16,8 +16,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from terok.lib.orchestration.task_runners import task_restart
-from terok.lib.orchestration.tasks import task_new, task_status, task_stop
-from terok.lib.sandbox.runtime import get_container_state, get_task_container_state
+from terok.lib.orchestration.tasks import get_task_container_state, task_new, task_status, task_stop
+from terok.lib.sandbox.runtime import get_container_state
 from terok.lib.util.yaml import dump as yaml_dump, load as yaml_load
 from tests.test_utils import mock_git_config, project_env
 
@@ -214,11 +214,8 @@ def test_get_task_container_state_returns_none_without_mode() -> None:
 
 def test_get_task_container_state_uses_project_id_and_mode() -> None:
     """Task container lookup resolves the canonical container name."""
-    with (
-        patch("terok.lib.sandbox.runtime.load_project", return_value=SimpleNamespace(id="proj")),
-        patch(
-            "terok.lib.sandbox.runtime.get_container_state", return_value="running"
-        ) as mock_state,
-    ):
-        assert get_task_container_state("ignored", "1", "cli") == "running"
+    with patch(
+        "terok.lib.orchestration.tasks.get_container_state", return_value="running"
+    ) as mock_state:
+        assert get_task_container_state("proj", "1", "cli") == "running"
         mock_state.assert_called_once_with("proj-cli-1")

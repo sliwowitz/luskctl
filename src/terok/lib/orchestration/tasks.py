@@ -29,7 +29,6 @@ from ..core.task_display import (
 )
 from ..core.work_status import read_work_status
 from ..sandbox.runtime import (
-    container_name,
     get_container_state,
     get_project_container_states,
     stop_task_containers,
@@ -46,6 +45,23 @@ from ..util.host_cmd import WORKSPACE_DANGEROUS_DIRNAME
 from ..util.logging_utils import _log_debug
 from ..util.yaml import dump as _yaml_dump, load as _yaml_load
 from .container_exec import container_git_diff
+
+# ---------- Container naming (orchestration policy) ----------
+
+CONTAINER_MODES = ("cli", "web", "run", "toad")
+
+
+def container_name(project_id: str, mode: str, task_id: str) -> str:
+    """Return the canonical container name for a task."""
+    return f"{project_id}-{mode}-{task_id}"
+
+
+def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
+    """Get actual container state for a task (TUI helper)."""
+    if not mode:
+        return None
+    cname = container_name(project_id, mode, task_id)
+    return get_container_state(cname)
 
 
 @dataclass(kw_only=True)
@@ -691,7 +707,8 @@ def _task_delete(project: ProjectConfig, task_id: str) -> None:
         _log_debug(f"task_delete: token revoke failed: {exc}")
 
     _log_debug("task_delete: calling _stop_task_containers")
-    stop_task_containers(project, str(task_id))
+    names = [container_name(project.id, mode, str(task_id)) for mode in CONTAINER_MODES]
+    stop_task_containers(names)
     _log_debug("task_delete: _stop_task_containers returned")
 
     if mode:

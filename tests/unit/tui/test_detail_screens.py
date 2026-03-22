@@ -739,7 +739,7 @@ class TestGateSyncAction:
             mock.patch.dict(
                 action_globals,
                 {
-                    "GitGate": mock.Mock(return_value=fake_gate),
+                    "make_git_gate": mock.Mock(return_value=fake_gate),
                     "load_project": mock.Mock(),
                 },
             ),
@@ -763,7 +763,7 @@ class TestGateSyncAction:
             mock.patch.dict(
                 action_globals,
                 {
-                    "GitGate": mock.Mock(return_value=fake_gate),
+                    "make_git_gate": mock.Mock(return_value=fake_gate),
                     "load_project": mock.Mock(),
                 },
             ),

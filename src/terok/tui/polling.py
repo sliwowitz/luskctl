@@ -183,12 +183,12 @@ class PollingMixin:
         import asyncio
 
         from ..lib.core.projects import load_project
-        from ..lib.sandbox.git_gate import GitGate
+        from ..lib.domain.project import make_git_gate
 
         try:
             # Run blocking call in thread pool
             staleness = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: GitGate(load_project(project_id)).compare_vs_upstream()
+                None, lambda: make_git_gate(load_project(project_id)).compare_vs_upstream()
             )
 
             # Validate project hasn't changed while we were polling
@@ -277,12 +277,12 @@ class PollingMixin:
         import asyncio
 
         from ..lib.core.projects import load_project
-        from ..lib.sandbox.git_gate import GitGate
+        from ..lib.domain.project import make_git_gate
 
         try:
             # Run blocking sync in thread pool
             result = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: GitGate(load_project(project_id)).sync_branches(branches)
+                None, lambda: make_git_gate(load_project(project_id)).sync_branches(branches)
             )
 
             # Validate project hasn't changed
@@ -295,7 +295,7 @@ class PollingMixin:
 
                 # Re-check staleness after sync
                 staleness = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: GitGate(load_project(project_id)).compare_vs_upstream()
+                    None, lambda: make_git_gate(load_project(project_id)).compare_vs_upstream()
                 )
 
                 if project_id == self.current_project_id:

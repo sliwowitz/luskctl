@@ -34,8 +34,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core.config import get_global_section, state_root
-from ..core.paths import runtime_root
+from .config import SandboxConfig
 
 # ---------- Constants ----------
 
@@ -51,19 +50,24 @@ _SOCKET_UNIT = "terok-gate.socket"
 # ---------- Config helpers ----------
 
 
-def _get_port() -> int:
+def _cfg(cfg: SandboxConfig | None = None) -> SandboxConfig:
+    """Return *cfg* or a default :class:`SandboxConfig`."""
+    return cfg or SandboxConfig()
+
+
+def _get_port(cfg: SandboxConfig | None = None) -> int:
     """Return the configured gate server port (default 9418)."""
-    return int(get_global_section("gate_server").get("port", _DEFAULT_PORT))
+    return _cfg(cfg).gate_port
 
 
-def _get_gate_base_path() -> Path:
+def _get_gate_base_path(cfg: SandboxConfig | None = None) -> Path:
     """Return the base path for the gate server (where gate repos live)."""
-    return state_root() / "gate"
+    return _cfg(cfg).gate_base_path
 
 
-def _pid_file() -> Path:
+def _pid_file(cfg: SandboxConfig | None = None) -> Path:
     """Return the path to the PID file for the managed daemon."""
-    return runtime_root() / "gate-server.pid"
+    return _cfg(cfg).pid_file_path
 
 
 def _systemd_unit_dir() -> Path:

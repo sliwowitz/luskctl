@@ -23,22 +23,22 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
-from ..core.config import state_root
+from .config import SandboxConfig
 
 
-def token_file_path() -> Path:
+def token_file_path(cfg: SandboxConfig | None = None) -> Path:
     """Return the path to the shared token file."""
-    return state_root() / "gate" / "tokens.json"
+    return (cfg or SandboxConfig()).token_file_path
 
 
-def create_token(project_id: str, task_id: str) -> str:
+def create_token(project_id: str, task_id: str, cfg: SandboxConfig | None = None) -> str:
     """Generate a 128-bit hex token, persist atomically, and return it.
 
     Uses ``secrets.token_hex(16)`` for cryptographic randomness.
     Atomic write via ``tempfile`` + ``os.replace()``.
     """
     token = secrets.token_hex(16)
-    path = token_file_path()
+    path = token_file_path(cfg)
     with _token_lock(path):
         tokens = _read_tokens(path)
         tokens[token] = {"project": project_id, "task": task_id}

@@ -70,7 +70,7 @@ from ..orchestration.tasks import (
     task_delete,
     task_new,
 )
-from ..sandbox.git_gate import GitGate, find_projects_sharing_gate
+from ..sandbox.git_gate import GitGate
 from ..sandbox.ssh import SSHManager
 from ..util.fs import archive_timestamp, create_archive_file
 from .project_state import get_project_state, is_task_image_old
@@ -92,6 +92,103 @@ def _is_under_terok_root(path: Path) -> bool:
     resolved = path.resolve()
     managed_roots = [config_root(), state_root(), get_envs_base_dir(), build_root()]
     return any(resolved == root or root in resolved.parents for root in managed_roots)
+
+
+# ---------------------------------------------------------------------------
+# Gate sharing validation (multi-project coordination — terok policy)
+# ---------------------------------------------------------------------------
+
+
+def find_projects_sharing_gate(
+    gate_path: Path, exclude_project: str | None = None
+) -> list[tuple[str, str | None]]:
+    """Find all projects configured to use the same gate path.
+
+    Args:
+        gate_path: The gate path to check for
+        exclude_project: Project ID to exclude from results (usually the current project)
+
+    Returns:
+        List of (project_id, upstream_url) tuples for projects sharing this gate
+    """
+    from ..core.projects import list_projects as _list_projects
+
+    gate_path = gate_path.resolve()
+    return [
+        (project.id, project.upstream_url)
+        for project in _list_projects()
+        if project.id != exclude_project and project.gate_path.resolve() == gate_path
+    ]
+
+
+def validate_gate_upstream_match(project_id: str) -> None:
+    """Validate that no other project uses the same gate with a different upstream.
+
+    Raises SystemExit if another project uses the same gate path but has a
+    different upstream_url configured.
+
+    Args:
+        project_id: The project to validate
+    """
+    project = load_project(project_id)
+    sharing = find_projects_sharing_gate(project.gate_path, exclude_project=project_id)
+
+    for other_id, other_url in sharing:
+        if other_url is None or project.upstream_url is None or other_url != project.upstream_url:
+            this_display = (
+                project.upstream_url if project.upstream_url is not None else "<not configured>"
+            )
+            other_display = other_url if other_url is not None else "<not configured>"
+            missing_note = ""
+            if other_url is None or project.upstream_url is None:
+                missing_note = (
+                    "\nNote: One or more projects sharing this gate do not have an "
+                    "upstream_url configured in project.yml.\n"
+                )
+            raise SystemExit(
+                f"Gate path conflict detected!\n"
+                f"\n"
+                f"  Gate path: {project.gate_path}\n"
+                f"\n"
+                f"  This project ({project_id}):\n"
+                f"    upstream_url: {this_display}\n"
+                f"\n"
+                f"  Conflicting project ({other_id}):\n"
+                f"    upstream_url: {other_display}\n"
+                f"\n"
+                f"Projects sharing a gate must have the same upstream_url.\n"
+                f"Either change the gate.path in one project's project.yml,\n"
+                f"or ensure both projects point to the same upstream repository.\n"
+                f"{missing_note}"
+            )
+
+
+def make_git_gate(config: ProjectConfig) -> GitGate:
+    """Construct a :class:`GitGate` from a :class:`ProjectConfig` (adapter factory).
+
+    Injects ``validate_gate_upstream_match`` as the gate validation callback.
+    """
+    return GitGate(
+        project_id=config.id,
+        gate_path=config.gate_path,
+        upstream_url=config.upstream_url,
+        default_branch=config.default_branch,
+        ssh_host_dir=config.ssh_host_dir,
+        ssh_key_name=config.ssh_key_name,
+        envs_base_dir=get_envs_base_dir(),
+        validate_gate_fn=validate_gate_upstream_match,
+    )
+
+
+def make_ssh_manager(config: ProjectConfig) -> SSHManager:
+    """Construct an :class:`SSHManager` from a :class:`ProjectConfig` (adapter factory)."""
+    return SSHManager(
+        project_id=config.id,
+        ssh_host_dir=config.ssh_host_dir,
+        ssh_key_name=config.ssh_key_name,
+        ssh_config_template=config.ssh_config_template,
+        envs_base_dir=get_envs_base_dir(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -411,14 +508,14 @@ class Project:
     def gate(self) -> GitGate:
         """Return the project-scoped git gate manager (lazy-initialized)."""
         if self._gate is None:
-            self._gate = GitGate(self._config)
+            self._gate = make_git_gate(self._config)
         return self._gate
 
     @property
     def ssh(self) -> SSHManager:
         """Return the project-scoped SSH manager (lazy-initialized)."""
         if self._ssh is None:
-            self._ssh = SSHManager(self._config)
+            self._ssh = make_ssh_manager(self._config)
         return self._ssh
 
     # --- Agent config ---

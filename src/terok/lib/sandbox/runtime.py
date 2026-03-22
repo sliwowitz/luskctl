@@ -4,30 +4,22 @@
 """Container runtime gateway wrapping the Podman CLI.
 
 Provides module-level functions for container lifecycle operations
-(naming, state queries, GPU args, log streaming, etc.).
+(state queries, GPU args, log streaming, etc.).
+
+All functions accept plain parameters (strings, paths) — no terok-specific
+types like ``ProjectConfig``.  Container naming is orchestration policy and
+lives in ``orchestration.tasks`` / ``orchestration.task_runners``.
 """
 
 import subprocess
 from collections.abc import Callable
-from typing import Any
-
-from ..core.projects import ProjectConfig, load_project
-
-# ---------- Constants ----------
-
-CONTAINER_MODES = ("cli", "web", "run")
-
+from pathlib import Path
 
 # ---------- Public functions ----------
 
 
-def container_name(project_id: str, mode: str, task_id: str) -> str:
-    """Return the canonical container name for a task."""
-    return f"{project_id}-{mode}-{task_id}"
-
-
-def get_project_container_states(project_id: str) -> dict[str, str]:
-    """Return ``{container_name: state}`` for all containers matching *project_id*.
+def get_project_container_states(name_prefix: str) -> dict[str, str]:
+    """Return ``{container_name: state}`` for all containers matching *name_prefix*.
 
     Uses a single ``podman ps -a`` call with a name filter instead of
     per-container ``podman inspect`` calls.  Returns an empty dict when
@@ -40,7 +32,7 @@ def get_project_container_states(project_id: str) -> dict[str, str]:
                 "ps",
                 "-a",
                 "--filter",
-                f"name=^{project_id}-",
+                f"name=^{name_prefix}-",
                 "--format",
                 "{{.Names}} {{.State}}",
                 "--no-trunc",
@@ -85,16 +77,15 @@ def is_container_running(cname: str) -> bool:
     return out.lower() == "true"
 
 
-def stop_task_containers(project: Any, task_id: str) -> None:
-    """Best-effort ``podman rm -f`` of all mode containers for a task.
+def stop_task_containers(container_names: list[str]) -> None:
+    """Best-effort ``podman rm -f`` of the given containers.
 
     Ignores all errors so that task deletion succeeds even when podman is
     absent or the containers are already gone.
     """
     from ..util.logging_utils import _log_debug
 
-    names = [container_name(project.id, mode, task_id) for mode in CONTAINER_MODES]
-    for name in names:
+    for name in container_names:
         try:
             _log_debug(f"stop_containers: podman rm -f {name} (start)")
             subprocess.run(
@@ -102,19 +93,23 @@ def stop_task_containers(project: Any, task_id: str) -> None:
                 check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                timeout=120,
             )
             _log_debug(f"stop_containers: podman rm -f {name} (done)")
         except Exception:
             pass
 
 
-def gpu_run_args(project: "ProjectConfig") -> list[str]:
-    """Return additional ``podman run`` args to enable NVIDIA GPU if configured."""
+def gpu_run_args(project_root: Path) -> list[str]:
+    """Return additional ``podman run`` args to enable NVIDIA GPU if configured.
+
+    Reads ``run.gpus`` from ``project.yml`` in *project_root*.
+    """
     from terok.lib.util.yaml import load as _yaml_load
 
     enabled = False
     try:
-        proj_cfg = _yaml_load((project.root / "project.yml").read_text()) or {}
+        proj_cfg = _yaml_load((project_root / "project.yml").read_text()) or {}
         run_cfg = proj_cfg.get("run", {}) or {}
         gpus = run_cfg.get("gpus")
         if isinstance(gpus, str):
@@ -244,15 +239,3 @@ def wait_for_exit(cname: str, timeout_sec: float | None = None) -> int:
         return 124
     except (FileNotFoundError, ValueError):
         return 1
-
-
-def get_task_container_state(project_id: str, task_id: str, mode: str | None) -> str | None:
-    """Get actual container state for a task (TUI helper)."""
-    if not mode:
-        return None
-    try:
-        project = load_project(project_id)
-    except (SystemExit, ValueError):
-        return None
-    cname = container_name(project.id, mode, task_id)
-    return get_container_state(cname)

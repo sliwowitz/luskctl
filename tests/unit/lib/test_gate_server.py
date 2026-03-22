@@ -84,7 +84,7 @@ def patched_install_env(unit_dir: Path) -> Iterator[None]:
             return_value=GATE_BASE_PATH,
         ),
         unittest.mock.patch(
-            "terok.lib.sandbox.gate_tokens.state_root",
+            "terok.lib.sandbox.config._state_root",
             return_value=STATE_ROOT_PATH,
         ),
     ):
@@ -105,7 +105,7 @@ def patched_daemon_paths(base: Path) -> Iterator[Path]:
             return_value=pid_file,
         ),
         unittest.mock.patch(
-            "terok.lib.sandbox.gate_tokens.state_root",
+            "terok.lib.sandbox.config._state_root",
             return_value=base,
         ),
     ):

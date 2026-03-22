@@ -33,12 +33,13 @@ from ..lib.domain.facade import (
 from ..lib.instrumentation.agents import parse_md_agent
 from ..lib.orchestration.autopilot import wait_for_container_exit
 from ..lib.orchestration.tasks import (
+    container_name,
     generate_task_name,
     get_login_command,
     get_workspace_git_diff,
     mark_task_deleting,
 )
-from ..lib.sandbox.runtime import container_name, get_container_state
+from ..lib.sandbox.runtime import get_container_state
 from .clipboard import copy_to_clipboard_detailed
 from .screens import (
     AgentSelectionScreen,

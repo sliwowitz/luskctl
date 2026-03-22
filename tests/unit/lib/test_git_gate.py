@@ -12,12 +12,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from terok.lib.core.projects import load_project
+from terok.lib.domain.project import (
+    find_projects_sharing_gate,
+    make_git_gate,
+    validate_gate_upstream_match,
+)
 from terok.lib.sandbox.git_gate import (
-    GitGate,
     _get_gate_branch_head,
     _get_upstream_head,
-    find_projects_sharing_gate,
-    validate_gate_upstream_match,
 )
 from tests.test_utils import project_env, write_project
 
@@ -82,7 +84,7 @@ def test_sync_project_gate_ssh_requires_config() -> None:
         ),
         pytest.raises(SystemExit),
     ):
-        GitGate(load_project(project_id)).sync()
+        make_git_gate(load_project(project_id)).sync()
 
 
 def test_sync_project_gate_https_clone() -> None:
@@ -104,7 +106,7 @@ def test_sync_project_gate_https_clone() -> None:
         with patch(
             "terok.lib.sandbox.git_gate.subprocess.run", side_effect=run_side_effect
         ) as run_mock:
-            result = GitGate(load_project(project_id)).sync()
+            result = make_git_gate(load_project(project_id)).sync()
 
     assert result == {
         "path": str(gate_dir),
@@ -147,7 +149,7 @@ def test_last_commit(with_gate: bool, run_result: MagicMock | None, expected: di
         project_id=project_id,
         with_gate=with_gate,
     ):
-        gate = GitGate(load_project(project_id))
+        gate = make_git_gate(load_project(project_id))
         if run_result is None:
             assert gate.last_commit() is None
         else:
@@ -230,11 +232,12 @@ def test_get_upstream_head(
     """Upstream HEAD lookup handles success, missing config, and network failures."""
     with project_env(yaml_text, project_id=project_id):
         project = load_project(project_id)
-        if run_behavior is None:
-            assert _get_upstream_head(project, branch=branch) is None
+        if project.upstream_url is None or run_behavior is None:
+            assert expected is None
         else:
+            effective_branch = branch or project.default_branch
             with patch("terok.lib.sandbox.git_gate.subprocess.run", **run_behavior):
-                assert _get_upstream_head(project, branch=branch) == expected
+                assert _get_upstream_head(project.upstream_url, effective_branch, {}) == expected
 
 
 @pytest.mark.parametrize(
@@ -263,11 +266,12 @@ def test_get_gate_branch_head(
     project_id = "proj-gate-head"
     with project_env(git_project_yaml(project_id), project_id=project_id, with_gate=with_gate):
         project = load_project(project_id)
+        effective_branch = branch or project.default_branch
         if run_result is None:
-            assert _get_gate_branch_head(project, branch=branch) is None
+            assert _get_gate_branch_head(project.gate_path, effective_branch, {}) is None
         else:
             with patch("terok.lib.sandbox.git_gate.subprocess.run", return_value=run_result):
-                assert _get_gate_branch_head(project, branch=branch) == expected
+                assert _get_gate_branch_head(project.gate_path, effective_branch, {}) == expected
 
 
 @pytest.mark.parametrize(
@@ -377,14 +381,26 @@ def test_compare_gate_vs_upstream(
 ) -> None:
     """Gate staleness comparison reports sync, stale, and error states."""
     project_id = "proj-compare"
+
+    def _range_side_effect(_gate_dir, from_ref, to_ref, _env):
+        """Return behind or ahead count depending on ref order."""
+        if gate_head and upstream_info:
+            if from_ref == gate_head and to_ref == upstream_info["commit_hash"]:
+                return count_behind
+            if from_ref == upstream_info["commit_hash"] and to_ref == gate_head:
+                return count_ahead
+        return None
+
     with project_env(git_project_yaml(project_id), project_id=project_id, with_gate=with_gate):
         with (
             patch("terok.lib.sandbox.git_gate._get_gate_branch_head", return_value=gate_head),
             patch("terok.lib.sandbox.git_gate._get_upstream_head", return_value=upstream_info),
-            patch("terok.lib.sandbox.git_gate._count_commits_behind", return_value=count_behind),
-            patch("terok.lib.sandbox.git_gate._count_commits_ahead", return_value=count_ahead),
+            patch(
+                "terok.lib.sandbox.git_gate._count_commits_range",
+                side_effect=_range_side_effect,
+            ),
         ):
-            result = GitGate(load_project(project_id)).compare_vs_upstream()
+            result = make_git_gate(load_project(project_id)).compare_vs_upstream()
 
     assert result.branch == "main"
     for key, value in expected.items():
@@ -444,7 +460,7 @@ def test_sync_branches(
     """Branch sync reports success, initialization problems, and fetch failures."""
     project_id = "proj-sync-branches"
     with project_env(git_project_yaml(project_id), project_id=project_id, with_gate=with_gate):
-        gate = GitGate(load_project(project_id))
+        gate = make_git_gate(load_project(project_id))
         if run_behavior is None:
             assert gate.sync_branches(branches) == expected
         else:
@@ -477,7 +493,7 @@ def test_sync_branches_rejects_mismatched_upstream() -> None:
         )
 
         with pytest.raises(SystemExit, match="Gate path conflict"):
-            GitGate(load_project("new-proj")).sync_branches()
+            make_git_gate(load_project("new-proj")).sync_branches()
 
 
 def test_find_projects_sharing_gate() -> None:
@@ -591,4 +607,4 @@ def test_sync_project_gate_rejects_mismatched_upstream() -> None:
         )
 
         with pytest.raises(SystemExit, match="Gate path conflict"):
-            GitGate(load_project("new-proj")).sync()
+            make_git_gate(load_project("new-proj")).sync()
