@@ -18,8 +18,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
-
-from terok.gate.server import (
+from terok_sandbox.gate.server import (
     _ROUTE,
     TokenStore,
     _extract_basic_auth_token,
@@ -28,6 +27,7 @@ from terok.gate.server import (
     _parse_content_length,
     _validate_token_data,
 )
+
 from tests.testfs import NONEXISTENT_TOKENS_PATH
 from tests.testnet import GATE_PORT, LOCALHOST_PEER
 
@@ -343,7 +343,7 @@ class TestAuth:
         assert cgi_env["GIT_CONFIG_VALUE_0"] == "/dev/null"
         assert "GIT_PROJECT_ROOT" in cgi_env
 
-    @unittest.mock.patch("terok.gate.server._logger")
+    @unittest.mock.patch("terok_sandbox.gate.server._logger")
     @unittest.mock.patch("subprocess.Popen")
     def test_cgi_stderr_is_logged(
         self,
@@ -420,7 +420,7 @@ class TestDetach:
 
     def test_child_calls_serve_forever(self) -> None:
         """Child process (fork returns 0) should call serve_forever."""
-        from terok.gate.server import _serve_daemon
+        from terok_sandbox.gate.server import _serve_daemon
 
         with tempfile.TemporaryDirectory() as td:
             mock_server = unittest.mock.Mock()
@@ -428,15 +428,15 @@ class TestDetach:
 
             with (
                 unittest.mock.patch(
-                    "terok.gate.server._ThreadingHTTPServer",
+                    "terok_sandbox.gate.server._ThreadingHTTPServer",
                     return_value=mock_server,
                 ),
-                unittest.mock.patch("terok.gate.server.os.fork", return_value=0),
-                unittest.mock.patch("terok.gate.server.signal.signal") as mock_signal,
-                unittest.mock.patch("terok.gate.server.os.setsid") as mock_setsid,
-                unittest.mock.patch("terok.gate.server.os.open", return_value=3),
-                unittest.mock.patch("terok.gate.server.os.dup2"),
-                unittest.mock.patch("terok.gate.server.os.close"),
+                unittest.mock.patch("terok_sandbox.gate.server.os.fork", return_value=0),
+                unittest.mock.patch("terok_sandbox.gate.server.signal.signal") as mock_signal,
+                unittest.mock.patch("terok_sandbox.gate.server.os.setsid") as mock_setsid,
+                unittest.mock.patch("terok_sandbox.gate.server.os.open", return_value=3),
+                unittest.mock.patch("terok_sandbox.gate.server.os.dup2"),
+                unittest.mock.patch("terok_sandbox.gate.server.os.close"),
             ):
                 store = TokenStore(Path(td) / "tokens.json")
                 with pytest.raises(SystemExit):
@@ -446,15 +446,15 @@ class TestDetach:
             mock_signal.assert_called_once()
             mock_server.serve_forever.assert_called_once()
 
-    @unittest.mock.patch("terok.gate.server._ThreadingHTTPServer")
-    @unittest.mock.patch("terok.gate.server.os.fork", return_value=42)
+    @unittest.mock.patch("terok_sandbox.gate.server._ThreadingHTTPServer")
+    @unittest.mock.patch("terok_sandbox.gate.server.os.fork", return_value=42)
     def test_parent_writes_pid_file(
         self,
         _mock_fork: unittest.mock.Mock,
         _mock_server_class: unittest.mock.Mock,
     ) -> None:
         """Parent process (fork returns child PID) should write PID file and exit."""
-        from terok.gate.server import _serve_daemon
+        from terok_sandbox.gate.server import _serve_daemon
 
         with tempfile.TemporaryDirectory() as td:
             pid_file = Path(td) / "gate.pid"

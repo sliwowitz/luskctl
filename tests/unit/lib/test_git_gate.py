@@ -104,7 +104,7 @@ def test_sync_project_gate_https_clone() -> None:
             return git_result(returncode=1)
 
         with patch(
-            "terok.lib.sandbox.git_gate.subprocess.run", side_effect=run_side_effect
+            "terok_sandbox.git_gate.subprocess.run", side_effect=run_side_effect
         ) as run_mock:
             result = make_git_gate(load_project(project_id)).sync()
 
@@ -153,7 +153,7 @@ def test_last_commit(with_gate: bool, run_result: MagicMock | None, expected: di
         if run_result is None:
             assert gate.last_commit() is None
         else:
-            with patch("terok.lib.sandbox.git_gate.subprocess.run", return_value=run_result):
+            with patch("terok_sandbox.git_gate.subprocess.run", return_value=run_result):
                 assert gate.last_commit() == expected
 
 
@@ -236,7 +236,7 @@ def test_get_upstream_head(
             assert expected is None
         else:
             effective_branch = branch or project.default_branch
-            with patch("terok.lib.sandbox.git_gate.subprocess.run", **run_behavior):
+            with patch("terok_sandbox.git_gate.subprocess.run", **run_behavior):
                 assert _get_upstream_head(project.upstream_url, effective_branch, {}) == expected
 
 
@@ -270,7 +270,7 @@ def test_get_gate_branch_head(
         if run_result is None:
             assert _get_gate_branch_head(project.gate_path, effective_branch, {}) is None
         else:
-            with patch("terok.lib.sandbox.git_gate.subprocess.run", return_value=run_result):
+            with patch("terok_sandbox.git_gate.subprocess.run", return_value=run_result):
                 assert _get_gate_branch_head(project.gate_path, effective_branch, {}) == expected
 
 
@@ -393,10 +393,10 @@ def test_compare_gate_vs_upstream(
 
     with project_env(git_project_yaml(project_id), project_id=project_id, with_gate=with_gate):
         with (
-            patch("terok.lib.sandbox.git_gate._get_gate_branch_head", return_value=gate_head),
-            patch("terok.lib.sandbox.git_gate._get_upstream_head", return_value=upstream_info),
+            patch("terok_sandbox.git_gate._get_gate_branch_head", return_value=gate_head),
+            patch("terok_sandbox.git_gate._get_upstream_head", return_value=upstream_info),
             patch(
-                "terok.lib.sandbox.git_gate._count_commits_range",
+                "terok_sandbox.git_gate._count_commits_range",
                 side_effect=_range_side_effect,
             ),
         ):
@@ -464,7 +464,7 @@ def test_sync_branches(
         if run_behavior is None:
             assert gate.sync_branches(branches) == expected
         else:
-            with patch("terok.lib.sandbox.git_gate.subprocess.run", **run_behavior):
+            with patch("terok_sandbox.git_gate.subprocess.run", **run_behavior):
                 assert gate.sync_branches(branches) == expected
 
 

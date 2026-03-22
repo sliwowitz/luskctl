@@ -326,64 +326,56 @@ depends_on = [
 # ·· isolation ··  Container runtime, shield, gate, SSH
 #
 
-# Sandbox path resolution (vendored, zero internal deps)
+# All sandbox modules are thin re-export shims — real code lives in terok-sandbox package.
+# Internal deps removed; each shim only imports from the external terok_sandbox package.
+
+# Sandbox path resolution (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.paths"
 layer = "sandbox"
 depends_on = []
 
-# Sandbox configuration dataclass
+# Sandbox configuration dataclass (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.config"
 layer = "sandbox"
-depends_on = ["terok.lib.sandbox.paths"]
+depends_on = []
 
-# Container state, GPU args, log streaming
+# Container state, GPU args, log streaming (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.runtime"
 layer = "sandbox"
-depends_on = ["terok.lib.util.logging_utils", "terok.lib.util.yaml"]
+depends_on = []
 
-# Shield egress firewall adapter
+# Shield egress firewall adapter (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.shield"
 layer = "sandbox"
-depends_on = ["terok.lib.sandbox.config"]
+depends_on = []
 
-# Gate server lifecycle management
+# Gate server lifecycle management (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.gate_server"
 layer = "sandbox"
-depends_on = ["terok.lib.sandbox.config", "terok.lib.sandbox.gate_tokens", "terok.lib.util.template_utils", "terok.gate"]
+depends_on = []
 
-# Gate token CRUD
+# Gate token CRUD (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.gate_tokens"
 layer = "sandbox"
-depends_on = ["terok.lib.sandbox.config"]
-
-# Standalone HTTP gate server (zero terok imports)
-[[modules]]
-path = "terok.gate"
-layer = "sandbox"
 depends_on = []
-utility = true
 
-# SSH key management
+# SSH key management (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.ssh"
 layer = "sandbox"
-depends_on = [
-    "terok.lib.sandbox.config",
-    "terok.lib.util.fs",
-    "terok.lib.util.template_utils",
-]
+depends_on = []
 
-# Git gate sync & validation
+# Git gate sync & validation (re-export shim)
 [[modules]]
 path = "terok.lib.sandbox.git_gate"
 layer = "sandbox"
-depends_on = ["terok.lib.sandbox.config", "terok.lib.sandbox.ssh"]
+depends_on = []
 
 # ── CORE LAYER ────────────────────────────────────────────────────
 #

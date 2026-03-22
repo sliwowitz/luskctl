@@ -121,7 +121,7 @@ def test_shield_state_is_reexported() -> None:
         pytest.param(pre_start, "pre_start", ["--network", "hook-net"], id="pre-start"),
     ],
 )
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_shield_functions_delegate_to_per_task_shield(
     mock_make: MagicMock,
     func: Callable[..., object],
@@ -143,7 +143,7 @@ def test_shield_functions_delegate_to_per_task_shield(
         assert result == expected
 
 
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_shield_down_allow_all(mock_make: MagicMock) -> None:
     """The ``down`` wrapper passes ``allow_all=True`` when requested."""
     mock_shield = make_mock_shield()
@@ -176,7 +176,7 @@ def test_status_custom_config() -> None:
 
 
 @pytest.mark.parametrize("func", [down, up], ids=["down", "up"])
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_bypass_makes_down_and_up_noops(
     mock_make: MagicMock,
     func: Callable[..., object],
@@ -195,7 +195,7 @@ def test_bypass_pre_start_returns_empty_with_warning() -> None:
     assert any(_BYPASS_WARNING in str(item.message) for item in caught)
 
 
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_bypass_state_still_queries_real_shield(
     mock_make: MagicMock,
 ) -> None:
@@ -225,7 +225,7 @@ def test_status_includes_bypass_flag_only_when_active(
     assert "profiles" in result
 
 
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_check_environment_forwards_result(mock_make: MagicMock) -> None:
     """Environment checking delegates to ``Shield.check_environment``."""
     expected = EnvironmentCheck(ok=True, health="ok", podman_version=(5, 6, 0))
@@ -246,14 +246,14 @@ def test_check_environment_bypass_returns_synthetic_result() -> None:
     assert any("bypass" in issue for issue in result.issues)
 
 
-@patch("terok.lib.sandbox.shield.make_shield")
+@patch("terok_sandbox.shield.make_shield")
 def test_pre_start_converts_shield_needs_setup_to_system_exit(mock_make: MagicMock) -> None:
     """``ShieldNeedsSetup`` is converted into a user-facing setup hint."""
     mock_shield = make_mock_shield()
     mock_shield.pre_start.side_effect = ShieldNeedsSetup("hooks not installed")
     mock_make.return_value = mock_shield
 
-    with pytest.raises(SystemExit, match="terokctl shield setup"):
+    with pytest.raises(SystemExit, match="shield setup"):
         pre_start("ctr", MOCK_TASK_DIR)
 
 
@@ -270,7 +270,7 @@ def test_run_setup(
     expected_call: dict[str, bool] | None,
 ) -> None:
     """Shield setup handles usage, user, and root installation paths."""
-    with patch("terok.lib.sandbox.shield.setup_hooks_direct") as mock_direct:
+    with patch("terok_sandbox.shield.setup_hooks_direct") as mock_direct:
         if expected_call is None:
             with pytest.raises(SystemExit, match="--root"):
                 run_setup(**kwargs)
@@ -287,9 +287,9 @@ def test_run_setup(
         pytest.param(True, True, False, id="root-mode"),
     ],
 )
-@patch("terok.lib.sandbox.shield.system_hooks_dir")
-@patch("terok.lib.sandbox.shield.ensure_containers_conf_hooks_dir")
-@patch("terok.lib.sandbox.shield.setup_global_hooks")
+@patch("terok_sandbox.shield.system_hooks_dir")
+@patch("terok_sandbox.shield.ensure_containers_conf_hooks_dir")
+@patch("terok_sandbox.shield.setup_global_hooks")
 def test_setup_hooks_direct(
     mock_setup: MagicMock,
     mock_conf: MagicMock,
