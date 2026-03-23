@@ -117,7 +117,7 @@ def _bypass_network_args(gate_port: int) -> list[str]:
         ]
     return [
         "--network",
-        f"pasta:-t,auto,-u,auto,-T,{gate_port},-U,auto",
+        f"pasta:-T,{gate_port}",
         "--add-host",
         f"host.containers.internal:{_LOCALHOST}",
     ]
@@ -289,6 +289,8 @@ def _print_detached_summary(summary: DetachedSummary) -> None:
 def _maybe_drop_shield(project: ProjectConfig, cname: str, task_dir: Path) -> None:
     """Best-effort shield drop if ``shield.drop_on_task_start`` is enabled."""
     if not project.shield_drop_on_task_start:
+        return
+    if get_shield_bypass_firewall_no_protection():
         return
     try:
         _shield_down_impl(cname, task_dir)
