@@ -117,7 +117,7 @@ def _bypass_network_args(gate_port: int) -> list[str]:
         ]
     return [
         "--network",
-        f"pasta:-T,{gate_port}",
+        f"pasta:-t,auto,-u,auto,-T,{gate_port},-U,auto",
         "--add-host",
         f"host.containers.internal:{_LOCALHOST}",
     ]
