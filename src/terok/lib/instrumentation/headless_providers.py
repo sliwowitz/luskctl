@@ -34,8 +34,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from ..core.project_model import ProjectConfig
-
 
 @dataclass(frozen=True)
 class OpenCodeProviderConfig:
@@ -394,17 +392,17 @@ def collect_all_auto_approve_env() -> dict[str, str]:
     return merged
 
 
-def get_provider(name: str | None, project: ProjectConfig) -> HeadlessProvider:
+def get_provider(name: str | None, *, default_agent: str | None = None) -> HeadlessProvider:
     """Resolve a provider name to a ``HeadlessProvider``.
 
     Resolution order:
       1. Explicit *name* if given
-      2. ``project.default_agent``
+      2. *default_agent* (from project config)
       3. ``"claude"`` (ultimate fallback)
 
     Raises ``SystemExit`` if the resolved name is not in the registry.
     """
-    resolved = name or project.default_agent or "claude"
+    resolved = name or default_agent or "claude"
     provider = HEADLESS_PROVIDERS.get(resolved)
     if provider is None:
         valid = ", ".join(sorted(HEADLESS_PROVIDERS))
@@ -457,7 +455,6 @@ class WrapperConfig:
     """Groups parameters for generating the Claude shell wrapper."""
 
     has_agents: bool
-    project: ProjectConfig
     has_instructions: bool = False
 
 
@@ -648,7 +645,6 @@ def _build_generic_command(
 
 def generate_agent_wrapper(
     provider: HeadlessProvider,
-    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -675,13 +671,12 @@ def generate_agent_wrapper(
     if provider.name == "claude":
         if claude_wrapper_fn is None:
             raise ValueError("claude_wrapper_fn is required for Claude provider")
-        return claude_wrapper_fn(WrapperConfig(has_agents=has_agents, project=project))
+        return claude_wrapper_fn(WrapperConfig(has_agents=has_agents))
 
-    return _generate_generic_wrapper(provider, project)
+    return _generate_generic_wrapper(provider)
 
 
 def generate_all_wrappers(
-    project: ProjectConfig,
     has_agents: bool,
     *,
     claude_wrapper_fn: Callable[[WrapperConfig], str] | None = None,
@@ -700,7 +695,6 @@ def generate_all_wrappers(
     for provider in HEADLESS_PROVIDERS.values():
         section = generate_agent_wrapper(
             provider,
-            project,
             has_agents,
             claude_wrapper_fn=claude_wrapper_fn,
         )
@@ -708,7 +702,94 @@ def generate_all_wrappers(
     return "\n".join(sections)
 
 
-def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig) -> str:
+def _auto_approve_block(provider: HeadlessProvider) -> list[str]:
+    """Emit bash lines for auto-approve flag injection (Codex only today)."""
+    if not provider.auto_approve_flags:
+        return []
+    lines = ["    local _approve_args=()"]
+    lines.append('    if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then')
+    for flag in provider.auto_approve_flags:
+        lines.append(f"        _approve_args+=({shlex.quote(flag)})")
+    lines.append("    fi")
+    return lines
+
+
+def _opencode_plugin_block(provider: HeadlessProvider) -> list[str]:
+    """Emit bash lines for OpenCode session plugin symlink setup."""
+    if not (provider.session_file and provider.uses_opencode_instructions):
+        return []
+    if provider.opencode_config is not None:
+        plugin_dir = f"$HOME/{provider.opencode_config.config_dir}/opencode/plugins"
+    else:
+        plugin_dir = "$HOME/.config/opencode/plugins"
+    return [
+        "    # Ensure OpenCode session plugin is installed",
+        "    local _plugin_src=/usr/local/share/terok/opencode-session-plugin.mjs",
+        f"    local _plugin_dir={plugin_dir}",
+        '    if [ -f "$_plugin_src" ]; then',
+        '        mkdir -p "$_plugin_dir"',
+        '        ln -sf "$_plugin_src" "$_plugin_dir/terok-session.mjs"',
+        "    fi",
+    ]
+
+
+def _session_resume_block(provider: HeadlessProvider, session_path: str | None) -> list[str]:
+    """Emit bash lines for session resume arg injection."""
+    if not (session_path and provider.resume_flag):
+        return []
+    return [
+        "    local _resume_args=()",
+        f"    if [ -s {session_path} ] && \\",
+        '       { [ -n "$_timeout" ] || [ $# -eq 0 ]; }; then',
+        f'        _resume_args+=({provider.resume_flag} "$(cat {session_path})")',
+        "    fi",
+    ]
+
+
+def _codex_instr_block(provider: HeadlessProvider) -> list[str]:
+    """Emit bash lines for Codex model_instructions_file injection."""
+    if provider.name != "codex":
+        return []
+    return [
+        "    local _instr_args=()",
+        "    [ -f /home/dev/.terok/instructions.md ] && \\",
+        "        _instr_args+=(-c 'model_instructions_file=\"/home/dev/.terok/instructions.md\"')",
+    ]
+
+
+def _vibe_capture_fn(provider: HeadlessProvider, session_path: str | None) -> list[str]:
+    """Emit bash lines for Vibe post-run session capture helper."""
+    if not (provider.name == "vibe" and session_path):
+        return []
+    return [
+        "    _terok_capture_vibe_session() {",
+        '        python3 -c "',
+        "import json, os, glob",
+        "files = sorted(glob.glob(os.path.expanduser('~/.vibe/logs/session/session_*/meta.json')),",
+        "               key=os.path.getmtime, reverse=True)",
+        "if files:",
+        "    with open(files[0]) as f:",
+        "        sid = json.load(f).get('session_id', '')",
+        "    if sid:",
+        "        print(sid)",
+        f'" > {session_path} 2>/dev/null || true',
+        "    }",
+    ]
+
+
+def _extra_args_expansion(provider: HeadlessProvider, session_path: str | None) -> str:
+    """Build the extra-args shell expansions between the binary and ``"$@"``."""
+    parts: list[str] = []
+    if provider.auto_approve_flags:
+        parts.append('"${_approve_args[@]}"')
+    if session_path and provider.resume_flag:
+        parts.append('"${_resume_args[@]}"')
+    if provider.name == "codex":
+        parts.append('"${_instr_args[@]}"')
+    return (" " + " ".join(parts)) if parts else ""
+
+
+def _generate_generic_wrapper(provider: HeadlessProvider) -> str:
     """Generate a shell wrapper for non-Claude providers.
 
     Sets git identity env vars and wraps the binary with optional timeout
@@ -727,6 +808,8 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
     author_name = shlex.quote(provider.git_author_name)
     author_email = shlex.quote(provider.git_author_email)
     binary = provider.binary
+    session_path = f"/home/dev/.terok/{provider.session_file}" if provider.session_file else None
+    extra = _extra_args_expansion(provider, session_path)
 
     lines = [
         "# Generated by terok",
@@ -743,107 +826,30 @@ def _generate_generic_wrapper(provider: HeadlessProvider, project: ProjectConfig
         "        . /usr/local/share/terok/terok-env-git-identity.sh",
     ]
 
-    # Permission mode: most agents use container-level env vars or /etc/
-    # config files.  Codex has no env var or managed config, so it needs
-    # CLI flags injected by the wrapper.
-    if provider.auto_approve_flags:
-        lines.append("    local _approve_args=()")
-        lines.append('    if [[ "${TEROK_UNRESTRICTED:-}" == "1" ]]; then')
-        for flag in provider.auto_approve_flags:
-            lines.append(f"        _approve_args+=({shlex.quote(flag)})")
-        lines.append("    fi")
+    lines.extend(_auto_approve_block(provider))
+    lines.extend(_opencode_plugin_block(provider))
+    lines.extend(_session_resume_block(provider, session_path))
+    lines.extend(_codex_instr_block(provider))
+    lines.extend(_vibe_capture_fn(provider, session_path))
 
-    # OpenCode session plugin setup for OpenCode-based providers.
-    if provider.session_file and provider.uses_opencode_instructions:
-        if provider.opencode_config is not None:
-            plugin_dir = f"$HOME/{provider.opencode_config.config_dir}/opencode/plugins"
-        else:
-            plugin_dir = "$HOME/.config/opencode/plugins"
-        lines.append("    # Ensure OpenCode session plugin is installed")
-        lines.append("    local _plugin_src=/usr/local/share/terok/opencode-session-plugin.mjs")
-        lines.append(f"    local _plugin_dir={plugin_dir}")
-        lines.append('    if [ -f "$_plugin_src" ]; then')
-        lines.append('        mkdir -p "$_plugin_dir"')
-        lines.append('        ln -sf "$_plugin_src" "$_plugin_dir/terok-session.mjs"')
-        lines.append("    fi")
-
-    # Session resume support for providers with session_file.
-    # Resume args are only injected in headless mode (--terok-timeout present)
-    # or on bare interactive launch (no user args — convenience for container
-    # re-entry).  When the user provides their own args, passthrough is
-    # transparent.
-    session_path = f"/home/dev/.terok/{provider.session_file}" if provider.session_file else None
-    if session_path and provider.resume_flag:
-        lines.append("    local _resume_args=()")
-        lines.append(f"    if [ -s {session_path} ] && \\")
-        lines.append('       { [ -n "$_timeout" ] || [ $# -eq 0 ]; }; then')
-        lines.append(f'        _resume_args+=({provider.resume_flag} "$(cat {session_path})")')
-        lines.append("    fi")
-
-    # Codex supports model_instructions_file in config; this injects the
-    # mounted /home/dev/.terok/instructions.md into startup context for both
-    # interactive CLI and headless exec runs.
-    if provider.name == "codex":
-        lines.append("    local _instr_args=()")
-        lines.append("    [ -f /home/dev/.terok/instructions.md ] && \\")
-        lines.append(
-            "        _instr_args+=(-c "
-            "'model_instructions_file=\"/home/dev/.terok/instructions.md\"')"
-        )
-
-    # Vibe session capture helper (no plugin system — parse logs post-run).
-    if provider.name == "vibe" and session_path:
-        lines.append("    _terok_capture_vibe_session() {")
-        lines.append('        python3 -c "')
-        lines.append("import json, os, glob")
-        lines.append(
-            "files = sorted(glob.glob(os.path.expanduser("
-            "'~/.vibe/logs/session/session_*/meta.json')),"
-        )
-        lines.append("               key=os.path.getmtime, reverse=True)")
-        lines.append("if files:")
-        lines.append("    with open(files[0]) as f:")
-        lines.append("        sid = json.load(f).get('session_id', '')")
-        lines.append("    if sid:")
-        lines.append("        print(sid)")
-        lines.append(f'" > {session_path} 2>/dev/null || true')
-        lines.append("    }")
-
-    # Git env vars and exec — with optional timeout (headless mode)
+    # Headless mode (with timeout)
     lines.append('    if [ -n "$_timeout" ]; then')
     lines.append("        (")
     lines.append(f"            _terok_apply_git_identity {author_name} {author_email}")
     if session_path:
         lines.append(f"            export TEROK_SESSION_FILE={session_path}")
-
-    # Build the extra-args expansions that sit between the binary and "$@".
-    _extra_expansions: list[str] = []
-    if provider.auto_approve_flags:
-        _extra_expansions.append('"${_approve_args[@]}"')
-    if session_path and provider.resume_flag:
-        _extra_expansions.append('"${_resume_args[@]}"')
-    if provider.name == "codex":
-        _extra_expansions.append('"${_instr_args[@]}"')
-    extra = (" " + " ".join(_extra_expansions)) if _extra_expansions else ""
-
     lines.append(f'        timeout "$_timeout" {binary}{extra} "$@"')
-
-    # Post-run: capture vibe session ID
     if provider.name == "vibe" and session_path:
         lines.append("        local _rc=$?; _terok_capture_vibe_session; return $_rc")
-
     lines.append("        )")
 
     # Interactive mode (no timeout)
     lines.append("    else")
     lines.append("        (")
     lines.append(f"            _terok_apply_git_identity {author_name} {author_email}")
-    # Set session file env var for bare interactive launch only
     if session_path:
         lines.append(f"            export TEROK_SESSION_FILE={session_path}")
-
     lines.append(f'        command {binary}{extra} "$@"')
-
     lines.append("        )")
     lines.append("    fi")
     lines.append("}")

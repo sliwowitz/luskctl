@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: 2025 Jiri Vyskocil
-# SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
 """Task container runners: CLI, headless, toad, and restart."""
@@ -201,20 +200,26 @@ def _prepare_agent_config(
     prepare sequence.  *provider_name* overrides the auto-detected provider
     (e.g. explicit provider selection).
     """
-    effective = resolve_agent_config(project_id, preset=preset)
+    effective = resolve_agent_config(
+        project_id,
+        agent_config=project.agent_config,
+        project_root=project.root,
+        preset=preset,
+    )
     subagents = list(effective.get("subagents") or [])
     from ..instrumentation.headless_providers import get_provider as _get_provider
 
-    resolved = _get_provider(provider_name, project)
+    resolved = _get_provider(provider_name, default_agent=project.default_agent)
     instr_text = resolve_instructions(effective, resolved.name, project_root=project.root)
     return prepare_agent_config_dir(
         AgentConfigSpec(
-            project=project,
+            tasks_root=project.tasks_root,
             task_id=task_id,
             subagents=subagents,
             selected_agents=agents,
             provider=resolved.name,
             instructions=instr_text,
+            default_agent=project.default_agent,
         )
     )
 
@@ -415,7 +420,12 @@ def task_run_cli(
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
     if unrestricted is None:
-        _effective = resolve_agent_config(project_id, preset=preset)
+        _effective = resolve_agent_config(
+            project_id,
+            agent_config=project.agent_config,
+            project_root=project.root,
+            preset=preset,
+        )
         _cfg_val = resolve_provider_value(
             "unrestricted", _effective, project.default_agent or "claude"
         )
@@ -551,7 +561,12 @@ def task_run_toad(
 
     # Resolve unrestricted mode: CLI flag → config → default (True)
     if unrestricted is None:
-        _effective = resolve_agent_config(project_id, preset=preset)
+        _effective = resolve_agent_config(
+            project_id,
+            agent_config=project.agent_config,
+            project_root=project.root,
+            preset=preset,
+        )
         _cfg_val = resolve_provider_value(
             "unrestricted", _effective, project.default_agent or "claude"
         )
@@ -683,7 +698,7 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     )
 
     project = load_project(request.project_id)
-    resolved = get_provider(request.provider, project)
+    resolved = get_provider(request.provider, default_agent=project.default_agent)
 
     # Build CLI overrides from --config file and explicit flags
     cli_overrides: dict = {}
@@ -697,6 +712,8 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     # Resolve layered agent config (global → project → preset → CLI overrides)
     effective = resolve_agent_config(
         request.project_id,
+        agent_config=project.agent_config,
+        project_root=project.root,
         preset=request.preset,
         cli_overrides=cli_overrides if cli_overrides else None,
     )
@@ -741,13 +758,14 @@ def task_run_headless(request: HeadlessRunRequest) -> str:
     task_dir = project.tasks_root / str(task_id)
     agent_config_dir = prepare_agent_config_dir(
         AgentConfigSpec(
-            project=project,
+            tasks_root=project.tasks_root,
             task_id=task_id,
             subagents=subagents,
             selected_agents=request.agents,
             prompt=effective_prompt,
             provider=resolved.name,
             instructions=instr_text,
+            default_agent=project.default_agent,
         )
     )
 
