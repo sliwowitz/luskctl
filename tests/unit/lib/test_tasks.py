@@ -538,21 +538,20 @@ class TestTask:
                     return_value=7861,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.orchestration.task_runners.subprocess.run"
-                ) as run_mock,
+                    "terok.lib.orchestration.task_runners._sandbox"
+                ) as sandbox_factory,
             ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
 
-            cmd = run_mock.call_args[0][0]
-            # The last element is the bash -lc command string
-            bash_cmd = cmd[-1]
+            spec = sandbox_factory.return_value.run.call_args[0][0]
+            bash_cmd = spec.command[-1]
             assert "--public-url http://127.0.0.1:7861" in bash_cmd
             assert "-p 8080" in bash_cmd
 
             # Port forwarding maps host port to container toad port
-            port_idx = cmd.index("-p")
-            assert cmd[port_idx + 1] == "127.0.0.1:7861:8080"
+            extra = list(spec.extra_args)
+            port_idx = extra.index("-p")
+            assert extra[port_idx + 1] == "127.0.0.1:7861:8080"
 
     def test_task_run_toad_uses_public_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """task_run_toad must use TEROK_PUBLIC_HOST for URLs and bind to 0.0.0.0."""
@@ -586,19 +585,19 @@ class TestTask:
                     return_value=7862,
                 ),
                 unittest.mock.patch(
-                    "terok.lib.orchestration.task_runners.subprocess.run"
-                ) as run_mock,
+                    "terok.lib.orchestration.task_runners._sandbox"
+                ) as sandbox_factory,
             ):
-                run_mock.return_value = subprocess.CompletedProcess([], 0)
                 task_run_toad(project_id, "1")
 
-            cmd = run_mock.call_args[0][0]
-            bash_cmd = cmd[-1]
+            spec = sandbox_factory.return_value.run.call_args[0][0]
+            bash_cmd = spec.command[-1]
             assert "--public-url http://myserver:7862" in bash_cmd
 
             # Port forwarding binds to 0.0.0.0 when public host is set
-            port_idx = cmd.index("-p")
-            assert cmd[port_idx + 1] == "0.0.0.0:7862:8080"
+            extra = list(spec.extra_args)
+            port_idx = extra.index("-p")
+            assert extra[port_idx + 1] == "0.0.0.0:7862:8080"
 
     def test_task_run_cli_already_running(self) -> None:
         """task_run_cli prints message and exits when container is already running."""

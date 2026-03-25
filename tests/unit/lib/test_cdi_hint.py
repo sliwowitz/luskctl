@@ -1,16 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for NVIDIA CDI error detection and user hint."""
+"""Tests for NVIDIA CDI error detection via sandbox GpuConfigError.
+
+The CDI hint logic has moved to ``terok_sandbox.runtime``.  These tests
+verify that terok still surfaces GPU errors correctly via the
+``GpuConfigError`` / ``check_gpu_error`` path.
+"""
 
 import subprocess
 
 import pytest
+from terok_sandbox.runtime import GpuConfigError, check_gpu_error
 
-from terok.lib.orchestration.task_runners import _CDI_HINT, _enrich_run_error
 
-
-def make_error(stderr: str | bytes | None, returncode: int = 1) -> subprocess.CalledProcessError:
+def _make_error(stderr: str | bytes | None, returncode: int = 1) -> subprocess.CalledProcessError:
     """Create a ``CalledProcessError`` carrying test stderr content."""
     exc = subprocess.CalledProcessError(returncode, ["podman", "run"])
     exc.stderr = stderr if isinstance(stderr, bytes) or stderr is None else stderr.encode()
@@ -18,7 +22,7 @@ def make_error(stderr: str | bytes | None, returncode: int = 1) -> subprocess.Ca
 
 
 @pytest.mark.parametrize(
-    ("stderr", "expects_hint"),
+    ("stderr", "expects_raise"),
     [
         ("Error: nvidia.com/gpu=all: device not found", True),
         ("Error: cdi.k8s.io: registry not configured", True),
@@ -42,15 +46,20 @@ def make_error(stderr: str | bytes | None, returncode: int = 1) -> subprocess.Ca
         "none",
     ],
 )
-def test_cdi_hint_detection(stderr: str | None, expects_hint: bool) -> None:
-    """CDI hint is emitted only for explicit supported error patterns."""
-    message = _enrich_run_error("Run failed", make_error(stderr))
-    assert (_CDI_HINT in message) is expects_hint
-    if stderr:
-        assert stderr.split(": ", 1)[-1] in message
+def test_cdi_hint_detection(stderr: str | None, expects_raise: bool) -> None:
+    """CDI hint is raised only for explicit supported error patterns."""
+    exc = _make_error(stderr)
+    if expects_raise:
+        with pytest.raises(GpuConfigError):
+            check_gpu_error(exc)
+    else:
+        check_gpu_error(exc)  # should not raise
 
 
-def test_prefix_in_message() -> None:
-    """The supplied prefix is always included in the enriched error message."""
-    message = _enrich_run_error("Custom prefix", make_error("some error"))
-    assert message.startswith("Custom prefix:")
+def test_gpu_config_error_contains_hint() -> None:
+    """GpuConfigError carries the CDI hint for display purposes."""
+    exc = _make_error("Error: nvidia.com/gpu=all: device not found")
+    with pytest.raises(GpuConfigError) as exc_info:
+        check_gpu_error(exc)
+    assert "CDI" in exc_info.value.hint
+    assert "podman-desktop.io" in exc_info.value.hint
