@@ -45,6 +45,11 @@ class TaskRunnerResult:
     wait_mock: unittest.mock.Mock
     task_id: str | None = None
 
+    @property
+    def last_spec(self):
+        """Return the last RunSpec passed to sandbox.run()."""
+        return self.run_mock.return_value.run.call_args[0][0]
+
 
 def make_project_config(
     *,
@@ -156,20 +161,19 @@ def run_headless_request(
     with unittest.mock.patch.dict(os.environ, runner_env_vars(base, config_file), clear=True):
         with (
             mock_git_config(),
-            unittest.mock.patch("terok.lib.orchestration.task_runners.subprocess.run") as run_mock,
+            unittest.mock.patch("terok.lib.orchestration.task_runners._sandbox") as sandbox_factory,
             unittest.mock.patch(
                 "terok.lib.orchestration.task_runners.wait_for_exit", return_value=0
             ) as wait_mock,
             unittest.mock.patch("terok.lib.orchestration.task_runners._print_run_summary"),
         ):
-            run_mock.return_value = subprocess.CompletedProcess([], 0)
             buffer = StringIO()
             with redirect_stdout(buffer):
                 task_id = task_run_headless(request)
     return TaskRunnerResult(
         task_id=task_id,
         output=buffer.getvalue(),
-        run_mock=run_mock,
+        run_mock=sandbox_factory,
         wait_mock=wait_mock,
     )
 
@@ -205,6 +209,21 @@ def run_followup_request(
             with redirect_stdout(buffer):
                 task_followup_headless(project_id, task_id, prompt, follow=follow)
     return TaskRunnerResult(output=buffer.getvalue(), run_mock=run_mock, wait_mock=wait_mock)
+
+
+def _spec_volumes(result: TaskRunnerResult) -> tuple[str, ...]:
+    """Extract volumes from the RunSpec captured by the sandbox mock."""
+    return result.last_spec.volumes
+
+
+def _spec_command(result: TaskRunnerResult) -> tuple[str, ...]:
+    """Extract command from the RunSpec captured by the sandbox mock."""
+    return result.last_spec.command
+
+
+def _spec_container_name(result: TaskRunnerResult) -> str:
+    """Extract container_name from the RunSpec captured by the sandbox mock."""
+    return result.last_spec.container_name
 
 
 class TestAgentConfigProject:
@@ -303,7 +322,7 @@ class TestTaskRunHeadless:
                 write_runner_project(base, "proj_mount"),
                 HeadlessRunRequest("proj_mount", "test prompt"),
             )
-            assert CONTAINER_TEROK_MOUNT_Z in " ".join(result.run_mock.call_args[0][0])
+            assert CONTAINER_TEROK_MOUNT_Z in " ".join(result.last_spec.volumes)
 
     def test_headless_generates_agent_wrapper(self) -> None:
         """task_run_headless generates terok-agent.sh in agent-config dir."""
@@ -379,7 +398,7 @@ class TestTaskRunHeadless:
                 HeadlessRunRequest("proj_flags", "test", model="opus", max_turns=100),
             )
 
-            bash_cmd = result.run_mock.call_args[0][0][-1]
+            bash_cmd = result.last_spec.command[-1]
             assert "--model opus" in bash_cmd
             assert "--max-turns 100" in bash_cmd
             assert "--terok-timeout" in bash_cmd
@@ -399,8 +418,7 @@ class TestTaskRunHeadless:
                 write_runner_project(base, "proj_name"),
                 HeadlessRunRequest("proj_name", "test"),
             )
-            cmd = result.run_mock.call_args[0][0]
-            assert cmd[cmd.index("--name") + 1] == "proj_name-run-1"
+            assert result.last_spec.container_name == "proj_name-run-1"
 
     def test_headless_metadata_updated(self) -> None:
         """task_run_headless sets mode=run and updates status on completion."""
@@ -440,7 +458,7 @@ class TestTaskRunHeadless:
                 write_runner_project(base, "proj_cmd"),
                 HeadlessRunRequest("proj_cmd", "test"),
             )
-            bash_cmd = result.run_mock.call_args[0][0][-1]
+            bash_cmd = result.last_spec.command[-1]
             assert "init-ssh-and-repo.sh" in bash_cmd
             assert "start-claude.sh" not in bash_cmd
             assert "--terok-timeout" in bash_cmd

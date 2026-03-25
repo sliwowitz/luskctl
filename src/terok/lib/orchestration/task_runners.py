@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import os
-import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,13 +16,14 @@ from terok_agent import (
     resolve_instructions,
     resolve_provider_value,
 )
-from terok_agent._util import podman_userns_args as _podman_userns_args
 from terok_sandbox import (
+    GpuConfigError,
+    LifecycleHooks,
+    RunSpec,
+    Sandbox,
     down as _shield_down_impl,
     get_container_state,
-    gpu_run_args,
     is_container_running,
-    pre_start as _shield_pre_start_impl,
     stream_initial_logs,
     wait_for_exit,
 )
@@ -32,7 +31,6 @@ from terok_sandbox import (
 from ..core.config import (
     SHIELD_SECURITY_HINT,
     get_envs_base_dir,
-    get_gate_server_port,
     get_public_host,
     get_shield_bypass_firewall_no_protection,
 )
@@ -77,55 +75,6 @@ def _str_to_bool(value: object) -> bool:
     return bool(value)
 
 
-_SENSITIVE_KEY_RE = re.compile(r"(?i)(KEY|TOKEN|SECRET|API|PASSWORD|PRIVATE)")
-
-# --- DANGEROUS TRANSITIONAL OVERRIDE helpers (bypass_firewall_no_protection) ---
-# Standalone network setup for when the shield is completely skipped.
-# Mirrors the networking portion of terok-shield's HookMode.pre_start()
-# but is fully independent — works even if the shield package is broken.
-# Delete this block when the bypass option is removed.
-
-_SLIRP_GATEWAY = "10.0.2.2"
-
-
-def _detect_rootless_network_mode() -> str:
-    """Detect whether podman uses pasta or slirp4netns for rootless networking."""
-    try:
-        out = subprocess.run(
-            ["podman", "info", "-f", "{{.Host.RootlessNetworkCmd}}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        cmd = out.stdout.strip()
-        return cmd if cmd in ("pasta", "slirp4netns") else "pasta"
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return "pasta"
-
-
-def _bypass_network_args(gate_port: int) -> list[str]:
-    """Return podman network args for the bypass path (no shield, no OCI hooks).
-
-    Replicates the networking that terok-shield's HookMode normally provides
-    but without nftables rules, annotations, hooks, or cap-drops.
-    """
-    if os.geteuid() == 0:
-        return []
-    if _detect_rootless_network_mode() == "slirp4netns":
-        return [
-            "--network",
-            "slirp4netns:allow_host_loopback=true",
-            "--add-host",
-            f"host.containers.internal:{_SLIRP_GATEWAY}",
-        ]
-    return [
-        "--network",
-        f"pasta:-T,{gate_port}",
-        "--add-host",
-        f"host.containers.internal:{_LOCALHOST}",
-    ]
-
-
 def _apply_unrestricted_env(env: dict[str, str]) -> None:
     """Set ``TEROK_UNRESTRICTED`` and all agent auto-approve env vars.
 
@@ -138,23 +87,6 @@ def _apply_unrestricted_env(env: dict[str, str]) -> None:
 
     env["TEROK_UNRESTRICTED"] = "1"
     env.update(collect_all_auto_approve_env())
-
-
-def _redact_env_args(cmd: list[str]) -> list[str]:
-    """Return a copy of *cmd* with sensitive ``-e KEY=VALUE`` args redacted."""
-    out: list[str] = []
-    redact_next = False
-    for arg in cmd:
-        if redact_next:
-            k, _, _v = arg.partition("=")
-            out.append(f"{k}=REDACTED" if _SENSITIVE_KEY_RE.search(k) else arg)
-            redact_next = False
-        elif arg == "-e":
-            out.append(arg)
-            redact_next = True
-        else:
-            out.append(arg)
-    return out
 
 
 @dataclass(frozen=True)
@@ -228,24 +160,6 @@ def _prepare_agent_config(
     )
 
 
-_CDI_HINT = (
-    "Hint: NVIDIA CDI configuration appears to be missing or broken.\n"
-    "Ensure the NVIDIA Container Toolkit is installed and CDI is configured.\n"
-    "See: https://podman-desktop.io/docs/podman/gpu"
-)
-
-_CDI_ERROR_PATTERNS = ("cdi.k8s.io", "nvidia.com/gpu", "CDI")
-
-
-def _enrich_run_error(prefix: str, exc: subprocess.CalledProcessError) -> str:
-    """Return an enriched error message, adding a CDI hint when applicable."""
-    stderr = (exc.stderr or b"").decode(errors="replace")
-    msg = f"{prefix}: {exc}" if not stderr else f"{prefix}:\n{stderr.strip()}"
-    if any(pat in stderr for pat in _CDI_ERROR_PATTERNS):
-        msg += f"\n\n{_CDI_HINT}"
-    return msg
-
-
 def _podman_start(cname: str) -> None:
     """Start an existing container, raising SystemExit on failure."""
     try:
@@ -257,8 +171,10 @@ def _podman_start(cname: str) -> None:
         )
     except FileNotFoundError:
         raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(_enrich_run_error("Failed to start container", e))
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace")
+        msg = f"Failed to start container:\n{stderr.strip()}" if stderr else str(exc)
+        raise SystemExit(msg)
 
 
 def _assert_running(cname: str) -> None:
@@ -317,59 +233,48 @@ def _run_container(
     task_dir: Path,
     extra_args: list[str] | None = None,
     command: list[str] | None = None,
+    hooks: LifecycleHooks | None = None,
 ) -> None:
-    """Build, print, and execute a detached ``podman run`` command.
+    """Launch a detached container via :meth:`Sandbox.run`.
 
-    Centralises the shared container-launch boilerplate used by the CLI, web,
-    and headless runners: user-namespace mapping, GPU passthrough, volume and
-    environment injection, and uniform error handling.
+    Constructs a :class:`RunSpec` from the given parameters and delegates all
+    podman command assembly (userns, shield/bypass, GPU, env redaction, CDI
+    detection) to the sandbox executor.
 
     Args:
         cname: Container name (``--name``).
         image: Container image to run.
         env: Environment variables to pass via ``-e``.
         volumes: Volume mounts to pass via ``-v``.
-        project: The resolved :class:`ProjectConfig` (used for GPU args).
+        project: The resolved :class:`ProjectConfig` (used for GPU flag).
         task_dir: Per-task directory (used for per-task shield state).
         extra_args: Additional ``podman run`` flags inserted after the GPU
             args (e.g. ``["-p", "127.0.0.1:8080:7860"]``).
         command: Optional command + args appended after the image name.
+        hooks: Optional lifecycle callbacks fired around the launch.
     """
-    cmd: list[str] = ["podman", "run", "-d"]
-    cmd += _podman_userns_args()
-    if "TEROK_UNRESTRICTED" not in env:
-        cmd += ["--security-opt", "no-new-privileges"]
+    spec = RunSpec(
+        container_name=cname,
+        image=image,
+        env=env,
+        volumes=tuple(volumes),
+        command=tuple(command or ()),
+        task_dir=task_dir,
+        gpu_enabled=has_gpu(project),
+        extra_args=tuple(extra_args or ()),
+        unrestricted="TEROK_UNRESTRICTED" in env,
+        bypass_shield=get_shield_bypass_firewall_no_protection(),
+    )
 
-    if get_shield_bypass_firewall_no_protection():
-        # DANGEROUS TRANSITIONAL OVERRIDE — bypass_firewall_no_protection
-        # Skip the shield entirely and use traditional podman networking so
-        # that the gate server port is forwarded via pasta.  Completely
-        # independent of terok-shield; easy to delete once no longer needed.
-        print(
-            "\n!! SHIELD BYPASSED — egress firewall DISABLED "
-            f"(shield.bypass_firewall_no_protection is set) !!\n{SHIELD_SECURITY_HINT}\n"
-        )
-        cmd += _bypass_network_args(get_gate_server_port())
-    else:
-        cmd += _shield_pre_start_impl(cname, task_dir)
-
-    cmd += gpu_run_args(enabled=has_gpu(project))
-    if extra_args:
-        cmd += extra_args
-    for v in volumes:
-        cmd += ["-v", v]
-    for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
-    cmd += ["--name", cname, "-w", "/workspace", image]
-    if command:
-        cmd += command
-    print("$", " ".join(_redact_env_args(cmd)))
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
-    except FileNotFoundError:
-        raise SystemExit("podman not found; please install podman")
-    except subprocess.CalledProcessError as e:
-        raise SystemExit(_enrich_run_error("Run failed", e))
+        _sandbox().run(spec, hooks=hooks)
+    except GpuConfigError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def _sandbox() -> Sandbox:
+    """Return a default :class:`Sandbox` instance."""
+    return Sandbox()
 
 
 def task_run_cli(

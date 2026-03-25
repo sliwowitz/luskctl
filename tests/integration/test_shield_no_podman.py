@@ -10,7 +10,7 @@ Shield class with an injected ``MockRunner`` (no subprocess calls).
 Uses the per-task Shield class API (state_dir from ShieldConfig).
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -175,35 +175,40 @@ class TestProfilesIntegration:
         assert all(isinstance(e, str) for e in entries)
 
 
-# ── TestTaskRunnerShieldIntegration ──────────────────────
+# ── TestSandboxRunShieldIntegration ──────────────────────
 
 
-class TestTaskRunnerShieldIntegration:
-    """Verify the full path from _run_container through real shield."""
+class TestSandboxRunShieldIntegration:
+    """Verify the full path from Sandbox.run() through real shield.
 
-    def test_run_container_includes_shield_args(
-        self, shield_env: TerokShieldIntegrationEnv
-    ) -> None:
-        """_run_container() injects real shield args into the podman command."""
+    Now that _run_container() delegates to Sandbox.run(), these tests
+    exercise the sandbox executor directly with real shield pre_start.
+    """
+
+    def test_sandbox_run_includes_shield_args(self, shield_env: TerokShieldIntegrationEnv) -> None:
+        """Sandbox.run() injects real shield args into the podman command."""
+        from terok_sandbox import RunSpec, Sandbox
+
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
         task_dir = shield_env.task_dir
+        spec = RunSpec(
+            container_name="integ-test-ctr",
+            image="alpine:latest",
+            env={},
+            volumes=(),
+            command=(),
+            task_dir=task_dir,
+            unrestricted=False,
+        )
+
         with (
             patch("terok_sandbox.paths.state_root", return_value=shield_env.state_dir),
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
-            patch(
-                "terok.lib.orchestration.task_runners._podman_userns_args",
-                return_value=[],
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.gpu_run_args",
-                return_value=[],
-            ),
-            # Inject MockRunner into the Shield created by _make_shield
             patch(
                 "terok_sandbox.shield.make_shield",
                 return_value=Shield(
@@ -216,29 +221,17 @@ class TestTaskRunnerShieldIntegration:
                     runner=MockRunner(),
                 ),
             ),
-            # Mock-based test: don't depend on real hook filesystem state
             patch("terok_shield.mode_hook.has_global_hooks", return_value=True),
         ):
-            from terok.lib.core.projects import ProjectConfig
-            from terok.lib.orchestration.task_runners import _run_container
-
-            project = MagicMock(spec=ProjectConfig, root=task_dir)
-
-            _run_container(
-                cname="integ-test-ctr",
-                image="alpine:latest",
-                env={},
-                volumes=[],
-                project=project,
-                task_dir=task_dir,
-            )
+            sandbox = Sandbox()
+            sandbox.run(spec)
 
         assert "--network" in captured_cmd
         assert "--annotation" in captured_cmd
         assert "--cap-drop" in captured_cmd
         assert any("terok.shield.profiles" in a for a in captured_cmd)
 
-        # Restricted mode (no TEROK_UNRESTRICTED) → no-new-privileges
+        # Restricted mode (unrestricted=False) → no-new-privileges
         secopt_indices = [i for i, v in enumerate(captured_cmd) if v == "--security-opt"]
         secopt_values = [captured_cmd[i + 1] for i in secopt_indices]
         assert "no-new-privileges" in secopt_values
@@ -247,103 +240,78 @@ class TestTaskRunnerShieldIntegration:
         self, shield_env: TerokShieldIntegrationEnv
     ) -> None:
         """Unrestricted containers must NOT set no-new-privileges (sudo needed)."""
+        from terok_sandbox import RunSpec, Sandbox
+
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
         task_dir = shield_env.task_dir
+        spec = RunSpec(
+            container_name="integ-test-ctr",
+            image="alpine:latest",
+            env={},
+            volumes=(),
+            command=(),
+            task_dir=task_dir,
+            unrestricted=True,
+        )
+
         with (
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
-            patch(
-                "terok.lib.orchestration.task_runners._podman_userns_args",
-                return_value=[],
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.gpu_run_args",
-                return_value=[],
-            ),
-            # Mock shield away to isolate terok's own --security-opt logic
-            patch(
-                "terok.lib.orchestration.task_runners._shield_pre_start_impl",
-                return_value=[],
-            ),
+            patch("terok_sandbox.shield.pre_start", return_value=[]),
         ):
-            from terok.lib.core.projects import ProjectConfig
-            from terok.lib.orchestration.task_runners import _run_container
-
-            project = MagicMock(spec=ProjectConfig, root=task_dir)
-
-            _run_container(
-                cname="integ-test-ctr",
-                image="alpine:latest",
-                env={"TEROK_UNRESTRICTED": "1"},
-                volumes=[],
-                project=project,
-                task_dir=task_dir,
-            )
+            sandbox = Sandbox()
+            sandbox.run(spec)
 
         assert "--security-opt" not in captured_cmd
 
-    def _run_bypass_container(
+    def _run_bypass_spec(
         self, shield_env: TerokShieldIntegrationEnv, network_mode: str
     ) -> list[str]:
-        """Helper: run _run_container with bypass active and given network mode."""
+        """Helper: run Sandbox.run with bypass active and given network mode."""
+        from terok_sandbox import RunSpec, Sandbox
+
         captured_cmd: list[str] = []
 
         def capture_run(cmd: list[str], **_kwargs) -> None:
             captured_cmd.extend(cmd)
 
         task_dir = shield_env.task_dir
+        spec = RunSpec(
+            container_name="bypass-test-ctr",
+            image="alpine:latest",
+            env={},
+            volumes=(),
+            command=(),
+            task_dir=task_dir,
+            bypass_shield=True,
+        )
+
         with (
             patch("os.geteuid", return_value=1000),
             patch("subprocess.run", side_effect=capture_run),
             patch(
-                "terok.lib.orchestration.task_runners._podman_userns_args",
-                return_value=[],
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.gpu_run_args",
-                return_value=[],
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.get_shield_bypass_firewall_no_protection",
-                return_value=True,
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.get_gate_server_port",
-                return_value=GATE_PORT,
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners._detect_rootless_network_mode",
+                "terok_sandbox.runtime._detect_rootless_network_mode",
                 return_value=network_mode,
             ),
             # Shield must NOT be called at all when bypass is active
             patch(
-                "terok.lib.orchestration.task_runners._shield_pre_start_impl",
+                "terok_sandbox.shield.pre_start",
                 side_effect=AssertionError("shield must not be called"),
             ),
         ):
-            from terok.lib.core.projects import ProjectConfig
-            from terok.lib.orchestration.task_runners import _run_container
+            sandbox = Sandbox()
+            sandbox.run(spec)
 
-            project = MagicMock(spec=ProjectConfig, root=task_dir)
-
-            _run_container(
-                cname="bypass-test-ctr",
-                image="alpine:latest",
-                env={},
-                volumes=[],
-                project=project,
-                task_dir=task_dir,
-            )
         return captured_cmd
 
     def test_bypass_uses_pasta_networking(self, shield_env: TerokShieldIntegrationEnv) -> None:
         """Bypass on pasta: injects --network=pasta:-T,<port> and --add-host."""
-        cmd = self._run_bypass_container(shield_env, "pasta")
-        assert f"pasta:-T,{GATE_PORT}" in cmd
+        cmd = self._run_bypass_spec(shield_env, "pasta")
+        assert any(f"pasta:-T,{GATE_PORT}" in c for c in cmd)
         assert "--add-host" in cmd
         host_idx = cmd.index("--add-host")
         assert cmd[host_idx + 1] == HOST_ALIAS_LOOPBACK
@@ -355,7 +323,7 @@ class TestTaskRunnerShieldIntegration:
         self, shield_env: TerokShieldIntegrationEnv
     ) -> None:
         """Bypass on slirp4netns: injects --network=slirp4netns:... and --add-host."""
-        cmd = self._run_bypass_container(shield_env, "slirp4netns")
+        cmd = self._run_bypass_spec(shield_env, "slirp4netns")
         assert "slirp4netns:allow_host_loopback=true" in cmd
         assert "--add-host" in cmd
         host_idx = cmd.index("--add-host")
