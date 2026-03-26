@@ -1,4 +1,4 @@
-.PHONY: all lint format test test-unit ruff-report bandit-report sonar-inputs test-integration test-integration-host test-integration-network test-integration-podman test-integration-map test-matrix test-matrix-build ci-map tach security docstrings complexity deadcode reuse check install install-dev docs docs-build clean spdx
+.PHONY: all lint format test test-unit ruff-report bandit-report sonar-inputs test-integration test-integration-host test-integration-network test-integration-podman test-integration-map test-matrix ci-map tach security docstrings complexity deadcode reuse check install install-dev docs docs-build clean spdx
 
 REPORTS_DIR ?= reports
 COVERAGE_XML ?= $(REPORTS_DIR)/coverage.xml
@@ -73,11 +73,16 @@ test-integration-map:
 	poetry run python docs/test_map.py
 
 # Multi-distro integration test matrix (Debian 12/13, Ubuntu 24.04, Fedora 43)
+#   NO_CACHE=1 make test-matrix           — force full image rebuild
+#   BUILD_ONLY=1 make test-matrix         — build images only
+#   SCOPE=host-only make test-matrix      — run only needs_host_features tests
+#   DISTROS="debian12 fedora43" make test-matrix — run specific distros
 test-matrix:
-	./tests/containers/run-matrix.sh
-
-test-matrix-build:
-	./tests/containers/run-matrix.sh --build-only
+	./tests/containers/run-matrix.sh \
+		$(if $(NO_CACHE),--no-cache) \
+		$(if $(BUILD_ONLY),--build-only) \
+		$(if $(SCOPE),--$(SCOPE)) \
+		$(DISTROS)
 
 # Generate CI workflow map (Markdown tables from .github/workflows/*.yml)
 ci-map:
