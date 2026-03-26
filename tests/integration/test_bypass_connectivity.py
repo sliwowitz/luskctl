@@ -39,7 +39,11 @@ pytestmark = [pytest.mark.needs_podman, pytest.mark.needs_internet]
 
 
 def _detect_rootless_network_mode() -> str:
-    """Detect whether podman uses pasta or slirp4netns."""
+    """Detect whether podman uses pasta or slirp4netns.
+
+    Falls back to slirp4netns — the safe default that works on all
+    podman versions (podman < 4.4 lacks ``RootlessNetworkCmd``).
+    """
     try:
         out = subprocess.run(
             ["podman", "info", "-f", "{{.Host.RootlessNetworkCmd}}"],
@@ -48,9 +52,9 @@ def _detect_rootless_network_mode() -> str:
             timeout=10,
         )
         cmd = out.stdout.strip()
-        return cmd if cmd in ("pasta", "slirp4netns") else "pasta"
+        return cmd if cmd in ("pasta", "slirp4netns") else "slirp4netns"
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return "pasta"
+        return "slirp4netns"
 
 
 def _bypass_network_args() -> list[str]:
