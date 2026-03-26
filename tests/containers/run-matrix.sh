@@ -25,7 +25,6 @@ IMAGE_PREFIX="terok-test"
 SOURCE_MOUNT="/src"
 WORKSPACE_DIR="/workspace"
 PYTHON_VERSION="3.12"
-DEFAULT_MARKER="needs_host_features"
 TEROK_DIAGNOSTIC_COMMAND="poetry run terokctl config"
 
 # ── Terminal colors (disabled when stdout is not a tty) ──
@@ -76,12 +75,9 @@ usage() {
     echo "  --build-only   Build images without running tests"
     echo "  --no-cache     Rebuild images from scratch (ignore layer cache)"
     echo "  --list         List available distros"
-    echo "  --host-only    Run only needs_host_features tests (fast)"
-    echo "  --podman       Run only needs_podman tests"
-    echo "  --all-markers  Run the full integration suite"
     echo "  -h, --help     Show this help"
     echo ""
-    echo "Default: install full infrastructure, run tests with marker '$DEFAULT_MARKER'."
+    echo "Default: install full infrastructure, run all integration tests."
     echo ""
     echo "Available distros: ${!DISTROS[*]}"
     return 0
@@ -102,14 +98,13 @@ build_image() {
 
 run_tests() {
     local name="$1"
-    local marker="${2:-$DEFAULT_MARKER}"
     local image="$IMAGE_PREFIX:$name"
     local ctr_name="$IMAGE_PREFIX-$name"
     local test_user="${TEST_USERS[$name]}"
 
     echo ""
     echo -e "${C_CYAN}==> Testing ${C_BOLD}$name${C_CYAN} (expected podman ${EXPECTED_VERSIONS[$name]})${C_RESET}"
-    echo -e "    ${C_DIM}marker: ${marker:-<all>}, user: $test_user${C_RESET}"
+    echo -e "    ${C_DIM}user: $test_user${C_RESET}"
     echo ""
 
     # Three-phase flow:
@@ -175,7 +170,7 @@ run_tests() {
                 # ── Phase 1: tests without hooks ──
                 echo \"\"
                 echo \"--- phase 1: tests without hooks ---\"
-                poetry run pytest tests/integration/ -v --tb=short -m \"$marker and not needs_hooks\"
+                poetry run pytest tests/integration/ -v --tb=short -m \"not needs_hooks\"
 
                 # ── Phase 2: install global hooks ──
                 echo \"\"
@@ -192,7 +187,7 @@ print(\\\"Shield hooks verified.\\\")
                 # ── Phase 3: tests with hooks ──
                 echo \"\"
                 echo \"--- phase 3: tests with hooks ---\"
-                poetry run pytest tests/integration/ -v --tb=short -m \"$marker and needs_hooks\"
+                poetry run pytest tests/integration/ -v --tb=short -m \"needs_hooks\"
 
                 echo \"\"
                 echo \"--- terokctl config ---\"
@@ -212,7 +207,6 @@ print(\\\"Shield hooks verified.\\\")
 BUILD_ONLY=false
 LIST_ONLY=false
 NO_CACHE=false
-MARKER="$DEFAULT_MARKER"
 TARGETS=()
 
 while [[ $# -gt 0 ]]; do
@@ -220,9 +214,6 @@ while [[ $# -gt 0 ]]; do
         --build-only) BUILD_ONLY=true ;;
         --no-cache) NO_CACHE=true ;;
         --list) LIST_ONLY=true ;;
-        --host-only) MARKER="$DEFAULT_MARKER" ;;
-        --podman) MARKER="needs_podman" ;;
-        --all-markers) MARKER="" ;;
         -h|--help) usage; exit 0 ;;
         *) TARGETS+=("$1") ;;
     esac
@@ -260,7 +251,7 @@ PASSED=()
 FAILED=()
 
 for target in "${TARGETS[@]}"; do
-    if run_tests "$target" "$MARKER"; then
+    if run_tests "$target"; then
         PASSED+=("$target")
     else
         FAILED+=("$target")
