@@ -1,11 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-# Latest upstream podman (quay.io/podman/stable) for tracking bleeding-edge
+# Official podman image — tracks the latest upstream release.
+# Already ships user 'podman' (uid 1000) with full rootless setup
+# (subuid/subgid, storage.conf, containers.conf, setuid newuidmap).
 FROM quay.io/podman/stable:latest
 
 RUN dnf install -y \
-    nftables python3 python3-pip git curl \
+    nftables python3 python3-pip \
+    git curl bind-utils openssh-clients \
     && dnf clean all
+
+# Ensure runtime dir exists for the pre-existing 'podman' user
+RUN mkdir -p /run/user/$(id -u podman) && chown podman:podman /run/user/$(id -u podman)
 
 WORKDIR /src

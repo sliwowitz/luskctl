@@ -100,8 +100,8 @@ def shell_test_image(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
 
     build_dir = tmp_path_factory.mktemp("container-build")
 
-    # Read L0 template from package resources (ARG BASE_IMAGE defaults to ubuntu:24.04).
-    tmpl_pkg = resources.files("terok") / "resources" / "templates"
+    # Read L0 template from terok_agent (moved there in 065a7b8).
+    tmpl_pkg = resources.files("terok_agent") / "resources" / "templates"
     l0_content = (tmpl_pkg / "l0.dev.Dockerfile.template").read_text()
     (build_dir / "L0.Dockerfile").write_text(l0_content)
 

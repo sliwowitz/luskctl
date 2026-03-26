@@ -38,6 +38,49 @@ from .helpers import (
 
 pytestmark = [pytest.mark.needs_podman, pytest.mark.needs_internet]
 
+# Podman version that ships the containers/common fix for IPv6 zone-ID
+# nameservers in resolv.conf (https://github.com/containers/common/pull/2233).
+_PODMAN_ZONE_ID_FIX = (5, 4)
+
+
+def _host_podman_version() -> tuple[int, ...]:
+    """Return the host podman version as a tuple of ints."""
+    r = subprocess.run(
+        ["podman", "version", "--format", "{{.Client.Version}}"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    parts: list[int] = []
+    for seg in r.stdout.strip().split(".") if r.returncode == 0 else []:
+        digits = "".join(c for c in seg if c.isdigit())
+        if digits:
+            parts.append(int(digits))
+    return tuple(parts) or (0,)
+
+
+def _strip_zone_id_nameservers(container: str) -> None:
+    """Remove nameserver entries with IPv6 zone-ID suffixes from a container.
+
+    These entries reference host interfaces (e.g. eno1) that don't exist
+    inside the container, causing BIND-based DNS tools to reject the entire
+    resolv.conf.  Only needed on podman < 5.4.
+    """
+    if _host_podman_version() >= _PODMAN_ZONE_ID_FIX:
+        return
+    subprocess.run(
+        [
+            "podman",
+            "exec",
+            container,
+            "sh",
+            "-c",
+            "grep -v '^nameserver.*%' /etc/resolv.conf > /tmp/rc && cat /tmp/rc > /etc/resolv.conf",
+        ],
+        capture_output=True,
+        timeout=10,
+    )
+
 
 # ── In-process gate server ────────────────────────────────
 
@@ -151,12 +194,12 @@ def shielded_e2e(_pull_image: None, gate_env: dict) -> Iterator[ShieldedContaine
             raise RuntimeError(
                 f"podman run failed (exit {result.returncode}):\n  stderr: {result.stderr.strip()}"
             )
-        # Install git in the alpine container
-        subprocess.run(
-            ["podman", "exec", name, "apk", "add", "--no-cache", "git"],
-            capture_output=True,
-            timeout=60,
-        )
+
+        # Podman < 5.4 copies IPv6 zone-ID nameservers (fe80::1%eno1) into
+        # the container where the interface doesn't exist, breaking BIND-based
+        # DNS tools.  Fixed upstream: https://github.com/containers/common/pull/2233
+        _strip_zone_id_nameservers(name)
+
         yield ShieldedContainer(name=name, shield=shield)
     finally:
         try:
@@ -198,7 +241,7 @@ class TestShieldedContainerLifecycle:
 
     def test_dns_resolves(self, shielded_e2e: ShieldedContainer) -> None:
         """DNS resolution works inside a shielded container."""
-        result = exec_in_container(shielded_e2e.name, "nslookup", "example.com", timeout=10)
+        result = exec_in_container(shielded_e2e.name, "getent", "hosts", "example.com", timeout=10)
         assert result.returncode == 0, f"DNS resolution failed: {result.stderr}"
 
     def test_allowed_domain_reachable(self, shielded_e2e: ShieldedContainer) -> None:

@@ -323,7 +323,7 @@ make test-integration-podman   # Podman-dependent integration tests
 make test-integration          # All integration tests
 make test-integration-map      # Generate docs/test_map.md from pytest collection
 make test-matrix               # Run the cross-distro integration matrix locally
-make test-matrix-build         # Build the matrix container images without running tests
+make test-matrix BUILD_ONLY=1  # Build the matrix container images without running tests
 make ci-map                    # Generate docs/ci_map.md from workflow YAML
 ```
 
@@ -364,7 +364,8 @@ make sonar-inputs  # Generate coverage + Ruff + Bandit reports under reports/
 | `make test-integration` | Run all integration tests | Before opening a PR that changes integration flows |
 | `make test-integration-map` | Generate the integration test map page | After reorganizing integration tests |
 | `make test-matrix` | Run the multi-distro integration matrix locally | Before changing matrix/container compatibility |
-| `make test-matrix-build` | Build the multi-distro matrix images without running tests | When iterating on matrix containerfiles |
+| `make test-matrix BUILD_ONLY=1` | Build the multi-distro matrix images without running tests | When iterating on matrix containerfiles |
+| `make test-matrix NO_CACHE=1` | Rebuild matrix images from scratch, then run tests | After changing Containerfiles |
 | `make ci-map` | Generate the CI workflow map page | After changing GitHub workflows |
 | `make tach` | Check module boundary rules | After changing imports |
 | `make security` | Run the Bandit SAST scan | Before opening a PR that changes CI/security-sensitive code |
