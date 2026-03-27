@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Credential proxy management: install, uninstall, start, stop, status.
+"""Credential proxy management: install, uninstall, start, stop, status, serve.
 
 Wraps the terok-sandbox proxy lifecycle with route generation from the
 agent registry — ``terokctl credentials start`` writes ``routes.json``
@@ -38,6 +38,12 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     sub.add_parser("stop", help="Stop the credential proxy daemon")
     sub.add_parser("status", help="Show credential proxy status")
 
+    sub.add_parser(
+        "serve",
+        help="Run credential proxy in foreground (used by systemd)",
+        add_help=False,
+    )
+
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle credentials commands.  Returns True if handled."""
@@ -55,6 +61,8 @@ def dispatch(args: argparse.Namespace) -> bool:
         _cmd_stop()
     elif cmd == "status":
         _cmd_status()
+    elif cmd == "serve":
+        _cmd_serve(args)
     else:
         return False
     return True
@@ -123,3 +131,24 @@ def _cmd_status() -> None:
         print("Credentials: none stored")
     if not status.running and status.mode == "none" and is_proxy_systemd_available():
         print("\nHint: run 'terokctl credentials install' to set up systemd socket activation.")
+
+
+def _cmd_serve(_args: argparse.Namespace) -> None:
+    """Run the credential proxy server in the foreground.
+
+    Delegates to the server's own ``main()`` which handles its own
+    argparse.  Used by systemd service units and ``start_daemon()``.
+    """
+    import sys as _sys
+
+    # Strip "terokctl credentials serve" prefix so the server's argparse
+    # sees only its own flags (--socket-path, --db-path, etc.).
+    idx = _sys.argv.index("serve")
+    saved = _sys.argv
+    try:
+        _sys.argv = ["terokctl-credentials-serve", *_sys.argv[idx + 1 :]]
+        from terok_sandbox.credential_proxy.server import main as _serve
+
+        _serve()
+    finally:
+        _sys.argv = saved
