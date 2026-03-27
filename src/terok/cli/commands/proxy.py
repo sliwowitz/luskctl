@@ -52,11 +52,12 @@ def dispatch(args: argparse.Namespace) -> bool:
 
 def _cmd_start() -> None:
     """Generate routes and start the credential proxy daemon."""
-    from terok_agent import ensure_proxy_routes
-
     if is_proxy_running():
         print("Credential proxy is already running.")
         sys.exit(1)
+
+    from terok_agent import ensure_proxy_routes
+
     path = ensure_proxy_routes()
     print(f"Routes:  {path}")
     start_proxy()
