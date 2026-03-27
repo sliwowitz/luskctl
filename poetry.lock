@@ -2563,18 +2563,19 @@ description = "Single-agent task runner for hardened Podman containers"
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_agent-0.0.12-py3-none-any.whl", hash = "sha256:ccc90efe0e3e7282e5af5bc87addb38ca170850b8be3be14e04fb81f6f01c24b"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 Jinja2 = ">=3.1"
 "ruamel.yaml" = ">=0.18"
-terok_sandbox = {url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.13/terok_sandbox-0.0.13-py3-none-any.whl"}
+terok-sandbox = {git = "https://github.com/sliwowitz/terok-sandbox.git", rev = "f1b6e5fd9361276e27719fbeff1879e4fd174b46"}
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-agent/releases/download/v0.0.12/terok_agent-0.0.12-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-agent.git"
+reference = "1bc70badba27a6b65ffc27a549b6e29918aeaa4f"
+resolved_reference = "1bc70badba27a6b65ffc27a549b6e29918aeaa4f"
 
 [[package]]
 name = "terok-sandbox"
@@ -2583,18 +2584,19 @@ description = "Hardened Podman container runner with gate server and shield inte
 optional = false
 python-versions = ">=3.12,<4.0"
 groups = ["main"]
-files = [
-    {file = "terok_sandbox-0.0.13-py3-none-any.whl", hash = "sha256:58b07aa6ec7964f60fa2644ac40d29baaaa1b951866a91e0f29d6f6d7f683f74"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 aiohttp = ">=3.9"
 platformdirs = ">=4.0"
-terok_shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.4.1/terok_shield-0.4.1-py3-none-any.whl"}
+terok-shield = {url = "https://github.com/terok-ai/terok-shield/releases/download/v0.4.1/terok_shield-0.4.1-py3-none-any.whl"}
 
 [package.source]
-type = "url"
-url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.0.13/terok_sandbox-0.0.13-py3-none-any.whl"
+type = "git"
+url = "https://github.com/sliwowitz/terok-sandbox.git"
+reference = "f1b6e5fd9361276e27719fbeff1879e4fd174b46"
+resolved_reference = "f1b6e5fd9361276e27719fbeff1879e4fd174b46"
 
 [[package]]
 name = "terok-shield"
@@ -3083,4 +3085,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "712c1c33f94c926577691131afe22b1553a0aaadbc9bc2337eb4e3b432f0b7f4"
+content-hash = "ef6830622a1e28bb40f6e45897eb551ee23f1ddb6837489e8b2554a14524764c"
