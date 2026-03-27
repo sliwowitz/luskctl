@@ -95,6 +95,7 @@ terokctl = "terok.cli.main:main"
 terok = "terok.tui.app:main"
 terok-web = "terok.tui.serve:main"
 terok-gate = "terok_sandbox.gate.server:main"
+terok-credential-proxy = "terok_sandbox.credential_proxy.server:main"
 
 [tool.ruff]
 target-version = "py312"
