@@ -108,3 +108,28 @@ class TestProxyDispatch:
         args = parser.parse_args(["proxy", "stop"])
         assert dispatch(args) is True
         assert "not running" in capsys.readouterr().out
+
+    @patch("terok.cli.commands.proxy.get_proxy_status")
+    def test_dispatch_status_no_credentials(self, mock_status, capsys) -> None:
+        """'proxy status' shows 'none stored' when no credentials exist."""
+        status = _make_status()
+        status.credentials_stored = ()
+        mock_status.return_value = status
+        parser = _make_parser()
+        args = parser.parse_args(["proxy", "status"])
+        dispatch(args)
+        assert "none stored" in capsys.readouterr().out
+
+    @patch("terok.cli.commands.proxy.get_proxy_status")
+    def test_dispatch_status_running(self, mock_status, capsys) -> None:
+        """'proxy status' shows 'running' when proxy is up."""
+        mock_status.return_value = _make_status(running=True)
+        parser = _make_parser()
+        args = parser.parse_args(["proxy", "status"])
+        dispatch(args)
+        assert "running" in capsys.readouterr().out
+
+    def test_dispatch_unknown_subcommand(self) -> None:
+        """Unknown proxy subcommand returns False."""
+        args = argparse.Namespace(cmd="proxy", proxy_cmd="bogus")
+        assert dispatch(args) is False

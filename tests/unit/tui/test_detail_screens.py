@@ -1091,6 +1091,40 @@ class TestRenderProxyStatus:
         assert "none stored" in str(result)
 
 
+class TestCredentialProxyScreenRefresh:
+    """Tests for proxy screen refresh logic."""
+
+    def test_refresh_status_updates_status(self) -> None:
+        """_refresh_status fetches new status from terok_sandbox."""
+        screens, _ = import_screens()
+        screen = screens.CredentialProxyScreen(make_proxy_status(running=False))
+        detail = mock.Mock()
+        screen.query_one = mock.Mock(return_value=detail)
+        new_status = make_proxy_status(running=True)
+        with mock.patch("terok_sandbox.get_proxy_status", return_value=new_status):
+            screen._refresh_status()
+        assert screen._status is new_status
+        detail.update.assert_called_once()
+
+    def test_refresh_status_handles_exception(self) -> None:
+        """_refresh_status sets status to None on failure."""
+        screens, _ = import_screens()
+        screen = screens.CredentialProxyScreen(make_proxy_status())
+        detail = mock.Mock()
+        screen.query_one = mock.Mock(return_value=detail)
+        with mock.patch("terok_sandbox.get_proxy_status", side_effect=RuntimeError):
+            screen._refresh_status()
+        assert screen._status is None
+
+    def test_proxy_screen_refresh_action(self) -> None:
+        """action_proxy_refresh calls _refresh_status."""
+        screens, _ = import_screens()
+        screen = screens.CredentialProxyScreen()
+        screen._refresh_status = mock.Mock()
+        screen.action_proxy_refresh()
+        screen._refresh_status.assert_called_once()
+
+
 class TestProxyCommandPalette:
     """Tests for proxy in the command palette."""
 
