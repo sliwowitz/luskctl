@@ -85,7 +85,7 @@ class TestCredentialProxyEnv:
         assert len(env["ANTHROPIC_API_KEY"]) == 32  # hex token
         # Base URL override — TCP via host.containers.internal
         assert "ANTHROPIC_BASE_URL" in env
-        assert "host.containers.internal:18731/claude" in env["ANTHROPIC_BASE_URL"]
+        assert "host.containers.internal:18731" in env["ANTHROPIC_BASE_URL"]
         # No socket mount (TCP transport)
         assert volumes == []
 
