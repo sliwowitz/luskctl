@@ -281,10 +281,15 @@ def _credential_proxy_env_and_volumes(
         # Override OpenCode base URL for proxied providers (the original
         # value from collect_opencode_provider_env points to the real upstream;
         # this override redirects through the proxy instead)
-        oc_base_key = f"TEROK_OC_{name.upper()}_BASE_URL"
         oc_provider = registry.providers.get(name)
         if oc_provider and oc_provider.opencode_config:
-            env[oc_base_key] = f"{proxy_base}/v1"
+            env[f"TEROK_OC_{name.upper()}_BASE_URL"] = f"{proxy_base}/v1"
+        if name == "glab":
+            env["GITLAB_API_HOST"] = f"host.containers.internal:{port}"
+            env["API_PROTOCOL"] = "http"
+
+    if routed:
+        env["TEROK_PROXY_PORT"] = str(port)
 
     return env, []
 
