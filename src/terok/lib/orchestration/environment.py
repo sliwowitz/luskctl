@@ -252,25 +252,32 @@ def _credential_proxy_env_and_volumes(
     cfg = SandboxConfig()
     ensure_proxy_reachable()
 
+    registry = get_registry()
+    proxy_routes = registry.proxy_routes
+
     db = CredentialDB(cfg.proxy_db_path)
     try:
         credential_set = "default"
-        phantom_token = db.create_proxy_token(project.id, task_id, credential_set)
         stored_providers = set(db.list_credentials(credential_set))
+        routed = stored_providers & proxy_routes.keys()
+        tokens = {
+            name: db.create_proxy_token(project.id, task_id, credential_set, name)
+            for name in routed
+        }
     finally:
         db.close()
 
     port = get_proxy_port(cfg)
+    proxy_base = f"http://host.containers.internal:{port}"
     env: dict[str, str] = {}
 
-    registry = get_registry()
-    for name, route in registry.proxy_routes.items():
-        if name not in stored_providers:
+    for name, route in proxy_routes.items():
+        if name not in routed:
             continue
         for env_var in route.phantom_env:
-            env[env_var] = phantom_token
+            env[env_var] = tokens[name]
         if route.base_url_env:
-            env[route.base_url_env] = f"http://host.containers.internal:{port}/{route.route_prefix}"
+            env[route.base_url_env] = f"{proxy_base}/{route.route_prefix}"
 
     return env, []
 
