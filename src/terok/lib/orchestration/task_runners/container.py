@@ -40,6 +40,7 @@ from ...util.logging_utils import timed_phase
 from ..tasks import dossier_path, tasks_meta_dir
 
 if TYPE_CHECKING:
+    from terok.lib.integrations.executor import EgressProjection
     from terok.lib.integrations.sandbox import ContainerRuntime
 
     from ...core.project_model import ProjectConfig
@@ -209,6 +210,7 @@ def _run_container(
     command: list[str] | None = None,
     hooks: LifecycleHooks | None = None,
     allow_debugger: bool = False,
+    egress: EgressProjection | None = None,
 ) -> None:
     """Launch a detached task container, annotated for clearance enrichment.
 
@@ -299,6 +301,7 @@ def _run_container(
                 task_id=task_id,
                 dossier_path=task_dossier_path,
                 allow_debugger=allow_debugger,
+                egress=egress,
             )
     except FileNotFoundError as exc:
         raise SystemExit(f"podman not found; please install podman ({exc})") from exc
