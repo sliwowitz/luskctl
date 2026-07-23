@@ -108,7 +108,7 @@ class TestFocusProbe:
             is_web=False,
             _check_for_update=MagicMock(),
             _vault_poll_timer=None,
-            _refresh_vault_pill_now=MagicMock(),
+            _schedule_vault_refresh=MagicMock(),
         )
         TerokTUI.on_app_focus(stub)
         stub._check_for_update.assert_called_once_with()
@@ -119,7 +119,7 @@ class TestFocusProbe:
             is_web=True,
             _check_for_update=MagicMock(),
             _vault_poll_timer=None,
-            _refresh_vault_pill_now=MagicMock(),
+            _schedule_vault_refresh=MagicMock(),
         )
         TerokTUI.on_app_focus(stub)
         stub._check_for_update.assert_not_called()

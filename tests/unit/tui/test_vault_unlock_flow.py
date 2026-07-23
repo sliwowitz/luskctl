@@ -157,11 +157,11 @@ class TestVaultPoll:
             is_web=False,
             _vault_poll_timer=timer,
             _check_for_update=MagicMock(),
-            _refresh_vault_pill_now=MagicMock(),
+            _schedule_vault_refresh=MagicMock(),
         )
         TerokTUI.on_app_focus(stub)
         timer.resume.assert_called_once()
-        stub._refresh_vault_pill_now.assert_called_once()
+        stub._schedule_vault_refresh.assert_called_once()
         # Focus-in still drives the existing update probe too.
         stub._check_for_update.assert_called_once()
 
@@ -171,10 +171,10 @@ class TestVaultPoll:
             is_web=False,
             _vault_poll_timer=None,
             _check_for_update=MagicMock(),
-            _refresh_vault_pill_now=MagicMock(),
+            _schedule_vault_refresh=MagicMock(),
         )
         TerokTUI.on_app_focus(stub)
-        stub._refresh_vault_pill_now.assert_called_once()
+        stub._schedule_vault_refresh.assert_called_once()
 
     def test_refresh_pill_now_runs_exclusive_vault_worker(self) -> None:
         """The one-shot re-probe hands ``_refresh_vault_status`` to an exclusive worker."""
@@ -183,7 +183,7 @@ class TestVaultPoll:
             run_worker=MagicMock(),
             _refresh_vault_status=MagicMock(return_value=sentinel),
         )
-        TerokTUI._refresh_vault_pill_now(stub)
+        TerokTUI._schedule_vault_refresh(stub)
         stub._refresh_vault_status.assert_called_once_with()
         stub.run_worker.assert_called_once()
         args, kwargs = stub.run_worker.call_args

@@ -539,13 +539,8 @@ if _HAS_TEXTUAL:
             # the ``maybe_vault_db`` graceful-degradation state and the
             # operator sees a silent empty SSH tile with no remediation.
             await self._refresh_vault_status(push_modal_if_locked=True)
-            # Keep the pill live: focus-in (on_app_focus) re-probes the
-            # instant the operator returns after an external `vault
-            # unlock`/`lock`; this interval is the while-focused backstop,
-            # paused on blur (on_app_blur) so an idle background session
-            # never wakes.
             self._vault_poll_timer = self.set_interval(
-                _VAULT_POLL_INTERVAL_S, self._refresh_vault_pill_now
+                _VAULT_POLL_INTERVAL_S, self._schedule_vault_refresh
             )
 
             # Once per session, surface the unconfirmed-recovery warning
@@ -2098,15 +2093,16 @@ if _HAS_TEXTUAL:
             terminal.  Whoever just upgraded terok in another window and
             came back should meet the restart offer right away, not
             after the idle interval.  The same moment is when an external
-            `vault unlock`/`lock` should surface, so re-probe the pill and
-            resume the backstop poll that blur paused.  Both probe workers
-            are exclusive, so a burst of focus flips collapses into one.
+            `vault unlock`/`lock` should surface, so re-probe the vault
+            and resume the backstop poll that blur paused.  Both probe
+            workers are exclusive, so a burst of focus flips collapses
+            into one.
             """
             if not self.is_web:
                 self._check_for_update()
             if self._vault_poll_timer is not None:
                 self._vault_poll_timer.resume()
-            self._refresh_vault_pill_now()
+            self._schedule_vault_refresh()
 
         def on_app_blur(self) -> None:
             """Pause the vault-pill backstop poll while the TUI isn't focused.
@@ -2441,13 +2437,14 @@ if _HAS_TEXTUAL:
                 timeout=30 if warning.severity == "error" else 20,
             )
 
-        def _refresh_vault_pill_now(self) -> None:
-            """Schedule a one-shot vault re-probe on a worker.
+        def _schedule_vault_refresh(self) -> None:
+            """Re-probe the vault off the event loop, at most one probe at a time.
 
-            The backstop interval and the focus-in handler both land here.
-            The worker is exclusive within its group, so overlapping ticks
-            (a focus flip landing on top of an interval fire) collapse
-            into a single probe rather than stacking DB opens.
+            The probe opens the credentials DB, so it must not run on the
+            message pump.  Requests arrive faster than probes finish — a
+            focus flip can land on top of a pending tick — and an
+            exclusive worker collapses those into a single in-flight
+            probe rather than stacking DB opens.
             """
             self.run_worker(
                 self._refresh_vault_status(),
