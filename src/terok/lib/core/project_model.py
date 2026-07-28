@@ -17,7 +17,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 
 class ShieldOverride(BaseModel):
@@ -35,6 +35,14 @@ class ShieldOverride(BaseModel):
     host: str
     reason: str
     expires: date | None = None
+
+    @field_validator("host")
+    @classmethod
+    def _reject_cidr(cls, value: str) -> str:
+        """Hold the single-host invariant for callers that skip the YAML schema."""
+        if "/" in value:
+            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
+        return value
 
 
 class ProjectConfig(BaseModel):

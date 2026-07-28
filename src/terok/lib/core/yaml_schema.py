@@ -329,6 +329,20 @@ class RawShieldOverride(BaseModel):
 
     host: str = Field(description="Single host or IP to allow above the deny (no CIDR)")
     reason: str = Field(description="Why this break-glass override exists (audit trail)")
+
+    @field_validator("host")
+    @classmethod
+    def _reject_cidr(cls, value: str) -> str:
+        """Refuse a subnet: break-glass punches one hole, not a range.
+
+        Shield rejects a CIDR t10 entry too, but only once the task is
+        launching; catching it while ``project.yml`` is parsed names the
+        offending entry instead of failing a container start.
+        """
+        if "/" in value:
+            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
+        return value
+
     expires: date | None = Field(
         default=None,
         description=(

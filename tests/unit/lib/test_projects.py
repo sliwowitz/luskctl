@@ -746,6 +746,24 @@ class TestProject:
             with pytest.raises(SystemExit, match="expires"):
                 load_project("proj-shield-badexp")
 
+    def test_shield_override_rejects_cidr_host(self) -> None:
+        """A CIDR break-glass entry would widen a whole subnet above the deny."""
+        yaml_text = project_yaml("proj-shield-cidr") + (
+            "shield:\n  override:\n    - host: 10.0.0.0/8\n      reason: testing\n"
+        )
+        with project_env(yaml_text, project_name="proj-shield-cidr"):
+            with pytest.raises(SystemExit, match="not a CIDR"):
+                load_project("proj-shield-cidr")
+
+    def test_shield_override_model_rejects_cidr_host(self) -> None:
+        """The resolved model holds the invariant for callers that skip the YAML."""
+        from pydantic import ValidationError
+
+        from terok.lib.core.project_model import ShieldOverride
+
+        with pytest.raises(ValidationError, match="not a CIDR"):
+            ShieldOverride(host="2001:db8::/32", reason="testing")
+
     def test_shared_dir_true_resolves_to_tasks_root(self) -> None:
         """``shared_dir: true`` resolves to tasks_root/_shared."""
         yaml_text = project_yaml("proj-shared") + "shared_dir: true\n"
