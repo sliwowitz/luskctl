@@ -12,9 +12,8 @@ alongside the project's git remote host and its custom ``shield.allow``.
 
 Ownership per the layering: terok owns the curated *workflow* content
 here; the ``os-packages`` set alone resolves through terok-executor's
-[`package_repo_hosts`][terok_executor.package_repo_hosts] — which distro
-repos a task needs is image knowledge, keyed on the project's detected
-package family.
+``package_repo_hosts`` — which distro repos a task needs is image
+knowledge, keyed on the project's detected package family.
 
 The **generous default** is every curated set: under a shield-up posture
 the common workflows (git, language package managers, container pulls,
@@ -107,8 +106,8 @@ def resolve_egress_sets(names: tuple[str, ...] | None, family: str | None) -> tu
     generous default (every set), an empty tuple resolves to nothing.
     *family* is the project image's package family (``deb``/``rpm``/None),
     consumed by the ``os-packages`` set through terok-executor's
-    [`package_repo_hosts`][terok_executor.package_repo_hosts]; an
-    unrecognized image gets the generous all-family union.
+    ``package_repo_hosts``; an unrecognized image gets the generous
+    all-family union.
     """
     from terok.lib.integrations.executor import package_repo_hosts
 

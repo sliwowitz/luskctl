@@ -251,6 +251,10 @@ class MockRunner:
         """Return the test IP for any domain."""
         return [TEST_IP]
 
+    def getent_hosts(self, domain: str, *, timeout: int = 10) -> list[str]:
+        """Return the test IP for any domain (the resolver's no-dig fallback)."""
+        return [TEST_IP]
+
 
 # ── Podman integration preflight ──────────────────────────
 

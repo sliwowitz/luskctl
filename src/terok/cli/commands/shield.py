@@ -123,46 +123,9 @@ def _resolved_commands() -> tuple[CommandDef, ...]:
     return tuple(cmd.resolve() for cmd in COMMANDS)
 
 
-def _handle_sets(project_name: str | None, selection: str | None) -> None:
-    """List the curated egress sets; show or replace a project's selection.
-
-    Without a project: the registry with each set's hosts.  With a project:
-    its effective selection (the generous default when ``shield.sets`` is
-    unset).  With ``--set``: replace the selection (``none`` → explicit
-    empty list) and remind that running containers pick it up on restart.
-    """
-    from ...lib.core.egress_sets import DEFAULT_EGRESS_SETS, EGRESS_SETS, OS_PACKAGES_SET
-    from ...lib.core.projects import load_project, set_project_shield_sets
-
-    if selection is not None:
-        if project_name is None:
-            print("Error: --set requires a project name", file=sys.stderr)
-            sys.exit(1)
-        token = selection.strip().lower()
-        chosen: tuple[str, ...] | None
-        if token == "none":
-            chosen = ()
-        elif token == "default":
-            chosen = None
-        else:
-            chosen = tuple(s.strip() for s in selection.split(",") if s.strip())
-        path = set_project_shield_sets(project_name, chosen)
-        label = (
-            "default (all curated sets)"
-            if chosen is None
-            else ", ".join(chosen) or "none (curated content disabled)"
-        )
-        print(f"shield.sets for {project_name}: {label}\nWritten to {path}")
-        print("Tasks pick the new selection up at their next start or restart.")
-        return
-
-    if project_name is not None:
-        project = load_project(project_name)
-        active = DEFAULT_EGRESS_SETS if project.shield_sets is None else project.shield_sets
-        origin = "default: all sets" if project.shield_sets is None else "from project.yml"
-        print(f"Active egress sets for {project_name} ({origin}):")
-        print("  " + (", ".join(active) if active else "none (curated content disabled)"))
-        return
+def _print_set_registry() -> None:
+    """List every curated set with the hosts it grants."""
+    from ...lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
 
     print("Curated egress sets (project.yml shield.sets; unset = all):")
     for name, hosts in EGRESS_SETS.items():
@@ -172,6 +135,63 @@ def _handle_sets(project_name: str | None, selection: str | None) -> None:
             else ", ".join(hosts)
         )
         print(f"  {name}: {detail}")
+
+
+def _print_project_sets(project_name: str) -> None:
+    """Show a project's effective selection and where it comes from."""
+    from ...lib.core.egress_sets import DEFAULT_EGRESS_SETS
+    from ...lib.core.projects import load_project
+
+    project = load_project(project_name)
+    active = DEFAULT_EGRESS_SETS if project.shield_sets is None else project.shield_sets
+    origin = "default: all sets" if project.shield_sets is None else "from project.yml"
+    print(f"Active egress sets for {project_name} ({origin}):")
+    print("  " + (", ".join(active) if active else "none (curated content disabled)"))
+
+
+def _parse_set_selection(selection: str) -> tuple[str, ...] | None:
+    """Map a ``--set`` value onto ``shield.sets``: 'default' → unset, 'none' → empty."""
+    word = selection.strip().lower()
+    if word == "default":
+        return None
+    if word == "none":
+        return ()
+    return tuple(s.strip() for s in selection.split(",") if s.strip())
+
+
+def _write_project_sets(project_name: str, selection: str) -> None:
+    """Replace a project's ``shield.sets`` and report the new selection."""
+    from ...lib.core.projects import set_project_shield_sets
+
+    chosen = _parse_set_selection(selection)
+    path = set_project_shield_sets(project_name, chosen)
+    label = (
+        "default (all curated sets)"
+        if chosen is None
+        else ", ".join(chosen) or "none (curated content disabled)"
+    )
+    print(f"shield.sets for {project_name}: {label}\nWritten to {path}")
+    print("Tasks pick the new selection up at their next start or restart.")
+
+
+def _handle_sets(project_name: str | None, selection: str | None) -> None:
+    """List the curated egress sets; show or replace a project's selection.
+
+    Without a project: the registry with each set's hosts.  With a project:
+    its effective selection (the generous default when ``shield.sets`` is
+    unset).  With ``--set``: replace the selection (``none`` → explicit
+    empty list) and remind that running containers pick it up on restart.
+    """
+    if selection is None:
+        if project_name is None:
+            _print_set_registry()
+        else:
+            _print_project_sets(project_name)
+    elif project_name is None:
+        print("Error: --set requires a project name", file=sys.stderr)
+        sys.exit(1)
+    else:
+        _write_project_sets(project_name, selection)
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

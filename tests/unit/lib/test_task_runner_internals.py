@@ -617,8 +617,9 @@ class TestRefreshShieldTiers:
             patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox,
         ):
             sandbox.return_value.shield_refresh.side_effect = RuntimeError("no persisted DNS tier")
+            project = self._project()
             with pytest.raises(SystemExit, match="Shield policy refresh failed"):
-                _refresh_shield_tiers(self._project(), "ctr", tmp_path)
+                _refresh_shield_tiers(project, "ctr", tmp_path)
 
 
 # ── _run_container ────────────────────────────────────────
