@@ -10,6 +10,7 @@ and the RunSpec delegation path through _run_container.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -387,20 +388,35 @@ class TestApplyShieldPolicy:
 # ── _compose_shield_tiers ─────────────────────────────────
 
 
+def _tier_project(**overrides: object) -> SimpleNamespace:
+    """A ProjectConfig stand-in for _compose_shield_tiers: no remote, no content.
+
+    Each test names only the field it is about; everything else stays at the
+    "nothing authored" baseline so an added ProjectConfig field lands here once.
+    """
+    return SimpleNamespace(
+        **{
+            "upstream_url": None,
+            "shield_sets": (),
+            "known_family": None,
+            "shield_allow": (),
+            "shield_override": (),
+            **overrides,
+        }
+    )
+
+
 def test_compose_shield_tiers_authors_t40_and_t10() -> None:
     """t40 = git host + custom allow; t10 = active overrides (expired dropped)."""
     from datetime import date, timedelta
-    from types import SimpleNamespace
 
     from terok.lib.core.project_model import ShieldOverride
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
     future = (date.today() + timedelta(days=1)).isoformat()
     past = (date.today() - timedelta(days=1)).isoformat()
-    project = SimpleNamespace(
+    project = _tier_project(
         upstream_url="https://github.com/foo/bar.git",
-        shield_sets=(),
-        known_family=None,
         shield_allow=("pypi.org",),
         shield_override=(
             ShieldOverride(host="api.debug.example", reason="debug"),
@@ -417,30 +433,22 @@ def test_compose_shield_tiers_authors_t40_and_t10() -> None:
 
 def test_compose_shield_tiers_empty_without_upstream() -> None:
     """No upstream + no config yields empty tiers (nothing authored)."""
-    from types import SimpleNamespace
-
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
-    project = SimpleNamespace(
-        upstream_url=None, shield_sets=(), known_family=None, shield_allow=(), shield_override=()
-    )
+    project = _tier_project()
     assert _compose_shield_tiers(project) == ((), ())
 
 
 def test_compose_shield_tiers_folds_in_curated_sets() -> None:
     """``shield.sets`` resolves into t40 between the git host and custom allows."""
-    from types import SimpleNamespace
-
     from terok.lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
     picked = next(n for n in EGRESS_SETS if n != OS_PACKAGES_SET)
-    project = SimpleNamespace(
+    project = _tier_project(
         upstream_url="https://github.com/foo/bar.git",
         shield_sets=(picked,),
-        known_family=None,
         shield_allow=("pypi.org",),
-        shield_override=(),
     )
 
     project_allow, _ = _compose_shield_tiers(project)
@@ -452,18 +460,10 @@ def test_compose_shield_tiers_folds_in_curated_sets() -> None:
 
 def test_compose_shield_tiers_default_sets_include_family_repos() -> None:
     """Unset ``shield.sets`` applies the generous default, keyed on the image family."""
-    from types import SimpleNamespace
-
     from terok.lib.integrations.executor import package_repo_hosts
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
-    project = SimpleNamespace(
-        upstream_url=None,
-        shield_sets=None,
-        known_family="deb",
-        shield_allow=(),
-        shield_override=(),
-    )
+    project = _tier_project(shield_sets=None, known_family="deb")
 
     project_allow, _ = _compose_shield_tiers(project)
 
@@ -476,17 +476,9 @@ def test_compose_shield_tiers_default_sets_include_family_repos() -> None:
 
 def test_compose_shield_tiers_scp_style_remote() -> None:
     """The documented ``git@host:path`` upstream form contributes its host to t40."""
-    from types import SimpleNamespace
-
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
-    project = SimpleNamespace(
-        upstream_url="git@github.com:user/cp2k.git",
-        shield_sets=(),
-        known_family=None,
-        shield_allow=(),
-        shield_override=(),
-    )
+    project = _tier_project(upstream_url="git@github.com:user/cp2k.git")
     assert _compose_shield_tiers(project) == (("github.com",), ())
 
 
@@ -504,9 +496,9 @@ def test_compose_shield_tiers_scp_style_remote() -> None:
 )
 def test_git_remote_host_forms(url: str, expected: str | None) -> None:
     """Host extraction covers scheme URLs and scp-like remotes; paths yield None."""
-    from terok.lib.orchestration.task_runners.container import _git_remote_host
+    from terok.lib.util.net import git_remote_host
 
-    assert _git_remote_host(url) == expected
+    assert git_remote_host(url) == expected
 
 
 def test_opt_out_via_shield_override() -> None:
@@ -519,15 +511,10 @@ def test_opt_out_via_shield_override() -> None:
     that outranks the deny.  A plain ``shield.allow`` entry stays in t40,
     *below* the deny, and must not surface in the override tuple.
     """
-    from types import SimpleNamespace
-
     from terok.lib.core.project_model import ShieldOverride
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
-    project = SimpleNamespace(
-        upstream_url=None,
-        shield_sets=(),
-        known_family=None,
+    project = _tier_project(
         shield_allow=("api.anthropic.com",),  # below the deny — NOT an opt-out
         shield_override=(ShieldOverride(host="api.anthropic.com", reason="direct SDK testing"),),
     )
@@ -558,8 +545,6 @@ class TestRefreshShieldTiers:
 
     def test_refresh_threads_current_projection_and_authored_tiers(self, tmp_path: Path) -> None:
         """Recomputed t20/t30 (roster) + t40/t10 (config) reach Sandbox.shield_refresh."""
-        from types import SimpleNamespace
-
         from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
 
         (tmp_path / "shield").mkdir()

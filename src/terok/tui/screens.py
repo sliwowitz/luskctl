@@ -307,7 +307,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         """Persist the new selection to ``project.yml``; ``None`` = no change."""
         if selection is None:
             return
-        from terok.lib.core.projects import set_project_shield_sets
+        from terok.lib.api import describe_egress_sets, set_project_shield_sets
         from terok.tui.shield_sets_screen import DEFAULT_SELECTION
 
         chosen = None if selection == DEFAULT_SELECTION else tuple(selection)
@@ -316,9 +316,9 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         # this same screen instance seeds from the freshly-saved value.
         # ``ProjectConfig`` is frozen, hence the model_copy.
         self._project = self._project.model_copy(update={"shield_sets": chosen})
-        label = "default (all curated sets)" if chosen is None else list(chosen) or "none"
         self.notify(
-            f"Wrote shield.sets = {label} to {path}\nTasks pick it up at their next (re)start.",
+            f"Wrote shield.sets = {describe_egress_sets(chosen)} to {path}\n"
+            "Tasks pick it up at their next (re)start.",
             severity="information",
         )
 

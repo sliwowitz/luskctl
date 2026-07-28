@@ -30,6 +30,9 @@ from collections.abc import Iterable
 OS_PACKAGES_SET = "os-packages"
 """The one dynamic set: distro package repos, resolved by package family."""
 
+OS_PACKAGES_SUMMARY = "distro repos, resolved by the image's package family"
+"""What to show operators in place of a host list for the dynamic set."""
+
 EGRESS_SETS: dict[str, tuple[str, ...]] = {
     "git-hosting": (
         "github.com",
@@ -83,6 +86,18 @@ DEFAULT_EGRESS_SETS: tuple[str, ...] = tuple(EGRESS_SETS)
 """The generous default: every curated set (applied when ``shield.sets`` is unset)."""
 
 
+def selected_egress_sets(names: tuple[str, ...] | None) -> tuple[str, ...]:
+    """The sets a ``shield.sets`` value actually grants (``None`` → the generous default)."""
+    return DEFAULT_EGRESS_SETS if names is None else names
+
+
+def describe_egress_sets(names: tuple[str, ...] | None) -> str:
+    """Render a ``shield.sets`` value for an operator — one wording, every surface."""
+    if names is None:
+        return "default (all curated sets)"
+    return ", ".join(names) or "none (curated content disabled)"
+
+
 def validate_egress_sets(names: Iterable[str] | None) -> None:
     """Reject unknown set names with the available registry spelled out.
 
@@ -111,8 +126,7 @@ def resolve_egress_sets(names: tuple[str, ...] | None, family: str | None) -> tu
     """
     from terok.lib.integrations.executor import package_repo_hosts
 
-    selected = DEFAULT_EGRESS_SETS if names is None else names
     hosts: list[str] = []
-    for name in selected:
+    for name in selected_egress_sets(names):
         hosts += package_repo_hosts(family) if name == OS_PACKAGES_SET else EGRESS_SETS[name]
     return tuple(dict.fromkeys(hosts))

@@ -125,28 +125,21 @@ def _resolved_commands() -> tuple[CommandDef, ...]:
 
 def _print_set_registry() -> None:
     """List every curated set with the hosts it grants."""
-    from ...lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
+    from terok.lib.api import EGRESS_SETS, OS_PACKAGES_SUMMARY
 
     print("Curated egress sets (project.yml shield.sets; unset = all):")
     for name, hosts in EGRESS_SETS.items():
-        detail = (
-            "distro repos, resolved by the image's package family"
-            if name == OS_PACKAGES_SET
-            else ", ".join(hosts)
-        )
-        print(f"  {name}: {detail}")
+        print(f"  {name}: {', '.join(hosts) or OS_PACKAGES_SUMMARY}")
 
 
 def _print_project_sets(project_name: str) -> None:
     """Show a project's effective selection and where it comes from."""
-    from ...lib.core.egress_sets import DEFAULT_EGRESS_SETS
-    from ...lib.core.projects import load_project
+    from terok.lib.api import load_project, selected_egress_sets
 
-    project = load_project(project_name)
-    active = DEFAULT_EGRESS_SETS if project.shield_sets is None else project.shield_sets
-    origin = "default: all sets" if project.shield_sets is None else "from project.yml"
+    sets = load_project(project_name).shield_sets
+    origin = "default: all sets" if sets is None else "from project.yml"
     print(f"Active egress sets for {project_name} ({origin}):")
-    print("  " + (", ".join(active) if active else "none (curated content disabled)"))
+    print("  " + (", ".join(selected_egress_sets(sets)) or "none (curated content disabled)"))
 
 
 def _parse_set_selection(selection: str) -> tuple[str, ...] | None:
@@ -161,16 +154,11 @@ def _parse_set_selection(selection: str) -> tuple[str, ...] | None:
 
 def _write_project_sets(project_name: str, selection: str) -> None:
     """Replace a project's ``shield.sets`` and report the new selection."""
-    from ...lib.core.projects import set_project_shield_sets
+    from terok.lib.api import describe_egress_sets, set_project_shield_sets
 
     chosen = _parse_set_selection(selection)
     path = set_project_shield_sets(project_name, chosen)
-    label = (
-        "default (all curated sets)"
-        if chosen is None
-        else ", ".join(chosen) or "none (curated content disabled)"
-    )
-    print(f"shield.sets for {project_name}: {label}\nWritten to {path}")
+    print(f"shield.sets for {project_name}: {describe_egress_sets(chosen)}\nWritten to {path}")
     print("Tasks pick the new selection up at their next start or restart.")
 
 
@@ -182,16 +170,15 @@ def _handle_sets(project_name: str | None, selection: str | None) -> None:
     unset).  With ``--set``: replace the selection (``none`` → explicit
     empty list) and remind that running containers pick it up on restart.
     """
-    if selection is None:
-        if project_name is None:
-            _print_set_registry()
-        else:
-            _print_project_sets(project_name)
-    elif project_name is None:
+    if selection is not None and project_name is None:
         print("Error: --set requires a project name", file=sys.stderr)
         sys.exit(1)
-    else:
+    if selection is not None and project_name is not None:
         _write_project_sets(project_name, selection)
+    elif project_name is not None:
+        _print_project_sets(project_name)
+    else:
+        _print_set_registry()
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

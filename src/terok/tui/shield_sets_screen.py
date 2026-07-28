@@ -24,10 +24,11 @@ DEFAULT_SELECTION = "default"  # nosec: B105 — selection token, not a secret
 """Dismiss value for the master-"All" state → ``shield.sets`` written as null."""
 
 _MASTER_ID = "shield-sets-all"
+_ITEM_PREFIX = "shield-sets-item-"
 
 
 def _item_id(slug: str) -> str:
-    return f"shield-sets-item-{slug}"
+    return f"{_ITEM_PREFIX}{slug}"
 
 
 class ShieldSetsScreen(ModalScreen[str | tuple[str, ...] | None]):
@@ -102,11 +103,11 @@ class ShieldSetsScreen(ModalScreen[str | tuple[str, ...] | None]):
 
     def compose(self) -> ComposeResult:
         """Render the master + per-set checkboxes and footer buttons."""
-        from terok.lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
+        from terok.lib.api import EGRESS_SETS, OS_PACKAGES_SUMMARY
 
         self._choices = tuple(EGRESS_SETS)
         is_all = self._initial is None
-        preset = set(self._choices) if is_all else set(self._initial or ())
+        preset = set(self._choices if self._initial is None else self._initial)
 
         dialog = Vertical(id="shield-sets-dialog")
         dialog.border_title = self._title
@@ -127,12 +128,8 @@ class ShieldSetsScreen(ModalScreen[str | tuple[str, ...] | None]):
                         name=DEFAULT_SELECTION,
                     )
                     yield Rule(line_style="dashed", classes="shield-sets-sep")
-                    for slug in self._choices:
-                        label = (
-                            f"{slug} (distro repos, by the image's package family)"
-                            if slug == OS_PACKAGES_SET
-                            else slug
-                        )
+                    for slug, hosts in EGRESS_SETS.items():
+                        label = slug if hosts else f"{slug} ({OS_PACKAGES_SUMMARY})"
                         yield Checkbox(label, value=slug in preset, id=_item_id(slug), name=slug)
             with Horizontal(id="shield-sets-buttons"):
                 yield Button("Cancel", id="shield-sets-cancel", variant="default")
@@ -155,7 +152,7 @@ class ShieldSetsScreen(ModalScreen[str | tuple[str, ...] | None]):
                 with item.prevent(Checkbox.Changed):
                     item.value = event.checkbox.value
             return
-        if cb_id.startswith("shield-sets-item-") and not event.checkbox.value:
+        if cb_id.startswith(_ITEM_PREFIX) and not event.checkbox.value:
             master = self._master_cb
             if master is not None and master.value:
                 with master.prevent(Checkbox.Changed):

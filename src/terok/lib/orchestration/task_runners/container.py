@@ -16,7 +16,6 @@ import shlex
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 from terok.lib.core.config import get_services_mode, is_experimental
 from terok.lib.integrations.executor import (
@@ -40,6 +39,7 @@ from ...core.egress_sets import resolve_egress_sets
 from ...core.projects import load_project
 from ...util.ansi import blue as _blue, supports_color as _supports_color, yellow as _yellow
 from ...util.logging_utils import timed_phase
+from ...util.net import git_remote_host
 from ..tasks import dossier_path, tasks_meta_dir
 
 if TYPE_CHECKING:
@@ -47,22 +47,6 @@ if TYPE_CHECKING:
     from terok.lib.integrations.sandbox import ContainerRuntime
 
     from ...core.project_model import ProjectConfig
-
-
-def _git_remote_host(url: str) -> str | None:
-    """Extract the host from a git remote URL, or ``None`` for a local path.
-
-    Handles both remote forms git accepts: scheme URLs (``https://``,
-    ``ssh://``) via ``urlparse``, and the scp-like ``git@github.com:org/repo``
-    form — which has no scheme, so ``urlparse`` reads it hostless and would
-    silently drop the host from the allow tier.
-    """
-    if "://" in url:
-        return urlparse(url).hostname
-    head, sep, _path = url.partition(":")
-    if not sep or "/" in head:
-        return None  # no colon, or a path-like prefix — a local repo, not a remote
-    return head.rpartition("@")[2].lower() or None
 
 
 def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -76,7 +60,7 @@ def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tupl
     ``expires`` date is in the past.  Both are de-duplicated, order-preserving.
     """
     allow: list[str] = []
-    if project.upstream_url and (host := _git_remote_host(project.upstream_url)):
+    if project.upstream_url and (host := git_remote_host(project.upstream_url)):
         allow.append(host)
     allow.extend(resolve_egress_sets(project.shield_sets, project.known_family))
     allow.extend(project.shield_allow)

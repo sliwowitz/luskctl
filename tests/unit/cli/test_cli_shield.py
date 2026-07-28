@@ -150,7 +150,7 @@ def test_dispatch_returns_false_for_non_shield_commands() -> None:
 
 def test_dispatch_sets_lists_registry() -> None:
     """Bare ``shield sets`` prints every curated set name."""
-    from terok.lib.core.egress_sets import EGRESS_SETS
+    from terok.lib.api import EGRESS_SETS
 
     args = argparse.Namespace(
         cmd="shield", shield_cmd="sets", project_name=None, sets_selection=None
@@ -169,7 +169,7 @@ def test_dispatch_sets_shows_project_selection() -> None:
         cmd="shield", shield_cmd="sets", project_name="proj", sets_selection=None
     )
     with (
-        patch("terok.lib.core.projects.load_project", return_value=project),
+        patch("terok.lib.api.load_project", return_value=project),
         patch("sys.stdout", new_callable=StringIO) as out,
     ):
         assert dispatch(args)
@@ -183,7 +183,7 @@ def test_dispatch_sets_writes_selection() -> None:
         cmd="shield", shield_cmd="sets", project_name="proj", sets_selection="python,git-hosting"
     )
     with (
-        patch("terok.lib.core.projects.set_project_shield_sets") as writer,
+        patch("terok.lib.api.set_project_shield_sets") as writer,
         patch("sys.stdout", new_callable=StringIO),
     ):
         assert dispatch(args)
@@ -203,7 +203,7 @@ def test_dispatch_sets_special_tokens(token: str, expected: object) -> None:
         cmd="shield", shield_cmd="sets", project_name="proj", sets_selection=token
     )
     with (
-        patch("terok.lib.core.projects.set_project_shield_sets") as writer,
+        patch("terok.lib.api.set_project_shield_sets") as writer,
         patch("sys.stdout", new_callable=StringIO),
     ):
         assert dispatch(args)

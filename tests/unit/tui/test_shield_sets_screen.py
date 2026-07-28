@@ -15,7 +15,7 @@ import pytest
 from textual.app import App
 from textual.widgets import Checkbox
 
-from terok.lib.core.egress_sets import EGRESS_SETS
+from terok.lib.api import EGRESS_SETS
 from terok.tui.shield_sets_screen import DEFAULT_SELECTION, ShieldSetsScreen
 
 _SENTINEL_PENDING = object()

@@ -255,6 +255,7 @@ depends_on = [
 path = "terok.lib.api.project"
 layer = "domain"
 depends_on = [
+    "terok.lib.core.egress_sets",
     "terok.lib.core.projects",
     "terok.lib.domain.image_cleanup",
     "terok.lib.domain.panic",
@@ -290,6 +291,7 @@ depends_on = [
     "terok.lib.orchestration.tasks",
     "terok.lib.integrations.sandbox",
     "terok.lib.core.project_model",
+    "terok.lib.util.net",
 ]
 
 [[modules]]
@@ -712,7 +714,10 @@ expose = [
     "DEFAULT_EGRESS_SETS",
     "EGRESS_SETS",
     "OS_PACKAGES_SET",
+    "OS_PACKAGES_SUMMARY",
+    "describe_egress_sets",
     "resolve_egress_sets",
+    "selected_egress_sets",
     "validate_egress_sets",
 ]
 from = ["terok.lib.core.egress_sets"]
