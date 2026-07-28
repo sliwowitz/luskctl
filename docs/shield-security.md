@@ -108,6 +108,43 @@ shield:
 
 ---
 
+## Per-Project Allow and Break-Glass Override
+
+Two additive `project.yml` layers shape a task's egress policy on top of
+the global allow profiles:
+
+```yaml
+shield:
+  allow:                # extra hosts allowed while the shield is up
+    - ftp.mirror.example.org
+  override:             # break-glass: reachable despite a security-deny
+    - host: api.anthropic.com
+      reason: direct SDK testing against the live endpoint
+      expires: 2026-08-15
+```
+
+- **`shield.allow`** entries join the project-allow tier alongside the
+  project's git remote host and the configured allow profiles.  They are
+  ordinary allows: a security-deny still wins over them.
+- **`shield.override`** entries sit *above* the security-deny — the only
+  way to reach a host terok deliberately denies, such as a vault-relayed
+  provider endpoint.  One host or IP per entry (never a CIDR), a
+  mandatory `reason` for the audit trail, and an optional `expires` date.
+- **Expiry is evaluated when the container is launched or restarted.**
+  An already-running container keeps its overrides until its next start —
+  restart the task to make an elapsed `expires` take effect.
+
+The policy tiers are recomputed from the current roster and project
+config on every launch **and every plain restart**, so config edits reach
+a stopped task the next time it starts.
+
+> **Migration note (0.9):** adding a vault-protected provider endpoint to
+> a custom allowlist profile no longer re-enables direct access — profile
+> entries compose below the security-deny, which always wins.  Use a
+> `shield.override` entry (with its auditable reason and expiry) instead.
+
+---
+
 ## Mitigations When Shield is Down or Missing
 
 If you must operate without the shield, consider these compensating controls:

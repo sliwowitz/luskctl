@@ -32,7 +32,7 @@ from ..ports import assign_web_port, release_web_port
 from ..tasks import container_name, load_task_meta
 from .cli import task_run_cli
 from .container import _assert_running, _podman_start, _print_login_instructions, _sandbox
-from .shield import _apply_shield_policy
+from .shield import _apply_shield_policy, _refresh_shield_tiers
 from .toad import _rehydrate_toad_token, _toad_browser_url, task_run_toad
 
 if TYPE_CHECKING:
@@ -140,6 +140,13 @@ def _make_running(
         assign_web_port(project.name, task_id, preferred=meta["web_port"])
 
     if reason is None:
+        # The resume rung is the only path that replays the existing shield
+        # bundle, so it alone gates on the bundle version — a recreate
+        # builds a fresh bundle and must never be blocked by a stale one —
+        # and refreshes the bundle's policy from the current roster/config
+        # before anything is torn down.
+        _validate_shield_bundle_version(cname)
+        _refresh_shield_tiers(project, cname, project.tasks_root / str(task_id))
         if container_state == "running":
             _stop_running_container(project, task_id, mode, cname, meta_path)
         try:
@@ -216,21 +223,26 @@ def _image_drift(project: ProjectConfig, cname: str) -> str | None:
 
 
 def _validate_shield_bundle_version(cname: str) -> None:
-    """Refuse to restart a container whose shield bundle predates this terok.
+    """Refuse to resume a container whose shield bundle doesn't match this terok.
 
     The shield OCI hook fails closed on a bundle-version mismatch at start;
     catching it here — *before* the running container is stopped — lets the
-    operator re-create the task instead of stranding a half-torn-down service.
-    An unreadable version (unshielded container, podman unreachable) is skipped:
-    the hook, or the absence of shielding, decides.  This mirrors the frozen
-    web-port precondition: refuse before we take anything down.
+    operator act instead of stranding a half-torn-down service.  Only the
+    resume rung calls this: a recreate builds a fresh bundle, and ensure on
+    an already-running container touches nothing.  An unreadable version
+    (unshielded container, podman unreachable) is skipped: the hook, or the
+    absence of shielding, decides.  The message stays direction-neutral —
+    a *newer* bundle than this terok (a downgrade) has the opposite remedy
+    of an older one.
     """
     version = resolve_container_shield_version(cname)
     if version is not None and version != BUNDLE_VERSION:
         raise SystemExit(
-            f"Container {cname} was prepared with shield bundle v{version}, but this terok "
-            f"ships v{BUNDLE_VERSION}.  Re-create the task — a fresh container gets a current "
-            f"shield bundle; the running one keeps running untouched until then."
+            f"Container {cname} carries shield bundle v{version}; this terok ships "
+            f"v{BUNDLE_VERSION}, so a resumed container would fail closed at start.  "
+            f"Re-create the task (terok task restart --recreate) to build a v{BUNDLE_VERSION} "
+            f"bundle, or run the terok version that created it.  A running container keeps "
+            f"running untouched until then."
         )
 
 
@@ -240,12 +252,13 @@ def _validate_restart_preconditions(
     """Validate what would fail the restart *before* the container is stopped.
 
     Taking down a working service only to then error out is worse than
-    refusing to stop: check the shield bundle version, re-claim the saved web
-    port, and rehydrate the toad token here, raising ``SystemExit`` if any is
-    no longer viable.  The port claim also pins the recreate rung to the saved
-    port — the registry hands the same claim back to the launch path.
+    refusing to stop: re-claim the saved web port and rehydrate the toad
+    token here, raising ``SystemExit`` if either is no longer viable.  The
+    port claim also pins the recreate rung to the saved port — the registry
+    hands the same claim back to the launch path.  (The shield bundle-version
+    gate is *not* here: it guards only the resume rung, which is the one
+    path that replays the existing bundle.)
     """
-    _validate_shield_bundle_version(cname)
     web_port = meta.get("web_port")
     if isinstance(web_port, int):
         actual = assign_web_port(project.name, task_id, preferred=web_port)

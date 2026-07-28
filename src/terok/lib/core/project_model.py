@@ -13,6 +13,7 @@ have no behavior beyond computed paths.
 """
 
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,15 +24,17 @@ class ShieldOverride(BaseModel):
     """A resolved break-glass override — shield's t10 tier (above the deny).
 
     ``host`` is a single host or IP (never a CIDR); ``reason`` records why the
-    punch-through exists; ``expires`` is an optional ISO-8601 date after which
-    the override is dropped at launch.
+    punch-through exists; ``expires`` is an optional date after which the
+    override is dropped.  Expiry is evaluated when the container is launched
+    or restarted — an already-running container keeps its overrides until its
+    next start.
     """
 
     model_config = ConfigDict(frozen=True)
 
     host: str
     reason: str
-    expires: str | None = None
+    expires: date | None = None
 
 
 class ProjectConfig(BaseModel):

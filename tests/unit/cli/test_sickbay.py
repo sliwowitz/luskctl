@@ -637,7 +637,7 @@ class TestCheckTaskShieldAnnotation:
             result = _check_task_shield_annotation("p", "g1abc", project)
         assert result is not None
         assert result[0] == "warn"
-        assert "predates" in result[2]
+        assert "does not match" in result[2]
 
     def test_missing_annotation_warns(self, tmp_path: Path, mock_runtime) -> None:
         """Shield dir present but container has no annotation → WARN."""

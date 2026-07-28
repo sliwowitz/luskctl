@@ -31,6 +31,7 @@ caught here.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
@@ -328,9 +329,13 @@ class RawShieldOverride(BaseModel):
 
     host: str = Field(description="Single host or IP to allow above the deny (no CIDR)")
     reason: str = Field(description="Why this break-glass override exists (audit trail)")
-    expires: str | None = Field(
+    expires: date | None = Field(
         default=None,
-        description="Optional ISO-8601 date after which the override is dropped at launch",
+        description=(
+            "Optional ISO-8601 date after which the override is dropped.  "
+            "Evaluated when the container is launched or restarted — an "
+            "already-running container keeps its overrides until its next start"
+        ),
     )
 
 

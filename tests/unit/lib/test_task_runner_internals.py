@@ -423,6 +423,145 @@ def test_compose_shield_tiers_empty_without_upstream() -> None:
     assert _compose_shield_tiers(project) == ((), ())
 
 
+def test_compose_shield_tiers_scp_style_remote() -> None:
+    """The documented ``git@host:path`` upstream form contributes its host to t40."""
+    from types import SimpleNamespace
+
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = SimpleNamespace(
+        upstream_url="git@github.com:user/cp2k.git", shield_allow=(), shield_override=()
+    )
+    assert _compose_shield_tiers(project) == (("github.com",), ())
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        pytest.param("https://github.com/foo/bar.git", "github.com", id="https"),
+        pytest.param("ssh://git@github.com/foo/bar.git", "github.com", id="ssh-scheme"),
+        pytest.param("git@github.com:foo/bar.git", "github.com", id="scp-style"),
+        pytest.param("GitLab.example.ORG:group/repo.git", "gitlab.example.org", id="scp-no-user"),
+        pytest.param("/srv/git/repo.git", None, id="local-path"),
+        pytest.param("../relative/repo", None, id="relative-path"),
+        pytest.param("file:///srv/git/repo.git", None, id="file-scheme"),
+    ],
+)
+def test_git_remote_host_forms(url: str, expected: str | None) -> None:
+    """Host extraction covers scheme URLs and scp-like remotes; paths yield None."""
+    from terok.lib.orchestration.task_runners.container import _git_remote_host
+
+    assert _git_remote_host(url) == expected
+
+
+def test_opt_out_via_shield_override() -> None:
+    """The #566 opt-out lives in ``shield.override`` (t10), not in allow profiles.
+
+    Successor to the deleted allow-profile opt-out test: a developer who
+    needs direct access to a security-denied provider endpoint declares a
+    break-glass override, which composes into the t10 tuple that
+    ``launch_prepared``/``shield_refresh`` carry to shield — the only tier
+    that outranks the deny.  A plain ``shield.allow`` entry stays in t40,
+    *below* the deny, and must not surface in the override tuple.
+    """
+    from types import SimpleNamespace
+
+    from terok.lib.core.project_model import ShieldOverride
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = SimpleNamespace(
+        upstream_url=None,
+        shield_allow=("api.anthropic.com",),  # below the deny — NOT an opt-out
+        shield_override=(ShieldOverride(host="api.anthropic.com", reason="direct SDK testing"),),
+    )
+
+    project_allow, override = _compose_shield_tiers(project)
+
+    assert override == ("api.anthropic.com",)
+    assert project_allow == ("api.anthropic.com",)  # the allow stays t40; t10 is the opt-out
+
+
+# ── _refresh_shield_tiers ─────────────────────────────────
+
+
+class TestRefreshShieldTiers:
+    """The restart path's policy-bundle recompute."""
+
+    def _project(self) -> MagicMock:
+        from terok.lib.core.project_model import ProjectConfig
+
+        p = MagicMock(spec=ProjectConfig)
+        p.runtime = "crun"
+        p.upstream_url = "https://github.com/foo/bar.git"
+        p.shield_allow = ()
+        p.shield_override = ()
+        return p
+
+    def test_refresh_threads_current_projection_and_authored_tiers(self, tmp_path: Path) -> None:
+        """Recomputed t20/t30 (roster) + t40/t10 (config) reach Sandbox.shield_refresh."""
+        from types import SimpleNamespace
+
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
+
+        (tmp_path / "shield").mkdir()
+        egress = SimpleNamespace(
+            deny_to_vault=("api.anthropic.com",), provider_allow=("telemetry.example",)
+        )
+        roster = MagicMock()
+        roster.compose_egress.return_value = egress
+        project = self._project()
+        with (
+            patch(
+                "terok.lib.orchestration.task_runners.shield."
+                "get_shield_bypass_firewall_no_protection",
+                return_value=False,
+            ),
+            patch("terok.lib.integrations.executor.AgentRoster") as roster_cls,
+            patch("terok.lib.core.config.exposed_credential_providers", return_value=frozenset()),
+            patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox,
+        ):
+            roster_cls.shared.return_value = roster
+            _refresh_shield_tiers(project, "ctr", tmp_path)
+
+        sandbox.return_value.shield_refresh.assert_called_once_with(
+            "ctr",
+            tmp_path,
+            runtime="crun",
+            security_deny=("api.anthropic.com",),
+            provider_allow=("telemetry.example",),
+            project_allow=("github.com",),
+            override=(),
+        )
+
+    def test_refresh_skips_unshielded_task(self, tmp_path: Path) -> None:
+        """No shield state under the task dir (e.g. created under bypass) → no-op."""
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
+
+        with patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox:
+            _refresh_shield_tiers(self._project(), "ctr", tmp_path)
+
+        sandbox.return_value.shield_refresh.assert_not_called()
+
+    def test_refresh_failure_aborts_with_system_exit(self, tmp_path: Path) -> None:
+        """A refresh failure aborts the restart before anything is torn down."""
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
+
+        (tmp_path / "shield").mkdir()
+        with (
+            patch(
+                "terok.lib.orchestration.task_runners.shield."
+                "get_shield_bypass_firewall_no_protection",
+                return_value=False,
+            ),
+            patch("terok.lib.integrations.executor.AgentRoster"),
+            patch("terok.lib.core.config.exposed_credential_providers", return_value=frozenset()),
+            patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox,
+        ):
+            sandbox.return_value.shield_refresh.side_effect = RuntimeError("no persisted DNS tier")
+            with pytest.raises(SystemExit, match="Shield policy refresh failed"):
+                _refresh_shield_tiers(self._project(), "ctr", tmp_path)
+
+
 # ── _run_container ────────────────────────────────────────
 
 

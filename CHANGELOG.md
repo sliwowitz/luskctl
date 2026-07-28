@@ -1,4 +1,21 @@
 # Changelog
+## Unreleased
+
+* **Behavior change — auth-protect opt-out moved**: adding a vault-protected
+  provider endpoint to a custom allowlist profile (the
+  [#566](https://github.com/terok-ai/terok/issues/566) flow) no longer
+  re-enables direct access; profile entries now compose below the shield's
+  security-deny tier, which always wins.  Use the new per-project
+  `shield.override` break-glass entry (host + reason + optional expiry)
+  instead — see the Shield Security guide.
+* **Upgrade contract**: containers created by a different shield-bundle
+  generation refuse to resume (`terok task restart` fails fast before
+  anything is stopped; `terok sickbay` diagnoses them).  Re-create the task
+  to move it to the current bundle; running containers keep running
+  untouched.
+* Shield policy tiers are now recomputed from the current roster and project
+  config on every plain restart, not only at container creation.
+
 ## v0.8.5 — You Exist Here
 
 * Keep container on plain restart, make image upgrade opt-in, https://github.com/terok-ai/terok/pull/1135

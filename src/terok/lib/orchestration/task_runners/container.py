@@ -48,6 +48,22 @@ if TYPE_CHECKING:
     from ...core.project_model import ProjectConfig
 
 
+def _git_remote_host(url: str) -> str | None:
+    """Extract the host from a git remote URL, or ``None`` for a local path.
+
+    Handles both remote forms git accepts: scheme URLs (``https://``,
+    ``ssh://``) via ``urlparse``, and the scp-like ``git@github.com:org/repo``
+    form — which has no scheme, so ``urlparse`` reads it hostless and would
+    silently drop the host from the allow tier.
+    """
+    if "://" in url:
+        return urlparse(url).hostname
+    head, sep, _path = url.partition(":")
+    if not sep or "/" in head:
+        return None  # no colon, or a path-like prefix — a local repo, not a remote
+    return head.rpartition("@")[2].lower() or None
+
+
 def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Author the project's t40 (project-allow) + t10 (override) shield tiers.
 
@@ -57,11 +73,11 @@ def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tupl
     ``expires`` date is in the past.  Both are de-duplicated, order-preserving.
     """
     allow: list[str] = []
-    if project.upstream_url and (host := urlparse(project.upstream_url).hostname):
+    if project.upstream_url and (host := _git_remote_host(project.upstream_url)):
         allow.append(host)
     allow.extend(project.shield_allow)
 
-    today = date.today().isoformat()
+    today = date.today()
     override = [o.host for o in project.shield_override if not (o.expires and o.expires < today)]
     return tuple(dict.fromkeys(allow)), tuple(dict.fromkeys(override))
 

@@ -665,6 +665,49 @@ class TestProject:
         with project_env(yaml_text, project_name=project_name):
             assert load_project(project_name).shield_on_task_restart == expected
 
+    def test_shield_allow_and_override_load(self) -> None:
+        """``shield.allow``/``override`` load; unquoted and quoted expiry dates both parse.
+
+        ``expires: 2099-12-31`` is the natural way to write a date in YAML —
+        ruamel hands the schema a ``datetime.date``, and a quoted ISO string
+        must coerce to the same thing (regression: a ``str`` field rejected
+        the unquoted form and broke the whole project.yml).
+        """
+        from datetime import date as _date
+
+        yaml_text = project_yaml("proj-shield-tiers") + (
+            "shield:\n"
+            "  allow:\n"
+            "    - pypi.org\n"
+            "  override:\n"
+            "    - host: api.example.org\n"
+            "      reason: testing\n"
+            "      expires: 2099-12-31\n"
+            "    - host: api2.example.org\n"
+            "      reason: testing\n"
+            '      expires: "2099-06-30"\n'
+        )
+        with project_env(yaml_text, project_name="proj-shield-tiers"):
+            project = load_project("proj-shield-tiers")
+        assert project.shield_allow == ("pypi.org",)
+        assert [(o.host, o.expires) for o in project.shield_override] == [
+            ("api.example.org", _date(2099, 12, 31)),
+            ("api2.example.org", _date(2099, 6, 30)),
+        ]
+
+    def test_shield_override_rejects_non_iso_expires(self) -> None:
+        """A non-ISO expiry (e.g. US-style) fails loading loudly, never silently drops."""
+        yaml_text = project_yaml("proj-shield-badexp") + (
+            "shield:\n"
+            "  override:\n"
+            "    - host: api.example.org\n"
+            "      reason: testing\n"
+            '      expires: "12/31/2099"\n'
+        )
+        with project_env(yaml_text, project_name="proj-shield-badexp"):
+            with pytest.raises(SystemExit, match="expires"):
+                load_project("proj-shield-badexp")
+
     def test_shared_dir_true_resolves_to_tasks_root(self) -> None:
         """``shared_dir: true`` resolves to tasks_root/_shared."""
         yaml_text = project_yaml("proj-shared") + "shared_dir: true\n"

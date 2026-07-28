@@ -4,9 +4,11 @@
 """Per-task shield (egress firewall) policy.
 
 ``_apply_shield_policy`` is the entry point every runner calls after a
-container starts — it honours ``shield.drop_on_task_run`` on creation,
-``shield.on_task_restart`` on restart, and always reapplies the
-roster-driven auth-protect denies that survive ``shield down``.
+container starts — it honours ``shield.drop_on_task_run`` on creation and
+``shield.on_task_restart`` on restart.  ``_refresh_shield_tiers`` is the
+restart path's pre-start companion: it recomputes the container's policy
+bundle from the *current* roster and project config so a resumed container
+enforces today's tiers, not the ones frozen at creation.
 
 The shield's hub socket is keyed on the **container UUID**, not the
 operator-facing name —
@@ -128,6 +130,51 @@ def _drop_shield_on_creation(cname: str, task_dir: Path) -> None:
         warnings.warn(f"shield drop: {exc}", stacklevel=2)
 
 
+def _refresh_shield_tiers(project: ProjectConfig, cname: str, task_dir: Path) -> None:
+    """Recompute a stopped container's shield policy bundle before resuming it.
+
+    Re-derives the generated t20/t30 tiers from the *current* roster
+    projection and the authored t40/t10 tiers from the *current* project
+    config — the same inputs the creation path uses — and pushes them
+    through [`Sandbox.shield_refresh`][terok_sandbox.Sandbox.shield_refresh],
+    so a plain restart picks up roster/config changes instead of replaying
+    the bundle frozen at creation.  Runs *before* anything is torn down;
+    a failure aborts the restart with the container untouched.
+
+    Skipped when the firewall bypass is active or the container was never
+    shielded (no shield state under *task_dir* — e.g. created under bypass).
+    """
+    if get_shield_bypass_firewall_no_protection():
+        return
+    if not ShieldManager(task_dir).state_dir.is_dir():
+        return
+    from terok.lib.integrations.executor import AgentRoster
+
+    from ...core.config import exposed_credential_providers
+    from .container import _compose_shield_tiers, _sandbox
+
+    egress = AgentRoster.shared().compose_egress(
+        exposed_credential_providers=exposed_credential_providers()
+    )
+    project_allow, override = _compose_shield_tiers(project)
+    with timed_phase(f"shield[{cname}]: refresh policy bundle"):
+        try:
+            _sandbox(project).shield_refresh(
+                cname,
+                task_dir,
+                runtime=project.runtime,
+                security_deny=egress.deny_to_vault,
+                provider_allow=egress.provider_allow,
+                project_allow=project_allow,
+                override=override,
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise SystemExit(
+                f"Shield policy refresh failed for {cname}: {exc}\n"
+                f"The container was left untouched."
+            ) from exc
+
+
 def _stop_container_best_effort(project: ProjectConfig, cname: str) -> None:
     """Stop *cname*, swallowing every error.
 
@@ -184,5 +231,6 @@ def _apply_shield_policy(
 
 __all__ = [
     "_apply_shield_policy",
+    "_refresh_shield_tiers",
     "resolve_container_uuid",
 ]

@@ -360,11 +360,14 @@ def _check_task_shield_annotation(
     label = f"Task {pid}/{tid} shield"
     version = resolve_container_shield_version(cname)
     if version is not None and version != BUNDLE_VERSION:
+        # Direction-neutral: a bundle *newer* than this terok (a downgrade)
+        # has the opposite remedy of an older one, so name both.
         return (
             "warn",
             label,
-            f"{cname!r}: shield bundle v{version} predates this terok (v{BUNDLE_VERSION}) "
-            "— restart refuses; re-create the task to get a current bundle",
+            f"{cname!r}: shield bundle v{version} does not match this terok's "
+            f"v{BUNDLE_VERSION} — restart refuses; re-create the task under this terok, "
+            "or run the terok version that created it",
         )
     actual = resolve_container_state_dir(cname)
     if actual is None:
