@@ -23,3 +23,9 @@ updates:
       day: "monday"
     commit-message:
       prefix: "ci"
+    groups:
+      internal-workflows:
+        patterns: ["terok-ai/*"]
+      external-actions:
+        patterns: ["*"]
+        exclude-patterns: ["terok-ai/*"]
