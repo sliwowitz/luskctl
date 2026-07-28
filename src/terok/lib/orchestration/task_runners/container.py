@@ -21,6 +21,7 @@ from terok.lib.core.config import get_services_mode, is_experimental
 from terok.lib.integrations.executor import (
     AgentRunner,
     BuildError,
+    EgressProjection,
     KrunHost,
 )
 from terok.lib.integrations.sandbox import (
@@ -43,10 +44,13 @@ from ...util.net import git_remote_host
 from ..tasks import dossier_path, tasks_meta_dir
 
 if TYPE_CHECKING:
-    from terok.lib.integrations.executor import EgressProjection
     from terok.lib.integrations.sandbox import ContainerRuntime
 
     from ...core.project_model import ProjectConfig
+
+
+_NO_EGRESS = EgressProjection()
+"""No roster projection — the launch paths that author no t20/t30 tier."""
 
 
 def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -234,7 +238,7 @@ def _run_container(
     command: list[str] | None = None,
     hooks: LifecycleHooks | None = None,
     allow_debugger: bool = False,
-    egress: EgressProjection | None = None,
+    egress: EgressProjection = _NO_EGRESS,
 ) -> None:
     """Launch a detached task container, annotated for clearance enrichment.
 
