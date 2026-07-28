@@ -36,6 +36,7 @@ from terok.lib.integrations.sandbox import (
 
 from ...core import runtime as _rt
 from ...core.config import make_sandbox_config
+from ...core.egress_sets import resolve_egress_sets
 from ...core.projects import load_project
 from ...util.ansi import blue as _blue, supports_color as _supports_color, yellow as _yellow
 from ...util.logging_utils import timed_phase
@@ -67,14 +68,17 @@ def _git_remote_host(url: str) -> str | None:
 def _compose_shield_tiers(project: ProjectConfig) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Author the project's t40 (project-allow) + t10 (override) shield tiers.
 
-    t40 = the upstream git host (so the agent can reach its own remote once the
-    shield is UP) plus the project's custom ``shield.allow`` hosts.  t10 = the
-    project's break-glass ``shield.override`` hosts, dropping any whose
+    t40 = the upstream git host (so the agent can reach its own remote once
+    the shield is UP), the project's curated egress sets (``shield.sets``,
+    defaulting generously to every set; ``os-packages`` resolves by the
+    image's package family), and its custom ``shield.allow`` hosts.  t10 =
+    the project's break-glass ``shield.override`` hosts, dropping any whose
     ``expires`` date is in the past.  Both are de-duplicated, order-preserving.
     """
     allow: list[str] = []
     if project.upstream_url and (host := _git_remote_host(project.upstream_url)):
         allow.append(host)
+    allow.extend(resolve_egress_sets(project.shield_sets, project.known_family))
     allow.extend(project.shield_allow)
 
     today = date.today()

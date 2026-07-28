@@ -34,6 +34,7 @@ from .config import (
     sandbox_live_dir,
     user_projects_dir,
 )
+from .egress_sets import validate_egress_sets
 from .project_model import (  # noqa: F401 — re-exported public API
     ProjectConfig,
     ShieldOverride,
@@ -219,6 +220,7 @@ def _build_project_config(
     agent_cfg = dict(raw.agent)
 
     shield_drop, shield_restart = _resolve_shield_config(raw)
+    validate_egress_sets(raw.shield.sets)
     hook_pre, hook_post, hook_ready, hook_stop = _resolve_hooks(raw)
 
     return ProjectConfig(
@@ -284,6 +286,7 @@ def _build_project_config(
         task_name_categories=raw.tasks.name_categories,
         shield_drop_on_task_run=shield_drop,
         shield_on_task_restart=shield_restart,
+        shield_sets=None if raw.shield.sets is None else tuple(raw.shield.sets),
         shield_allow=tuple(raw.shield.allow),
         shield_override=tuple(
             ShieldOverride(host=o.host, reason=o.reason, expires=o.expires)
@@ -605,4 +608,23 @@ def set_project_image_agents(project_name: str, selection: str) -> Path:
 
     cfg_path = _find_project_root(project_name) / _PROJECT_YML
     yaml_update_section(cfg_path, "image", {"agents": selection})
+    return cfg_path
+
+
+def set_project_shield_sets(project_name: str, sets: tuple[str, ...] | None) -> Path:
+    """Write *sets* into the project's ``project.yml`` under ``shield.sets``.
+
+    Validates the names against the curated registry first (raising
+    ``SystemExit`` with the available names on a typo).  The three states
+    are all expressible: ``None`` writes an explicit null — back to the
+    generous default, inheriting sets added in future releases; an empty
+    tuple writes ``[]`` — curated content deliberately disabled; a
+    non-empty tuple freezes that exact selection.  Returns the project.yml
+    path written.
+    """
+    from terok.lib.integrations.sandbox import yaml_update_section
+
+    validate_egress_sets(sets)
+    cfg_path = _find_project_root(project_name) / _PROJECT_YML
+    yaml_update_section(cfg_path, "shield", {"sets": None if sets is None else list(sets)})
     return cfg_path

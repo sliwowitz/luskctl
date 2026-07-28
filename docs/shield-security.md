@@ -108,10 +108,41 @@ shield:
 
 ---
 
+## Curated Egress Sets
+
+Named bundles of well-known development endpoints feed the project-allow
+tier so common workflows keep working while the shield is up: git
+hosting, language package registries (`python`, `node`, `rust`, `go`),
+container registries, and `os-packages` — the distro package repos,
+resolved automatically from the project image's package family
+(`dnf` vs `apt`).  Run `terok shield sets` to list them.
+
+The default is **generous**: every curated set.  Narrow a project via
+`shield.sets` in `project.yml` (the TUI project screen's *Egress sets*
+picker or `terok shield sets <project> --set …` write it):
+
+```yaml
+shield:
+  sets: [git-hosting, python, os-packages]   # freeze this exact selection
+  # sets: []                                 # disable all curated content
+  # (unset/null: the generous default — every set, including future ones)
+```
+
+Two caveats worth knowing:
+
+- Set entries are ordinary t40 allows — a security-deny always wins over
+  them, and on the dnsmasq DNS tier a listed domain admits its
+  subdomains by suffix match.
+- Hostname allowlists cannot cover community *mirror pools* (Fedora's
+  metalink hands dnf arbitrary mirror hosts).  The `os-packages` set
+  covers the distros' own hosts (metalink + primary download); a blocked
+  community mirror surfaces in the audit log and dnf falls back through
+  its mirror list.
+
 ## Per-Project Allow and Break-Glass Override
 
 Two additive `project.yml` layers shape a task's egress policy on top of
-the global allow profiles:
+the curated sets:
 
 ```yaml
 shield:

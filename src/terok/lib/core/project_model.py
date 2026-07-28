@@ -148,6 +148,12 @@ class ProjectConfig(BaseModel):
     task_name_categories: list[str] | None = None
     shield_drop_on_task_run: bool = True
     shield_on_task_restart: str = "retain"
+    shield_sets: tuple[str, ...] | None = None
+    """Curated egress sets granted to tasks (t40).
+
+    ``None`` applies the generous default (every curated set in
+    [`EGRESS_SETS`][terok.lib.core.egress_sets.EGRESS_SETS]); an empty
+    tuple disables all curated content."""
     shield_allow: tuple[str, ...] = ()
     """Extra hosts allowed at egress — shield's t40 project-allow tier."""
     shield_override: tuple[ShieldOverride, ...] = ()

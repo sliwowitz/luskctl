@@ -30,3 +30,20 @@ run:
   # Note: GPU-enabled projects typically require a CUDA/NVIDIA-capable base image.
   # Configure under image.base_image accordingly.
   # gpus: all
+
+# Egress firewall (shield) per-project policy.
+# shield:
+#   # Curated egress sets granted to this project's tasks (t40 allow tier).
+#   # Unset = the generous default (every curated set, including ones added
+#   # in future releases); [] disables all curated content.  List the
+#   # available names with `terok shield sets`.
+#   sets: [git-hosting, python, os-packages]
+#   # Extra hosts allowed while the shield is up (below the security-deny).
+#   allow:
+#     - ftp.mirror.example.org
+#   # Break-glass overrides ABOVE the security-deny — single host, mandatory
+#   # reason, optional expiry (evaluated at each container (re)start).
+#   override:
+#     - host: api.example.org
+#       reason: direct endpoint testing
+#       expires: 2099-12-31

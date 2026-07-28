@@ -549,6 +549,12 @@ path = "terok.lib.core.project_model"
 layer = "core"
 depends_on = []
 
+# Curated egress allowlist sets (shield t40 default content)
+[[modules]]
+path = "terok.lib.core.egress_sets"
+layer = "core"
+depends_on = ["terok.lib.integrations.executor"]
+
 # Raw YAML schema models (Pydantic validation, no I/O)
 [[modules]]
 path = "terok.lib.core.yaml_schema"
@@ -561,6 +567,7 @@ path = "terok.lib.core.projects"
 layer = "core"
 depends_on = [
     "terok.lib.core.config",
+    "terok.lib.core.egress_sets",
     "terok.lib.core.project_model",
     "terok.lib.core.yaml_schema",
     "terok.lib.util.yaml",
@@ -702,6 +709,16 @@ from = ["terok.lib.core.project_model"]
 
 [[interfaces]]
 expose = [
+    "DEFAULT_EGRESS_SETS",
+    "EGRESS_SETS",
+    "OS_PACKAGES_SET",
+    "resolve_egress_sets",
+    "validate_egress_sets",
+]
+from = ["terok.lib.core.egress_sets"]
+
+[[interfaces]]
+expose = [
     "BrokenProject",
     "ProjectConfig",
     "discover_projects",
@@ -711,6 +728,7 @@ expose = [
     "derive_project",
     "require_project_exists",
     "set_project_image_agents",
+    "set_project_shield_sets",
     "validate_project_name",
 ]
 from = ["terok.lib.core.projects"]

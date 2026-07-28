@@ -695,6 +695,44 @@ class TestProject:
             ("api2.example.org", _date(2099, 6, 30)),
         ]
 
+    def test_shield_sets_load_and_default(self) -> None:
+        """An explicit ``shield.sets`` loads as a tuple; unset stays ``None`` (default)."""
+        yaml_text = project_yaml("proj-shield-sets") + ("shield:\n  sets: [python]\n")
+        with project_env(yaml_text, project_name="proj-shield-sets"):
+            assert load_project("proj-shield-sets").shield_sets == ("python",)
+        with project_env(project_yaml("proj-shield-nosets"), project_name="proj-shield-nosets"):
+            assert load_project("proj-shield-nosets").shield_sets is None
+
+    def test_shield_sets_unknown_name_fails_loudly(self) -> None:
+        """A typo in ``shield.sets`` refuses the load and spells out the registry."""
+        yaml_text = project_yaml("proj-shield-badset") + ("shield:\n  sets: [pythn]\n")
+        with project_env(yaml_text, project_name="proj-shield-badset"):
+            with pytest.raises(SystemExit, match="Available sets"):
+                load_project("proj-shield-badset")
+
+    def test_set_project_shield_sets_round_trips(self) -> None:
+        """The writer persists explicit, empty, and back-to-default selections."""
+        from terok.lib.core.projects import set_project_shield_sets
+
+        name = "proj-shield-write"
+        with project_env(project_yaml(name), project_name=name):
+            set_project_shield_sets(name, ("python", "git-hosting"))
+            assert load_project(name).shield_sets == ("python", "git-hosting")
+            set_project_shield_sets(name, ())
+            assert load_project(name).shield_sets == ()
+            set_project_shield_sets(name, None)
+            assert load_project(name).shield_sets is None
+
+    def test_set_project_shield_sets_validates_names(self) -> None:
+        """The writer refuses unknown names before touching project.yml."""
+        from terok.lib.core.projects import set_project_shield_sets
+
+        name = "proj-shield-badwrite"
+        with project_env(project_yaml(name), project_name=name):
+            with pytest.raises(SystemExit, match="Available sets"):
+                set_project_shield_sets(name, ("nonsense",))
+            assert load_project(name).shield_sets is None  # nothing written
+
     def test_shield_override_rejects_non_iso_expires(self) -> None:
         """A non-ISO expiry (e.g. US-style) fails loading loudly, never silently drops."""
         yaml_text = project_yaml("proj-shield-badexp") + (

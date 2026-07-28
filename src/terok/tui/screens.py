@@ -159,6 +159,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         _modal_binding("s", "init_ssh", "Init SSH"),
         _modal_binding("a", "auth", "Authenticate"),
         _modal_binding("A", "set_agents", "Set agents"),
+        _modal_binding("e", "shield_sets", "Egress sets"),
         _modal_binding("I", "edit_instructions", "Edit instructions"),
         _modal_binding("t", "toggle_inherit", "Toggle inherit"),
         _modal_binding("v", "show_resolved", "Show resolved instructions"),
@@ -214,6 +215,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             None,
             Option("\\[a]uthenticate...", id="auth"),
             Option("set \\[A]gents (image.agents in project.yml)...", id="set_agents"),
+            Option("\\[e]gress sets (shield.sets in project.yml)...", id="shield_sets"),
             None,
             Option("edit \\[I]nstructions", id="edit_instructions"),
             Option("\\[t]oggle instructions inherit", id="toggle_inherit"),
@@ -247,6 +249,8 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
             self._open_auth_modal()
         elif option_id == "set_agents":
             self._open_agents_modal()
+        elif option_id == "shield_sets":
+            self._open_shield_sets_modal()
         elif option_id:
             self.dismiss(option_id)
 
@@ -284,6 +288,37 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self._project = self._project.model_copy(update={"agents": selection})
         self.notify(
             f"Wrote image.agents = {selection!r} to {path}",
+            severity="information",
+        )
+
+    def _open_shield_sets_modal(self) -> None:
+        """Push the egress-set picker seeded with this project's ``shield.sets``."""
+        from terok.tui.shield_sets_screen import ShieldSetsScreen
+
+        self.app.push_screen(
+            ShieldSetsScreen(
+                initial=self._project.shield_sets,
+                title=f"Egress sets for {self._project.name}",
+            ),
+            self._on_shield_sets_modal_result,
+        )
+
+    def _on_shield_sets_modal_result(self, selection: str | tuple[str, ...] | None) -> None:
+        """Persist the new selection to ``project.yml``; ``None`` = no change."""
+        if selection is None:
+            return
+        from terok.lib.core.projects import set_project_shield_sets
+        from terok.tui.shield_sets_screen import DEFAULT_SELECTION
+
+        chosen = None if selection == DEFAULT_SELECTION else tuple(selection)
+        path = set_project_shield_sets(self._project.name, chosen)
+        # Keep the cached config in sync so a re-open of the modal in
+        # this same screen instance seeds from the freshly-saved value.
+        # ``ProjectConfig`` is frozen, hence the model_copy.
+        self._project = self._project.model_copy(update={"shield_sets": chosen})
+        label = "default (all curated sets)" if chosen is None else list(chosen) or "none"
+        self.notify(
+            f"Wrote shield.sets = {label} to {path}\nTasks pick it up at their next (re)start.",
             severity="information",
         )
 
@@ -331,6 +366,10 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
     def action_set_agents(self) -> None:
         """Open the per-project agent multi-select modal."""
         self._open_agents_modal()
+
+    def action_shield_sets(self) -> None:
+        """Open the per-project egress-set picker modal."""
+        self._open_shield_sets_modal()
 
     def action_edit_instructions(self) -> None:
         """Open instructions for editing."""

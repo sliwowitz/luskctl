@@ -357,6 +357,15 @@ class RawShieldProjectSection(BaseModel):
         default=None,
         description="Shield policy on container restart: ``retain`` or ``up``",
     )
+    sets: list[str] | None = Field(
+        default=None,
+        description=(
+            "Curated egress sets granted to this project's tasks (t40).  "
+            "Unset applies the generous default (every curated set); an "
+            "empty list disables all curated content.  "
+            "See ``terok shield sets`` for the available names"
+        ),
+    )
     allow: list[str] = Field(
         default_factory=list,
         description="Extra hosts allowed at egress (shield's t40 project-allow tier)",

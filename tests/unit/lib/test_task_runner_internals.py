@@ -399,6 +399,8 @@ def test_compose_shield_tiers_authors_t40_and_t10() -> None:
     past = (date.today() - timedelta(days=1)).isoformat()
     project = SimpleNamespace(
         upstream_url="https://github.com/foo/bar.git",
+        shield_sets=(),
+        known_family=None,
         shield_allow=("pypi.org",),
         shield_override=(
             ShieldOverride(host="api.debug.example", reason="debug"),
@@ -419,8 +421,57 @@ def test_compose_shield_tiers_empty_without_upstream() -> None:
 
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
-    project = SimpleNamespace(upstream_url=None, shield_allow=(), shield_override=())
+    project = SimpleNamespace(
+        upstream_url=None, shield_sets=(), known_family=None, shield_allow=(), shield_override=()
+    )
     assert _compose_shield_tiers(project) == ((), ())
+
+
+def test_compose_shield_tiers_folds_in_curated_sets() -> None:
+    """``shield.sets`` resolves into t40 between the git host and custom allows."""
+    from types import SimpleNamespace
+
+    from terok.lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    picked = next(n for n in EGRESS_SETS if n != OS_PACKAGES_SET)
+    project = SimpleNamespace(
+        upstream_url="https://github.com/foo/bar.git",
+        shield_sets=(picked,),
+        known_family=None,
+        shield_allow=("pypi.org",),
+        shield_override=(),
+    )
+
+    project_allow, _ = _compose_shield_tiers(project)
+
+    assert project_allow[0] == "github.com"  # git remote host stays first
+    assert set(EGRESS_SETS[picked]) <= set(project_allow)
+    assert "pypi.org" in project_allow  # custom shield.allow rides along
+
+
+def test_compose_shield_tiers_default_sets_include_family_repos() -> None:
+    """Unset ``shield.sets`` applies the generous default, keyed on the image family."""
+    from types import SimpleNamespace
+
+    from terok.lib.integrations.executor import package_repo_hosts
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = SimpleNamespace(
+        upstream_url=None,
+        shield_sets=None,
+        known_family="deb",
+        shield_allow=(),
+        shield_override=(),
+    )
+
+    project_allow, _ = _compose_shield_tiers(project)
+
+    assert set(package_repo_hosts("deb")) <= set(project_allow)
+    # An rpm-only repo host must not leak into a deb image's allow tier
+    # through the os-packages set (the 'containers' set may still carry
+    # registry hosts — pick a repo-only one).
+    assert "mirrors.fedoraproject.org" not in project_allow
 
 
 def test_compose_shield_tiers_scp_style_remote() -> None:
@@ -430,7 +481,11 @@ def test_compose_shield_tiers_scp_style_remote() -> None:
     from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
 
     project = SimpleNamespace(
-        upstream_url="git@github.com:user/cp2k.git", shield_allow=(), shield_override=()
+        upstream_url="git@github.com:user/cp2k.git",
+        shield_sets=(),
+        known_family=None,
+        shield_allow=(),
+        shield_override=(),
     )
     assert _compose_shield_tiers(project) == (("github.com",), ())
 
@@ -471,6 +526,8 @@ def test_opt_out_via_shield_override() -> None:
 
     project = SimpleNamespace(
         upstream_url=None,
+        shield_sets=(),
+        known_family=None,
         shield_allow=("api.anthropic.com",),  # below the deny — NOT an opt-out
         shield_override=(ShieldOverride(host="api.anthropic.com", reason="direct SDK testing"),),
     )
@@ -493,6 +550,8 @@ class TestRefreshShieldTiers:
         p = MagicMock(spec=ProjectConfig)
         p.runtime = "crun"
         p.upstream_url = "https://github.com/foo/bar.git"
+        p.shield_sets = ()
+        p.known_family = None
         p.shield_allow = ()
         p.shield_override = ()
         return p
@@ -585,6 +644,8 @@ class TestRunContainer:
         p.podman_args = []
         p.runtime = None
         p.upstream_url = None
+        p.shield_sets = ()
+        p.known_family = None
         p.shield_allow = ()
         p.shield_override = ()
         return p
@@ -1289,6 +1350,8 @@ class TestLaunchPreparedIdentity:
         p.podman_args = []
         p.runtime = None
         p.upstream_url = None
+        p.shield_sets = ()
+        p.known_family = None
         p.shield_allow = ()
         p.shield_override = ()
         return p
