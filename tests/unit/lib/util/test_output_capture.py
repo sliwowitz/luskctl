@@ -22,11 +22,78 @@ def test_log_file_path_shape(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     assert build_path.name.startswith("build-") and "None" not in build_path.name
 
 
+@pytest.mark.parametrize(
+    "task_id",
+    [
+        pytest.param("../../etc/cron.d/x", id="relative-traversal"),
+        pytest.param("..", id="bare-parent"),
+        pytest.param(".", id="bare-dot"),
+        pytest.param("/etc/passwd", id="absolute-path"),
+        pytest.param("a/b", id="embedded-separator"),
+        pytest.param("has\0nul", id="nul-byte"),
+    ],
+)
+def test_log_file_path_rejects_traversal_task_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, task_id: str
+) -> None:
+    """A *task_id* that could escape the log tree is rejected, not interpolated."""
+    monkeypatch.setattr(oc, "_logs_dir", lambda project: tmp_path)
+    with pytest.raises(ValueError, match="unsafe task_id"):
+        oc._log_file_path("run", "proj", task_id)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        pytest.param("../evil", id="relative-traversal"),
+        pytest.param("..", id="bare-parent"),
+        pytest.param("/abs", id="absolute-path"),
+        pytest.param("build\0", id="nul-byte"),
+    ],
+)
+def test_log_file_path_rejects_unsafe_kind(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+) -> None:
+    """An unsafe *kind* label is rejected the same way as *task_id*."""
+    monkeypatch.setattr(oc, "_logs_dir", lambda project: tmp_path)
+    with pytest.raises(ValueError, match="unsafe kind"):
+        oc._log_file_path(kind, "proj", "t1")
+
+
+def test_log_file_path_stays_within_logs_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Valid components resolve strictly under ``_logs_dir`` — no escape."""
+    logs = tmp_path / "logs"
+    monkeypatch.setattr(oc, "_logs_dir", lambda project: logs)
+    path = oc._log_file_path("run", "proj", "t1")
+    assert path.parent == logs
+    assert logs in path.resolve().parents
+
+
 def test_logs_dir_scopes_by_project(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr("terok.lib.core.paths.core_state_dir", lambda: tmp_path)
     assert oc._logs_dir("proj") == tmp_path / "projects" / "proj" / "logs"
     assert oc._logs_dir(None) == tmp_path / "logs"
-    assert oc._logs_dir("../evil") == tmp_path / "logs"  # unsafe name falls back to global
+
+
+@pytest.mark.parametrize(
+    "project",
+    [
+        pytest.param("../evil", id="relative-traversal"),
+        pytest.param("..", id="bare-parent"),
+        pytest.param("/abs", id="absolute-path"),
+        pytest.param("a/b", id="embedded-separator"),
+        pytest.param("has\0nul", id="nul-byte"),
+    ],
+)
+def test_logs_dir_rejects_unsafe_project(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, project: str
+) -> None:
+    """An unsafe *project* now fails loud too — same guard as kind/task_id."""
+    monkeypatch.setattr("terok.lib.core.paths.core_state_dir", lambda: tmp_path)
+    with pytest.raises(ValueError, match="unsafe project"):
+        oc._logs_dir(project)
 
 
 def test_tee_output_delegates_and_persists(
