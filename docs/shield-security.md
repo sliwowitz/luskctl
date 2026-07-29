@@ -108,6 +108,74 @@ shield:
 
 ---
 
+## Curated Egress Sets
+
+Named bundles of well-known development endpoints feed the project-allow
+tier so common workflows keep working while the shield is up: git
+hosting, language package registries (`python`, `node`, `rust`, `go`),
+container registries, and `os-packages` — the distro package repos,
+resolved automatically from the project image's package family
+(`dnf` vs `apt`).  Run `terok shield sets` to list them.
+
+The default is **generous**: every curated set.  Narrow a project via
+`shield.sets` in `project.yml` (the TUI project screen's *Egress sets*
+picker or `terok shield sets <project> --set …` write it):
+
+```yaml
+shield:
+  sets: [git-hosting, python, os-packages]   # freeze this exact selection
+  # sets: []                                 # disable all curated content
+  # (unset/null: the generous default — every set, including future ones)
+```
+
+Two caveats worth knowing:
+
+- Set entries are ordinary t40 allows — a security-deny always wins over
+  them, and on the dnsmasq DNS tier a listed domain admits its
+  subdomains by suffix match.
+- Hostname allowlists cannot cover community *mirror pools* (Fedora's
+  metalink hands dnf arbitrary mirror hosts).  The `os-packages` set
+  covers the distros' own hosts (metalink + primary download); a blocked
+  community mirror surfaces in the audit log and dnf falls back through
+  its mirror list.
+
+## Per-Project Allow and Break-Glass Override
+
+Two additive `project.yml` layers shape a task's egress policy on top of
+the curated sets:
+
+```yaml
+shield:
+  allow:                # extra hosts allowed while the shield is up
+    - ftp.mirror.example.org
+  override:             # break-glass: reachable despite a security-deny
+    - host: api.anthropic.com
+      reason: direct SDK testing against the live endpoint
+      expires: 2026-08-15
+```
+
+- **`shield.allow`** entries join the project-allow tier alongside the
+  project's git remote host and the configured allow profiles.  They are
+  ordinary allows: a security-deny still wins over them.
+- **`shield.override`** entries sit *above* the security-deny — the only
+  way to reach a host terok deliberately denies, such as a vault-relayed
+  provider endpoint.  One host or IP per entry (never a CIDR), a
+  mandatory `reason` for the audit trail, and an optional `expires` date.
+- **Expiry is evaluated when the container is launched or restarted.**
+  An already-running container keeps its overrides until its next start —
+  restart the task to make an elapsed `expires` take effect.
+
+The policy tiers are recomputed from the current roster and project
+config on every launch **and every plain restart**, so config edits reach
+a stopped task the next time it starts.
+
+> **Migration note (0.9):** adding a vault-protected provider endpoint to
+> a custom allowlist profile no longer re-enables direct access — profile
+> entries compose below the security-deny, which always wins.  Use a
+> `shield.override` entry (with its auditable reason and expiry) instead.
+
+---
+
 ## Mitigations When Shield is Down or Missing
 
 If you must operate without the shield, consider these compensating controls:

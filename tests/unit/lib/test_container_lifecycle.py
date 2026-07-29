@@ -685,3 +685,142 @@ def test_task_restart_toad_rehydrates_token_and_prints_url() -> None:
         container.start.assert_called_once()
         assert "Toad:" in output
         assert "8080" in output
+
+
+# ── _validate_shield_bundle_version (upgrade-restart gate) ─────────────────
+
+
+def test_validate_shield_bundle_version_refuses_stale() -> None:
+    """A container whose bundle predates this terok is refused before any teardown."""
+    from terok.lib.orchestration.task_runners.restart import _validate_shield_bundle_version
+
+    with (
+        patch(
+            "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+            return_value=1,
+        ),
+        patch("terok.lib.orchestration.task_runners.restart.BUNDLE_VERSION", 15),
+        pytest.raises(SystemExit, match="Re-create the task"),
+    ):
+        _validate_shield_bundle_version("ctr")
+
+
+def test_validate_shield_bundle_version_passes_current() -> None:
+    """A matching bundle version restarts normally (no raise)."""
+    from terok.lib.orchestration.task_runners.restart import _validate_shield_bundle_version
+
+    with (
+        patch(
+            "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+            return_value=15,
+        ),
+        patch("terok.lib.orchestration.task_runners.restart.BUNDLE_VERSION", 15),
+    ):
+        _validate_shield_bundle_version("ctr")
+
+
+def test_validate_shield_bundle_version_skips_unreadable() -> None:
+    """An unreadable version (unshielded / podman down) is skipped, not blocked."""
+    from terok.lib.orchestration.task_runners.restart import _validate_shield_bundle_version
+
+    with patch(
+        "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+        return_value=None,
+    ):
+        _validate_shield_bundle_version("ctr")
+
+
+def test_task_restart_fresh_ignores_stale_bundle() -> None:
+    """``--recreate`` is the stale-bundle remedy — the gate must not block it."""
+    project_name = "proj_fresh_stale"
+    with project_env(project_config(project_name), project_name=project_name) as ctx:
+        task_id = create_task_with_mode(ctx, project_name)
+
+        container = _mock_container(state="running")
+        runtime_mock = _mock_runtime(container)
+        with (
+            mock_git_config(),
+            patch("terok.lib.core.runtime.resolve_runtime", return_value=runtime_mock),
+            patch("terok.lib.orchestration.task_runners.restart._sandbox"),
+            patch("terok.lib.orchestration.task_runners.restart.task_run_cli") as run_cli,
+            patch(
+                "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+                return_value=1,
+            ),
+        ):
+            output = capture_stdout(task_restart, project_name, task_id, fresh=True)
+
+        assert "Recreating" in output
+        run_cli.assert_called_once()
+
+
+def test_task_restart_resume_refuses_stale_bundle_before_stop() -> None:
+    """The resume rung gates on the bundle version *before* anything is stopped."""
+    project_name = "proj_resume_stale"
+    with project_env(project_config(project_name), project_name=project_name) as ctx:
+        task_id = create_task_with_mode(ctx, project_name)
+
+        container = _mock_container(state="running")
+        runtime_mock = _mock_runtime(container)
+        with (
+            mock_git_config(),
+            patch("terok.lib.core.runtime.resolve_runtime", return_value=runtime_mock),
+            patch(
+                "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+                return_value=1,
+            ),
+            pytest.raises(SystemExit, match="shield bundle"),
+        ):
+            capture_stdout(task_restart, project_name, task_id)
+
+        container.stop.assert_not_called()
+        container.start.assert_not_called()
+
+
+def test_ensure_running_skips_stale_bundle_gate() -> None:
+    """Ensure never disturbs a live container, so it must not gate on the bundle."""
+    project_name = "proj_ensure_stale"
+    with project_env(project_config(project_name), project_name=project_name) as ctx:
+        task_id = create_task_with_mode(ctx, project_name)
+        container_name = f"{project_name}-cli-{task_id}"
+
+        container = _mock_container(state="running")
+        container.login_command.return_value = ["podman", "exec", "-it", container_name, "bash"]
+        runtime_mock = _mock_runtime(container)
+        with (
+            mock_git_config(),
+            patch("terok.lib.core.runtime.resolve_runtime", return_value=runtime_mock),
+            patch(
+                "terok.lib.orchestration.task_runners.restart.resolve_container_shield_version",
+                return_value=1,
+            ),
+        ):
+            output = capture_stdout(ensure_task_running, project_name, task_id)
+
+        assert "already running" in output
+        container.stop.assert_not_called()
+
+
+def test_task_restart_resume_refreshes_shield_tiers() -> None:
+    """The resume rung recomputes the shield policy bundle before starting."""
+    project_name = "proj_resume_refresh"
+    with project_env(project_config(project_name), project_name=project_name) as ctx:
+        task_id = create_task_with_mode(ctx, project_name)
+        container_name = f"{project_name}-cli-{task_id}"
+
+        container = _mock_container(state="exited")
+        container.login_command.return_value = ["podman", "exec", "-it", container_name, "bash"]
+        container.start.side_effect = lambda: setattr(container, "state", "running")
+        runtime_mock = _mock_runtime(container)
+        with (
+            mock_git_config(),
+            patch("terok.lib.core.runtime.resolve_runtime", return_value=runtime_mock),
+            patch("terok.lib.orchestration.task_runners.restart._refresh_shield_tiers") as refresh,
+        ):
+            capture_stdout(task_restart, project_name, task_id)
+
+        refresh.assert_called_once()
+        project_arg, cname_arg, task_dir_arg = refresh.call_args.args
+        assert cname_arg == container_name
+        assert task_dir_arg == project_arg.tasks_root / str(task_id)
+        container.start.assert_called_once()

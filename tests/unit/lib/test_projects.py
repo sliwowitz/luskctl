@@ -665,6 +665,105 @@ class TestProject:
         with project_env(yaml_text, project_name=project_name):
             assert load_project(project_name).shield_on_task_restart == expected
 
+    def test_shield_allow_and_override_load(self) -> None:
+        """``shield.allow``/``override`` load; unquoted and quoted expiry dates both parse.
+
+        ``expires: 2099-12-31`` is the natural way to write a date in YAML —
+        ruamel hands the schema a ``datetime.date``, and a quoted ISO string
+        must coerce to the same thing (regression: a ``str`` field rejected
+        the unquoted form and broke the whole project.yml).
+        """
+        from datetime import date as _date
+
+        yaml_text = project_yaml("proj-shield-tiers") + (
+            "shield:\n"
+            "  allow:\n"
+            "    - pypi.org\n"
+            "  override:\n"
+            "    - host: api.example.org\n"
+            "      reason: testing\n"
+            "      expires: 2099-12-31\n"
+            "    - host: api2.example.org\n"
+            "      reason: testing\n"
+            '      expires: "2099-06-30"\n'
+        )
+        with project_env(yaml_text, project_name="proj-shield-tiers"):
+            project = load_project("proj-shield-tiers")
+        assert project.shield_allow == ("pypi.org",)
+        assert [(o.host, o.expires) for o in project.shield_override] == [
+            ("api.example.org", _date(2099, 12, 31)),
+            ("api2.example.org", _date(2099, 6, 30)),
+        ]
+
+    def test_shield_sets_load_and_default(self) -> None:
+        """An explicit ``shield.sets`` loads as a tuple; unset stays ``None`` (default)."""
+        yaml_text = project_yaml("proj-shield-sets") + ("shield:\n  sets: [python]\n")
+        with project_env(yaml_text, project_name="proj-shield-sets"):
+            assert load_project("proj-shield-sets").shield_sets == ("python",)
+        with project_env(project_yaml("proj-shield-nosets"), project_name="proj-shield-nosets"):
+            assert load_project("proj-shield-nosets").shield_sets is None
+
+    def test_shield_sets_unknown_name_fails_loudly(self) -> None:
+        """A typo in ``shield.sets`` refuses the load and spells out the registry."""
+        yaml_text = project_yaml("proj-shield-badset") + ("shield:\n  sets: [pythn]\n")
+        with project_env(yaml_text, project_name="proj-shield-badset"):
+            with pytest.raises(SystemExit, match="Available sets"):
+                load_project("proj-shield-badset")
+
+    def test_set_project_shield_sets_round_trips(self) -> None:
+        """The writer persists explicit, empty, and back-to-default selections."""
+        from terok.lib.core.projects import set_project_shield_sets
+
+        name = "proj-shield-write"
+        with project_env(project_yaml(name), project_name=name):
+            set_project_shield_sets(name, ("python", "git-hosting"))
+            assert load_project(name).shield_sets == ("python", "git-hosting")
+            set_project_shield_sets(name, ())
+            assert load_project(name).shield_sets == ()
+            set_project_shield_sets(name, None)
+            assert load_project(name).shield_sets is None
+
+    def test_set_project_shield_sets_validates_names(self) -> None:
+        """The writer refuses unknown names before touching project.yml."""
+        from terok.lib.core.projects import set_project_shield_sets
+
+        name = "proj-shield-badwrite"
+        with project_env(project_yaml(name), project_name=name):
+            with pytest.raises(SystemExit, match="Available sets"):
+                set_project_shield_sets(name, ("nonsense",))
+            assert load_project(name).shield_sets is None  # nothing written
+
+    def test_shield_override_rejects_non_iso_expires(self) -> None:
+        """A non-ISO expiry (e.g. US-style) fails loading loudly, never silently drops."""
+        yaml_text = project_yaml("proj-shield-badexp") + (
+            "shield:\n"
+            "  override:\n"
+            "    - host: api.example.org\n"
+            "      reason: testing\n"
+            '      expires: "12/31/2099"\n'
+        )
+        with project_env(yaml_text, project_name="proj-shield-badexp"):
+            with pytest.raises(SystemExit, match="expires"):
+                load_project("proj-shield-badexp")
+
+    def test_shield_override_rejects_cidr_host(self) -> None:
+        """A CIDR break-glass entry would widen a whole subnet above the deny."""
+        yaml_text = project_yaml("proj-shield-cidr") + (
+            "shield:\n  override:\n    - host: 10.0.0.0/8\n      reason: testing\n"
+        )
+        with project_env(yaml_text, project_name="proj-shield-cidr"):
+            with pytest.raises(SystemExit, match="not a CIDR"):
+                load_project("proj-shield-cidr")
+
+    def test_shield_override_model_rejects_cidr_host(self) -> None:
+        """The resolved model holds the invariant for callers that skip the YAML."""
+        from pydantic import ValidationError
+
+        from terok.lib.core.project_model import ShieldOverride
+
+        with pytest.raises(ValidationError, match="not a CIDR"):
+            ShieldOverride(host="2001:db8::/32", reason="testing")
+
     def test_shared_dir_true_resolves_to_tasks_root(self) -> None:
         """``shared_dir: true`` resolves to tasks_root/_shared."""
         yaml_text = project_yaml("proj-shared") + "shared_dir: true\n"

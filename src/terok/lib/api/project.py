@@ -27,6 +27,12 @@ import importlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from terok.lib.core.egress_sets import (
+        EGRESS_SETS as EGRESS_SETS,
+        OS_PACKAGES_SUMMARY as OS_PACKAGES_SUMMARY,
+        describe_egress_sets as describe_egress_sets,
+        selected_egress_sets as selected_egress_sets,
+    )
     from terok.lib.core.projects import (
         BrokenProject as BrokenProject,
         ProjectConfig as ProjectConfig,
@@ -34,6 +40,7 @@ if TYPE_CHECKING:
         load_project as load_project,
         require_project_exists as require_project_exists,
         set_project_image_agents as set_project_image_agents,
+        set_project_shield_sets as set_project_shield_sets,
     )
     from terok.lib.domain.image_cleanup import (
         cleanup_images as cleanup_images,
@@ -86,6 +93,8 @@ _LAZY: dict[str, str] = {
     "detect_gpu_choices": "terok.lib.domain.wizards.new_project",
     "GpuDeviceChoice": "terok.lib.domain.wizards.new_project",
     "BASE_GPU_VENDOR": "terok.lib.domain.wizards.new_project",
+    "EGRESS_SETS": "terok.lib.core.egress_sets",
+    "OS_PACKAGES_SUMMARY": "terok.lib.core.egress_sets",
     "CUSTOM_BASE": "terok.lib.domain.wizards.new_project",
     "CUSTOM_IMAGE_WARNING": "terok.lib.domain.wizards.new_project",
     "BrokenProject": "terok.lib.core.projects",
@@ -98,6 +107,7 @@ _LAZY: dict[str, str] = {
     "cleanup_images": "terok.lib.domain.image_cleanup",
     "delete_project": "terok.lib.domain.project",
     "derive_project": "terok.lib.domain.project",
+    "describe_egress_sets": "terok.lib.core.egress_sets",
     "discover_projects": "terok.lib.core.projects",
     "execute_panic": "terok.lib.domain.panic",
     "find_orphaned_images": "terok.lib.domain.image_cleanup",
@@ -112,7 +122,9 @@ _LAZY: dict[str, str] = {
     "remove_images": "terok.lib.domain.image_cleanup",
     "render_project_yaml": "terok.lib.domain.wizards.new_project",
     "require_project_exists": "terok.lib.core.projects",
+    "selected_egress_sets": "terok.lib.core.egress_sets",
     "set_project_image_agents": "terok.lib.core.projects",
+    "set_project_shield_sets": "terok.lib.core.projects",
     "summarize_ssh_init": "terok.lib.domain.ssh",
     "validate_answer": "terok.lib.domain.wizards.new_project",
     "write_project_yaml": "terok.lib.domain.wizards.new_project",

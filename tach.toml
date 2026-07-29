@@ -255,6 +255,7 @@ depends_on = [
 path = "terok.lib.api.project"
 layer = "domain"
 depends_on = [
+    "terok.lib.core.egress_sets",
     "terok.lib.core.projects",
     "terok.lib.domain.image_cleanup",
     "terok.lib.domain.panic",
@@ -290,6 +291,7 @@ depends_on = [
     "terok.lib.orchestration.tasks",
     "terok.lib.integrations.sandbox",
     "terok.lib.core.project_model",
+    "terok.lib.util.net",
 ]
 
 [[modules]]
@@ -549,6 +551,12 @@ path = "terok.lib.core.project_model"
 layer = "core"
 depends_on = []
 
+# Curated egress allowlist sets (shield t40 default content)
+[[modules]]
+path = "terok.lib.core.egress_sets"
+layer = "core"
+depends_on = ["terok.lib.integrations.executor"]
+
 # Raw YAML schema models (Pydantic validation, no I/O)
 [[modules]]
 path = "terok.lib.core.yaml_schema"
@@ -561,6 +569,7 @@ path = "terok.lib.core.projects"
 layer = "core"
 depends_on = [
     "terok.lib.core.config",
+    "terok.lib.core.egress_sets",
     "terok.lib.core.project_model",
     "terok.lib.core.yaml_schema",
     "terok.lib.util.yaml",
@@ -694,10 +703,24 @@ depends_on = []
 [[interfaces]]
 expose = [
     "ProjectConfig",
+    "ShieldOverride",
     "is_valid_project_name",
     "validate_project_name",
 ]
 from = ["terok.lib.core.project_model"]
+
+[[interfaces]]
+expose = [
+    "DEFAULT_EGRESS_SETS",
+    "EGRESS_SETS",
+    "OS_PACKAGES_SET",
+    "OS_PACKAGES_SUMMARY",
+    "describe_egress_sets",
+    "resolve_egress_sets",
+    "selected_egress_sets",
+    "validate_egress_sets",
+]
+from = ["terok.lib.core.egress_sets"]
 
 [[interfaces]]
 expose = [
@@ -710,6 +733,7 @@ expose = [
     "derive_project",
     "require_project_exists",
     "set_project_image_agents",
+    "set_project_shield_sets",
     "validate_project_name",
 ]
 from = ["terok.lib.core.projects"]

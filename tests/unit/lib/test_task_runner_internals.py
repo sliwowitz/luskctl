@@ -9,8 +9,8 @@ and the RunSpec delegation path through _run_container.
 
 from __future__ import annotations
 
-import contextlib
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -266,10 +266,9 @@ class TestApplyShieldPolicy:
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=True)
         mock_down.return_value.down.assert_not_called()
 
-    def test_warns_on_failure(self, tmp_path: Path) -> None:
-        """Drop emits a warning then auth-protect propagates — drop is best-
-        effort (will retry on restart) but the auth-protect denies are
-        load-bearing for #873 and must not fail silently."""
+    def test_drop_failure_is_best_effort(self, tmp_path: Path) -> None:
+        """A failed drop warns but does not propagate — it is best-effort and
+        re-attempts on the next restart; the ``down`` intent still persists."""
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
 
         project = self._make_project(drop=True)
@@ -283,7 +282,6 @@ class TestApplyShieldPolicy:
                 side_effect=RuntimeError("nft missing"),
             ),
             pytest.warns(match="shield drop"),
-            pytest.raises(RuntimeError, match="nft missing"),
         ):
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
         # Intent persists even when the drop failed — restart will retry.
@@ -292,9 +290,9 @@ class TestApplyShieldPolicy:
     def test_post_start_failure_stops_container_and_reraises(
         self, mock_runtime: MagicMock, tmp_path: Path
     ) -> None:
-        """A post-start shield failure stops the live container before
-        re-raising the original error — a half-protected, untracked
-        container must never be left running."""
+        """An unexpected shield-application failure stops the live container
+        before re-raising — a half-protected, untracked container must never be
+        left running."""
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
 
         project = self._make_project(drop=True)
@@ -305,10 +303,9 @@ class TestApplyShieldPolicy:
                 return_value=False,
             ),
             patch(
-                "terok.lib.orchestration.task_runners.shield.ShieldManager",
+                "terok.lib.orchestration.task_runners.shield._drop_shield_on_creation",
                 side_effect=RuntimeError("nft missing"),
             ),
-            pytest.warns(match="shield drop"),
             pytest.raises(RuntimeError, match="nft missing"),
         ):
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
@@ -330,10 +327,9 @@ class TestApplyShieldPolicy:
                 return_value=False,
             ),
             patch(
-                "terok.lib.orchestration.task_runners.shield.ShieldManager",
+                "terok.lib.orchestration.task_runners.shield._drop_shield_on_creation",
                 side_effect=RuntimeError("nft missing"),
             ),
-            pytest.warns(match="shield drop"),
             pytest.raises(RuntimeError, match="nft missing"),
         ):
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
@@ -355,8 +351,8 @@ class TestApplyShieldPolicy:
         mock_down.return_value.down.assert_not_called()
 
     def test_restart_retain_warns_on_restore_failure(self, tmp_path: Path) -> None:
-        """Restart with retain warns on restore failure, then auth-protect
-        propagates (containment denies must not fail silently)."""
+        """Restart with retain warns on restore failure but does not propagate —
+        restore is best-effort, like the drop."""
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
 
         (tmp_path / "shield_desired_state").write_text("down\n")
@@ -371,7 +367,6 @@ class TestApplyShieldPolicy:
                 side_effect=RuntimeError("nft not found"),
             ),
             pytest.warns(match="shield restore"),
-            pytest.raises(RuntimeError, match="nft not found"),
         ):
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=True)
 
@@ -390,152 +385,226 @@ class TestApplyShieldPolicy:
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=True)
 
 
-# ── _apply_auth_protect_denies ────────────────────────────
+# ── _compose_shield_tiers ─────────────────────────────────
 
 
-class TestApplyAuthProtectDenies:
-    """Verify roster-driven deny for agent OAuth/API endpoints."""
+def _tier_project(**overrides: object) -> SimpleNamespace:
+    """A ProjectConfig stand-in for _compose_shield_tiers: no remote, no content.
 
-    @staticmethod
-    def _route(
-        upstream: str,
-        oauth_refresh: dict | None = None,
-        *,
-        shared_domain: bool = False,
-    ) -> MagicMock:
-        """Build a mock VaultRoute with the relevant fields set."""
-        r = MagicMock()
-        r.upstream = upstream
-        r.oauth_refresh = oauth_refresh
-        r.shared_domain = shared_domain
-        return r
+    Each test names only the field it is about; everything else stays at the
+    "nothing authored" baseline so an added ProjectConfig field lands here once.
+    """
+    return SimpleNamespace(
+        **{
+            "upstream_url": None,
+            "shield_sets": (),
+            "known_family": None,
+            "shield_allow": (),
+            "shield_override": (),
+            **overrides,
+        }
+    )
 
-    def _patches(
-        self,
-        *,
-        routes: dict,
-        exposed: frozenset[str] = frozenset(),
-        allow_entries: frozenset[str] = frozenset(),
-        shield_obj: MagicMock | None = None,
-    ) -> tuple:
-        """Build the standard patch stack for these tests."""
+
+def test_compose_shield_tiers_authors_t40_and_t10() -> None:
+    """t40 = git host + custom allow; t10 = active overrides (expired dropped)."""
+    from datetime import date, timedelta
+
+    from terok.lib.core.project_model import ShieldOverride
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    future = (date.today() + timedelta(days=1)).isoformat()
+    past = (date.today() - timedelta(days=1)).isoformat()
+    project = _tier_project(
+        upstream_url="https://github.com/foo/bar.git",
+        shield_allow=("pypi.org",),
+        shield_override=(
+            ShieldOverride(host="api.debug.example", reason="debug"),
+            ShieldOverride(host="api.active.example", reason="soon", expires=future),
+            ShieldOverride(host="api.expired.example", reason="old", expires=past),
+        ),
+    )
+
+    project_allow, override = _compose_shield_tiers(project)
+
+    assert project_allow == ("github.com", "pypi.org")  # git remote host + custom allow
+    assert override == ("api.debug.example", "api.active.example")  # expired dropped
+
+
+def test_compose_shield_tiers_empty_without_upstream() -> None:
+    """No upstream + no config yields empty tiers (nothing authored)."""
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = _tier_project()
+    assert _compose_shield_tiers(project) == ((), ())
+
+
+def test_compose_shield_tiers_folds_in_curated_sets() -> None:
+    """``shield.sets`` resolves into t40 between the git host and custom allows."""
+    from terok.lib.core.egress_sets import EGRESS_SETS, OS_PACKAGES_SET
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    picked = next(n for n in EGRESS_SETS if n != OS_PACKAGES_SET)
+    project = _tier_project(
+        upstream_url="https://github.com/foo/bar.git",
+        shield_sets=(picked,),
+        shield_allow=("pypi.org",),
+    )
+
+    project_allow, _ = _compose_shield_tiers(project)
+
+    assert project_allow[0] == "github.com"  # git remote host stays first
+    assert set(EGRESS_SETS[picked]) <= set(project_allow)
+    assert "pypi.org" in project_allow  # custom shield.allow rides along
+
+
+def test_compose_shield_tiers_default_sets_include_family_repos() -> None:
+    """Unset ``shield.sets`` applies the generous default, keyed on the image family."""
+    from terok.lib.integrations.executor import package_repo_hosts
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = _tier_project(shield_sets=None, known_family="deb")
+
+    project_allow, _ = _compose_shield_tiers(project)
+
+    assert set(package_repo_hosts("deb")) <= set(project_allow)
+    # An rpm-only repo host must not leak into a deb image's allow tier
+    # through the os-packages set (the 'containers' set may still carry
+    # registry hosts — pick a repo-only one).
+    assert "mirrors.fedoraproject.org" not in project_allow
+
+
+def test_compose_shield_tiers_scp_style_remote() -> None:
+    """The documented ``git@host:path`` upstream form contributes its host to t40."""
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = _tier_project(upstream_url="git@github.com:user/cp2k.git")
+    assert _compose_shield_tiers(project) == (("github.com",), ())
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        pytest.param("https://github.com/foo/bar.git", "github.com", id="https"),
+        pytest.param("ssh://git@github.com/foo/bar.git", "github.com", id="ssh-scheme"),
+        pytest.param("git@github.com:foo/bar.git", "github.com", id="scp-style"),
+        pytest.param("GitLab.example.ORG:group/repo.git", "gitlab.example.org", id="scp-no-user"),
+        pytest.param("/srv/git/repo.git", None, id="local-path"),
+        pytest.param("../relative/repo", None, id="relative-path"),
+        pytest.param("file:///srv/git/repo.git", None, id="file-scheme"),
+    ],
+)
+def test_git_remote_host_forms(url: str, expected: str | None) -> None:
+    """Host extraction covers scheme URLs and scp-like remotes; paths yield None."""
+    from terok.lib.util.net import git_remote_host
+
+    assert git_remote_host(url) == expected
+
+
+def test_opt_out_via_shield_override() -> None:
+    """The #566 opt-out lives in ``shield.override`` (t10), not in allow profiles.
+
+    Successor to the deleted allow-profile opt-out test: a developer who
+    needs direct access to a security-denied provider endpoint declares a
+    break-glass override, which composes into the t10 tuple that
+    ``launch_prepared``/``shield_refresh`` carry to shield — the only tier
+    that outranks the deny.  A plain ``shield.allow`` entry stays in t40,
+    *below* the deny, and must not surface in the override tuple.
+    """
+    from terok.lib.core.project_model import ShieldOverride
+    from terok.lib.orchestration.task_runners.container import _compose_shield_tiers
+
+    project = _tier_project(
+        shield_allow=("api.anthropic.com",),  # below the deny — NOT an opt-out
+        shield_override=(ShieldOverride(host="api.anthropic.com", reason="direct SDK testing"),),
+    )
+
+    project_allow, override = _compose_shield_tiers(project)
+
+    assert override == ("api.anthropic.com",)
+    assert project_allow == ("api.anthropic.com",)  # the allow stays t40; t10 is the opt-out
+
+
+# ── _refresh_shield_tiers ─────────────────────────────────
+
+
+class TestRefreshShieldTiers:
+    """The restart path's policy-bundle recompute."""
+
+    def _project(self) -> MagicMock:
+        from terok.lib.core.project_model import ProjectConfig
+
+        p = MagicMock(spec=ProjectConfig)
+        p.runtime = "crun"
+        p.upstream_url = "https://github.com/foo/bar.git"
+        p.shield_sets = ()
+        p.known_family = None
+        p.shield_allow = ()
+        p.shield_override = ()
+        return p
+
+    def test_refresh_threads_current_projection_and_authored_tiers(self, tmp_path: Path) -> None:
+        """Recomputed t20/t30 (roster) + t40/t10 (config) reach Sandbox.shield_refresh."""
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
+
+        (tmp_path / "shield").mkdir()
+        egress = SimpleNamespace(
+            deny_to_vault=("api.anthropic.com",), provider_allow=("telemetry.example",)
+        )
         roster = MagicMock()
-        roster.vault_routes = routes
-        return (
-            patch("terok.lib.integrations.executor.AgentRoster.shared", return_value=roster),
+        roster.compose_egress.return_value = egress
+        project = self._project()
+        with (
             patch(
-                "terok.lib.core.config.exposed_credential_providers",
-                return_value=exposed,
+                "terok.lib.orchestration.task_runners.shield."
+                "get_shield_bypass_firewall_no_protection",
+                return_value=False,
             ),
-            patch(
-                "terok.lib.orchestration.task_runners.shield._resolved_allow_entries",
-                return_value=allow_entries,
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.shield.ShieldManager",
-                return_value=MagicMock(shield=shield_obj or MagicMock()),
-            ),
+            patch("terok.lib.integrations.executor.AgentRoster") as roster_cls,
+            patch("terok.lib.core.config.exposed_credential_providers", return_value=frozenset()),
+            patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox,
+        ):
+            roster_cls.shared.return_value = roster
+            _refresh_shield_tiers(project, "ctr", tmp_path)
+
+        sandbox.return_value.shield_refresh.assert_called_once_with(
+            "ctr",
+            tmp_path,
+            runtime="crun",
+            security_deny=("api.anthropic.com",),
+            provider_allow=("telemetry.example",),
+            project_allow=("github.com",),
+            override=(),
         )
 
-    def test_denies_upstream_and_oauth_refresh_for_each_provider(self, tmp_path: Path) -> None:
-        """Both upstream and oauth_refresh.token_url are denied per provider."""
-        from terok.lib.orchestration.task_runners.shield import _apply_auth_protect_denies
+    def test_refresh_skips_unshielded_task(self, tmp_path: Path) -> None:
+        """No shield state under the task dir (e.g. created under bypass) → no-op."""
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
 
-        mock_shield = MagicMock()
-        routes = {
-            "claude": self._route(
-                "https://api.anthropic.com",
-                oauth_refresh={"token_url": "https://platform.claude.com/v1/oauth/token"},
+        with patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox:
+            _refresh_shield_tiers(self._project(), "ctr", tmp_path)
+
+        sandbox.return_value.shield_refresh.assert_not_called()
+
+    def test_refresh_failure_aborts_with_system_exit(self, tmp_path: Path) -> None:
+        """A refresh failure aborts the restart before anything is torn down."""
+        from terok.lib.orchestration.task_runners.shield import _refresh_shield_tiers
+
+        (tmp_path / "shield").mkdir()
+        with (
+            patch(
+                "terok.lib.orchestration.task_runners.shield."
+                "get_shield_bypass_firewall_no_protection",
+                return_value=False,
             ),
-            "vibe": self._route("https://api.mistral.ai"),
-        }
-        with contextlib.ExitStack() as stack:
-            for p in self._patches(routes=routes, shield_obj=mock_shield):
-                stack.enter_context(p)
-            _apply_auth_protect_denies("ctr", tmp_path)
-
-        called_hosts = {c.args[1] for c in mock_shield.deny.call_args_list}
-        assert called_hosts == {
-            "api.anthropic.com",
-            "platform.claude.com",
-            "api.mistral.ai",
-        }
-
-    def test_skips_exposed_providers(self, tmp_path: Path) -> None:
-        """Exposed agents don't get denies — the agent name resolves to its provider.
-
-        ``_auth_protect_hosts`` is keyed by provider (``anthropic``) while
-        ``exposed_credential_providers`` yields agent names (``claude``); the
-        skip resolves claude → anthropic so the exposed agent's own upstream is
-        not denied.
-        """
-        from terok.lib.orchestration.task_runners.shield import _apply_auth_protect_denies
-
-        mock_shield = MagicMock()
-        routes = {"anthropic": self._route("https://api.anthropic.com")}
-        with contextlib.ExitStack() as stack:
-            for p in self._patches(
-                routes=routes, exposed=frozenset({"claude"}), shield_obj=mock_shield
-            ):
-                stack.enter_context(p)
-            _apply_auth_protect_denies("ctr", tmp_path)
-
-        mock_shield.deny.assert_not_called()
-
-    def test_skips_shared_domain_routes(self, tmp_path: Path) -> None:
-        """Routes flagged ``shared_domain`` (glab, sonar, …) are skipped.
-
-        The deny is host-level; for upstreams whose apex also serves
-        non-API traffic, blocking the host would overshoot.  The roster
-        carries the classification — see
-        [`VaultRoute.shared_domain`][terok_executor.roster.types.VaultRoute].
-        """
-        from terok.lib.orchestration.task_runners.shield import _apply_auth_protect_denies
-
-        mock_shield = MagicMock()
-        routes = {
-            "glab": self._route("https://gitlab.com", shared_domain=True),
-            "sonar": self._route("https://sonarcloud.io", shared_domain=True),
-            "claude": self._route("https://api.anthropic.com"),
-        }
-        with contextlib.ExitStack() as stack:
-            for p in self._patches(routes=routes, shield_obj=mock_shield):
-                stack.enter_context(p)
-            _apply_auth_protect_denies("ctr", tmp_path)
-
-        called_hosts = {c.args[1] for c in mock_shield.deny.call_args_list}
-        assert called_hosts == {"api.anthropic.com"}
-
-    def test_opt_out_via_allow_profile(self, tmp_path: Path) -> None:
-        """Hosts in the resolved allow profile set are skipped."""
-        from terok.lib.orchestration.task_runners.shield import _apply_auth_protect_denies
-
-        mock_shield = MagicMock()
-        routes = {"claude": self._route("https://api.anthropic.com")}
-        with contextlib.ExitStack() as stack:
-            for p in self._patches(
-                routes=routes,
-                allow_entries=frozenset({"api.anthropic.com"}),
-                shield_obj=mock_shield,
-            ):
-                stack.enter_context(p)
-            _apply_auth_protect_denies("ctr", tmp_path)
-
-        mock_shield.deny.assert_not_called()
-
-    def test_propagates_per_host_failure(self, tmp_path: Path) -> None:
-        """A failing deny() aborts the loop — silent containment regressions
-        (terok-ai/terok#873) are worse than a visible launch error."""
-        from terok.lib.orchestration.task_runners.shield import _apply_auth_protect_denies
-
-        mock_shield = MagicMock()
-        mock_shield.deny.side_effect = RuntimeError("nft missing")
-        routes = {"claude": self._route("https://api.anthropic.com")}
-        with contextlib.ExitStack() as stack:
-            for p in self._patches(routes=routes, shield_obj=mock_shield):
-                stack.enter_context(p)
-            with pytest.raises(RuntimeError, match="nft missing"):
-                _apply_auth_protect_denies("ctr", tmp_path)
+            patch("terok.lib.integrations.executor.AgentRoster"),
+            patch("terok.lib.core.config.exposed_credential_providers", return_value=frozenset()),
+            patch("terok.lib.orchestration.task_runners.container._sandbox") as sandbox,
+        ):
+            sandbox.return_value.shield_refresh.side_effect = RuntimeError("no persisted DNS tier")
+            project = self._project()
+            with pytest.raises(SystemExit, match="Shield policy refresh failed"):
+                _refresh_shield_tiers(project, "ctr", tmp_path)
 
 
 # ── _run_container ────────────────────────────────────────
@@ -560,6 +629,11 @@ class TestRunContainer:
         p.perf = False
         p.podman_args = []
         p.runtime = None
+        p.upstream_url = None
+        p.shield_sets = ()
+        p.known_family = None
+        p.shield_allow = ()
+        p.shield_override = ()
         return p
 
     def test_builds_runspec_and_delegates(self) -> None:
@@ -1261,6 +1335,11 @@ class TestLaunchPreparedIdentity:
         p.perf = False
         p.podman_args = []
         p.runtime = None
+        p.upstream_url = None
+        p.shield_sets = ()
+        p.known_family = None
+        p.shield_allow = ()
+        p.shield_override = ()
         return p
 
     def test_identity_kwargs_passed_through(self) -> None:

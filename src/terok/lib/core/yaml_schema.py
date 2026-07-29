@@ -31,6 +31,7 @@ caught here.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
@@ -315,10 +316,49 @@ class RawGatekeepingSection(BaseModel):
         return data
 
 
+class RawShieldOverride(BaseModel):
+    """One ``shield.override`` break-glass entry (shield's t10 tier).
+
+    A t10 override sits *above* the security-deny, so it can reach a host the
+    firewall would otherwise refuse.  A single host or IP only — never a CIDR
+    (widening a subnet through the firewall is exactly what break-glass must
+    not do); a ``reason`` is mandatory so the punch-through is auditable.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = Field(description="Single host or IP to allow above the deny (no CIDR)")
+    reason: str = Field(description="Why this break-glass override exists (audit trail)")
+
+    @field_validator("host")
+    @classmethod
+    def _reject_cidr(cls, value: str) -> str:
+        """Refuse a subnet: break-glass punches one hole, not a range.
+
+        Shield rejects a CIDR t10 entry too, but only once the task is
+        launching; catching it while ``project.yml`` is parsed names the
+        offending entry instead of failing a container start.
+        """
+        if "/" in value:
+            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
+        return value
+
+    expires: date | None = Field(
+        default=None,
+        description=(
+            "Optional ISO-8601 date after which the override is dropped.  "
+            "Evaluated when the container is launched or restarted — an "
+            "already-running container keeps its overrides until its next start"
+        ),
+    )
+
+
 class RawShieldProjectSection(BaseModel):
     """The ``shield:`` section of project.yml.
 
-    Both fields default to ``None`` (inherit from global ``config.yml``).
+    ``drop_on_task_run`` / ``on_task_restart`` default to ``None`` (inherit from
+    global ``config.yml``); ``allow`` / ``override`` are additive project layers
+    that stack on top of the global defaults.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -330,6 +370,23 @@ class RawShieldProjectSection(BaseModel):
     on_task_restart: Literal["retain", "up"] | None = Field(
         default=None,
         description="Shield policy on container restart: ``retain`` or ``up``",
+    )
+    sets: list[str] | None = Field(
+        default=None,
+        description=(
+            "Curated egress sets granted to this project's tasks (t40).  "
+            "Unset applies the generous default (every curated set); an "
+            "empty list disables all curated content.  "
+            "See ``terok shield sets`` for the available names"
+        ),
+    )
+    allow: list[str] = Field(
+        default_factory=list,
+        description="Extra hosts allowed at egress (shield's t40 project-allow tier)",
+    )
+    override: list[RawShieldOverride] = Field(
+        default_factory=list,
+        description="Break-glass overrides above the security-deny (shield's t10 tier)",
     )
 
 

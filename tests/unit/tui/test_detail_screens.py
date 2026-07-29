@@ -3049,7 +3049,6 @@ class TestOnVaultUnlockResult:
         cfg.vault_systemd_creds_file = passphrase_file.parent / "absent.cred"
         cfg.db_path = passphrase_file.parent / "absent.db"
         cfg.credentials_use_keyring = False
-        cfg.credentials_passphrase = None
         cfg.credentials_passphrase_command = None
         instance._test_sandbox_cfg = cfg
         return instance

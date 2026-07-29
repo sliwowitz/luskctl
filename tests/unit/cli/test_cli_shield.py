@@ -148,6 +148,82 @@ def test_dispatch_returns_false_for_non_shield_commands() -> None:
     assert not dispatch(argparse.Namespace(cmd="project"))
 
 
+def test_dispatch_sets_lists_registry() -> None:
+    """Bare ``shield sets`` prints every curated set name."""
+    from terok.lib.api import EGRESS_SETS
+
+    args = argparse.Namespace(
+        cmd="shield", shield_cmd="sets", project_name=None, sets_selection=None
+    )
+    with patch("sys.stdout", new_callable=StringIO) as out:
+        assert dispatch(args)
+    for name in EGRESS_SETS:
+        assert name in out.getvalue()
+
+
+def test_dispatch_sets_shows_project_selection() -> None:
+    """``shield sets <project>`` reports the project's effective selection."""
+    project = MagicMock()
+    project.shield_sets = ("python",)
+    args = argparse.Namespace(
+        cmd="shield", shield_cmd="sets", project_name="proj", sets_selection=None
+    )
+    with (
+        patch("terok.lib.api.load_project", return_value=project),
+        patch("sys.stdout", new_callable=StringIO) as out,
+    ):
+        assert dispatch(args)
+    assert "python" in out.getvalue()
+    assert "from project.yml" in out.getvalue()
+
+
+def test_dispatch_sets_writes_selection() -> None:
+    """``shield sets <project> --set a,b`` writes through the validated writer."""
+    args = argparse.Namespace(
+        cmd="shield", shield_cmd="sets", project_name="proj", sets_selection="python,git-hosting"
+    )
+    with (
+        patch("terok.lib.api.set_project_shield_sets") as writer,
+        patch("sys.stdout", new_callable=StringIO),
+    ):
+        assert dispatch(args)
+    writer.assert_called_once_with("proj", ("python", "git-hosting"))
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [
+        pytest.param("none", (), id="none-disables"),
+        pytest.param("default", None, id="default-restores"),
+    ],
+)
+def test_dispatch_sets_special_tokens(token: str, expected: object) -> None:
+    """``--set none`` writes an empty list; ``--set default`` writes null."""
+    args = argparse.Namespace(
+        cmd="shield", shield_cmd="sets", project_name="proj", sets_selection=token
+    )
+    with (
+        patch("terok.lib.api.set_project_shield_sets") as writer,
+        patch("sys.stdout", new_callable=StringIO),
+    ):
+        assert dispatch(args)
+    writer.assert_called_once_with("proj", expected)
+
+
+def test_dispatch_sets_set_requires_project() -> None:
+    """``--set`` without a project exits with a clean CLI error."""
+    args = argparse.Namespace(
+        cmd="shield", shield_cmd="sets", project_name=None, sets_selection="python"
+    )
+    with (
+        patch("sys.stderr", new_callable=StringIO) as err,
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        dispatch(args)
+    assert exc_info.value.code == 1
+    assert "requires a project" in err.getvalue()
+
+
 @patch("terok.cli.commands.shield.ShieldManager")
 def test_dispatch_status_without_task(mock_mgr_cls: MagicMock) -> None:
     """Bare ``shield status`` shows the runtime/available shield status."""

@@ -13,10 +13,36 @@ have no behavior beyond computed paths.
 """
 
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+
+
+class ShieldOverride(BaseModel):
+    """A resolved break-glass override — shield's t10 tier (above the deny).
+
+    ``host`` is a single host or IP (never a CIDR); ``reason`` records why the
+    punch-through exists; ``expires`` is an optional date after which the
+    override is dropped.  Expiry is evaluated when the container is launched
+    or restarted — an already-running container keeps its overrides until its
+    next start.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    host: str
+    reason: str
+    expires: date | None = None
+
+    @field_validator("host")
+    @classmethod
+    def _reject_cidr(cls, value: str) -> str:
+        """Hold the single-host invariant for callers that skip the YAML schema."""
+        if "/" in value:
+            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
+        return value
 
 
 class ProjectConfig(BaseModel):
@@ -130,6 +156,16 @@ class ProjectConfig(BaseModel):
     task_name_categories: list[str] | None = None
     shield_drop_on_task_run: bool = True
     shield_on_task_restart: str = "retain"
+    shield_sets: tuple[str, ...] | None = None
+    """Curated egress sets granted to tasks (t40).
+
+    ``None`` applies the generous default (every curated set in
+    [`EGRESS_SETS`][terok.lib.core.egress_sets.EGRESS_SETS]); an empty
+    tuple disables all curated content."""
+    shield_allow: tuple[str, ...] = ()
+    """Extra hosts allowed at egress — shield's t40 project-allow tier."""
+    shield_override: tuple[ShieldOverride, ...] = ()
+    """Break-glass overrides above the security-deny — shield's t10 tier."""
     # Lifecycle hooks (host-side commands)
     hook_pre_start: str | None = None
     hook_post_start: str | None = None

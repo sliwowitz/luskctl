@@ -32,8 +32,10 @@ from contextlib import suppress
 from pathlib import Path
 
 from terok.lib.api.setup import (
+    BUNDLE_VERSION,
     SERVICES_TCP_OPTOUT_YAML,
     check_environment,
+    resolve_container_shield_version,
     resolve_container_state_dir,
     systemd_creds_has_tpm2,
 )
@@ -356,6 +358,17 @@ def _check_task_shield_annotation(
         return None  # task isn't shielded — nothing to compare against
 
     label = f"Task {pid}/{tid} shield"
+    version = resolve_container_shield_version(cname)
+    if version is not None and version != BUNDLE_VERSION:
+        # Direction-neutral: a bundle *newer* than this terok (a downgrade)
+        # has the opposite remedy of an older one, so name both.
+        return (
+            "warn",
+            label,
+            f"{cname!r}: shield bundle v{version} does not match this terok's "
+            f"v{BUNDLE_VERSION} — restart refuses; re-create the task under this terok, "
+            "or run the terok version that created it",
+        )
     actual = resolve_container_state_dir(cname)
     if actual is None:
         return (

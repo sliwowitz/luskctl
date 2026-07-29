@@ -123,6 +123,64 @@ def _resolved_commands() -> tuple[CommandDef, ...]:
     return tuple(cmd.resolve() for cmd in COMMANDS)
 
 
+def _print_set_registry() -> None:
+    """List every curated set with the hosts it grants."""
+    from terok.lib.api import EGRESS_SETS, OS_PACKAGES_SUMMARY
+
+    print("Curated egress sets (project.yml shield.sets; unset = all):")
+    for name, hosts in EGRESS_SETS.items():
+        print(f"  {name}: {', '.join(hosts) or OS_PACKAGES_SUMMARY}")
+
+
+def _print_project_sets(project_name: str) -> None:
+    """Show a project's effective selection and where it comes from."""
+    from terok.lib.api import load_project, selected_egress_sets
+
+    sets = load_project(project_name).shield_sets
+    origin = "default: all sets" if sets is None else "from project.yml"
+    print(f"Active egress sets for {project_name} ({origin}):")
+    print("  " + (", ".join(selected_egress_sets(sets)) or "none (curated content disabled)"))
+
+
+def _parse_set_selection(selection: str) -> tuple[str, ...] | None:
+    """Map a ``--set`` value onto ``shield.sets``: 'default' → unset, 'none' → empty."""
+    word = selection.strip().lower()
+    if word == "default":
+        return None
+    if word == "none":
+        return ()
+    return tuple(s.strip() for s in selection.split(",") if s.strip())
+
+
+def _write_project_sets(project_name: str, selection: str) -> None:
+    """Replace a project's ``shield.sets`` and report the new selection."""
+    from terok.lib.api import describe_egress_sets, set_project_shield_sets
+
+    chosen = _parse_set_selection(selection)
+    path = set_project_shield_sets(project_name, chosen)
+    print(f"shield.sets for {project_name}: {describe_egress_sets(chosen)}\nWritten to {path}")
+    print("Tasks pick the new selection up at their next start or restart.")
+
+
+def _handle_sets(project_name: str | None, selection: str | None) -> None:
+    """List the curated egress sets; show or replace a project's selection.
+
+    Without a project: the registry with each set's hosts.  With a project:
+    its effective selection (the generous default when ``shield.sets`` is
+    unset).  With ``--set``: replace the selection (``none`` → explicit
+    empty list) and remind that running containers pick it up on restart.
+    """
+    if selection is not None and project_name is None:
+        print("Error: --set requires a project name", file=sys.stderr)
+        sys.exit(1)
+    if selection is not None and project_name is not None:
+        _write_project_sets(project_name, selection)
+    elif project_name is not None:
+        _print_project_sets(project_name)
+    else:
+        _print_set_registry()
+
+
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``shield`` subcommand group from the registry."""
     p = subparsers.add_parser("shield", help="Manage egress firewall (terok-shield)")
@@ -164,6 +222,23 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     # one touches only the shield OCI hooks.
     sub.add_parser("install-hooks", help="Install global OCI hooks for shield")
 
+    # Manually registered: the curated-set chooser is a terok concept
+    # (authored t40 content), not a terok-shield registry command.
+    sets_p = sub.add_parser("sets", help="List curated egress sets; show or set a project's choice")
+    from ._completers import add_project_name
+
+    add_project_name(sets_p, nargs="?", help="Project whose selection to show or change")
+    sets_p.add_argument(
+        "--set",
+        dest="sets_selection",
+        metavar="SET[,SET…]",
+        help=(
+            "Replace the project's shield.sets with this comma-separated selection "
+            "('none' disables every curated set, 'default' restores the generous "
+            "default; requires a project name)"
+        ),
+    )
+
 
 def dispatch(args: argparse.Namespace) -> bool:
     """Handle shield commands.  Returns True if handled."""
@@ -180,6 +255,10 @@ def dispatch(args: argparse.Namespace) -> bool:
         # Module-attribute access so the test ``@patch("...ShieldHooks.install")``
         # intercepts the call.
         _shield_api.ShieldHooks.install()
+        return True
+
+    if cmd_name == "sets":
+        _handle_sets(getattr(args, "project_name", None), getattr(args, "sets_selection", None))
         return True
 
     cmd_lookup = {cmd.name: cmd for cmd in _resolved_commands() if not shield_standalone_only(cmd)}

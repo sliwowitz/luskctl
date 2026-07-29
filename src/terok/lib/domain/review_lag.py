@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote, urlsplit
 
 from terok.lib.orchestration.tasks import agent_config_dir, iter_task_ids, tasks_meta_dir
+from terok.lib.util.net import git_remote_host
 
 if TYPE_CHECKING:
     from terok.lib.core.project_model import ProjectConfig
@@ -103,15 +104,10 @@ def _forge_command(upstream_url: str) -> list[str] | None:
 
 def _split_forge_url(upstream_url: str) -> tuple[str, str]:
     """Return ``(host, owner/repo)`` from an HTTPS or SSH remote URL."""
-    if "://" in upstream_url:
-        parts = urlsplit(upstream_url)
-        host, path = parts.hostname or "", parts.path
-    elif "@" in upstream_url and ":" in upstream_url:
-        # scp-like syntax: git@host:owner/repo.git
-        host_part, _, path = upstream_url.partition(":")
-        host = host_part.rpartition("@")[2]
-    else:
+    host = git_remote_host(upstream_url)
+    if host is None:
         return "", ""
+    path = urlsplit(upstream_url).path if "://" in upstream_url else upstream_url.partition(":")[2]
     return host, path.strip("/").removesuffix(".git")
 
 
