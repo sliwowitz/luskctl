@@ -539,7 +539,10 @@ if _HAS_TEXTUAL:
             # the ``maybe_vault_db`` graceful-degradation state and the
             # operator sees a silent empty SSH tile with no remediation.
             await self._refresh_vault_status(push_modal_if_locked=True)
-            self._vault_poll_timer = self.set_interval(
+            # Mount-time framework wiring, exercised only in a live TUI —
+            # like the upgrade-check interval above it; the poll behaviour
+            # itself is unit-tested via on_app_focus/blur/_schedule_vault_refresh.
+            self._vault_poll_timer = self.set_interval(  # pragma: no cover
                 _VAULT_POLL_INTERVAL_S, self._schedule_vault_refresh
             )
 
@@ -2549,7 +2552,7 @@ if _HAS_TEXTUAL:
                 return
             except OSError as exc:
                 self.notify(
-                    f"Failed to write session-unlock file: {exc}",
+                    f"Failed to cache the passphrase: {exc}",
                     severity="error",
                     timeout=10,
                 )

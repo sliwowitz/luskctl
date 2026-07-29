@@ -13,6 +13,7 @@ from terok_sandbox import SelinuxCheckResult, SelinuxStatus
 
 from terok.cli.commands.sickbay import (
     _check_default_agents,
+    _check_kernel_keyring_quota,
     _check_recovery_acknowledged,
     _check_selinux_policy,
     _check_ssh_signer,
@@ -24,6 +25,41 @@ from terok.cli.commands.sickbay import (
 from terok.lib.util.yaml import dump as yaml_dump
 
 MOCK_BASE = Path("/tmp/terok-testing")
+
+
+class TestCheckKernelKeyringQuota:
+    """The sickbay row renders sandbox's keyring-quota verdict verbatim."""
+
+    def _patch(self, monkeypatch: pytest.MonkeyPatch, severity: str, detail: str) -> None:
+        from types import SimpleNamespace
+
+        check = SimpleNamespace(
+            evaluate=lambda *_a: SimpleNamespace(severity=severity, detail=detail)
+        )
+        monkeypatch.setattr("terok.lib.api.setup.make_kernel_keyring_quota_check", lambda: check)
+
+    def test_ok_passthrough(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._patch(monkeypatch, "ok", "19/200 keys used (per-uid quota)")
+        assert _check_kernel_keyring_quota() == (
+            "ok",
+            "Kernel keyring quota",
+            "19/200 keys used (per-uid quota)",
+        )
+
+    def test_warn_passthrough(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._patch(monkeypatch, "warn", "kernel keyring 98% full (195/200 keys)")
+        sev, label, detail = _check_kernel_keyring_quota()
+        assert sev == "warn"
+        assert "195/200 keys" in detail
+
+    def test_failure_degrades_to_warn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _boom() -> object:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("terok.lib.api.setup.make_kernel_keyring_quota_check", _boom)
+        sev, _label, detail = _check_kernel_keyring_quota()
+        assert sev == "warn"
+        assert "check failed" in detail
 
 
 @pytest.fixture()
@@ -749,8 +785,8 @@ class TestCheckRecoveryAcknowledged:
     ``sandbox_doctor_checks`` and rendered per-task; terok's host-level
     sickbay now owns its own row instead so the warning appears
     exactly once.  Severity escalates from ``warn`` to ``error`` when
-    the resolver lands on the session-unlock tmpfs tier and the marker
-    is missing — one reboot away from losing the vault.
+    the resolver lands on the volatile kernel-keyring cache and the
+    marker is missing — one logout away from losing the vault.
     """
 
     @staticmethod
@@ -793,7 +829,7 @@ class TestCheckRecoveryAcknowledged:
         assert "UNRECOVERABLE" not in detail
 
     def test_error_when_marker_missing_volatile_only(self) -> None:
-        """Unacked + kernel-keyring source → ``error`` with the reboot-loss wording."""
+        """Unacked + kernel-keyring source → ``error`` with the logout-loss wording."""
         with unittest.mock.patch(
             "terok.lib.api.shield.RecoveryStatus.load",
             return_value=self._status(acknowledged=False, source="kernel-keyring"),
@@ -802,8 +838,8 @@ class TestCheckRecoveryAcknowledged:
         assert sev == "error"
         assert label == "Recovery key acknowledged"
         # Explicit operator-facing breadcrumbs of the asymmetry.
-        assert "session-unlock" in detail
-        assert "reboot" in detail.lower()
+        assert "kernel-keyring" in detail
+        assert "logout" in detail.lower()
         assert "UNRECOVERABLE" in detail
         # Both remediation verbs still surface.
         assert "terok vault passphrase reveal" in detail

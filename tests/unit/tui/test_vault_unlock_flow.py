@@ -85,6 +85,19 @@ class TestOnVaultUnlockResult:
         assert not any("unlocked" in m for m in messages)
         unlock_stub._refresh_vault_status.assert_not_awaited()
 
+    async def test_unexpected_error_is_surfaced_verbatim(
+        self, unlock_stub: SimpleNamespace
+    ) -> None:
+        """An unexpected failure (e.g. the kernel keyring unavailable) is shown, not swallowed."""
+        with patch(
+            "terok.lib.api.vault.provision_session_passphrase",
+            side_effect=RuntimeError("the kernel keyring is unavailable here"),
+        ):
+            await TerokTUI._on_vault_unlock_result(unlock_stub, "some-pass")
+        messages = [str(c.args[0]) for c in unlock_stub.notify.call_args_list]
+        assert any("kernel keyring is unavailable" in m for m in messages)
+        unlock_stub._refresh_vault_status.assert_not_awaited()
+
     async def test_empty_result_is_a_noop(self, unlock_stub: SimpleNamespace) -> None:
         """Dismissing the modal (None / empty) must not touch the vault."""
         with patch("terok.lib.api.vault.provision_session_passphrase") as provision:

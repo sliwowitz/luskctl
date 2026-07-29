@@ -620,10 +620,10 @@ def _check_recovery_acknowledged() -> _CheckResult:
     bundle).
 
     Two severity bands when the marker is missing: an ``error`` when
-    the resolver lands on the session-unlock tmpfs file (the
-    passphrase is wiped on the next reboot and the vault becomes
-    unrecoverable then), a ``warn`` for any durable tier (machine-
-    bound; needs an off-host copy for hardware-failure DR).
+    the resolver lands on the volatile kernel-keyring cache (the
+    passphrase is wiped at logout and the vault becomes unrecoverable
+    then), a ``warn`` for any durable tier (machine-bound; needs an
+    off-host copy for hardware-failure DR).
     """
     label = "Recovery key acknowledged"
     try:
@@ -643,8 +643,8 @@ def _check_recovery_acknowledged() -> _CheckResult:
             "error",
             label,
             "vault recovery key UNCONFIRMED and the passphrase lives ONLY"
-            " in the session-unlock tmpfs file — it will be wiped on the"
-            " next reboot and your vault becomes UNRECOVERABLE then."
+            " in the kernel-keyring cache — it will be wiped at logout"
+            " and your vault becomes UNRECOVERABLE then."
             f" Run {reveal} NOW and save the value off-host,"
             f" or {ack} if you already captured it.",
         )
@@ -656,6 +656,25 @@ def _check_recovery_acknowledged() -> _CheckResult:
         f" Run {reveal} to view and save the value off-host,"
         f" or {ack} if you already captured it.",
     )
+
+
+def _check_kernel_keyring_quota() -> _CheckResult:
+    """Warn when the per-uid kernel keyring is nearly full.
+
+    A host-level gauge (the quota is per-uid, not per-task): the OCI
+    runtime leaks a session keyring per container, so a busy host drifts
+    toward the key quota and then fails to launch with a misleading
+    "Disk quota exceeded".  Sandbox owns the reading and the threshold;
+    this row renders its verdict, quiet until near the edge.
+    """
+    label = "Kernel keyring quota"
+    try:
+        from terok.lib.api.setup import make_kernel_keyring_quota_check
+
+        verdict = make_kernel_keyring_quota_check().evaluate(0, "", "")
+    except Exception as exc:  # noqa: BLE001 — best-effort probe, never block sickbay
+        return ("warn", label, f"check failed — {exc}")
+    return (verdict.severity, label, verdict.detail)
 
 
 def _check_stray_sidecars() -> _CheckResult:
@@ -710,6 +729,7 @@ _GLOBAL_CHECKS = [
     ("Shield", _check_shield),
     ("Vault", _check_vault),
     ("Recovery key acknowledged", _check_recovery_acknowledged),
+    ("Kernel keyring quota", _check_kernel_keyring_quota),
     ("SSH signer", _check_ssh_signer),
     ("SELinux policy", _check_selinux_policy),
     ("Stray sidecars", _check_stray_sidecars),
