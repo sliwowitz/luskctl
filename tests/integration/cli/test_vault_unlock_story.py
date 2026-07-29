@@ -49,6 +49,7 @@ agent:
 
 
 @pytest.mark.needs_vault
+@pytest.mark.needs_kernel_keyring
 class TestVaultUnlockStory:
     """Walks the full lock → hint → unlock → success cycle through the real CLI."""
 

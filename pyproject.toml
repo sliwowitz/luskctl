@@ -149,6 +149,7 @@ markers = [
   "needs_internet: requires outbound network connectivity",
   "needs_hooks: requires OCI global hooks installed via terok shield install-hooks",
   "needs_vault: exercises real vault (DB + token-broker daemon)",
+  "needs_kernel_keyring: requires a working kernel keyring (libkeyutils.so.1 + add_key)",
   "needs_dbus: requires a private D-Bus session bus (provided via python-dbusmock)",
 ]
 asyncio_mode = "auto"
