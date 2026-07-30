@@ -46,14 +46,14 @@ def _plan(
     *,
     provisioned: bool = False,
     auto_tier: str | None = None,
-    keyring_available: bool = True,
+    unavailable: dict[str, str] | None = None,
 ) -> SimpleNamespace:
-    """A ``ProvisioningPlan`` stand-in (the flow reads all four fields)."""
+    """A ``ProvisioningPlan`` stand-in (the flow reads provisioned/auto_tier/unavailable)."""
     return SimpleNamespace(
         provisioned=provisioned,
         auto_tier=auto_tier,
         choices=("keyring", "kernel-keyring"),
-        keyring_available=keyring_available,
+        unavailable=unavailable or {},
     )
 
 
@@ -253,7 +253,7 @@ class TestTierChooserModalRouting:
     def test_buttons_dismiss_with_tier(self, button_id: str, expected: str | None) -> None:
         from terok.tui.screens import VaultTierChooserModal
 
-        modal = VaultTierChooserModal(keyring_available=True)
+        modal = VaultTierChooserModal(unavailable={})
         modal.dismiss = MagicMock()
         event = MagicMock()
         event.button.id = button_id
@@ -263,7 +263,9 @@ class TestTierChooserModalRouting:
     def test_escape_cancels(self) -> None:
         from terok.tui.screens import VaultTierChooserModal
 
-        modal = VaultTierChooserModal(keyring_available=False)
+        modal = VaultTierChooserModal(
+            unavailable={"keyring": "no OS keyring backend is reachable on this host"}
+        )
         modal.dismiss = MagicMock()
         modal.action_cancel()
         modal.dismiss.assert_called_once_with(None)
@@ -388,7 +390,7 @@ class TestTierChooserModalPilot:
     async def test_keyring_button_dismisses_with_tier(self) -> None:
         from terok.tui.screens import VaultTierChooserModal
 
-        app = _modal_host(VaultTierChooserModal(keyring_available=True))
+        app = _modal_host(VaultTierChooserModal(unavailable={}))
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.click("#vault-tier-keyring")
@@ -400,7 +402,9 @@ class TestTierChooserModalPilot:
 
         from terok.tui.screens import VaultTierChooserModal
 
-        modal = VaultTierChooserModal(keyring_available=False)
+        modal = VaultTierChooserModal(
+            unavailable={"keyring": "no OS keyring backend is reachable on this host"}
+        )
         app = _modal_host(modal)
         async with app.run_test() as pilot:
             await pilot.pause()

@@ -766,7 +766,9 @@ if _HAS_TEXTUAL:
                 tier = plan.auto_tier
             else:
                 tier = await self.push_screen_wait(
-                    VaultTierChooserModal(keyring_available=plan.keyring_available)
+                    VaultTierChooserModal(
+                        unavailable={str(t): reason for t, reason in plan.unavailable.items()}
+                    )
                 )
                 if tier is None:
                     self._notify_provisioning_skipped()

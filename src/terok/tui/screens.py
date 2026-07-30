@@ -2727,20 +2727,26 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
     }
     """
 
-    def __init__(self, *, keyring_available: bool) -> None:
-        """Record whether the OS keyring backend is reachable (dims that option)."""
+    def __init__(self, *, unavailable: dict[str, str]) -> None:
+        """Record which tiers can't be provisioned here, keyed by reason.
+
+        Each unavailable tier's button is disabled and labelled
+        ``(unavailable)`` so the operator sees *why* it's off rather than
+        the tier silently vanishing from the choice.
+        """
         super().__init__()
-        self._keyring_available = keyring_available
+        self._unavailable = unavailable
 
     def compose(self) -> ComposeResult:
         """Lay out the explainer and the per-tier buttons."""
         dialog = Vertical(id="vault-tier-dialog")
         dialog.border_title = "Set up vault encryption"
-        keyring_note = (
-            ""
-            if self._keyring_available
-            else "\n\nNo OS keyring backend is reachable on this host, so the"
-            " recommended tier is unavailable."
+        keyring_off = "keyring" in self._unavailable
+        kernel_off = "kernel-keyring" in self._unavailable
+        notes = "".join(
+            f"\n\nThe {name} is unavailable: {self._unavailable[tier]}."
+            for tier, name in (("keyring", "OS keyring"), ("kernel-keyring", "kernel keyring"))
+            if tier in self._unavailable
         )
         with dialog:
             yield Static(
@@ -2752,17 +2758,22 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
                 " it after each logout\n\n"
                 "systemd-creds (the strongest, machine-bound tier) needs"
                 " systemd ≥ 257 and isn't available on this host."
-                f"{keyring_note}",
+                f"{notes}",
                 id="vault-tier-prompt",
             )
             with Horizontal(id="vault-tier-buttons"):
                 yield Button("Cancel", id="vault-tier-cancel", variant="default")
-                yield Button("Kernel keyring", id="vault-tier-kernel", variant="default")
                 yield Button(
-                    "OS keyring (recommended)",
+                    "Kernel keyring (unavailable)" if kernel_off else "Kernel keyring",
+                    id="vault-tier-kernel",
+                    variant="default",
+                    disabled=kernel_off,
+                )
+                yield Button(
+                    "OS keyring (unavailable)" if keyring_off else "OS keyring (recommended)",
                     id="vault-tier-keyring",
                     variant="primary",
-                    disabled=not self._keyring_available,
+                    disabled=keyring_off,
                 )
 
     def action_cancel(self) -> None:
