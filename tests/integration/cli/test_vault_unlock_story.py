@@ -55,6 +55,22 @@ class TestVaultUnlockStory:
 
     _STORY_PASSPHRASE = "story-test-passphrase-9f7c"
 
+    @pytest.fixture(autouse=True)
+    def _forget_kernel_keyring_key(self, terok_env: TerokIntegrationEnv):
+        """Drop this vault's kernel-keyring key after the test.
+
+        ``vault unlock`` caches the passphrase in the per-uid ``@u``
+        keyring, which — unlike the tmpfs tier it replaced — no
+        ``tmp_path`` redirection can isolate.  The key is scoped to this
+        vault's DB path, so forgetting it touches nothing else; without
+        the cleanup a dev machine running the suite under a shared uid
+        would slowly accrue orphaned test keys against the keyring quota.
+        """
+        yield
+        from terok_sandbox.vault.store import kernel_keyring
+
+        kernel_keyring.forget(terok_env.vault_dir / "credentials.db")
+
     def _prime_locked_vault(self, terok_env: TerokIntegrationEnv) -> None:
         """Encrypt the credentials DB and strip every chain tier the harness seeded.
 
