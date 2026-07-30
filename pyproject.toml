@@ -44,8 +44,8 @@ dependencies = [
     "unique-namer~=1.6",
     "textual-serve~=1.1",
     "jinja2~=3.1",
-    "terok-executor @ https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a18/terok_executor-0.4.0a18-py3-none-any.whl",
-    "terok-sandbox @ https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a19/terok_sandbox-0.5.0a19-py3-none-any.whl",
+    "terok-executor @ https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a19/terok_executor-0.4.0a19-py3-none-any.whl",
+    "terok-sandbox @ https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a20/terok_sandbox-0.5.0a20-py3-none-any.whl",
     "terok-shield @ https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a8/terok_shield-0.8.0a8-py3-none-any.whl",
     "terok-clearance @ https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a7/terok_clearance-0.8.0a7-py3-none-any.whl",
     "terok-util @ https://github.com/terok-ai/terok-util/releases/download/v0.3.1a4/terok_util-0.3.1a4-py3-none-any.whl",
@@ -149,6 +149,7 @@ markers = [
   "needs_internet: requires outbound network connectivity",
   "needs_hooks: requires OCI global hooks installed via terok shield install-hooks",
   "needs_vault: exercises real vault (DB + token-broker daemon)",
+  "needs_kernel_keyring: requires a working kernel keyring (libkeyutils.so.1 + add_key)",
   "needs_dbus: requires a private D-Bus session bus (provided via python-dbusmock)",
 ]
 asyncio_mode = "auto"

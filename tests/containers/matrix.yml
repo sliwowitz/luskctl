@@ -9,12 +9,17 @@
 # clearance varlink hub) on the nested rootless-podman image family.
 # Extra packages per slot: openssh for the SSH signer path, dbus + the
 # meson/glib toolchain for dbus-python (the `stories` dependency group);
-# alpine additionally needs git-daemon for the gate's git:// tests.
+# the keyutils runtime library (libkeyutils.so.1) so the vault's
+# kernel-keyring passphrase tier loads for real — the package name varies
+# per family (libkeyutils1 on apt, keyutils-libs on dnf/apk, libkeyutils
+# on xbps, lib64keyutils1 on Mageia); alpine additionally needs
+# git-daemon for the gate's git:// tests.
 #
 # The nix slot is not a distro — it reproduces a wrapped-Python setup so
 # `[sys.executable, "-m", "terok…"]` re-entry keeps working (#717); it
 # runs the GitHub-Actions flavour of the suite (unit + host-only
-# integration) under its own phases.
+# integration) under its own phases.  Its base image ships no keyutils,
+# so the kernel-keyring story test is deselected there (needs_kernel_keyring).
 
 image-prefix: terok-test
 flavor: podman
@@ -23,28 +28,28 @@ groups: [test, stories]
 
 slots:
   debian12:
-    extra-packages: [python3-venv, openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson]
+    extra-packages: [python3-venv, openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson, libkeyutils1]
   ubuntu2404:
-    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson]
+    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson, libkeyutils1]
   ubuntu2604:
-    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson]
+    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson, libkeyutils1]
   debian13:
-    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson]
+    extra-packages: [openssh-client, dbus, gcc, python3-dev, libdbus-1-dev, libglib2.0-dev, pkg-config, meson, libkeyutils1]
   fedora43:
-    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson]
+    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson, keyutils-libs]
   fedora44:
-    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson]
+    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson, keyutils-libs]
   podman:
-    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson]
+    extra-packages: [openssh-clients, dbus-daemon, gcc, python3-devel, dbus-devel, glib2-devel, pkgconf, meson, keyutils-libs]
   alpine:
-    extra-packages: [git-daemon, openssh-client, dbus, dbus-dev, glib-dev, pkgconf, meson]
+    extra-packages: [git-daemon, openssh-client, dbus, dbus-dev, glib-dev, pkgconf, meson, keyutils-libs]
     skip:
       arches: [aarch64, arm64]
       reason: musl+aarch64 has no tree-sitter grammar wheels (textual[syntax]); Alpine is x86_64-only for terok
   void:
-    extra-packages: [openssh, dbus, dbus-devel, glib-devel, pkgconf, meson]
+    extra-packages: [openssh, dbus, dbus-devel, glib-devel, pkgconf, meson, libkeyutils]
   mageia:
-    extra-packages: [openssh-clients, dbus, dbus-devel, glib2-devel, pkgconf, meson]
+    extra-packages: [openssh-clients, dbus, dbus-devel, glib2-devel, pkgconf, meson, lib64keyutils1]
   nix:
     groups: [test, docs]
     expect: []
@@ -54,7 +59,7 @@ slots:
         pytest: tests/unit -v --tb=short -p no:tach
       - name: host-only integration tests
         scope: integ
-        pytest: tests/integration -v --tb=short -p no:tach -m "needs_host_features and not needs_internet and not needs_podman"
+        pytest: tests/integration -v --tb=short -p no:tach -m "needs_host_features and not needs_internet and not needs_podman and not needs_kernel_keyring"
 
 phases:
   - name: "phase 1: tests without hooks"

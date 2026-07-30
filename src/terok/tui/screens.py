@@ -2687,7 +2687,7 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
     (with it, the strongest tier picks itself and there is nothing to
     ask).
 
-    Dismisses with ``"keyring"`` / ``"session-file"`` or ``None`` on
+    Dismisses with ``"keyring"`` / ``"kernel-keyring"`` or ``None`` on
     cancel.  The plaintext ``config`` tier is deliberately not offered
     — that stays a CLI-only choice behind its typed confirmation.
     """
@@ -2727,20 +2727,26 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
     }
     """
 
-    def __init__(self, *, keyring_available: bool) -> None:
-        """Record whether the OS keyring backend is reachable (dims that option)."""
+    def __init__(self, *, unavailable: dict[str, str]) -> None:
+        """Record which tiers can't be provisioned here, keyed by reason.
+
+        Each unavailable tier's button is disabled and labelled
+        ``(unavailable)`` so the operator sees *why* it's off rather than
+        the tier silently vanishing from the choice.
+        """
         super().__init__()
-        self._keyring_available = keyring_available
+        self._unavailable = unavailable
 
     def compose(self) -> ComposeResult:
         """Lay out the explainer and the per-tier buttons."""
         dialog = Vertical(id="vault-tier-dialog")
         dialog.border_title = "Set up vault encryption"
-        keyring_note = (
-            ""
-            if self._keyring_available
-            else "\n\nNo OS keyring backend is reachable on this host, so the"
-            " recommended tier is unavailable."
+        keyring_off = "keyring" in self._unavailable
+        kernel_off = "kernel-keyring" in self._unavailable
+        notes = "".join(
+            f"\n\nThe {name} is unavailable: {self._unavailable[tier]}."
+            for tier, name in (("keyring", "OS keyring"), ("kernel-keyring", "kernel keyring"))
+            if tier in self._unavailable
         )
         with dialog:
             yield Static(
@@ -2748,21 +2754,26 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
                 " where to keep it:\n\n"
                 "  • OS keyring — auto-unlocks with your login session"
                 " (recommended)\n"
-                "  • Session only — RAM-backed, cleared at reboot; you re-enter"
-                " it after each boot\n\n"
+                "  • Kernel keyring — RAM-only, cleared at logout; you re-enter"
+                " it after each logout\n\n"
                 "systemd-creds (the strongest, machine-bound tier) needs"
                 " systemd ≥ 257 and isn't available on this host."
-                f"{keyring_note}",
+                f"{notes}",
                 id="vault-tier-prompt",
             )
             with Horizontal(id="vault-tier-buttons"):
                 yield Button("Cancel", id="vault-tier-cancel", variant="default")
-                yield Button("Session only", id="vault-tier-session", variant="default")
                 yield Button(
-                    "OS keyring (recommended)",
+                    "Kernel keyring (unavailable)" if kernel_off else "Kernel keyring",
+                    id="vault-tier-kernel",
+                    variant="default",
+                    disabled=kernel_off,
+                )
+                yield Button(
+                    "OS keyring (unavailable)" if keyring_off else "OS keyring (recommended)",
                     id="vault-tier-keyring",
                     variant="primary",
-                    disabled=not self._keyring_available,
+                    disabled=keyring_off,
                 )
 
     def action_cancel(self) -> None:
@@ -2774,8 +2785,8 @@ class VaultTierChooserModal(screen.ModalScreen[str | None]):
         match event.button.id:
             case "vault-tier-keyring":
                 self.dismiss("keyring")
-            case "vault-tier-session":
-                self.dismiss("session-file")
+            case "vault-tier-kernel":
+                self.dismiss("kernel-keyring")
             case _:
                 self.dismiss(None)
 
@@ -2912,14 +2923,14 @@ class VaultCreatePassphraseModal(screen.ModalScreen[str | None]):
 
 
 class VaultUnlockModal(screen.ModalScreen["str | None"]):
-    """Passphrase prompt that writes to the session-unlock tmpfs file.
+    """Passphrase prompt that caches the passphrase in the kernel keyring.
 
     Triggered when the vault snapshot reports ``LOCKED`` at TUI mount or after
     a manual ``Ctrl+L`` re-probe.  Mirrors the [`AskpassModal`][terok.tui.askpass_service.AskpassModal]
     shape: one masked input, two buttons.  The "Unlock for this
-    session" path is the always-safe one — it writes the session-file
-    tier, the highest-priority resolver tier, which wins over any
-    stale persistent state.
+    session" path caches the passphrase in the kernel keyring (RAM-only,
+    cleared at logout) — the volatile tier the resolver falls back to
+    when no durable tier is set up.
 
     Persistent-tier writes (keyring / systemd-creds / config.yml) are
     setup-time decisions surfaced via the chooser and ``vault seal``;
@@ -3096,7 +3107,7 @@ class VaultRevealModal(screen.ModalScreen["bool | None"]):
             yield Static(
                 "Save this off-host (password manager, paper safe, "
                 "sealed envelope). Every storage tier we resolve through "
-                "(systemd-creds, keyring, session-file) is bound to this "
+                "(systemd-creds, keyring, kernel-keyring) is bound to this "
                 "machine, account, or boot — a hardware failure or TPM "
                 "transplant strands the vault without it.",
                 id="vault-reveal-explainer",
@@ -3141,7 +3152,7 @@ class VaultScreen(screen.Screen[str | None]):
     BINDINGS = [
         _modal_binding("escape", "dismiss", "Back"),
         _modal_binding("q", "dismiss", "Back"),
-        _modal_binding("n", "vault_unlock", "Unlock (session-file tier)"),
+        _modal_binding("n", "vault_unlock", "Unlock (kernel-keyring tier)"),
         _modal_binding("l", "vault_lock", "Lock (clear all tiers)"),
         _modal_binding("e", "vault_seal", "Seal into systemd-creds"),
         _modal_binding("k", "vault_to_keyring", "Move passphrase to keyring"),
@@ -3174,7 +3185,7 @@ class VaultScreen(screen.Screen[str | None]):
         yield detail_pane
 
         yield OptionList(
-            Option("u\\[n]lock (write to session-file tier)", id="vault_unlock"),
+            Option("u\\[n]lock (cache in kernel-keyring tier)", id="vault_unlock"),
             Option("\\[l]ock (clear all tiers)", id="vault_lock"),
             Option("s\\[e]al current passphrase into systemd-creds", id="vault_seal"),
             Option("move passphrase to \\[k]eyring", id="vault_to_keyring"),
@@ -3222,11 +3233,11 @@ class VaultScreen(screen.Screen[str | None]):
         self.dismiss(result)
 
     def action_vault_unlock(self) -> None:
-        """Trigger the session-file unlock flow."""
+        """Trigger the kernel-keyring unlock flow."""
         self.dismiss("vault_unlock")
 
     def action_vault_lock(self) -> None:
-        """Trigger session-file lock (reversible; persistent tiers untouched)."""
+        """Trigger vault lock (reversible; persistent tiers untouched)."""
         self.dismiss("vault_lock")
 
     def action_vault_seal(self) -> None:
