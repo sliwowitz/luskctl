@@ -672,7 +672,8 @@ def _check_kernel_keyring_quota() -> _CheckResult:
         from terok.lib.api.setup import make_kernel_keyring_quota_check
 
         verdict = make_kernel_keyring_quota_check().evaluate(0, "", "")
-    except Exception as exc:  # noqa: BLE001 — best-effort probe, never block sickbay
+    # Best-effort probe — a failure here must never block sickbay.
+    except Exception as exc:  # noqa: BLE001
         return ("warn", label, f"check failed — {exc}")
     return (verdict.severity, label, verdict.detail)
 
