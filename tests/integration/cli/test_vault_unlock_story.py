@@ -25,6 +25,10 @@ are no mocks in this path.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from pathlib import Path
+from uuid import uuid4
+
 import pytest
 
 from tests.testnet import TEST_UPSTREAM_URL
@@ -55,23 +59,27 @@ class TestVaultUnlockStory:
 
     _STORY_PASSPHRASE = "story-test-passphrase-9f7c"
 
-    @pytest.fixture(autouse=True)
-    def _forget_kernel_keyring_key(self, terok_env: TerokIntegrationEnv):
-        """Drop this vault's kernel-keyring key after the test.
+    @pytest.fixture
+    def story_vault(self, tmp_path: Path) -> Iterator[Path]:
+        """A vault directory unique to this test invocation, cleaned from ``@u`` after.
 
-        ``vault unlock`` caches the passphrase in the per-uid ``@u``
-        keyring, which — unlike the tmpfs tier it replaced — no
-        ``tmp_path`` redirection can isolate.  The key is scoped to this
-        vault's DB path, so forgetting it touches nothing else; without
-        the cleanup a dev machine running the suite under a shared uid
-        would slowly accrue orphaned test keys against the keyring quota.
+        The kernel keyring is per-uid, and under the matrix's concurrent
+        rootless containers it is shared across slots — so the fixed DB
+        path every slot's ``tmp_path`` produces (``pytest-0/…``) would
+        collide in the shared ``@u``: one slot resolving another's cached
+        key (a "locked" vault that isn't), or a teardown clearing a key
+        mid-run (an "unlocked" vault that relocks).  A per-invocation nonce
+        makes this story's cached key unique across slots *and* runs; the
+        teardown drops it so ``@u`` never accrues orphaned test keys.
         """
-        yield
+        vault_dir = tmp_path / f"vault-{uuid4().hex}"
+        vault_dir.mkdir(parents=True, exist_ok=True)
+        yield vault_dir
         from terok_sandbox.vault.store import kernel_keyring
 
-        kernel_keyring.forget(terok_env.vault_dir / "credentials.db")
+        kernel_keyring.forget(vault_dir / "credentials.db")
 
-    def _prime_locked_vault(self, terok_env: TerokIntegrationEnv) -> None:
+    def _prime_locked_vault(self, terok_env: TerokIntegrationEnv, vault_dir: Path) -> None:
         """Encrypt the credentials DB and strip every chain tier the harness seeded.
 
         The default ``terok_env`` fixture wires a ``passphrase_command``
@@ -80,12 +88,12 @@ class TestVaultUnlockStory:
         *opposite* — a locked vault that no tier can unseal — so we
         undo that helper deliberately (keyring explicitly off: it
         defaults on now, and a CI host's real Secret Service must not
-        unlock the story's vault).
+        unlock the story's vault).  The DB lands in *vault_dir* (the
+        per-invocation path the CLI is pointed at via ``TEROK_VAULT_DIR``).
         """
         from terok_sandbox import CredentialDB
 
-        db_path = terok_env.vault_dir / "credentials.db"
-        CredentialDB(db_path, passphrase=self._STORY_PASSPHRASE).close()
+        CredentialDB(vault_dir / "credentials.db", passphrase=self._STORY_PASSPHRASE).close()
 
         (terok_env.xdg_config_home / "terok" / "config.yml").write_text(
             "credentials:\n  use_keyring: false\n",
@@ -99,18 +107,24 @@ class TestVaultUnlockStory:
     def test_locked_then_unlocked_via_kernel_keyring(
         self,
         terok_env: TerokIntegrationEnv,
-        tmp_path,
+        tmp_path: Path,
+        story_vault: Path,
     ) -> None:
         """The full story in one go — fails closed with the hint, then succeeds after unlock."""
-        self._prime_locked_vault(terok_env)
+        self._prime_locked_vault(terok_env, story_vault)
         terok_env.write_project("alpha", _SOURCE_PROJECT)
 
         # ``terok_env`` already creates this path and exports
         # ``TEROK_SANDBOX_RUNTIME_DIR``; ``exist_ok=True`` keeps this
-        # explicit assignment idempotent.
+        # explicit assignment idempotent.  ``TEROK_VAULT_DIR`` points every
+        # CLI subprocess at this invocation's unique vault so its cached
+        # kernel-keyring key can't collide with a concurrent slot's.
         runtime_dir = tmp_path / "sandbox-runtime"
         runtime_dir.mkdir(exist_ok=True)
-        sandbox_env = {"TEROK_SANDBOX_RUNTIME_DIR": str(runtime_dir)}
+        sandbox_env = {
+            "TEROK_SANDBOX_RUNTIME_DIR": str(runtime_dir),
+            "TEROK_VAULT_DIR": str(story_vault),
+        }
 
         # --- Act 1: locked vault → exit 2 + actionable hint ----------
         locked = terok_env.run_cli(
