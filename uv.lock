@@ -2451,8 +2451,8 @@ dependencies = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a20.dev465+g3ab1a1682"
-source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#3ab1a1682f79da2d42a13d7d17c30ccd519b11d2" }
+version = "0.4.0a20.dev466+g326e563a8"
+source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#326e563a8f35ccb7d7483549ca0521557265dd2e" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2467,8 +2467,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a21.dev459+g513b81de7"
-source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#513b81de7c53e73d86241d9a48a8a467cbc0952b" }
+version = "0.5.0a21.dev460+g58d287f36"
+source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#58d287f36afd0829169508244bda19207085deb7" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
