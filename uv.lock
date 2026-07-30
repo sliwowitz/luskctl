@@ -2440,8 +2440,8 @@ test = [
 
 [[package]]
 name = "terok-clearance"
-version = "0.8.0a8.dev216+g55c9f6702"
-source = { git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin#55c9f67026f30b9df580b38f257c2473231f12ef" }
+version = "0.8.0a8.dev218+gd11720679"
+source = { git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin#d11720679951bd474649334933b3c3eb76c594c8" }
 dependencies = [
     { name = "asyncvarlink" },
     { name = "dbus-fast" },
@@ -2451,8 +2451,8 @@ dependencies = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a20.dev460+g2f3c6ab8e"
-source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#2f3c6ab8e4a0c75659b7139b892577943a9a8838" }
+version = "0.4.0a20.dev462+g67b7ff79b"
+source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#67b7ff79bf5f1faee89a8f039ed038027c60599d" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2467,8 +2467,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a21.dev453+gc3da50a54"
-source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#c3da50a54e020410dbc357edaa678cfaaeca53b7" }
+version = "0.5.0a21.dev455+g0053f098c"
+source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#0053f098c89c25b010ff8c15a55314a32133b9ba" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2487,8 +2487,8 @@ dependencies = [
 
 [[package]]
 name = "terok-shield"
-version = "0.8.0a9.dev352+g384510845"
-source = { git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement#38451084513470a3300c6a95b64bd416ae90d49f" }
+version = "0.8.0a9.dev356+gc213a3c88"
+source = { git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement#c213a3c88a896d5c18bd2703f7af7f469a8fa1cf" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -2497,8 +2497,8 @@ dependencies = [
 
 [[package]]
 name = "terok-util"
-version = "0.3.1a5.dev87+g784797962"
-source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#78479796236fc9f02ab5257b283ff65df22ca270" }
+version = "0.3.1a5.dev88+g1e095db2b"
+source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#1e095db2bfba84a96116e325c0be77d5494e3991" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },

@@ -21,9 +21,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Terok-specific env vars that override path resolution.  The autouse
-# isolation fixture unsets each so resolution falls back through the
-# tmp-rooted ``HOME`` / ``XDG_*`` chain — never to the operator's real
-# state.  Kept in one place so a new ``TEROK_*_DIR`` knob added in
+# isolation fixture clears them before applying its own isolated values;
+# most paths then fall through the tmp-rooted ``HOME`` / ``XDG_*`` chain.
+# Kept in one place so a new ``TEROK_*_DIR`` knob added in
 # terok, sandbox, or executor only needs one edit here.
 _TEROK_PATH_OVERRIDE_ENV_VARS = (
     "TEROK_CONFIG_DIR",
@@ -69,6 +69,9 @@ def _isolate_user_paths(
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(fake_home / "run"))
     for var in _TEROK_PATH_OVERRIDE_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+    # pytest's nested tmp path plus the normal XDG namespace can exceed
+    # Linux's AF_UNIX pathname limit once the per-service lanes are added.
+    monkeypatch.setenv("TEROK_SANDBOX_RUNTIME_DIR", str(fake_home / "r"))
     # CI containers whose ``uid_map`` maps ``geteuid()`` → 0 trip the
     # post-userns ``_is_root()`` → paths route to ``/var/lib/terok``.
     # Tests run as non-root by definition.
@@ -151,19 +154,6 @@ def _mock_infrastructure() -> Iterator[None]:
         ),
     ):
         yield
-
-
-@pytest.fixture(autouse=True)
-def _no_shield_self_confinement(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Neutralise shield's irreversible Landlock self-floor for in-process tests.
-
-    Dispatching ``shield watch`` / ``shield simple-clearance`` enters shield's
-    reader handlers, which call ``confine_to_state`` — Landlock ``restrict_self``,
-    process-wide and permanent.  Left live it confines the pytest worker itself,
-    so every later test errors trying to open its temp/coverage files.  The real
-    floor is proved on the live kernel in terok-shield's own subprocess test.
-    """
-    monkeypatch.setattr("terok_shield._confine.confine_to_state", lambda _state_dir: None)
 
 
 @pytest.fixture(autouse=True)
