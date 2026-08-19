@@ -490,21 +490,72 @@ class TestRunContainerDoctor:
         mock_sandbox_cfg: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """``_collect_all_checks`` refuses TCP mode without resolved ports.
+        """``_collect_all_checks`` refuses TCP mode without resolvable ports.
 
-        In TCP mode the per-task probes need real port numbers — either
-        pinned in ``config.yml`` or auto-allocated by the port registry.
-        Socket mode is the opposite contract (no TCP ports expected) and
-        is covered by ``test_sickbay_collects_checks_in_socket_mode`` in
+        In TCP mode the per-task probes need real port numbers — from the
+        task's sidecar, or pinned in ``config.yml`` for pre-recording
+        sidecars.  With neither source the doctor must fail loud.  Socket
+        mode is the opposite contract (no TCP ports expected) and is
+        covered by ``test_sickbay_collects_checks_in_socket_mode`` in
         ``test_unified_layering_contracts``.
         """
         from terok.lib.orchestration.container_doctor import _collect_all_checks
 
         mock_sandbox_cfg.return_value = MagicMock(
-            gate_port=None, token_broker_port=None, ssh_signer_port=None
+            state_dir=tmp_path / "state",  # no sidecar written → empty wiring
+            gate_port=None,
+            token_broker_port=None,
+            ssh_signer_port=None,
         )
-        with pytest.raises(SystemExit, match="ports are not all configured"):
-            _collect_all_checks("proj", tmp_path, services_mode="tcp")
+        with pytest.raises(SystemExit, match="ports could not be resolved"):
+            _collect_all_checks("proj", tmp_path, services_mode="tcp", cname="proj-cli-42")
+
+    @patch("terok.lib.orchestration.container_doctor._terok_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.AgentRoster")
+    @patch("terok.lib.orchestration.container_doctor.sandbox_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.make_sandbox_config")
+    def test_collect_all_checks_resolves_tcp_ports_from_the_sidecar(
+        self,
+        mock_sandbox_cfg: MagicMock,
+        mock_sandbox_checks: MagicMock,
+        mock_roster: MagicMock,
+        mock_terok_checks: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A running TCP task's sidecar ports satisfy the gate without config pins.
+
+        Each container gets its own kernel-assigned port trio at launch,
+        so global ``config.yml`` pins are legitimately absent — the
+        doctor must read the task's recorded ports instead of rejecting
+        a healthy task, and must hand those ports to the check
+        assemblers.
+        """
+        import json
+
+        from terok.lib.orchestration.container_doctor import _collect_all_checks
+
+        cname = "proj-cli-42"
+        sidecar_dir = tmp_path / "state" / "sidecar"
+        sidecar_dir.mkdir(parents=True)
+        (sidecar_dir / f"{cname}.json").write_text(
+            json.dumps(
+                {"ipc_mode": "tcp", "tcp_port": 18800, "ssh_signer_port": 18801, "gate_port": 18802}
+            )
+        )
+        mock_sandbox_cfg.return_value = MagicMock(
+            state_dir=tmp_path / "state",
+            gate_port=None,
+            token_broker_port=None,
+            ssh_signer_port=None,
+        )
+        mock_roster.shared.return_value.doctor_checks.return_value = []
+
+        checks = _collect_all_checks("proj", tmp_path, services_mode="tcp", cname=cname)
+
+        assert checks == []
+        mock_sandbox_checks.assert_called_once()
+        assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] == 18800
+        assert mock_sandbox_checks.call_args.kwargs["ssh_signer_port"] == 18801
 
 
 class TestStreamingGrouping:

@@ -486,7 +486,9 @@ def _read_sidecar_wiring(cname: str) -> dict[str, int | str]:
     if not isinstance(payload, dict):
         return {}
     wiring: dict[str, int | str] = {
-        k: v for k in ("tcp_port", "gate_port") if isinstance(v := payload.get(k), int)
+        k: v
+        for k in ("tcp_port", "ssh_signer_port", "gate_port")
+        if isinstance(v := payload.get(k), int)
     }
     if isinstance(mode := payload.get("ipc_mode"), str):
         wiring["ipc_mode"] = mode
@@ -595,13 +597,17 @@ def _collect_all_checks(
     task_id: str | None = None,
     *,
     services_mode: str,
+    cname: str,
 ) -> list[DoctorCheck]:
     """Gather health checks from sandbox, agent, and terok layers.
 
-    In TCP mode all three port fields must resolve to an ``int`` (either
-    pinned via ``config.yml`` or auto-allocated by sandbox's port
-    registry).  In socket mode they are *supposed* to be ``None`` — no
-    TCP listener exists, comms go over Unix sockets — and every
+    In TCP mode all three port fields must resolve to an ``int``.  Since
+    each container gets its own kernel-assigned port trio at launch, the
+    task's sidecar is the primary source; a ``config.yml`` pin covers a
+    sidecar that predates port recording.  The doctor never allocates —
+    it examines an existing task, so allocation would probe ports nothing
+    listens on.  In socket mode the ports are *supposed* to be ``None`` —
+    no TCP listener exists, comms go over Unix sockets — and every
     downstream assembler
     ([`sandbox_doctor_checks`][terok_sandbox.doctor.sandbox_doctor_checks],
     [`AgentRoster.doctor_checks`][terok_executor.AgentRoster.doctor_checks],
@@ -613,17 +619,20 @@ def _collect_all_checks(
     project.
     """
     cfg = make_sandbox_config()
-    token_broker_port = cfg.token_broker_port
-    ssh_signer_port = cfg.ssh_signer_port
+    wiring = _read_sidecar_wiring(cname)
+    token_broker_port = _as_int(wiring.get("tcp_port")) or cfg.token_broker_port
+    ssh_signer_port = _as_int(wiring.get("ssh_signer_port")) or cfg.ssh_signer_port
+    gate_port = _as_int(wiring.get("gate_port")) or cfg.gate_port
     desired_shield = _read_desired_shield_state(task_dir)
 
     if services_mode == "tcp" and (
-        cfg.gate_port is None or token_broker_port is None or ssh_signer_port is None
+        gate_port is None or token_broker_port is None or ssh_signer_port is None
     ):
         raise SystemExit(
-            "Sandbox service ports are not all configured — sickbay (TCP mode) "
-            "needs gate.port / vault.port / vault.ssh_signer_port in config.yml "
-            "or auto-allocation enabled."
+            "Sandbox service ports could not be resolved — sickbay (TCP mode) "
+            "reads them from the task's sidecar; for a task launched before "
+            "port recording, pin gate.port / vault.port / "
+            "vault.ssh_signer_port in config.yml."
         )
 
     checks: list[DoctorCheck] = []
@@ -801,7 +810,11 @@ class ContainerDoctor:
         runtime = _rt.resolve_runtime(project)
         checks = list(
             _collect_all_checks(
-                self.project_name, task_dir, self.task_id, services_mode=project.services_mode
+                self.project_name,
+                task_dir,
+                self.task_id,
+                services_mode=project.services_mode,
+                cname=cname,
             )
         )
 
