@@ -2395,11 +2395,11 @@ requires-dist = [
     { name = "requests", specifier = "~=2.34" },
     { name = "rich", specifier = "~=15.0" },
     { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "terok-clearance", git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin" },
-    { name = "terok-executor", git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin" },
-    { name = "terok-sandbox", git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement" },
-    { name = "terok-shield", git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement" },
-    { name = "terok-util", git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement" },
+    { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a8/terok_clearance-0.8.0a8-py3-none-any.whl" },
+    { name = "terok-executor", url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a20/terok_executor-0.4.0a20-py3-none-any.whl" },
+    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a21/terok_sandbox-0.5.0a21-py3-none-any.whl" },
+    { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a9/terok_shield-0.8.0a9-py3-none-any.whl" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" },
     { name = "textual", extras = ["syntax"], specifier = "~=8.2.8" },
     { name = "textual-serve", specifier = "~=1.1" },
     { name = "unique-namer", specifier = "~=1.6" },
@@ -2440,19 +2440,30 @@ test = [
 
 [[package]]
 name = "terok-clearance"
-version = "0.8.0a8.dev223+g1d34b069a"
-source = { git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin#1d34b069ac44fc4d7f056a19598981f6091e457a" }
+version = "0.8.0a8"
+source = { url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a8/terok_clearance-0.8.0a8-py3-none-any.whl" }
 dependencies = [
     { name = "asyncvarlink" },
     { name = "dbus-fast" },
     { name = "pyyaml" },
     { name = "terok-util" },
 ]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a8/terok_clearance-0.8.0a8-py3-none-any.whl", hash = "sha256:ee2d98a0011dde0197c7e14c61db38f6cd6235ccb8626f045dcbeef974301648" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncvarlink", specifier = "==0.3.2" },
+    { name = "dbus-fast", specifier = "~=5.0" },
+    { name = "pyyaml", specifier = "~=6.0" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" },
+]
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a20.dev473+g9fc14047b"
-source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#9fc14047b8bbd2442ffe8b7882498c16683b869b" }
+version = "0.4.0a20"
+source = { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a20/terok_executor-0.4.0a20-py3-none-any.whl" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2464,11 +2475,27 @@ dependencies = [
     { name = "terok-util" },
     { name = "tomli-w" },
 ]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a20/terok_executor-0.4.0a20-py3-none-any.whl", hash = "sha256:129f47e8933d58e298321d6d8ddac3caae1706fdd9fdda1c445a2836fb312644" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-client-protocol", specifier = "==0.12.0" },
+    { name = "jinja2", specifier = "~=3.1" },
+    { name = "prompt-toolkit", specifier = "~=3.0" },
+    { name = "pydantic", specifier = "~=2.13" },
+    { name = "rich", specifier = "~=15.0" },
+    { name = "ruamel-yaml", specifier = "==0.19.1" },
+    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a21/terok_sandbox-0.5.0a21-py3-none-any.whl" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" },
+    { name = "tomli-w", specifier = "~=1.2" },
+]
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a21.dev470+g9207231c4"
-source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#9207231c4d1904b1ed6cd8620d30ea3af5fbfa09" }
+version = "0.5.0a21"
+source = { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a21/terok_sandbox-0.5.0a21-py3-none-any.whl" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2484,25 +2511,65 @@ dependencies = [
     { name = "terok-shield" },
     { name = "terok-util" },
 ]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a21/terok_sandbox-0.5.0a21-py3-none-any.whl", hash = "sha256:da766ddb7979680c6c92f36d1ff7b86cba72543859ffae5ffea8c6ddf1c852c1" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiohttp", specifier = "~=3.14.1" },
+    { name = "cryptography", specifier = ">=49,<51" },
+    { name = "jinja2", specifier = "~=3.1" },
+    { name = "keyring", specifier = "~=25.7" },
+    { name = "packaging", specifier = "~=26.2" },
+    { name = "platformdirs", specifier = "~=4.10" },
+    { name = "prompt-toolkit", specifier = "~=3.0" },
+    { name = "pydantic", specifier = "~=2.13" },
+    { name = "ruamel-yaml", specifier = "==0.19.1" },
+    { name = "sqlcipher3", specifier = "==0.6.2" },
+    { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a8/terok_clearance-0.8.0a8-py3-none-any.whl" },
+    { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a9/terok_shield-0.8.0a9-py3-none-any.whl" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" },
+]
 
 [[package]]
 name = "terok-shield"
-version = "0.8.0a9.dev363+gbf57bcef7"
-source = { git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement#bf57bcef7953ba6edbe2fc13ff74488d4a330f7d" }
+version = "0.8.0a9"
+source = { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a9/terok_shield-0.8.0a9-py3-none-any.whl" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "terok-util" },
 ]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a9/terok_shield-0.8.0a9-py3-none-any.whl", hash = "sha256:f3425bdb9e9f01c65f10543bdc9a12306757ea98c1bd50dbbf01cb88340fb503" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = "~=2.13" },
+    { name = "pyyaml", specifier = "~=6.0" },
+    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" },
+]
 
 [[package]]
 name = "terok-util"
-version = "0.3.1a5.dev97+g9e08865a2"
-source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#9e08865a2132d4b1b9b3f859ca05bd18e48fd503" }
+version = "0.3.1a5"
+source = { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
     { name = "ruamel-yaml" },
+]
+wheels = [
+    { url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a5/terok_util-0.3.1a5-py3-none-any.whl", hash = "sha256:7be655245a7cf5589909cf2e02b9d85a8a2241db59658808b4043b74de8ec699" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jinja2", specifier = "~=3.1" },
+    { name = "platformdirs", specifier = "~=4.10" },
+    { name = "ruamel-yaml", specifier = "==0.19.1" },
 ]
 
 [[package]]
