@@ -107,7 +107,10 @@ class SelinuxFixScreen(ModalScreen[SelinuxFixOutcome]):
             )
             yield Label(
                 "Pick one of the two remediations below.  Both run setup again "
-                "afterwards so the install can complete cleanly.",
+                "afterwards so the install can complete cleanly.  The TCP "
+                "switch flips the global default only — a project pinning "
+                "services.mode: socket in its project.yml still needs the "
+                "policy.",
                 id="selinux-fix-blurb",
             )
             with Horizontal(id="selinux-fix-buttons"):

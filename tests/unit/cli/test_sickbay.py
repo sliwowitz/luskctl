@@ -450,12 +450,38 @@ class TestCheckSelinuxPolicy:
         with unittest.mock.patch("terok.lib.api.setup.check_selinux_status", return_value=result):
             return _check_selinux_policy()
 
+    def test_socket_mode_project_forces_the_check(self) -> None:
+        """Global tcp + one socket-mode project → the policy check runs as socket.
+
+        ``services.mode`` is overridable per project, and the host needs
+        the SELinux policy as soon as any project resolves to socket — a
+        global ``tcp`` must not short-circuit the check for everyone.
+        """
+        from types import SimpleNamespace
+
+        captured: dict[str, str] = {}
+
+        def _spy(*, services_mode: str) -> SelinuxCheckResult:
+            captured["services_mode"] = services_mode
+            return SelinuxCheckResult(SelinuxStatus.NOT_APPLICABLE_PERMISSIVE)
+
+        with (
+            unittest.mock.patch("terok.lib.api.setup.check_selinux_status", side_effect=_spy),
+            unittest.mock.patch("terok.cli.commands.sickbay.get_services_mode", return_value="tcp"),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.list_projects",
+                return_value=[SimpleNamespace(services_mode="socket")],
+            ),
+        ):
+            _check_selinux_policy()
+        assert captured["services_mode"] == "socket"
+
     def test_not_needed_in_tcp_mode(self) -> None:
-        """``services.mode: tcp`` renders as ok."""
+        """TCP mode everywhere (no socket-mode project) renders as ok."""
 
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.NOT_APPLICABLE_TCP_MODE))
         assert sev == "ok"
-        assert "services.mode: tcp" in detail
+        assert "no project uses services.mode: socket" in detail
 
     def test_not_needed_when_selinux_permissive(self) -> None:
         """Socket mode on a permissive host renders as ok."""

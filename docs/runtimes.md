@@ -74,7 +74,7 @@ Unset means "fall through to project/global config".
 
 ## krun runner behaviour
 
-The container's PID 1 runs as `root`.  Rejected at launch: `run.nested_containers: true` and `services.mode: socket` (the microVM's kernel doesn't see the host's Unix sockets — set `services.mode: tcp` for krun tasks).
+The container's PID 1 runs as `root`.  Rejected at launch: `run.nested_containers: true` and `services.mode: socket` (the microVM's kernel doesn't see the host's Unix sockets — set `services: {mode: tcp}` in the krun project's `project.yml`; other projects keep the socket transport).
 
 ## Login
 

@@ -464,12 +464,16 @@ def _container_runtime_dir(cname: str) -> Path:
     return make_sandbox_config().runtime_dir / "run" / cname
 
 
-def _read_sidecar_ports(cname: str) -> dict[str, int]:
-    """Read the per-container sidecar JSON and return its TCP port fields.
+def _read_sidecar_wiring(cname: str) -> dict[str, int | str]:
+    """Read the per-container sidecar JSON: recorded transport + TCP ports.
 
-    The sidecar is the same file the supervisor reads to learn its wiring;
-    in TCP mode it carries the loopback ports the per-container services
-    listen on.  ``tcp_port`` is the vault token broker; ``gate_port`` the
+    The sidecar is the same file the supervisor reads to learn its wiring,
+    so it is ground truth for the *running* container: ``ipc_mode`` is the
+    transport the container was launched with — config (global or
+    per-project) may have changed since, and probing the configured
+    transport instead of the recorded one diagnoses the wrong thing.  In
+    TCP mode it carries the loopback ports the per-container services
+    listen on: ``tcp_port`` is the vault token broker; ``gate_port`` the
     gate (present only once the launch path records it).  Returns an empty
     mapping when the sidecar is absent or unreadable — this probe is
     best-effort and never fatal.
@@ -481,7 +485,31 @@ def _read_sidecar_ports(cname: str) -> dict[str, int]:
         return {}
     if not isinstance(payload, dict):
         return {}
-    return {k: v for k in ("tcp_port", "gate_port") if isinstance(v := payload.get(k), int)}
+    wiring: dict[str, int | str] = {
+        k: v
+        for k in ("tcp_port", "ssh_signer_port", "gate_port")
+        if isinstance(v := payload.get(k), int)
+    }
+    if isinstance(mode := payload.get("ipc_mode"), str):
+        wiring["ipc_mode"] = mode
+    return wiring
+
+
+def _as_int(value: object) -> int | None:
+    """Narrow a sidecar wiring value to an ``int`` port, or ``None``."""
+    return value if isinstance(value, int) else None
+
+
+def _effective_ipc_mode(wiring: dict[str, int | str], fallback: str) -> str:
+    """Return the transport to diagnose: the sidecar's recorded mode, else *fallback*.
+
+    The recorded ``ipc_mode`` is ground truth for the running container —
+    the project's effective ``services.mode`` may have changed since
+    launch, and it only governs the *next* container.  *fallback* covers
+    sidecars that predate mode recording (or an unrecognisable value).
+    """
+    recorded = wiring.get("ipc_mode")
+    return recorded if recorded in ("tcp", "socket") else fallback
 
 
 def _tcp_reachable(port: int) -> bool:
@@ -500,12 +528,21 @@ _SUPERVISOR_DOWN_SUFFIX = f" — supervisor is not running (see '{_SUPERVISOR_CH
 
 
 def _check_service_reachable(
-    label: str, cname: str, socket_relative_path: Path, tcp_port: int | None, *, supervisor_up: bool
+    label: str,
+    cname: str,
+    socket_relative_path: Path,
+    tcp_port: int | None,
+    *,
+    mode: str,
+    supervisor_up: bool,
 ) -> _CheckResult:
     """Best-effort reachability check for one per-container service.
 
-    Socket mode: the per-container unix socket exists under the runtime
-    dir.  TCP mode: a loopback connect to *tcp_port* succeeds.  Returns a
+    *mode* is the transport this container actually runs — the sidecar's
+    recorded ``ipc_mode``, falling back to the project's effective
+    ``services.mode`` when the sidecar is unreadable.  Socket mode: the
+    per-container unix socket exists under the runtime dir.  TCP mode: a
+    loopback connect to *tcp_port* succeeds.  Returns a
     ``warn`` when the endpoint is missing/unreachable and ``ok`` otherwise
     — never an ``error``, since the supervisor binds these lazily and a
     transient miss must not fail the doctor run.  When *supervisor_up* is
@@ -513,7 +550,7 @@ def _check_service_reachable(
     the root cause as its own symptom.
     """
     miss = "" if supervisor_up else _SUPERVISOR_DOWN_SUFFIX
-    if make_sandbox_config().services_mode == "socket":
+    if mode == "socket":
         sock_path = _container_runtime_dir(cname) / socket_relative_path
         if sock_path.exists():
             return ("ok", label, f"socket present ({sock_path})")
@@ -526,28 +563,36 @@ def _check_service_reachable(
     return ("warn", label, f"not reachable on 127.0.0.1:{tcp_port}{miss}")
 
 
-def _check_per_container_services(cname: str, *, supervisor_up: bool = True) -> list[_CheckResult]:
+def _check_per_container_services(
+    cname: str, *, fallback_mode: str, supervisor_up: bool = True
+) -> list[_CheckResult]:
     """Reachability checks for this container's per-container vault + gate.
 
     Both are warn-level and best-effort: they confirm the supervisor has
     stood up the endpoints the container talks to, without ever blocking
-    the rest of the doctor run.  *supervisor_up* threads the root-cause
+    the rest of the doctor run.  The probed transport is the sidecar's
+    recorded ``ipc_mode`` — ground truth for the running container —
+    with *fallback_mode* (the project's effective ``services.mode``)
+    covering an absent sidecar.  *supervisor_up* threads the root-cause
     verdict through so a missing endpoint references it.
     """
-    ports = _read_sidecar_ports(cname)
+    wiring = _read_sidecar_wiring(cname)
+    mode = _effective_ipc_mode(wiring, fallback_mode)
     return [
         _check_service_reachable(
             "Vault reachable",
             cname,
             _VAULT_SOCKET_RELATIVE_PATH,
-            ports.get("tcp_port"),
+            _as_int(wiring.get("tcp_port")),
+            mode=mode,
             supervisor_up=supervisor_up,
         ),
         _check_service_reachable(
             "Gate reachable",
             cname,
             _GATE_SOCKET_RELATIVE_PATH,
-            ports.get("gate_port"),
+            _as_int(wiring.get("gate_port")),
+            mode=mode,
             supervisor_up=supervisor_up,
         ),
     ]
@@ -562,33 +607,51 @@ def _collect_all_checks(
     project_name: str,
     task_dir: Path,
     task_id: str | None = None,
+    *,
+    services_mode: str,
+    cname: str,
 ) -> list[DoctorCheck]:
     """Gather health checks from sandbox, agent, and terok layers.
 
-    In TCP mode all three port fields must resolve to an ``int`` (either
-    pinned via ``config.yml`` or auto-allocated by sandbox's port
-    registry).  In socket mode they are *supposed* to be ``None`` — no
-    TCP listener exists, comms go over Unix sockets — and every
+    In TCP mode all three port fields must resolve to an ``int``.  Since
+    each container gets its own kernel-assigned port trio at launch, the
+    task's sidecar is the primary source; a ``config.yml`` pin covers a
+    sidecar that predates port recording.  The doctor never allocates —
+    it examines an existing task, so allocation would probe ports nothing
+    listens on.  In socket mode the ports are *supposed* to be ``None`` —
+    no TCP listener exists, comms go over Unix sockets — and every
     downstream assembler
     ([`sandbox_doctor_checks`][terok_sandbox.doctor.sandbox_doctor_checks],
     [`AgentRoster.doctor_checks`][terok_executor.AgentRoster.doctor_checks],
     and the local
     [`_terok_doctor_checks`][terok.lib.orchestration.container_doctor._terok_doctor_checks])
     already special-cases ``None`` to drop the TCP-only probes.  So the
-    "must be set" gate fires only in TCP mode.
+    "must be set" gate fires only in TCP mode — the mode of the *running
+    container* (its sidecar's recorded ``ipc_mode``), with *services_mode*
+    — the project's effective ``services.mode``, overridable per project —
+    covering pre-recording sidecars.  A mode change after launch only
+    governs the next container, so a socket-mode container under a
+    now-TCP project still gets socket-shaped checks, and vice versa.
     """
     cfg = make_sandbox_config()
-    token_broker_port = cfg.token_broker_port
-    ssh_signer_port = cfg.ssh_signer_port
+    wiring = _read_sidecar_wiring(cname)
+    mode = _effective_ipc_mode(wiring, services_mode)
+    if mode == "tcp":
+        token_broker_port = _as_int(wiring.get("tcp_port")) or cfg.token_broker_port
+        ssh_signer_port = _as_int(wiring.get("ssh_signer_port")) or cfg.ssh_signer_port
+        gate_port = _as_int(wiring.get("gate_port")) or cfg.gate_port
+    else:
+        token_broker_port = ssh_signer_port = gate_port = None
     desired_shield = _read_desired_shield_state(task_dir)
 
-    if cfg.services_mode == "tcp" and (
-        cfg.gate_port is None or token_broker_port is None or ssh_signer_port is None
+    if mode == "tcp" and (
+        gate_port is None or token_broker_port is None or ssh_signer_port is None
     ):
         raise SystemExit(
-            "Sandbox service ports are not all configured — sickbay (TCP mode) "
-            "needs gate.port / vault.port / vault.ssh_signer_port in config.yml "
-            "or auto-allocation enabled."
+            "Sandbox service ports could not be resolved — sickbay (TCP mode) "
+            "reads them from the task's sidecar; for a task launched before "
+            "port recording, pin gate.port / vault.port / "
+            "vault.ssh_signer_port in config.yml."
         )
 
     checks: list[DoctorCheck] = []
@@ -762,13 +825,24 @@ class ContainerDoctor:
         # reaches the container through the same backend that booted it
         # (under krun: SSH over a passt-forwarded TCP port; under crun:
         # podman exec).
-        runtime = _rt.resolve_runtime(load_project(self.project_name))
-        checks = list(_collect_all_checks(self.project_name, task_dir, self.task_id))
+        project = load_project(self.project_name)
+        runtime = _rt.resolve_runtime(project)
+        checks = list(
+            _collect_all_checks(
+                self.project_name,
+                task_dir,
+                self.task_id,
+                services_mode=project.services_mode,
+                cname=cname,
+            )
+        )
 
         # Per-container vault + gate reachability — host-side, best-effort.
         # Emitted after the layered probes so they read as a closing
         # "are this container's services actually up?" pair.
-        reachability = _check_per_container_services(cname, supervisor_up=supervisor_up)
+        reachability = _check_per_container_services(
+            cname, fallback_mode=project.services_mode, supervisor_up=supervisor_up
+        )
 
         if reporter is None:
             # Legacy path: collect-and-return.  No streaming, no grouping.

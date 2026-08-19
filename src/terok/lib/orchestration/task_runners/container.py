@@ -17,7 +17,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from terok.lib.core.config import get_services_mode, is_experimental
+from terok.lib.core.config import is_experimental
 from terok.lib.integrations.executor import (
     AgentRunner,
     BuildError,
@@ -350,7 +350,7 @@ def _sandbox(project: ProjectConfig) -> Sandbox:
     (launch) and [`_podman_start`][terok.lib.orchestration.task_runners.container._podman_start]
     (restart) so both speak to the same backend the same way.
     """
-    return Sandbox(make_sandbox_config(), runtime=_rt.resolve_runtime(project))
+    return Sandbox(make_sandbox_config(project), runtime=_rt.resolve_runtime(project))
 
 
 def _agent_runner(project: ProjectConfig) -> AgentRunner:
@@ -419,7 +419,7 @@ def _project_runtime_flags(project: ProjectConfig, *, cname: str) -> list[str]:
             "-p",
             f"{DEFAULT_SSH_HOST}:{host_port}:{DEFAULT_GUEST_SSHD_PORT}",
         ]
-        flags += KrunHost(cfg=make_sandbox_config()).launch_args()
+        flags += KrunHost(cfg=make_sandbox_config(project)).launch_args()
     return flags
 
 
@@ -455,14 +455,14 @@ def _validate_krun_compatibility(project: ProjectConfig) -> None:
             "Pick one or move the nested workload to a crun task."
         )
 
-    if get_services_mode() == "socket":
+    if project.services_mode == "socket":
         raise SystemExit(
             "run.runtime: krun is incompatible with services.mode: socket — "
             "the microVM's kernel doesn't see the host's unix sockets, so the "
             "token-broker and ssh-signer bridges can't establish.  Set "
-            "``services.mode: tcp`` in your config.yml (and re-run "
-            "``terok setup`` so the host services bind to TCP) before "
-            "launching krun tasks."
+            "``services: {mode: tcp}`` in this project's project.yml (other "
+            "projects keep socket mode), or globally in your config.yml, "
+            "before launching krun tasks."
         )
 
 

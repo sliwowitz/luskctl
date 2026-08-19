@@ -560,11 +560,15 @@ def _check_selinux_policy() -> _CheckResult:
     )
 
     label = "SELinux policy"
-    result = check_selinux_status(services_mode=get_services_mode())
+    # ``services.mode`` is overridable per project, so the host needs the
+    # SELinux policy as soon as *any* mode in use is ``socket`` — a global
+    # ``tcp`` with one socket-mode project still hits the socket denials.
+    modes = {get_services_mode(), *(p.services_mode for p in list_projects())}
+    result = check_selinux_status(services_mode="socket" if "socket" in modes else "tcp")
 
     match result.status:
         case SelinuxStatus.NOT_APPLICABLE_TCP_MODE:
-            return ("ok", label, "not needed (services.mode: tcp)")
+            return ("ok", label, "not needed (no project uses services.mode: socket)")
         case SelinuxStatus.NOT_APPLICABLE_PERMISSIVE:
             return ("ok", label, "not needed (SELinux not enforcing)")
         case SelinuxStatus.POLICY_MISSING:

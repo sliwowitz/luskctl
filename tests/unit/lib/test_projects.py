@@ -37,6 +37,7 @@ def project_yaml(
     authorship: str | None = None,
     shield_drop_on_task_run: bool | None = None,
     shield_on_task_restart: str | None = None,
+    services_mode: str | None = None,
     timezone: str | None = None,
     ssh_use_personal: bool | None = None,
     credentials_scope: str | None = None,
@@ -55,6 +56,8 @@ def project_yaml(
         shield_lines.append(f"  on_task_restart: {shield_on_task_restart}")
     if shield_lines:
         lines += ["shield:", *shield_lines]
+    if services_mode is not None:
+        lines += ["services:", f"  mode: {services_mode}"]
     if timezone is not None:
         lines += ["run:", f"  timezone: {timezone}"]
     if ssh_use_personal is not None:
@@ -664,6 +667,35 @@ class TestProject:
         """Project-level on_task_restart overrides global default."""
         with project_env(yaml_text, project_name=project_name):
             assert load_project(project_name).shield_on_task_restart == expected
+
+    @pytest.mark.parametrize(
+        ("project_name", "yaml_text", "expected"),
+        [
+            ("proj-svc-default", project_yaml("proj-svc-default"), "socket"),
+            ("proj-svc-tcp", project_yaml("proj-svc-tcp", services_mode="tcp"), "tcp"),
+            (
+                "proj-svc-socket",
+                project_yaml("proj-svc-socket", services_mode="socket"),
+                "socket",
+            ),
+        ],
+        ids=["inherit-global-default", "override-tcp", "explicit-socket"],
+    )
+    def test_services_mode(
+        self,
+        project_name: str,
+        yaml_text: str,
+        expected: str,
+    ) -> None:
+        """Project-level services.mode overrides the global default."""
+        with project_env(yaml_text, project_name=project_name):
+            assert load_project(project_name).services_mode == expected
+
+    def test_services_mode_inherits_global_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unset project services.mode follows the *global* services.mode."""
+        monkeypatch.setattr("terok.lib.core.projects.get_services_mode", lambda: "tcp")
+        with project_env(project_yaml("proj-svc-inherit"), project_name="proj-svc-inherit"):
+            assert load_project("proj-svc-inherit").services_mode == "tcp"
 
     def test_shield_allow_and_override_load(self) -> None:
         """``shield.allow``/``override`` load; unquoted and quoted expiry dates both parse.
