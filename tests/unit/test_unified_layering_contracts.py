@@ -419,7 +419,9 @@ def test_sickbay_collects_checks_in_socket_mode(tmp_path: Path) -> None:
             human_email="n@x",
             security_class="gatekeeping",
         )
-        checks = container_doctor._collect_all_checks("any-project", tmp_path)
+        checks = container_doctor._collect_all_checks(
+            "any-project", tmp_path, services_mode="socket"
+        )
 
     assert isinstance(checks, list)
     # Port-drift checks are TCP-only and must be elided in socket mode.

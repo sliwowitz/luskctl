@@ -553,10 +553,10 @@ class TaskEnvironment:
         repo_dir = task_dir / WORKSPACE_DANGEROUS_DIRNAME
         repo_dir.mkdir(exist_ok=True)
 
-        from ..core.config import get_services_mode, get_vault_bypass, get_vault_transport
+        from ..core.config import get_vault_bypass, vault_transport_for
 
-        cfg = make_sandbox_config()
-        use_socket = get_services_mode() == "socket"
+        cfg = make_sandbox_config(project)
+        use_socket = project.services_mode == "socket"
 
         # Pre-resolve gate server URLs → CODE_REPO / CLONE_FROM / GIT_BRANCH,
         # plus any security-mode volumes (the gate socket sub-mount).
@@ -595,7 +595,7 @@ class TaskEnvironment:
         vault_bypass = get_vault_bypass()
         if not vault_bypass:
             _check_project_credentials_present(project)
-        vault_transport = get_vault_transport()
+        vault_transport = vault_transport_for(project.services_mode)
 
         roster = AgentRoster.shared()
         enabled_patch_providers, disabled_patch_providers = _vault_patch_provider_sets(

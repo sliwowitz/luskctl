@@ -36,6 +36,7 @@ class RawProjectYamlTests(unittest.TestCase):
         self.assertEqual(raw.run.shutdown_timeout, 10)
         self.assertIsNone(raw.shield.drop_on_task_run)
         self.assertIsNone(raw.shield.on_task_restart)
+        self.assertIsNone(raw.services.mode)
 
     def test_full_valid_input(self) -> None:
         """A complete valid project.yml parses correctly."""
@@ -53,6 +54,7 @@ class RawProjectYamlTests(unittest.TestCase):
             },
             "run": {"shutdown_timeout": 30, "gpus": "all"},
             "shield": {"drop_on_task_run": False, "on_task_restart": "up"},
+            "services": {"mode": "tcp"},
             "image": {"base_image": "nvidia/cuda:12.0", "user_snippet_inline": "RUN echo hi"},
             "default_agent": "claude",
             "default_provider": "openrouter",
@@ -73,9 +75,15 @@ class RawProjectYamlTests(unittest.TestCase):
         self.assertEqual(raw.run.gpus, "all")
         self.assertFalse(raw.shield.drop_on_task_run)
         self.assertEqual(raw.shield.on_task_restart, "up")
+        self.assertEqual(raw.services.mode, "tcp")
         self.assertEqual(raw.image.base_image, "nvidia/cuda:12.0")
         self.assertEqual(raw.default_agent, "claude")
         self.assertEqual(raw.default_provider, "openrouter")
+
+    def test_invalid_services_mode_rejected(self) -> None:
+        """``services.mode`` accepts only the tcp|socket vocabulary."""
+        with self.assertRaises(ValidationError):
+            RawProjectYaml.model_validate({"services": {"mode": "carrier-pigeon"}})
 
     def test_unknown_key_rejected(self) -> None:
         """Unknown top-level key raises ValidationError (typo detection)."""

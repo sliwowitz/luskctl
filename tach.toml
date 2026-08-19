@@ -947,7 +947,7 @@ expose = [
     "is_oauth_enabled_for",
     "get_vault_bypass",
     "get_services_mode",
-    "get_vault_transport",
+    "vault_transport_for",
     "get_vault_token_broker_port",
     "get_vault_ssh_signer_port",
     "get_shield_bypass_firewall_no_protection",

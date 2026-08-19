@@ -315,7 +315,10 @@ def selinux_switch_to_tcp() -> None:
     Writes only the ``services.mode`` field; preserves any other
     user-supplied config via terok-sandbox's round-trip YAML writer.
     The new value takes effect on the next setup run — which the
-    caller launches immediately after this returns.
+    caller launches immediately after this returns.  Per-project
+    ``services.mode`` overrides in ``project.yml`` are deliberately
+    untouched: a project pinning ``socket`` keeps it (and keeps
+    needing the SELinux policy).
     """
     from terok.lib.api.setup import yaml_update_section
     from terok.lib.core.config import global_config_path

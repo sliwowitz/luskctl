@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from terok_util import ConfigStack
 
+    from terok.lib.core.project_model import ProjectConfig
     from terok.lib.core.yaml_schema import RawGlobalConfig
     from terok.lib.integrations.sandbox import SandboxConfig, ServicesMode
 
@@ -361,8 +362,14 @@ def vault_dir() -> Path:
     )
 
 
-def make_sandbox_config() -> SandboxConfig:
+def make_sandbox_config(project: ProjectConfig | None = None) -> SandboxConfig:
     """Construct a `SandboxConfig` for sandbox operations.
+
+    *project* overlays the per-project settings a launch must honour —
+    today just ``services_mode`` ([`ProjectConfig.services_mode`]
+    [terok.lib.core.project_model.ProjectConfig.services_mode]).  Omit it
+    for project-agnostic operations (vault, state paths, sickbay host
+    checks), which read the global config alone.
 
     Bridges terok's config layer (env vars → config.yml → XDG defaults) to
     sandbox's plain dataclass.  Sandbox uses its own ``state_dir`` default
@@ -401,7 +408,7 @@ def make_sandbox_config() -> SandboxConfig:
         ssh_signer_port=get_vault_ssh_signer_port(),
         shield_bypass=get_shield_bypass_firewall_no_protection(),
         shield_audit=get_shield_audit(),
-        services_mode=get_services_mode(),
+        services_mode=project.services_mode if project is not None else get_services_mode(),
     )
 
 
@@ -569,16 +576,16 @@ def get_services_mode() -> ServicesMode:
     return _load_validated().services.mode
 
 
-def get_vault_transport() -> Literal["direct", "socket"]:
-    """Return the vault transport mode (``"direct"`` or ``"socket"``).
+def vault_transport_for(mode: ServicesMode) -> Literal["direct", "socket"]:
+    """Map a services mode to the vault transport (``"direct"`` or ``"socket"``).
 
-    Derived from ``services.mode``: ``socket`` → ``"socket"`` (containers
-    read the mounted Unix socket), anything else → ``"direct"``
-    (containers connect to the broker's TCP port).  One knob, two
-    vocabularies — kept aligned so the listener and the container-side
-    routing cannot disagree.
+    ``socket`` → ``"socket"`` (containers read the mounted Unix socket),
+    anything else → ``"direct"`` (containers connect to the broker's TCP
+    port).  One knob, two vocabularies — kept aligned in this single
+    place so the listener and the container-side routing cannot disagree,
+    whichever layer (global or per-project) the mode came from.
     """
-    return "socket" if _load_validated().services.mode == "socket" else "direct"
+    return "socket" if mode == "socket" else "direct"
 
 
 def get_vault_token_broker_port() -> int | None:

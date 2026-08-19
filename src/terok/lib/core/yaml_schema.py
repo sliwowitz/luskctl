@@ -37,7 +37,7 @@ from typing import Annotated, Any, ClassVar, Literal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from terok.lib.integrations.executor import ExecutorConfigView, RawImageSection
-from terok.lib.integrations.sandbox import RawRunSection, RawSSHSection
+from terok.lib.integrations.sandbox import RawRunSection, RawSSHSection, ServicesMode
 
 # ---------------------------------------------------------------------------
 # Shared reusable validators / annotated types
@@ -390,6 +390,27 @@ class RawShieldProjectSection(BaseModel):
     )
 
 
+class RawServicesProjectSection(BaseModel):
+    """The ``services:`` section of project.yml.
+
+    ``mode`` defaults to ``None`` (inherit the global ``services.mode``
+    from ``config.yml``); ``tcp`` or ``socket`` pins the host↔container
+    IPC transport for this project's tasks regardless of the global
+    choice.  Same vocabulary as the global section sandbox owns, so the
+    documented opt-out snippet works at either level.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: ServicesMode | None = Field(
+        default=None,
+        description=(
+            "Host↔container IPC transport for this project's tasks: "
+            "``tcp`` or ``socket``; unset inherits the global ``services.mode``"
+        ),
+    )
+
+
 class RawCredentialsSection(BaseModel):
     """The ``credentials:`` section of project.yml.
 
@@ -432,6 +453,7 @@ class RawProjectYaml(BaseModel):
     gatekeeping: RawGatekeepingSection = Field(default_factory=RawGatekeepingSection)
     run: RawRunSection = Field(default_factory=RawRunSection)
     shield: RawShieldProjectSection = Field(default_factory=RawShieldProjectSection)
+    services: RawServicesProjectSection = Field(default_factory=RawServicesProjectSection)
     image: RawImageSection = Field(default_factory=RawImageSection)
     credentials: RawCredentialsSection = Field(default_factory=RawCredentialsSection)
     default_agent: str | None = Field(
@@ -461,6 +483,7 @@ class RawProjectYaml(BaseModel):
             "gatekeeping",
             "run",
             "shield",
+            "services",
             "image",
             "credentials",
             "agent",

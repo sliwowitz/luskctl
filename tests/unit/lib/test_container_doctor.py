@@ -501,10 +501,10 @@ class TestRunContainerDoctor:
         from terok.lib.orchestration.container_doctor import _collect_all_checks
 
         mock_sandbox_cfg.return_value = MagicMock(
-            services_mode="tcp", gate_port=None, token_broker_port=None, ssh_signer_port=None
+            gate_port=None, token_broker_port=None, ssh_signer_port=None
         )
         with pytest.raises(SystemExit, match="ports are not all configured"):
-            _collect_all_checks("proj", tmp_path)
+            _collect_all_checks("proj", tmp_path, services_mode="tcp")
 
 
 class TestStreamingGrouping:
@@ -740,7 +740,7 @@ class TestPerContainerReachability:
         with patch(
             "terok.lib.orchestration.container_doctor.make_sandbox_config", return_value=cfg
         ):
-            results = _check_per_container_services(cname)
+            results = _check_per_container_services(cname, fallback_mode="socket")
 
         labels = {label: sev for sev, label, _ in results}
         assert labels == {"Vault reachable": "ok", "Gate reachable": "ok"}
@@ -756,7 +756,7 @@ class TestPerContainerReachability:
         with patch(
             "terok.lib.orchestration.container_doctor.make_sandbox_config", return_value=cfg
         ):
-            results = _check_per_container_services(cname)
+            results = _check_per_container_services(cname, fallback_mode="socket")
 
         # Sockets don't exist → both warn, never fatal.
         assert {sev for sev, _, _ in results} == {"warn"}
@@ -771,7 +771,7 @@ class TestPerContainerReachability:
         sidecar_dir = tmp_path / "state" / "sidecar"
         sidecar_dir.mkdir(parents=True)
         (sidecar_dir / f"{cname}.json").write_text(
-            json.dumps({"tcp_port": 18800, "gate_port": 18801})
+            json.dumps({"ipc_mode": "tcp", "tcp_port": 18800, "gate_port": 18801})
         )
 
         cfg = self._cfg("tcp", state_dir=tmp_path / "state", runtime_dir=tmp_path / "rt")
@@ -781,7 +781,9 @@ class TestPerContainerReachability:
                 "terok.lib.orchestration.container_doctor._tcp_reachable", return_value=True
             ) as mock_reach,
         ):
-            results = _check_per_container_services(cname)
+            # fallback_mode deliberately disagrees: the sidecar's recorded
+            # ipc_mode is ground truth for the running container and wins.
+            results = _check_per_container_services(cname, fallback_mode="socket")
 
         assert {sev for sev, _, _ in results} == {"ok"}
         mock_reach.assert_any_call(18800)
@@ -795,6 +797,7 @@ class TestPerContainerReachability:
         cname = "proj-cli-42"
         sidecar_dir = tmp_path / "state" / "sidecar"
         sidecar_dir.mkdir(parents=True)
+        # No ipc_mode recorded (pre-upgrade sidecar) → *fallback_mode* decides.
         (sidecar_dir / f"{cname}.json").write_text(json.dumps({"tcp_port": 18800}))
 
         cfg = self._cfg("tcp", state_dir=tmp_path / "state", runtime_dir=tmp_path / "rt")
@@ -802,7 +805,7 @@ class TestPerContainerReachability:
             patch("terok.lib.orchestration.container_doctor.make_sandbox_config", return_value=cfg),
             patch("terok.lib.orchestration.container_doctor._tcp_reachable", return_value=False),
         ):
-            results = _check_per_container_services(cname)
+            results = _check_per_container_services(cname, fallback_mode="tcp")
 
         sev_by_label = {label: sev for sev, label, _ in results}
         # Vault has a recorded port but is unreachable → warn.
@@ -811,14 +814,14 @@ class TestPerContainerReachability:
         assert sev_by_label["Gate reachable"] == "warn"
 
     def test_missing_sidecar_is_best_effort(self, tmp_path: Path) -> None:
-        from terok.lib.orchestration.container_doctor import _read_sidecar_ports
+        from terok.lib.orchestration.container_doctor import _read_sidecar_wiring
 
         cfg = self._cfg("tcp", state_dir=tmp_path / "state", runtime_dir=tmp_path / "rt")
         with patch(
             "terok.lib.orchestration.container_doctor.make_sandbox_config", return_value=cfg
         ):
             # No sidecar file written → empty mapping, no exception.
-            assert _read_sidecar_ports("proj-cli-42") == {}
+            assert _read_sidecar_wiring("proj-cli-42") == {}
 
 
 class TestSupervisorAliveCheck:
@@ -951,7 +954,9 @@ class TestReachabilityReferencesSupervisor:
             "terok.lib.orchestration.container_doctor.make_sandbox_config",
             return_value=self._cfg(tmp_path),
         ):
-            results = _check_per_container_services("proj-cli-42", supervisor_up=False)
+            results = _check_per_container_services(
+                "proj-cli-42", fallback_mode="socket", supervisor_up=False
+            )
         assert all(status == "warn" for status, _, _ in results)
         assert all("supervisor is not running" in detail for _, _, detail in results)
 
@@ -962,7 +967,9 @@ class TestReachabilityReferencesSupervisor:
             "terok.lib.orchestration.container_doctor.make_sandbox_config",
             return_value=self._cfg(tmp_path),
         ):
-            results = _check_per_container_services("proj-cli-42", supervisor_up=True)
+            results = _check_per_container_services(
+                "proj-cli-42", fallback_mode="socket", supervisor_up=True
+            )
         assert all("supervisor is not running" not in detail for _, _, detail in results)
 
     def test_tcp_mode_unrecorded_port_references_root_cause_when_down(self, tmp_path: Path) -> None:
@@ -970,10 +977,13 @@ class TestReachabilityReferencesSupervisor:
         from terok.lib.orchestration.container_doctor import _check_per_container_services
 
         cfg = self._cfg(tmp_path)
-        cfg.services_mode = "tcp"  # no sidecar → _read_sidecar_ports returns {} → ports absent
         with patch(
             "terok.lib.orchestration.container_doctor.make_sandbox_config", return_value=cfg
         ):
-            results = _check_per_container_services("proj-cli-42", supervisor_up=False)
+            # No sidecar → _read_sidecar_wiring returns {} → ports absent,
+            # and the fallback mode selects the TCP branch.
+            results = _check_per_container_services(
+                "proj-cli-42", fallback_mode="tcp", supervisor_up=False
+            )
         assert all("cannot probe" in detail for _, _, detail in results)
         assert all("supervisor is not running" in detail for _, _, detail in results)

@@ -67,6 +67,12 @@ allocates three kernel-assigned loopback ports (vault broker, SSH
 signer, gate); containers reach them via `host.containers.internal`.
 Works on any distro, SELinux or not, zero extra setup.
 
+The same section works per project — in a project's `project.yml` it
+overrides the global choice for that project's tasks only (each
+container gets its own supervisor, so mixed modes coexist on one
+host).  A project pinning `services: {mode: socket}` still needs the
+policy even after a global switch to `tcp`.
+
 The TCP transport is **not** deprecated — it's a supported opt-out.
 Caveat: the per-container ports are visible on the host via `ss -tlnp`
 (127.0.0.1 only).  They don't leak off-loopback, but on multi-user

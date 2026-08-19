@@ -35,6 +35,10 @@ def _krun_project(**overrides):  # type: ignore[no-untyped-def]
         "gate_path": MOCK_BASE / "p" / "gate",
         "staging_root": None,
         "runtime": "krun",
+        # ProjectConfig defaults to "socket"; krun needs "tcp", so the
+        # factory builds a compatible project — the dedicated guard test
+        # overrides back to "socket" to exercise the rejection.
+        "services_mode": "tcp",
     }
     defaults.update(overrides)
     return ProjectConfig(**defaults)
@@ -178,15 +182,11 @@ class TestKrunCompatibilityGuard:
         pointer to ``services.mode: tcp`` beats a baffling timeout
         deeper in the bring-up.
         """
-        project = _krun_project()
+        project = _krun_project(services_mode="socket")
         with (
             patch(
                 "terok.lib.orchestration.task_runners.container.is_experimental",
                 return_value=True,
-            ),
-            patch(
-                "terok.lib.orchestration.task_runners.container.get_services_mode",
-                return_value="socket",
             ),
             pytest.raises(SystemExit, match="incompatible.*services.mode: socket"),
         ):
@@ -198,19 +198,13 @@ def _experimental_enabled():
     """Patch the krun guards open for tests that exercise the krun path.
 
     ``_validate_krun_compatibility`` refuses krun without the
-    experimental flag AND under ``services.mode: socket`` (the new
-    default); these tests verify the happy-path *after* the gate, so
-    both guards are patched out.
+    experimental flag; these tests verify the happy path *after* the
+    gate, so it is patched out.  The transport guard needs no patch —
+    ``_krun_project`` already builds a ``services_mode="tcp"`` project.
     """
-    with (
-        patch(
-            "terok.lib.orchestration.task_runners.container.is_experimental",
-            return_value=True,
-        ),
-        patch(
-            "terok.lib.orchestration.task_runners.container.get_services_mode",
-            return_value="tcp",
-        ),
+    with patch(
+        "terok.lib.orchestration.task_runners.container.is_experimental",
+        return_value=True,
     ):
         yield
 
@@ -277,7 +271,9 @@ class TestProjectRuntimeFlags:
         """
         from terok.lib.orchestration.task_runners.container import _project_runtime_flags
 
-        flags = _project_runtime_flags(_project(runtime="krun"), cname="terok-cli-demoproj-task-a")
+        flags = _project_runtime_flags(
+            _project(runtime="krun", services_mode="tcp"), cname="terok-cli-demoproj-task-a"
+        )
         assert "--runtime" not in flags
 
     def test_krun_emits_loopback_pinned_port_forward(
@@ -290,7 +286,9 @@ class TestProjectRuntimeFlags:
         ``podman port`` at exec time."""
         from terok.lib.orchestration.task_runners.container import _project_runtime_flags
 
-        flags = _project_runtime_flags(_project(runtime="krun"), cname="terok-cli-demoproj-task-a")
+        flags = _project_runtime_flags(
+            _project(runtime="krun", services_mode="tcp"), cname="terok-cli-demoproj-task-a"
+        )
 
         p_idx = flags.index("-p")
         assert flags[p_idx + 1] == "127.0.0.1:42201:22"
@@ -310,7 +308,9 @@ class TestProjectRuntimeFlags:
         """
         from terok.lib.orchestration.task_runners.container import _project_runtime_flags
 
-        flags = _project_runtime_flags(_project(runtime="krun"), cname="terok-cli-demoproj-task-a")
+        flags = _project_runtime_flags(
+            _project(runtime="krun", services_mode="tcp"), cname="terok-cli-demoproj-task-a"
+        )
         _krun_launch_args_stub.assert_called_once()
         for token in _LAUNCH_ARGS_STUB:
             assert token in flags
@@ -334,7 +334,7 @@ class TestProjectRuntimeFlags:
         from terok.lib.orchestration.task_runners.container import _project_runtime_flags
 
         flags = _project_runtime_flags(
-            _project(runtime="krun", memory="4g", cpus="2"),
+            _project(runtime="krun", services_mode="tcp", memory="4g", cpus="2"),
             cname="terok-cli-demoproj-task-a",
         )
         joined = " ".join(flags)
@@ -362,7 +362,9 @@ class TestProjectRuntimeFlags:
             ),
             pytest.raises(SystemExit, match="requires the experimental flag"),
         ):
-            _project_runtime_flags(_project(runtime="krun"), cname="terok-cli-demoproj-task-a")
+            _project_runtime_flags(
+                _project(runtime="krun", services_mode="tcp"), cname="terok-cli-demoproj-task-a"
+            )
 
     def test_nested_only_unaffected(self, _krun_launch_args_stub) -> None:
         """`nested_containers` alone still emits its existing flags (no krun bits)."""

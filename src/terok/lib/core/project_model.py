@@ -153,6 +153,16 @@ class ProjectConfig(BaseModel):
     explicit string (``"UTC"``, ``"Europe/Prague"``) to override — including
     to pin containers to UTC for reproducible runs.
     """
+    services_mode: Literal["tcp", "socket"] = "socket"
+    """Effective host↔container IPC transport for this project's tasks.
+
+    Resolved at load time from the project's ``services.mode`` override,
+    falling back to the global ``services.mode`` in ``config.yml``.  The
+    vocabulary mirrors sandbox's
+    [`ServicesMode`][terok_sandbox.config_schema.ServicesMode]; the
+    per-container supervisor makes mixed modes on one host safe, so a
+    ``krun`` project can pin ``tcp`` while the rest stay on ``socket``.
+    """
     task_name_categories: list[str] | None = None
     shield_drop_on_task_run: bool = True
     shield_on_task_restart: str = "retain"
