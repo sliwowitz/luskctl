@@ -4,14 +4,14 @@ requires-python = ">=3.12, <3.15"
 
 [[package]]
 name = "agent-client-protocol"
-version = "0.11.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/93/396d02c91b387b2678f23081869ca47bd495fc6c78789022c683180cf5f1/agent_client_protocol-0.11.0.tar.gz", hash = "sha256:8920a3b27bdcc852fd7c73066f47ab53257dbfbe57b505e20a40c69f80a5391c", size = 87402, upload-time = "2026-07-05T17:07:56.803Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/50/65bfb4e3e13f350a52c368cbfc4bc36a1b3b3f34a6b3f5a2e3551e1bd63b/agent_client_protocol-0.12.0.tar.gz", hash = "sha256:4d42ac680388556b038cb6dd58dbbbd1561f9e545a334c1a352cc055f98b1c79", size = 135037, upload-time = "2026-08-01T15:58:22.35Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/48/a1367dded7765f5489f9840389949d5aeac53a73aeb1b4e6c0ab61e1617a/agent_client_protocol-0.11.0-py3-none-any.whl", hash = "sha256:2d8570cd4911f8af9fbab4808f7b05f09204a756f346c7409ecdcae3f37cdb2f", size = 68089, upload-time = "2026-07-05T17:07:55.518Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/c7/b84b8698879464bd8f869551bac31454bed14a3a22910f65d9693f3701bd/agent_client_protocol-0.12.0-py3-none-any.whl", hash = "sha256:233626748034896214de118f5cf5a319484ad2186705fd595219afee92237ccc", size = 92992, upload-time = "2026-08-01T15:58:21.216Z" },
 ]
 
 [[package]]
@@ -2440,8 +2440,8 @@ test = [
 
 [[package]]
 name = "terok-clearance"
-version = "0.8.0a8.dev218+gd11720679"
-source = { git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin#d11720679951bd474649334933b3c3eb76c594c8" }
+version = "0.8.0a8.dev223+g1d34b069a"
+source = { git = "https://github.com/sliwowitz/terok-clearance.git?rev=chore%2Futil-landlock-pin#1d34b069ac44fc4d7f056a19598981f6091e457a" }
 dependencies = [
     { name = "asyncvarlink" },
     { name = "dbus-fast" },
@@ -2451,8 +2451,8 @@ dependencies = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a20.dev466+g326e563a8"
-source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#326e563a8f35ccb7d7483549ca0521557265dd2e" }
+version = "0.4.0a20.dev473+g9fc14047b"
+source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fsandbox-landlock-pin#9fc14047b8bbd2442ffe8b7882498c16683b869b" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2467,8 +2467,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a21.dev460+g58d287f36"
-source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#58d287f36afd0829169508244bda19207085deb7" }
+version = "0.5.0a21.dev470+g9207231c4"
+source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Flandlock-write-confinement#9207231c4d1904b1ed6cd8620d30ea3af5fbfa09" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2487,8 +2487,8 @@ dependencies = [
 
 [[package]]
 name = "terok-shield"
-version = "0.8.0a9.dev357+gc85a3b0fc"
-source = { git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement#c85a3b0fc43bb3aaa32dcc30e8055cfe2cdf276f" }
+version = "0.8.0a9.dev363+gbf57bcef7"
+source = { git = "https://github.com/sliwowitz/terok-shield.git?rev=feat%2Flandlock-confinement#bf57bcef7953ba6edbe2fc13ff74488d4a330f7d" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -2497,8 +2497,8 @@ dependencies = [
 
 [[package]]
 name = "terok-util"
-version = "0.3.1a5.dev88+g1e095db2b"
-source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#1e095db2bfba84a96116e325c0be77d5494e3991" }
+version = "0.3.1a5.dev97+g9e08865a2"
+source = { git = "https://github.com/sliwowitz/terok-util.git?rev=feat%2Flandlock-fs-confinement#9e08865a2132d4b1b9b3f859ca05bd18e48fd503" }
 dependencies = [
     { name = "jinja2" },
     { name = "platformdirs" },
