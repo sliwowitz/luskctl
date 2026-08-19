@@ -500,6 +500,18 @@ def _as_int(value: object) -> int | None:
     return value if isinstance(value, int) else None
 
 
+def _effective_ipc_mode(wiring: dict[str, int | str], fallback: str) -> str:
+    """Return the transport to diagnose: the sidecar's recorded mode, else *fallback*.
+
+    The recorded ``ipc_mode`` is ground truth for the running container —
+    the project's effective ``services.mode`` may have changed since
+    launch, and it only governs the *next* container.  *fallback* covers
+    sidecars that predate mode recording (or an unrecognisable value).
+    """
+    recorded = wiring.get("ipc_mode")
+    return recorded if recorded in ("tcp", "socket") else fallback
+
+
 def _tcp_reachable(port: int) -> bool:
     """Return whether a TCP connect to ``127.0.0.1:<port>`` succeeds."""
     try:
@@ -565,7 +577,7 @@ def _check_per_container_services(
     verdict through so a missing endpoint references it.
     """
     wiring = _read_sidecar_wiring(cname)
-    mode = str(wiring.get("ipc_mode", fallback_mode))
+    mode = _effective_ipc_mode(wiring, fallback_mode)
     return [
         _check_service_reachable(
             "Vault reachable",
@@ -614,18 +626,25 @@ def _collect_all_checks(
     and the local
     [`_terok_doctor_checks`][terok.lib.orchestration.container_doctor._terok_doctor_checks])
     already special-cases ``None`` to drop the TCP-only probes.  So the
-    "must be set" gate fires only in TCP mode — *services_mode* is the
-    project's effective mode, since ``services.mode`` is overridable per
-    project.
+    "must be set" gate fires only in TCP mode — the mode of the *running
+    container* (its sidecar's recorded ``ipc_mode``), with *services_mode*
+    — the project's effective ``services.mode``, overridable per project —
+    covering pre-recording sidecars.  A mode change after launch only
+    governs the next container, so a socket-mode container under a
+    now-TCP project still gets socket-shaped checks, and vice versa.
     """
     cfg = make_sandbox_config()
     wiring = _read_sidecar_wiring(cname)
-    token_broker_port = _as_int(wiring.get("tcp_port")) or cfg.token_broker_port
-    ssh_signer_port = _as_int(wiring.get("ssh_signer_port")) or cfg.ssh_signer_port
-    gate_port = _as_int(wiring.get("gate_port")) or cfg.gate_port
+    mode = _effective_ipc_mode(wiring, services_mode)
+    if mode == "tcp":
+        token_broker_port = _as_int(wiring.get("tcp_port")) or cfg.token_broker_port
+        ssh_signer_port = _as_int(wiring.get("ssh_signer_port")) or cfg.ssh_signer_port
+        gate_port = _as_int(wiring.get("gate_port")) or cfg.gate_port
+    else:
+        token_broker_port = ssh_signer_port = gate_port = None
     desired_shield = _read_desired_shield_state(task_dir)
 
-    if services_mode == "tcp" and (
+    if mode == "tcp" and (
         gate_port is None or token_broker_port is None or ssh_signer_port is None
     ):
         raise SystemExit(

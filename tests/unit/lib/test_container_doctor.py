@@ -557,6 +557,87 @@ class TestRunContainerDoctor:
         assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] == 18800
         assert mock_sandbox_checks.call_args.kwargs["ssh_signer_port"] == 18801
 
+    @patch("terok.lib.orchestration.container_doctor._terok_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.AgentRoster")
+    @patch("terok.lib.orchestration.container_doctor.sandbox_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.make_sandbox_config")
+    def test_collect_all_checks_honours_a_socket_sidecar_under_a_tcp_project(
+        self,
+        mock_sandbox_cfg: MagicMock,
+        mock_sandbox_checks: MagicMock,
+        mock_roster: MagicMock,
+        mock_terok_checks: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A socket-launched container gets socket-shaped checks under a now-TCP project.
+
+        A mode change only governs the *next* container.  The socket
+        sidecar records no ports, so without this the TCP gate would
+        reject the healthy container (no pins) or assemble TCP probes
+        against it (pins present — hence the pinned cfg here, proving
+        the pins are ignored).
+        """
+        import json
+
+        from terok.lib.orchestration.container_doctor import _collect_all_checks
+
+        cname = "proj-cli-42"
+        sidecar_dir = tmp_path / "state" / "sidecar"
+        sidecar_dir.mkdir(parents=True)
+        (sidecar_dir / f"{cname}.json").write_text(json.dumps({"ipc_mode": "socket"}))
+        mock_sandbox_cfg.return_value = MagicMock(
+            state_dir=tmp_path / "state",
+            gate_port=18700,
+            token_broker_port=18701,
+            ssh_signer_port=18702,
+        )
+        mock_roster.shared.return_value.doctor_checks.return_value = []
+
+        checks = _collect_all_checks("proj", tmp_path, services_mode="tcp", cname=cname)
+
+        assert checks == []
+        assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] is None
+        assert mock_sandbox_checks.call_args.kwargs["ssh_signer_port"] is None
+
+    @patch("terok.lib.orchestration.container_doctor._terok_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.AgentRoster")
+    @patch("terok.lib.orchestration.container_doctor.sandbox_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.make_sandbox_config")
+    def test_collect_all_checks_honours_a_tcp_sidecar_under_a_socket_project(
+        self,
+        mock_sandbox_cfg: MagicMock,
+        mock_sandbox_checks: MagicMock,
+        mock_roster: MagicMock,
+        mock_terok_checks: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A TCP-launched container keeps its TCP checks under a now-socket project."""
+        import json
+
+        from terok.lib.orchestration.container_doctor import _collect_all_checks
+
+        cname = "proj-cli-42"
+        sidecar_dir = tmp_path / "state" / "sidecar"
+        sidecar_dir.mkdir(parents=True)
+        (sidecar_dir / f"{cname}.json").write_text(
+            json.dumps(
+                {"ipc_mode": "tcp", "tcp_port": 18800, "ssh_signer_port": 18801, "gate_port": 18802}
+            )
+        )
+        mock_sandbox_cfg.return_value = MagicMock(
+            state_dir=tmp_path / "state",
+            gate_port=None,
+            token_broker_port=None,
+            ssh_signer_port=None,
+        )
+        mock_roster.shared.return_value.doctor_checks.return_value = []
+
+        checks = _collect_all_checks("proj", tmp_path, services_mode="socket", cname=cname)
+
+        assert checks == []
+        assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] == 18800
+        assert mock_sandbox_checks.call_args.kwargs["ssh_signer_port"] == 18801
+
 
 class TestStreamingGrouping:
     """Verify that the streaming path partitions checks by heading correctly."""
