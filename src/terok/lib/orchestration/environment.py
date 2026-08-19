@@ -253,11 +253,11 @@ def _security_mode_env_and_volumes(
     else:
         env = _online_repo_env(project, gate_base, gate_port, token_source)
 
-    # Gate socket path for the container-side socat bridge.  The gate now
-    # runs inside the per-container supervisor, which binds
-    # The executor mounts the isolated runtime tree and the supervisor binds
-    # the gate endpoint in its dedicated lane.  No host bind-mount is needed
-    # here; the bridge only needs the canonical in-container socket path.
+    # Gate socket path for the container-side socat bridge.  The gate runs
+    # inside the per-container supervisor.  The executor mounts the isolated
+    # runtime tree, and the supervisor binds the gate endpoint in its
+    # dedicated lane.  No host bind-mount is needed here; the bridge only
+    # needs the canonical in-container socket path.
     if use_socket and "TEROK_GATE_TOKEN" in env:
         env["TEROK_GATE_SOCKET"] = CONTAINER_GATE_SOCKET
 
