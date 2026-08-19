@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from terok_shield import ExecError
@@ -391,15 +391,23 @@ def test_dispatch_watch(
     mock_confine: MagicMock,
     mock_run: MagicMock,
 ) -> None:
-    """``shield watch`` dispatches to the watch handler."""
+    """``shield watch`` confines the process first, then enters the watch loop."""
     mock_shield = MagicMock()
     mock_shield.config.state_dir = MOCK_TASK_DIR_1 / "shield"
     mock_mgr_cls.return_value.shield = mock_shield
 
+    # Order is the security invariant: the Landlock floor must be in place
+    # before the long-lived reader loop starts, so record both on one parent.
+    sequence = MagicMock()
+    sequence.attach_mock(mock_confine, "confine")
+    sequence.attach_mock(mock_run, "run_watch")
+
     args = argparse.Namespace(cmd="shield", shield_cmd="watch", project_name="proj", task_id="1")
     assert dispatch(args)
-    mock_confine.assert_called_once_with(mock_shield.config.state_dir)
-    mock_run.assert_called_once_with(mock_shield.config.state_dir, "proj-cli-1")
+    assert sequence.mock_calls == [
+        call.confine(mock_shield.config.state_dir),
+        call.run_watch(mock_shield.config.state_dir, "proj-cli-1"),
+    ]
 
 
 @patch("terok.lib.orchestration.tasks.load_task_meta", return_value=({"mode": None}, None))
