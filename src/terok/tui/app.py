@@ -2385,10 +2385,14 @@ if _HAS_TEXTUAL:
 
         async def action_show_vault(self) -> None:
             """Open the vault management screen."""
+            import asyncio
+
             from terok.lib.api.vault import load_vault_status
 
+            # Off the loop for the same reason as ``_refresh_vault_status``:
+            # the probe can stall on host facilities.
             try:
-                self._last_vault_status = load_vault_status()
+                self._last_vault_status = await asyncio.to_thread(load_vault_status)
             except Exception:
                 self._last_vault_status = None
             await self.push_screen(
@@ -2461,10 +2465,16 @@ if _HAS_TEXTUAL:
 
         async def _refresh_vault_status(self, *, push_modal_if_locked: bool = False) -> None:
             """Read a fresh snapshot, update the pill, optionally push the unlock modal."""
+            import asyncio
+
             from terok.lib.api.vault import VaultState, load_vault_status
 
+            # The probe opens the credentials DB and walks the passphrase
+            # chain — blocking I/O that can stall on host facilities (a
+            # slow keyring, a wedged D-Bus).  It runs on a thread so the
+            # message pump keeps painting whatever the chain does.
             try:
-                self._last_vault_status = load_vault_status()
+                self._last_vault_status = await asyncio.to_thread(load_vault_status)
             except Exception:
                 self._last_vault_status = None
 
