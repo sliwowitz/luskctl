@@ -2480,6 +2480,10 @@ if _HAS_TEXTUAL:
                     self._last_vault_status = await asyncio.to_thread(load_vault_status)
                 except Exception:
                     self._last_vault_status = None
+            # The pill derives from the snapshot, so it updates wherever
+            # the snapshot lands — a skipped poll can then rely on the
+            # probe owner to have painted it.
+            self._render_status_pill(self._last_vault_status)
             return True
 
         async def _refresh_vault_status(self, *, push_modal_if_locked: bool = False) -> None:
@@ -2487,9 +2491,7 @@ if _HAS_TEXTUAL:
             from terok.lib.api.vault import VaultState
 
             if not await self._probe_vault_status(skip_if_inflight=True):
-                return  # the in-flight probe's caller renders the fresh pill
-
-            self._render_status_pill(self._last_vault_status)
+                return  # the in-flight probe renders the fresh pill itself
 
             # Only a genuinely LOCKED vault gets the unlock prompt.  An
             # UNPROVISIONED one has nothing to unlock — the modal would
