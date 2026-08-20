@@ -15,6 +15,7 @@ unbound-method-on-stub, same idiom as ``test_vault_unlock_flow.py``.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -181,6 +182,7 @@ class TestFreshInstallUnlockGuard:
             _render_status_pill=MagicMock(),
             push_screen=AsyncMock(),
             _on_vault_unlock_result=MagicMock(),
+            _vault_probe_lock=asyncio.Lock(),
         )
         with patch("terok.lib.api.vault.load_vault_status", return_value=status):
             await TerokTUI._refresh_vault_status(stub, push_modal_if_locked=True)
@@ -193,6 +195,7 @@ class TestFreshInstallUnlockGuard:
             _render_status_pill=MagicMock(),
             push_screen=AsyncMock(),
             _on_vault_unlock_result=MagicMock(),
+            _vault_probe_lock=asyncio.Lock(),
         )
         with patch("terok.lib.api.vault.load_vault_status", return_value=status):
             await TerokTUI._refresh_vault_status(stub, push_modal_if_locked=True)

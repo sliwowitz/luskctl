@@ -5,6 +5,7 @@
 
 """Terok TUI application built on Textual."""
 
+import asyncio
 import getpass
 import inspect
 import os
@@ -321,6 +322,10 @@ if _HAS_TEXTUAL:
             self.ansi_theme_light = self.ansi_theme_dark
             # Snapshot the global config once; reuse via ``self._config``.
             self._config: Config = get_config()
+            # One vault probe at a time: the poll worker and the vault
+            # screen may otherwise race, and a slower probe would land a
+            # stale ``_last_vault_status`` over a newer one.
+            self._vault_probe_lock = asyncio.Lock()
             # Set dynamic title with version and branch info
             self._update_title()
 
@@ -2389,12 +2394,13 @@ if _HAS_TEXTUAL:
 
             from terok.lib.api.vault import load_vault_status
 
-            # Off the loop for the same reason as ``_refresh_vault_status``:
-            # the probe can stall on host facilities.
-            try:
-                self._last_vault_status = await asyncio.to_thread(load_vault_status)
-            except Exception:
-                self._last_vault_status = None
+            # Off the loop and under the shared lock for the same reasons
+            # as ``_refresh_vault_status``.
+            async with self._vault_probe_lock:
+                try:
+                    self._last_vault_status = await asyncio.to_thread(load_vault_status)
+                except Exception:
+                    self._last_vault_status = None
             await self.push_screen(
                 VaultScreen(self._last_vault_status),
                 self._on_vault_action_result,
@@ -2473,11 +2479,13 @@ if _HAS_TEXTUAL:
             # chain.  That is blocking I/O, and it can stall on host
             # facilities (a slow keyring, a wedged D-Bus).  The probe runs
             # on a thread, so the message pump keeps painting whatever the
-            # chain does.
-            try:
-                self._last_vault_status = await asyncio.to_thread(load_vault_status)
-            except Exception:
-                self._last_vault_status = None
+            # chain does.  The lock serializes concurrent probes, so a
+            # slower one cannot land a stale snapshot over a newer one.
+            async with self._vault_probe_lock:
+                try:
+                    self._last_vault_status = await asyncio.to_thread(load_vault_status)
+                except Exception:
+                    self._last_vault_status = None
 
             self._render_status_pill(self._last_vault_status)
 
