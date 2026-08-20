@@ -2470,9 +2470,10 @@ if _HAS_TEXTUAL:
             from terok.lib.api.vault import VaultState, load_vault_status
 
             # The probe opens the credentials DB and walks the passphrase
-            # chain — blocking I/O that can stall on host facilities (a
-            # slow keyring, a wedged D-Bus).  It runs on a thread so the
-            # message pump keeps painting whatever the chain does.
+            # chain.  That is blocking I/O, and it can stall on host
+            # facilities (a slow keyring, a wedged D-Bus).  The probe runs
+            # on a thread, so the message pump keeps painting whatever the
+            # chain does.
             try:
                 self._last_vault_status = await asyncio.to_thread(load_vault_status)
             except Exception:

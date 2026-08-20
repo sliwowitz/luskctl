@@ -209,10 +209,10 @@ class TestVaultProbeOffTheLoop:
     """The vault probe never runs on the message pump.
 
     ``load_vault_status`` opens the credentials DB and walks the
-    passphrase chain, which can stall on host facilities (a locked OS
-    keyring's unlock prompt froze the whole TUI on a headless host).
-    The refresh must hand the probe to a thread so the loop keeps
-    painting whatever the chain does.
+    passphrase chain, and the chain can stall on host facilities.  A
+    locked OS keyring's unlock prompt froze the whole TUI on a headless
+    host.  The refresh must hand the probe to a thread, so the loop
+    keeps painting whatever the chain does.
     """
 
     def test_refresh_probes_on_a_worker_thread(self, monkeypatch: pytest.MonkeyPatch) -> None:
