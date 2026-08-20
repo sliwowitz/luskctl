@@ -184,6 +184,7 @@ class TestFreshInstallUnlockGuard:
             _on_vault_unlock_result=MagicMock(),
             _vault_probe_lock=asyncio.Lock(),
         )
+        stub._probe_vault_status = lambda **kw: TerokTUI._probe_vault_status(stub, **kw)
         with patch("terok.lib.api.vault.load_vault_status", return_value=status):
             await TerokTUI._refresh_vault_status(stub, push_modal_if_locked=True)
         stub.push_screen.assert_not_awaited()
@@ -197,6 +198,7 @@ class TestFreshInstallUnlockGuard:
             _on_vault_unlock_result=MagicMock(),
             _vault_probe_lock=asyncio.Lock(),
         )
+        stub._probe_vault_status = lambda **kw: TerokTUI._probe_vault_status(stub, **kw)
         with patch("terok.lib.api.vault.load_vault_status", return_value=status):
             await TerokTUI._refresh_vault_status(stub, push_modal_if_locked=True)
         stub.push_screen.assert_awaited_once()

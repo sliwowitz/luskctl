@@ -236,6 +236,7 @@ class TestVaultProbeOffTheLoop:
                 _last_vault_status=None,
                 _vault_probe_lock=asyncio.Lock(),
             )
+            stub._probe_vault_status = lambda **kw: TerokTUI._probe_vault_status(stub, **kw)
             await TerokTUI._refresh_vault_status(stub)
             return stub
 
@@ -275,8 +276,8 @@ class TestVaultProbeOffTheLoop:
                 _vault_probe_lock=asyncio.Lock(),
             )
             await asyncio.gather(
-                TerokTUI._refresh_vault_status(stub),
-                TerokTUI._refresh_vault_status(stub),
+                TerokTUI._probe_vault_status(stub),
+                TerokTUI._probe_vault_status(stub),
             )
 
         asyncio.run(_drive())
