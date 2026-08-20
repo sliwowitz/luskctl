@@ -86,6 +86,18 @@ class _BaseRoutingScreen(screen.Screen[None]):
         """Render *routing* into the subclass's widgets."""
         raise NotImplementedError
 
+    def _pick_project_to_mint(self) -> None:
+        """Ask which loaded project should receive a fresh key."""
+        if self._routing is not None:
+            self.app.push_screen(
+                _ProjectPickerScreen(self._routing.projects), self._mint_for_picked
+            )
+
+    def _mint_for_picked(self, scope: str | None) -> None:
+        """Mint for the picked project, or do nothing on cancel."""
+        if scope:
+            self._mint(scope)
+
     def _mint(self, scope: str) -> None:
         """Mint a key for *scope*."""
         self._apply(lambda: mint_key(scope), "Mint failed")
@@ -173,6 +185,7 @@ class KeyRoutingScreen(_BaseRoutingScreen):
         _modal_binding("escape", "dismiss_screen", "Back"),
         _modal_binding("q", "dismiss_screen", "Back"),
         _modal_binding("m", "toggle_mode", "Matrix / list"),
+        _modal_binding("n", "pick_project_to_mint", "Mint key"),
         _modal_binding("c", "rename_cursor_key", "Rename key"),
         _modal_binding("d", "delete_cursor_key", "Delete key"),
         _modal_binding("i", "show_inventory", "Inventory"),
@@ -280,6 +293,10 @@ class KeyRoutingScreen(_BaseRoutingScreen):
         if self._list_mode:
             self.query_one("#kr-projects").focus()
 
+    def action_pick_project_to_mint(self) -> None:
+        """Ask for a project when the focused list cannot infer one."""
+        self._pick_project_to_mint()
+
     def action_rename_cursor_key(self) -> None:
         """Rename the key the cursor points at (matrix or list)."""
         if (key_id := self._current_key_id()) is not None:
@@ -376,15 +393,7 @@ class KeyInventoryScreen(_BaseRoutingScreen):
 
     def action_mint(self) -> None:
         """Pick a project, then mint a key for it."""
-        if self._routing is not None:
-            self.app.push_screen(
-                _ProjectPickerScreen(self._routing.projects), self._mint_for_picked
-            )
-
-    def _mint_for_picked(self, scope: str | None) -> None:
-        """Mint for the picked project, or do nothing on cancel."""
-        if scope:
-            self._mint(scope)
+        self._pick_project_to_mint()
 
     def action_rename(self) -> None:
         """Rename the highlighted key's comment."""

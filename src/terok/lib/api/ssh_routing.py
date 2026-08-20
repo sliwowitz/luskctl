@@ -99,13 +99,13 @@ def delete_key(key_id: int) -> None:
         db.delete_ssh_key(key_id)
 
 
-def mint_key(
-    project_name: str, *, key_type: str = "ed25519", comment: str | None = None
-) -> SSHInitResult:
+def mint_key(project_name: str, *, key_type: str = "ed25519", comment: str = "") -> SSHInitResult:
     """Generate a fresh keypair already linked to *project_name*.
 
     A key is born attached to a project (the vault holds no unlinked
-    keys), so minting always names the column it lands in.
+    keys), so minting always names the column it lands in.  The blank
+    comment deliberately selects additive provisioning; ``None`` means
+    "reuse the primary key" and therefore is not a mint operation.
     """
     return get_project(project_name).provision_ssh_key(key_type=key_type, comment=comment)
 

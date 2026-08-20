@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -130,6 +131,16 @@ class TestMutations:
 
 class TestMint:
     """Verify minting routes through the project aggregate."""
+
+    def test_default_requests_additive_generation(self, monkeypatch):
+        """A bare mint requests a fresh side key instead of reusing the primary key."""
+        project = SimpleNamespace(provision_ssh_key=mock.Mock(return_value={"key_id": 8}))
+        monkeypatch.setattr(ssh_routing, "get_project", lambda _name: project)
+
+        result = ssh_routing.mint_key("foo")
+
+        project.provision_ssh_key.assert_called_once_with(key_type="ed25519", comment="")
+        assert result == {"key_id": 8}
 
     def test_mint_provisions_for_project(self, monkeypatch):
         """mint_key calls provision_ssh_key on the named project."""

@@ -1,24 +1,104 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for the pure label and hint helpers of the key-routing screens."""
+"""Verify SSH key routing labels, mutation guards, and minting shortcuts."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+from textual.app import App
+
+from terok.lib.api.ssh_routing import KeyRouting
+from terok.tui import key_routing_screen
 from terok.tui.key_routing_screen import (
+    KeyInventoryScreen,
+    KeyRoutingScreen,
     _BaseRoutingScreen,
     _hint,
     _inventory_label,
     _key_label,
+    _ProjectPickerScreen,
 )
 
 
 def _row(*, comment: str = "", key_type: str = "ed25519", fingerprint: str = "SHA256:abcdef"):
     """A stand-in key row carrying the fields the label helpers read."""
     return SimpleNamespace(comment=comment, key_type=key_type, fingerprint=fingerprint)
+
+
+class _RoutingHost(App[None]):
+    """Run the routing screen in the smallest app that can exercise its bindings."""
+
+    def on_mount(self) -> None:
+        """Open the routing screen."""
+        self.push_screen(KeyRoutingScreen())
+
+
+@pytest.fixture()
+def mint_calls(monkeypatch):
+    """Serve one routed key and record every project passed to the minting API."""
+    key = SimpleNamespace(
+        id=1,
+        comment="tk-main:alpha",
+        key_type="ed25519",
+        fingerprint="SHA256:abcdef",
+    )
+    routing = KeyRouting(
+        keys=(key,),
+        projects=("alpha", "beta"),
+        links=frozenset({("alpha", key.id)}),
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(key_routing_screen, "load_key_routing", lambda: routing)
+    monkeypatch.setattr(key_routing_screen, "mint_key", calls.append)
+    return calls
+
+
+class TestMintShortcuts:
+    """Every advertised ``n`` path reaches the project-scoped minting API."""
+
+    @pytest.mark.asyncio
+    async def test_matrix_mints_for_cursor_project(self, mint_calls) -> None:
+        """Matrix mode derives the project from the cursor column."""
+        app = _RoutingHost()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+
+        assert mint_calls == ["alpha"]
+
+    @pytest.mark.asyncio
+    async def test_list_mode_opens_picker_and_mints_selection(self, mint_calls) -> None:
+        """List mode asks for the otherwise ambiguous project and mints the selection."""
+        app = _RoutingHost()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("m", "n")
+            await pilot.pause()
+            assert isinstance(app.screen, _ProjectPickerScreen)
+            await pilot.press("enter")
+            await pilot.pause()
+
+        assert mint_calls == ["alpha"]
+
+    @pytest.mark.asyncio
+    async def test_inventory_picker_mints_selection(self, mint_calls) -> None:
+        """Inventory mode carries the project picker result into the minting API."""
+        app = _RoutingHost()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            await pilot.press("i", "n")
+            await pilot.pause()
+            assert isinstance(app.screen, _ProjectPickerScreen)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, KeyInventoryScreen)
+
+        assert mint_calls == ["alpha"]
 
 
 class TestKeyLabel:
