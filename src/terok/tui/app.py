@@ -2297,8 +2297,8 @@ if _HAS_TEXTUAL:
                 self.action_show_clearance,
             )
             yield SystemCommand(
-                "Authenticate agents and tools",
-                "Run the host-wide auth flow for an agent or tool — no project required",
+                "Authenticate providers",
+                "Run host-wide auth for an agent, tool, or endpoint. No project is required.",
                 self.action_authenticate,
             )
             yield SystemCommand(
@@ -2314,7 +2314,7 @@ if _HAS_TEXTUAL:
             self.push_screen(ConsoleOutputScreen(self.console_logs))
 
         async def action_authenticate(self) -> None:
-            """Open the host-wide ``Authenticate agents and tools`` modal.
+            """Open the host-wide ``Authenticate providers`` modal.
 
             Reuses [`AuthActionsScreen`][terok.tui.screens.AuthActionsScreen], but the result handler
             forces a host-wide auth flow (``project_name=None``) regardless

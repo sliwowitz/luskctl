@@ -412,6 +412,87 @@ Different selections produce different L1 image tags (`terok-l1-cli:<base>-claud
 
 Transitive dependencies are expanded automatically — picking `blablador` or `kisski` also pulls in `opencode`.
 
+### Custom LLM endpoint providers
+
+An LLM endpoint provider defines a runtime connection. An LLM endpoint provider
+does not install an agent in the image. Store each provider file at
+`~/.config/terok/providers/<name>.yaml`. If you set `$XDG_CONFIG_HOME`, Terok
+uses `$XDG_CONFIG_HOME/terok/providers/<name>.yaml` instead. Terok uses `<name>`
+as the provider name. Use only lowercase ASCII letters and digits for `<name>`.
+
+The `example.yaml` file defines the `example` provider:
+
+```yaml
+label: Example AI
+upstream: https://api.example.com
+
+auth:
+  api_key: {}
+
+serves:
+  openai-chat: /v1
+
+default_model: example-chat
+models:
+  example-chat:
+    name: Example Chat
+    limit:
+      context: 120000
+```
+
+The empty `api_key` mapping uses the `Authorization: Bearer <key>` format. Set
+`header` and `prefix` when the provider requires a different format. If you set
+`header` but omit `prefix`, Terok uses no prefix for compatibility with legacy
+files.
+
+Omit `models` to let OpenCode and Pi request `/models`. OpenCode and Pi use only
+the entries in a nonempty `models` map. When `models` is nonempty, OpenCode and
+Pi do not request `/models`. Use a nonempty `models` map when the provider does
+not implement `/models`.
+
+The `limit.context` and `limit.output` fields accept positive token counts. Pi
+uses each specified limit. Pi applies a default value to each omitted limit.
+OpenCode uses limits only when you specify both fields. The OpenCode schema
+requires both fields.
+
+Authenticate the provider on the host. Then start a new task. In the task,
+select the provider with OpenCode or Pi:
+
+```bash
+terok auth example
+terok task run myproj
+
+# In the task container:
+opencode --provider example
+pi --provider example
+```
+
+After `terok auth` succeeds, Terok regenerates the vault routes. Terok also
+checks the routes before each task launch. Do not run `terok vault routes`
+manually.
+
+Changes to a provider file without an `install` section do not require an image
+rebuild. Install a compatible harness before you use the provider. The following
+image configuration selects OpenCode and Pi:
+
+```yaml
+image:
+  agents: "opencode,pi"
+```
+
+Do not add `example` to `image.agents`. Rebuild L1 only when you add a harness
+to the image.
+
+When Terok creates a task container, Terok also creates the credential handles.
+A running task does not receive a provider that you authenticate later. Start a
+new task after you authenticate a provider or change its file. You do not need
+to restart the Terok TUI.
+
+Terok also reads legacy files from `~/.config/terok/agent/providers/`. Terok
+supports full `opencode:` blocks in legacy files. A file in
+`~/.config/terok/providers/` overrides a legacy file with the same name. Run
+`terok config paths` to show the primary user provider directory.
+
 ### Step 6: Initialize SSH (for private repos)
 
 ```bash
@@ -563,7 +644,7 @@ conflicts. The container status bar shows `host: ^b` as a reminder.
 
 ## Authentication
 
-Before running tasks, authenticate each agent or tool you plan to use.
+Before running tasks, authenticate each provider you plan to use.
 Credentials are stored host-wide in the vault and shared across every
 project and task by default.
 
@@ -573,11 +654,13 @@ terok auth claude
 terok auth gh
 terok auth codex
 
-# Project-scoped — uses the project's L2 image for the auth container.
+# Project-scoped. OAuth uses and validates the project's L2 image.
+# API-key endpoint auth uses no container and needs no image.agents entry.
 # With the default credentials.scope: shared the token still lands in the
 # host-wide bucket; credentials.scope: project stores it in the project's
 # private vault bucket instead.
 terok auth claude --project myproj
+terok auth example --project myproj
 
 # Interactive menu — pick one or more providers in sequence
 terok auth
@@ -664,10 +747,10 @@ escrowed recovery passphrase.
 Run any supported agent headlessly in a container — no interactive session needed.
 Useful for CI/CD pipelines, batch tasks, or scripted workflows.
 
-Supported agents (`--agent`): `claude`, `codex`, `copilot`, `opencode`,
-`pi`, `vibe`.  Endpoint providers such as `blablador`, `kisski`, or
-`openrouter` are selected with `--provider` and route a harness agent
-(OpenCode) to a different LLM endpoint.
+Use `--agent` with `claude`, `codex`, `copilot`, `opencode`, `pi`, or `vibe`.
+Use `--provider` to select an LLM endpoint provider such as `blablador`,
+`kisski`, or `openrouter`. OpenCode and Pi support compatible LLM endpoint
+providers.
 
 ### Basic Usage
 
@@ -714,8 +797,8 @@ default_agent: claude
 | Session resume | Yes | No | No | Yes | Yes | Yes |
 | Structured log output | Yes | No | No | No | No | No |
 
-Endpoint providers (`blablador`, `kisski`, …) inherit the capabilities of
-the harness agent (OpenCode) they ride on.
+The selected harness determines the available capabilities for an LLM endpoint
+provider.
 
 ### Per-Provider Config Values
 

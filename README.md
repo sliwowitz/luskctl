@@ -74,8 +74,8 @@ Terok was started at the
   snippet, cached and reused across projects; Ubuntu / Debian /
   Fedora / nvidia/cuda out of the box, GPU passthrough for projects
   whose base image supports it.
-- **Multi-vendor agents** — Claude Code, Codex, Copilot, Vibe, plus
-  custom LLM endpoints via OpenCode.
+- **Multi-vendor agents:** Terok supports Claude Code, Codex, Copilot,
+  Vibe, OpenCode, and Pi. OpenCode and Pi support custom LLM endpoints.
 
 ## The six-package stack
 

@@ -234,7 +234,8 @@ class TestAuthenticate:
         # at their definition modules rather than on the auth module.
         with (
             patch(
-                "terok.lib.domain.auth.project_cli_image", return_value="terok-p1:latest"
+                "terok.lib.domain.auth._resolve_project_auth_image",
+                return_value="terok-p1:latest",
             ) as mock_l2,
             patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
             patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
@@ -243,12 +244,15 @@ class TestAuthenticate:
             patch("terok.lib.domain.auth.Authenticator.run") as mock_auth,
         ):
             api.authenticate("claude", project_name="p1")
+            image = mock_auth.call_args.kwargs["image"]
+            assert callable(image)
+            resolved_image = image()
 
-        mock_l2.assert_called_once_with("p1")
+        assert resolved_image == "terok-p1:latest"
+        mock_l2.assert_called_once_with("p1", "claude")
         mock_auth.assert_called_once()
         # Positional call arg 0 is the container-scope string: the project name.
         assert mock_auth.call_args.args[0] == "p1"
-        assert mock_auth.call_args.kwargs["image"] == "terok-p1:latest"
         assert mock_auth.call_args.kwargs["expose_token"] is False
         assert mock_auth.call_args.kwargs["credential_set"] == "default"
         # Shared-scope routes the host-wide mount tree.  The helper imports
@@ -258,6 +262,40 @@ class TestAuthenticate:
         from terok.lib.orchestration.environment import project_mounts_dir
 
         assert mock_auth.call_args.kwargs["mounts_dir"] == project_mounts_dir(fake_project)
+
+    def test_project_endpoint_api_key_does_not_validate_image(self) -> None:
+        """Project-scoped endpoint API-key auth does not require an image entry."""
+        from terok.lib import api
+
+        fake_project = MagicMock(credentials_scope="shared", credential_set="default")
+        with (
+            patch("terok.lib.domain.auth._resolve_project_auth_image") as mock_resolve_image,
+            patch("terok.lib.domain.auth.load_auth_providers", return_value={"example": object()}),
+            patch("terok.lib.core.config.sandbox_live_mounts_dir", return_value="/mnt"),
+            patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
+            patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=False),
+            patch("terok.lib.core.projects.load_project", return_value=fake_project),
+            patch("terok.lib.domain.auth.Authenticator.run") as mock_auth,
+        ):
+            api.authenticate("example", project_name="p1")
+
+        mock_resolve_image.assert_not_called()
+        assert callable(mock_auth.call_args.kwargs["image"])
+
+    def test_project_oauth_image_validates_installed_entry(self) -> None:
+        """Resolving a project OAuth image still validates its auth command."""
+        from terok.lib.domain import auth
+
+        fake_project = MagicMock()
+        fake_project.name = "p1"
+        with (
+            patch("terok.lib.core.projects.load_project", return_value=fake_project),
+            patch("terok.lib.core.images.require_agent_installed") as mock_require,
+        ):
+            image = auth._resolve_project_auth_image("p1", "claude")
+
+        assert image == "p1:l2-cli"
+        mock_require.assert_called_once_with(fake_project, "claude", noun="Provider")
 
     def test_project_scoped_with_per_project_creds_uses_project_set(self, tmp_path: Path) -> None:
         """``credentials_scope: project`` routes to the project's vault row and mount tree."""
@@ -271,7 +309,6 @@ class TestAuthenticate:
             project_mounts_dir=project_root / "mounts",
         )
         with (
-            patch("terok.lib.domain.auth.project_cli_image", return_value="terok-p1:latest"),
             patch("terok.lib.core.config.is_claude_oauth_exposed", return_value=False),
             patch("terok.lib.core.config.is_codex_oauth_exposed", return_value=False),
             patch("terok.lib.core.projects.load_project", return_value=fake_project),

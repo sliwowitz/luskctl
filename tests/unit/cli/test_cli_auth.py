@@ -83,6 +83,15 @@ def test_auth_accepts_provider_alias() -> None:
     assert args.provider == "openai"
 
 
+def test_auth_accepts_current_endpoint_provider() -> None:
+    """Parser registration reads endpoint providers from the current roster."""
+    endpoint = SimpleNamespace(name="example", label="Example")
+    with patch("terok.lib.api.agents.load_auth_providers", return_value={"example": endpoint}):
+        args = _make_parser().parse_args(["auth", "example"])
+
+    assert args.provider == "example"
+
+
 def test_auth_rejects_unknown_provider() -> None:
     """argparse's choices validation still fires for unknown provider names."""
     with pytest.raises(SystemExit) as exc:
@@ -113,32 +122,20 @@ def test_dispatch_ignores_other_commands() -> None:
 
 
 def test_dispatch_host_wide_skips_project_loading() -> None:
-    """``auth <provider>`` never touches ``load_project`` / ``require_agent_installed``."""
+    """``auth <provider>`` delegates without project-specific CLI checks."""
     args = argparse.Namespace(cmd="auth", provider="claude", project_flag=None, device_auth=False)
-    with (
-        patch("terok.cli.commands.auth.load_project") as mock_load,
-        patch("terok.cli.commands.auth.require_agent_installed") as mock_check,
-        patch("terok.cli.commands.auth.authenticate") as mock_auth,
-    ):
+    with patch("terok.cli.commands.auth.authenticate") as mock_auth:
         assert dispatch(args) is True
 
-    mock_load.assert_not_called()
-    mock_check.assert_not_called()
     mock_auth.assert_called_once_with("claude", None, device_auth=False)
 
 
-def test_dispatch_project_flag_runs_install_check() -> None:
-    """``auth <p> --project <name>`` loads the project and verifies the agent."""
-    fake_project = SimpleNamespace(name="p1")
+def test_dispatch_project_flag_defers_image_check() -> None:
+    """``auth <p> --project <name>`` delegates image validation to the auth flow."""
     args = argparse.Namespace(cmd="auth", provider="claude", project_flag="p1", device_auth=False)
-    with (
-        patch("terok.cli.commands.auth.load_project", return_value=fake_project),
-        patch("terok.cli.commands.auth.require_agent_installed") as mock_check,
-        patch("terok.cli.commands.auth.authenticate") as mock_auth,
-    ):
+    with patch("terok.cli.commands.auth.authenticate") as mock_auth:
         assert dispatch(args) is True
 
-    mock_check.assert_called_once_with(fake_project, "claude", noun="Provider")
     mock_auth.assert_called_once_with("claude", "p1", device_auth=False)
 
 
@@ -289,28 +286,16 @@ def test_run_interactive_scopes_auth_state_to_project(
 
 
 def test_run_one_skips_install_check_when_host_wide() -> None:
-    """Host-wide ``_run_one`` goes straight to ``authenticate`` — no project load."""
-    with (
-        patch("terok.cli.commands.auth.load_project") as mock_load,
-        patch("terok.cli.commands.auth.authenticate") as mock_auth,
-    ):
+    """Host-wide ``_run_one`` goes straight to ``authenticate``."""
+    with patch("terok.cli.commands.auth.authenticate") as mock_auth:
         _run_one("claude", project_name=None)
-    mock_load.assert_not_called()
     mock_auth.assert_called_once_with("claude", None, device_auth=False)
 
 
-def test_run_one_resolves_alias_for_install_check() -> None:
-    """``_run_one("openai", project)`` checks the *codex* agent is installed."""
-    fake_project = SimpleNamespace(name="p1")
-    with (
-        patch("terok.cli.commands.auth.load_project", return_value=fake_project),
-        patch("terok.cli.commands.auth.require_agent_installed") as mock_check,
-        patch("terok.cli.commands.auth.authenticate") as mock_auth,
-    ):
+def test_run_one_defers_project_image_check() -> None:
+    """Project-scoped ``_run_one`` leaves lazy image validation to ``authenticate``."""
+    with patch("terok.cli.commands.auth.authenticate") as mock_auth:
         _run_one("openai", project_name="p1")
-    # the baked-agent lookup uses the resolved agent name, not the provider alias
-    mock_check.assert_called_once_with(fake_project, "codex", noun="Provider")
-    # authenticate gets the original token; it resolves the alias itself
     mock_auth.assert_called_once_with("openai", "p1", device_auth=False)
 
 
@@ -346,10 +331,9 @@ def test_run_one_stays_quiet_without_stored_credential(
 
 
 def test_run_one_warns_on_stale_image(capsys: pytest.CaptureFixture[str]) -> None:
-    """A stale project image surfaces a heads-up on stderr before launching."""
+    """An OAuth-capable provider reports a stale project image."""
     with (
-        patch("terok.cli.commands.auth.load_project"),
-        patch("terok.cli.commands.auth.require_agent_installed"),
+        patch("terok.lib.api.agents.available_auth_modes", return_value=["oauth"]),
         patch(
             "terok.cli.commands.auth.auth_image_staleness_warning",
             return_value="Warning: stale image",
@@ -358,6 +342,18 @@ def test_run_one_warns_on_stale_image(capsys: pytest.CaptureFixture[str]) -> Non
     ):
         _run_one("codex", project_name="p1")
     assert "Warning: stale image" in capsys.readouterr().err
+
+
+def test_run_one_skips_image_warning_for_api_key_endpoint() -> None:
+    """An API-key-only endpoint does not probe project image staleness."""
+    with (
+        patch("terok.lib.api.agents.available_auth_modes", return_value=["api_key"]),
+        patch("terok.cli.commands.auth.auth_image_staleness_warning") as mock_warning,
+        patch("terok.cli.commands.auth.authenticate"),
+    ):
+        _run_one("example", project_name="p1")
+
+    mock_warning.assert_not_called()
 
 
 # ── authenticated_entries (vault-backed auth-state query) ───────────────

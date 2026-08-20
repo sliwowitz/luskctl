@@ -130,7 +130,7 @@ def _task_action_cases() -> list[tuple[str, str]]:
 
 
 def _auth_providers() -> list[str]:
-    from terok_executor import AUTH_PROVIDERS
+    from terok.lib.api.agents import AUTH_PROVIDERS
 
     return list(AUTH_PROVIDERS)
 
@@ -758,26 +758,41 @@ class TestAuthScreenOptions:
         screen.dismiss.assert_called_once_with("import_opencode_config")
 
     def test_auth_screen_lists_every_provider(self) -> None:
-        """Every ``AUTH_PROVIDERS`` entry is listed — no 9-entry shortcut cap."""
-        from terok_executor import AUTH_PROVIDERS
+        """Every current auth-provider entry is listed — no shortcut cap."""
+        from terok.lib.api.agents import load_auth_providers
 
+        auth_providers = load_auth_providers()
         screens, _ = import_screens()
         screen = screens.AuthActionsScreen()
         (option_list,) = list(screen.compose())
         ids = [opt._stub_kwargs.get("id") for opt in option_list._stub_args if opt is not None]
-        assert ids == [f"auth_{name}" for name in AUTH_PROVIDERS] + ["import_opencode_config"]
+        assert ids == [f"auth_{name}" for name in auth_providers] + ["import_opencode_config"]
+
+    def test_auth_screen_loads_current_endpoint_providers(self) -> None:
+        """Opening the modal reads endpoint providers added after TUI startup."""
+        screens, _ = import_screens()
+        endpoint = SimpleNamespace(name="example", label="Example")
+        with mock.patch(
+            "terok.lib.api.agents.load_auth_providers", return_value={"example": endpoint}
+        ):
+            screen = screens.AuthActionsScreen()
+
+        (option_list,) = list(screen.compose())
+        ids = [opt._stub_kwargs.get("id") for opt in option_list._stub_args if opt is not None]
+        assert ids == ["auth_example", "import_opencode_config"]
 
     def test_auth_screen_badges_authenticated_entries(self) -> None:
         """Stored-credential entries get their option prompt badged."""
-        from terok_executor import AUTH_PROVIDERS
+        from terok.lib.api.agents import load_auth_providers
 
+        auth_providers = load_auth_providers()
         screens, _ = import_screens()
         screen = screens.AuthActionsScreen()
         option_list = mock.Mock()
         screen.query_one = mock.Mock(return_value=option_list)
         screen._show_auth_state(frozenset({"claude"}))
         option_list.replace_option_prompt.assert_called_once_with(
-            "auth_claude", f"{AUTH_PROVIDERS['claude'].label}  ✓ authenticated"
+            "auth_claude", f"{auth_providers['claude'].label}  ✓ authenticated"
         )
 
     def test_auth_screen_unreadable_vault_flags_subtitle(self) -> None:
@@ -1201,14 +1216,12 @@ class TestAuthFlow:
     def _roster(self, provider: str, info: SimpleNamespace, *, oauth_enabled: bool):
         """Patch the provider roster and the OAuth gate for *provider*.
 
-        The roster is patched in both places that read it: the membership
-        check in ``_run_auth_flow_body`` (via ``terok.lib.api``) and
-        ``available_auth_modes`` (via ``terok.lib.domain.auth``).  At runtime
-        these are the same object; the test pins both names to the fake.
+        The loader is patched in both places that read it: the membership
+        check in ``_run_auth_flow_body`` and ``available_auth_modes``.
         """
         with (
-            mock.patch("terok.lib.api.AUTH_PROVIDERS", {provider: info}),
-            mock.patch("terok.lib.domain.auth.AUTH_PROVIDERS", {provider: info}),
+            mock.patch("terok.lib.api.load_auth_providers", return_value={provider: info}),
+            mock.patch("terok.lib.domain.auth.load_auth_providers", return_value={provider: info}),
             mock.patch("terok.lib.core.config.is_oauth_enabled_for", return_value=oauth_enabled),
         ):
             yield
@@ -1219,7 +1232,7 @@ class TestAuthFlow:
         """An unknown provider name is reported and dispatches nothing."""
         mixin = self._get_mixin()
         instance = self._instance(mixin)
-        with mock.patch("terok.lib.api.AUTH_PROVIDERS", {}):
+        with mock.patch("terok.lib.api.load_auth_providers", return_value={}):
             run(mixin._run_auth_flow_body(instance, "nope", None))
         instance.notify.assert_called_once()
         instance._auth_via_api_key.assert_not_awaited()
@@ -1642,7 +1655,7 @@ class TestCommandPalette:
         with mock.patch.dict(sys.modules, stubs):
             commands = list(app_class.get_system_commands(instance, screen=mock.Mock()))
         titles = [cmd.title for cmd in commands]
-        assert "Authenticate agents and tools" in titles
+        assert "Authenticate providers" in titles
 
     def test_get_system_commands_includes_set_default_agents(self) -> None:
         """The global agent default is reachable from the command palette."""
