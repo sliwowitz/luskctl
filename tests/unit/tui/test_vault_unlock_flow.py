@@ -203,3 +203,83 @@ class TestVaultPoll:
         assert args[0] is sentinel
         assert kwargs["group"] == "vault-poll"
         assert kwargs["exclusive"] is True
+
+
+class TestVaultProbeOffTheLoop:
+    """The vault probe never runs on the message pump.
+
+    ``load_vault_status`` opens the credentials DB and walks the
+    passphrase chain, and the chain can stall on host facilities.  A
+    locked OS keyring's unlock prompt froze the whole TUI on a headless
+    host.  The refresh must hand the probe to a thread, so the loop
+    keeps painting whatever the chain does.
+    """
+
+    def test_refresh_probes_on_a_worker_thread(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The refresh hands ``load_vault_status`` to a thread, not the loop."""
+        import asyncio
+        import threading
+
+        import terok.lib.api.vault as vault_api
+
+        probe_threads: list[threading.Thread] = []
+
+        def _probe() -> None:
+            probe_threads.append(threading.current_thread())
+            return None
+
+        monkeypatch.setattr(vault_api, "load_vault_status", _probe)
+
+        async def _drive() -> SimpleNamespace:
+            stub = SimpleNamespace(
+                _render_status_pill=MagicMock(),
+                _last_vault_status=None,
+                _vault_probe_lock=asyncio.Lock(),
+            )
+            stub._probe_vault_status = lambda **kw: TerokTUI._probe_vault_status(stub, **kw)
+            await TerokTUI._refresh_vault_status(stub)
+            return stub
+
+        stub = asyncio.run(_drive())
+
+        assert probe_threads
+        assert probe_threads[0] is not threading.main_thread()
+        stub._render_status_pill.assert_called_once()
+
+    def test_overlapping_probes_serialize_on_the_shared_lock(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A slower probe cannot land a stale snapshot over a newer one."""
+        import asyncio
+
+        import terok.lib.api.vault as vault_api
+
+        active = 0
+        peak = 0
+
+        def _probe() -> str:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            import time
+
+            time.sleep(0.05)
+            active -= 1
+            return "snapshot"
+
+        monkeypatch.setattr(vault_api, "load_vault_status", _probe)
+
+        async def _drive() -> None:
+            stub = SimpleNamespace(
+                _render_status_pill=MagicMock(),
+                _last_vault_status=None,
+                _vault_probe_lock=asyncio.Lock(),
+            )
+            await asyncio.gather(
+                TerokTUI._probe_vault_status(stub),
+                TerokTUI._probe_vault_status(stub),
+            )
+
+        asyncio.run(_drive())
+
+        assert peak == 1  # the lock admits one probe at a time

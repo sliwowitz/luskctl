@@ -5,6 +5,7 @@
 
 """Terok TUI application built on Textual."""
 
+import asyncio
 import getpass
 import inspect
 import os
@@ -321,6 +322,10 @@ if _HAS_TEXTUAL:
             self.ansi_theme_light = self.ansi_theme_dark
             # Snapshot the global config once; reuse via ``self._config``.
             self._config: Config = get_config()
+            # One vault probe at a time: the poll worker and the vault
+            # screen may otherwise race, and a slower probe would land a
+            # stale ``_last_vault_status`` over a newer one.
+            self._vault_probe_lock = asyncio.Lock()
             # Set dynamic title with version and branch info
             self._update_title()
 
@@ -2385,12 +2390,7 @@ if _HAS_TEXTUAL:
 
         async def action_show_vault(self) -> None:
             """Open the vault management screen."""
-            from terok.lib.api.vault import load_vault_status
-
-            try:
-                self._last_vault_status = load_vault_status()
-            except Exception:
-                self._last_vault_status = None
+            await self._probe_vault_status()
             await self.push_screen(
                 VaultScreen(self._last_vault_status),
                 self._on_vault_action_result,
@@ -2459,16 +2459,39 @@ if _HAS_TEXTUAL:
                 exit_on_error=False,
             )
 
+        async def _probe_vault_status(self, *, skip_if_inflight: bool = False) -> bool:
+            """Land a fresh snapshot in ``_last_vault_status``; return ``False`` on a skip.
+
+            The probe opens the credentials DB and walks the passphrase
+            chain.  That is blocking I/O, and it can stall on host
+            facilities (a slow keyring, a wedged D-Bus).  The probe runs
+            on a thread, so the message pump keeps painting whatever the
+            chain does.  The lock serializes concurrent probes, so a
+            slower one cannot land a stale snapshot over a newer one.
+            *skip_if_inflight* lets the poll drop its tick instead of
+            queueing a redundant probe behind a stalled one.
+            """
+            if skip_if_inflight and self._vault_probe_lock.locked():
+                return False
+            from terok.lib.api.vault import load_vault_status
+
+            async with self._vault_probe_lock:
+                try:
+                    self._last_vault_status = await asyncio.to_thread(load_vault_status)
+                except Exception:
+                    self._last_vault_status = None
+            # The pill derives from the snapshot, so it updates wherever
+            # the snapshot lands — a skipped poll can then rely on the
+            # probe owner to have painted it.
+            self._render_status_pill(self._last_vault_status)
+            return True
+
         async def _refresh_vault_status(self, *, push_modal_if_locked: bool = False) -> None:
             """Read a fresh snapshot, update the pill, optionally push the unlock modal."""
-            from terok.lib.api.vault import VaultState, load_vault_status
+            from terok.lib.api.vault import VaultState
 
-            try:
-                self._last_vault_status = load_vault_status()
-            except Exception:
-                self._last_vault_status = None
-
-            self._render_status_pill(self._last_vault_status)
+            if not await self._probe_vault_status(skip_if_inflight=True):
+                return  # the in-flight probe renders the fresh pill itself
 
             # Only a genuinely LOCKED vault gets the unlock prompt.  An
             # UNPROVISIONED one has nothing to unlock — the modal would

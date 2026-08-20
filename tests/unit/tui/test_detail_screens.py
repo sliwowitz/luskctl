@@ -2963,9 +2963,15 @@ class TestRefreshVaultStatus:
     """[`_refresh_vault_status`][terok.tui.app.TerokTUI._refresh_vault_status] probe + modal trigger behaviour."""
 
     def _make_instance(self, app_class: type) -> object:
+        import asyncio
+
         instance = mock.Mock(spec=app_class)
         instance._render_status_pill = mock.Mock()
         instance.push_screen = mock.AsyncMock()
+        instance._vault_probe_lock = asyncio.Lock()
+        # Route the probe to the real implementation so the refresh
+        # under test exercises the thread + lock mechanics.
+        instance._probe_vault_status = lambda **kw: app_class._probe_vault_status(instance, **kw)
         return instance
 
     def test_refresh_probes_and_stores_status(self) -> None:
