@@ -35,7 +35,7 @@ def project_yaml(
     *,
     security_class: str | None = None,
     authorship: str | None = None,
-    shield_drop_on_task_run: bool | None = None,
+    shield_down_on_task_run: bool | None = None,
     shield_on_task_restart: str | None = None,
     services_mode: str | None = None,
     timezone: str | None = None,
@@ -50,8 +50,8 @@ def project_yaml(
     if authorship is not None:
         lines.append(f"  authorship: {authorship}")
     shield_lines: list[str] = []
-    if shield_drop_on_task_run is not None:
-        shield_lines.append(f"  drop_on_task_run: {str(shield_drop_on_task_run).lower()}")
+    if shield_down_on_task_run is not None:
+        shield_lines.append(f"  down_on_task_run: {str(shield_down_on_task_run).lower()}")
     if shield_on_task_restart is not None:
         shield_lines.append(f"  on_task_restart: {shield_on_task_restart}")
     if shield_lines:
@@ -625,26 +625,26 @@ class TestProject:
             ("proj-shield-default", project_yaml("proj-shield-default"), True),
             (
                 "proj-shield-drop",
-                project_yaml("proj-shield-drop", shield_drop_on_task_run=True),
+                project_yaml("proj-shield-drop", shield_down_on_task_run=True),
                 True,
             ),
             (
                 "proj-shield-no-drop",
-                project_yaml("proj-shield-no-drop", shield_drop_on_task_run=False),
+                project_yaml("proj-shield-no-drop", shield_down_on_task_run=False),
                 False,
             ),
         ],
         ids=["default", "enabled", "disabled"],
     )
-    def test_shield_drop_on_task_run(
+    def test_shield_down_on_task_run(
         self,
         project_name: str,
         yaml_text: str,
         expected: bool,
     ) -> None:
-        """Project-level drop_on_task_run overrides global default."""
+        """Project-level down_on_task_run overrides global default."""
         with project_env(yaml_text, project_name=project_name):
-            assert load_project(project_name).shield_drop_on_task_run is expected
+            assert load_project(project_name).shield_down_on_task_run is expected
 
     @pytest.mark.parametrize(
         ("project_name", "yaml_text", "expected"),
@@ -778,23 +778,20 @@ class TestProject:
             with pytest.raises(SystemExit, match="expires"):
                 load_project("proj-shield-badexp")
 
-    def test_shield_override_rejects_cidr_host(self) -> None:
-        """A CIDR break-glass entry would widen a whole subnet above the deny."""
+    def test_shield_override_accepts_cidr_host(self) -> None:
+        """A CIDR break-glass entry opens a whole range above the deny — allowed, shield warns."""
         yaml_text = project_yaml("proj-shield-cidr") + (
-            "shield:\n  override:\n    - host: 10.0.0.0/8\n      reason: testing\n"
+            "shield:\n  override:\n    - host: 10.0.0.0/8\n      reason: local services\n"
         )
         with project_env(yaml_text, project_name="proj-shield-cidr"):
-            with pytest.raises(SystemExit, match="not a CIDR"):
-                load_project("proj-shield-cidr")
+            project = load_project("proj-shield-cidr")
+        assert [o.host for o in project.shield_override] == ["10.0.0.0/8"]
 
-    def test_shield_override_model_rejects_cidr_host(self) -> None:
-        """The resolved model holds the invariant for callers that skip the YAML."""
-        from pydantic import ValidationError
-
+    def test_shield_override_model_accepts_cidr_host(self) -> None:
+        """The resolved model carries a range through for callers that skip the YAML."""
         from terok.lib.core.project_model import ShieldOverride
 
-        with pytest.raises(ValidationError, match="not a CIDR"):
-            ShieldOverride(host="2001:db8::/32", reason="testing")
+        assert ShieldOverride(host="2001:db8::/32", reason="testing").host == "2001:db8::/32"
 
     def test_shared_dir_true_resolves_to_tasks_root(self) -> None:
         """``shared_dir: true`` resolves to tasks_root/_shared."""

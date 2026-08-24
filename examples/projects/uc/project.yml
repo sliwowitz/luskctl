@@ -41,8 +41,9 @@ run:
 #   # Extra hosts allowed while the shield is up (below the security-deny).
 #   allow:
 #     - ftp.mirror.example.org
-#   # Break-glass overrides ABOVE the security-deny — single host, mandatory
-#   # reason, optional expiry (evaluated at each container (re)start).
+#   # Break-glass overrides ABOVE the security-deny — host, IP, or CIDR (a
+#   # range is logged as a warning), mandatory reason, optional expiry
+#   # (evaluated at each container (re)start).
 #   override:
 #     - host: api.example.org
 #       reason: direct endpoint testing

@@ -320,28 +320,19 @@ class RawShieldOverride(BaseModel):
     """One ``shield.override`` break-glass entry (shield's t10 tier).
 
     A t10 override sits *above* the security-deny, so it can reach a host the
-    firewall would otherwise refuse.  A single host or IP only — never a CIDR
-    (widening a subnet through the firewall is exactly what break-glass must
-    not do); a ``reason`` is mandatory so the punch-through is auditable.
+    firewall would otherwise refuse — including private (RFC 1918) addresses.
+    A host, an IP, or a CIDR: opening the agent to several local services is
+    a legitimate way to run, so a range is accepted, but shield logs it as a
+    warning at launch because it widens a whole subnet through the firewall.
+    A ``reason`` is mandatory so the punch-through is auditable.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    host: str = Field(description="Single host or IP to allow above the deny (no CIDR)")
+    host: str = Field(
+        description="Host, IP, or CIDR to allow above the deny (a range is logged as a warning)"
+    )
     reason: str = Field(description="Why this break-glass override exists (audit trail)")
-
-    @field_validator("host")
-    @classmethod
-    def _reject_cidr(cls, value: str) -> str:
-        """Refuse a subnet: break-glass punches one hole, not a range.
-
-        Shield rejects a CIDR t10 entry too, but only once the task is
-        launching; catching it while ``project.yml`` is parsed names the
-        offending entry instead of failing a container start.
-        """
-        if "/" in value:
-            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
-        return value
 
     expires: date | None = Field(
         default=None,
@@ -356,16 +347,16 @@ class RawShieldOverride(BaseModel):
 class RawShieldProjectSection(BaseModel):
     """The ``shield:`` section of project.yml.
 
-    ``drop_on_task_run`` / ``on_task_restart`` default to ``None`` (inherit from
+    ``down_on_task_run`` / ``on_task_restart`` default to ``None`` (inherit from
     global ``config.yml``); ``allow`` / ``override`` are additive project layers
     that stack on top of the global defaults.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    drop_on_task_run: bool | None = Field(
+    down_on_task_run: bool | None = Field(
         default=None,
-        description="Drop shield (bypass firewall) when task container is created",
+        description="Take the shield down when the task container is created",
     )
     on_task_restart: Literal["retain", "up"] | None = Field(
         default=None,

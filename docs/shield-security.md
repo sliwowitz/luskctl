@@ -17,18 +17,23 @@ This page explains **what you lose** when the shield is weakened or absent.
 | State | Meaning | Risk |
 |-------|---------|------|
 | **up** (deny-all) | Only allowlisted IPs/domains and the gate server are reachable | Low — intended production state |
-| **down** (bypass) | Egress allowed except private ranges (`down --allow-all` lifts even that); audit logging still active | High — see [Shield Down](#shield-down-bypass-mode) |
+| **down** | Egress allowed except private ranges and denied hosts (`down --disengage` lifts even those — the **disengaged** posture enforces nothing); audit logging still active | High — see [Shield Down](#shield-down) |
 | **disabled** / missing | No firewall hooks installed at all; no audit logging | Highest — see [Shield Disabled](#shield-disabled-or-missing) |
 
 ---
 
-## Shield Down (Bypass Mode)
+## Shield Down
 
 When the shield is **down** — whether via `terok shield down`, the TUI
-toggle, or the `shield.drop_on_task_run` config — the nftables rules
+toggle, or the `shield.down_on_task_run` config — the nftables rules
 switch to allow, but the OCI hook infrastructure remains in place and the
-private-range (RFC 1918) reject stays unless you pass `--allow-all`.
-**Audit logging continues.**
+private-range (RFC 1918) reject and the explicit deny sets stay unless you
+pass `--disengage` — the **disengaged** posture enforces nothing at all.
+A private host or range can be opened in any posture with a `shield.override`
+entry (a CIDR is accepted but logged as a warning); the private-range reject
+sits above the allow tiers, so a plain `shield.allow` entry does not open it
+— `--disengage` opens everything without an override.  **Audit logging
+continues.**
 
 ### What you lose protection against
 
@@ -45,12 +50,14 @@ the internet, including attacker-controlled pages.  The shield narrows
 this to the allowlist; it does not stop injection from content served by
 allowlisted hosts.
 
-**Internal network exposure** (only with `down --allow-all` or the shield
-disabled).  Containers without egress filtering can reach hosts on
-private networks (RFC 1918 ranges: `10.0.0.0/8`, `172.16.0.0/12`,
-`192.168.0.0/16`).  On a host connected to a corporate LAN, VPN, or cloud
-VPC, that exposes internal services to the agent.  Plain `shield down`
-keeps the private-range reject in place.
+**Internal network exposure** (with `down --disengage`, with the shield
+disabled, or through a private `shield.override` entry).  Containers
+without egress filtering can reach hosts on private networks (RFC 1918
+ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).  On a host
+connected to a corporate LAN, VPN, or cloud VPC, that exposes internal
+services to the agent.  Plain `shield down` keeps the private-range
+reject in place; a `shield.override` entry opens only the host or range
+it names.
 
 ### What you keep
 
@@ -67,7 +74,7 @@ keeps the private-range reject in place.
 ## Shield Disabled or Missing
 
 When the shield is **disabled** via the
-`shield.bypass_firewall_no_protection` global config option, or when
+`shield.disable_firewall_no_protection` global config option, or when
 terok-shield is not installed or cannot run (e.g. because `nft` is missing
 or the podman version is incompatible), **no OCI hooks are installed at
 all**.  This is the most dangerous state.
@@ -82,12 +89,12 @@ all**.  This is the most dangerous state.
     **No ability to raise the shield.**
     The `terok shield up` command and TUI toggle have no effect — there
     are no nftables rules to activate.  The only way to restore protection is
-    to remove the bypass config, fix the underlying podman/nft issue, and
+    to remove the kill-switch config, fix the underlying podman/nft issue, and
     start a new task.
 
 ### When is this acceptable?
 
-The `bypass_firewall_no_protection` option exists **only** as a transitional
+The `disable_firewall_no_protection` option exists **only** as a transitional
 escape hatch for users whose podman version is incompatible with the
 OCI-hook-based shield.  It will be removed once terok-shield supports all
 target podman versions.
@@ -103,7 +110,7 @@ Set it only if:
 ```yaml
 # ~/.config/terok/config.yml — DANGEROUS, remove ASAP
 shield:
-  bypass_firewall_no_protection: true
+  disable_firewall_no_protection: true
 ```
 
 ---
@@ -159,8 +166,12 @@ shield:
   ordinary allows: a security-deny still wins over them.
 - **`shield.override`** entries sit *above* the security-deny — the only
   way to reach a host terok deliberately denies, such as a vault-relayed
-  provider endpoint.  One host or IP per entry (never a CIDR), a
-  mandatory `reason` for the audit trail, and an optional `expires` date.
+  provider endpoint, or a private (RFC 1918) address.  A host, IP, or CIDR
+  per entry — opening the agent to several local services is a legitimate
+  way to run, but a range widens a whole subnet through the firewall, so
+  shield logs it as a warning (and an `override_range` audit event) at
+  launch — a mandatory `reason` for the audit trail, and an optional
+  `expires` date.
 - **Expiry is evaluated when the container is launched or restarted.**
   An already-running container keeps its overrides until its next start —
   restart the task to make an elapsed `expires` take effect.

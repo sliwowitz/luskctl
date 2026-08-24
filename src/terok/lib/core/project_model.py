@@ -17,17 +17,17 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class ShieldOverride(BaseModel):
     """A resolved break-glass override — shield's t10 tier (above the deny).
 
-    ``host`` is a single host or IP (never a CIDR); ``reason`` records why the
-    punch-through exists; ``expires`` is an optional date after which the
-    override is dropped.  Expiry is evaluated when the container is launched
-    or restarted — an already-running container keeps its overrides until its
-    next start.
+    ``host`` is a host, an IP, or a CIDR (shield logs a range as a warning at
+    launch); ``reason`` records why the punch-through exists; ``expires`` is an
+    optional date after which the override is dropped.  Expiry is evaluated
+    when the container is launched or restarted — an already-running container
+    keeps its overrides until its next start.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -35,14 +35,6 @@ class ShieldOverride(BaseModel):
     host: str
     reason: str
     expires: date | None = None
-
-    @field_validator("host")
-    @classmethod
-    def _reject_cidr(cls, value: str) -> str:
-        """Hold the single-host invariant for callers that skip the YAML schema."""
-        if "/" in value:
-            raise ValueError(f"must be a single host or IP, not a CIDR: {value!r}")
-        return value
 
 
 class ProjectConfig(BaseModel):
@@ -164,7 +156,7 @@ class ProjectConfig(BaseModel):
     ``krun`` project can pin ``tcp`` while the rest stay on ``socket``.
     """
     task_name_categories: list[str] | None = None
-    shield_drop_on_task_run: bool = True
+    shield_down_on_task_run: bool = True
     shield_on_task_restart: str = "retain"
     shield_sets: tuple[str, ...] | None = None
     """Curated egress sets granted to tasks (t40).
