@@ -371,7 +371,7 @@ graph LR
 | Shield state | Outbound traffic | Audit logging | Risk |
 |-------------|------------------|---------------|------|
 | **Up** (deny-all) | Allowlisted only | Yes | Low |
-| **Down** (bypass) | All allowed | Yes | High |
+| **Down** | Egress allowed except private ranges (`--disengage` lifts even that and the deny sets) | Yes | High |
 | **Disabled** | All allowed | No | Highest |
 
 The shield reduces exposure to:

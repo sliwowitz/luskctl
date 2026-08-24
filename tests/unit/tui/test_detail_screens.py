@@ -459,6 +459,24 @@ class TestRenderHelpers:
         healthy = str(screens.render_shield_status(SimpleNamespace(dns_tier="dnsmasq", **base)))
         assert "dnsmasq" in healthy and "degraded" not in healthy
 
+    def test_render_shield_status_lists_issues_and_flags_the_kill_switch(self) -> None:
+        """Environment issues render one per line; the kill-switch issue carries the red style."""
+        screens, _ = import_screens()
+        env = SimpleNamespace(
+            health="disabled",
+            podman_version=(6, 0, 2),
+            hooks="per-container",
+            dns_tier="dnsmasq",
+            issues=["shield.disable_firewall_no_protection is set", "nft missing"],
+            setup_hint="run setup",
+        )
+        rendered = screens.render_shield_status(env)
+        text = str(rendered)
+        assert "disable_firewall_no_protection is set" in text
+        assert "nft missing" in text
+        assert "run setup" in text
+        assert any("red" in str(span.style) for span in rendered.spans)
+
     @pytest.mark.parametrize(
         ("overrides", "present", "absent"),
         [
@@ -794,6 +812,25 @@ class TestAuthScreenOptions:
         screen.dismiss = mock.Mock()
         screen.action_cancel()
         screen.dismiss.assert_called_once_with(None)
+
+
+class TestTaskMenuShieldOptions:
+    """The task menu names what each accept posture still blocks."""
+
+    def test_task_menu_names_both_accept_postures(self) -> None:
+        """Plain down says private ranges stay blocked; disengage says nothing is enforced."""
+        screen = make_task_screen(has_tasks=True, mode="cli")
+        option_list = next(
+            w for w in screen.compose() if w._stub_kwargs.get("id") == "actions-list"
+        )
+        labels = {
+            opt._stub_kwargs.get("id"): opt._stub_args[0]
+            for opt in option_list._stub_args
+            if opt is not None
+        }
+        assert "private ranges blocked" in labels["shield_down"]
+        assert "enforce nothing" in labels["shield_disengaged"]
+        assert "shield_up" in labels  # the kill-switch is off in the isolated test config
 
 
 class TestActionDispatch:
