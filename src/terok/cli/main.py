@@ -330,6 +330,7 @@ def main(prog: str = "terok") -> None:
         os.execlp("terok-tui", "terok-tui", *sys.argv[sys.argv.index("tui") + 1 :])
         return  # type: ignore[unreachable]  # in tests os.execlp is mocked
 
+    from terok.lib.api.shield import ShieldSetupError
     from terok.lib.api.vault import NoPassphraseError
 
     # Dispatch chain — tried in order; first True wins.  Only the modules we
@@ -349,6 +350,17 @@ def main(prog: str = "terok") -> None:
         print(
             f"error: {exc}\n"
             "hint:  run `terok vault unlock` to provision the vault passphrase for this session.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    except ShieldSetupError as exc:
+        # Same split: sandbox reports what failed and what it refused; the
+        # remedy — diagnose, or opt out of the firewall — is named here.
+        print(
+            f"error: {exc}\n"
+            "hint:  run `terok sickbay` to diagnose the shield, or set "
+            "`shield.disable_firewall_no_protection: true` in config.yml to launch "
+            "without the firewall.",
             file=sys.stderr,
         )
         sys.exit(2)
