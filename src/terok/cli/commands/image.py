@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 
 from ...lib.api import find_orphaned_images, list_images, remove_images, require_project_exists
+from ...lib.util.output_capture import tee_output
 from . import _storage_view
 from ._completers import complete_project_names as _complete_project_names, set_completer
 
@@ -121,15 +122,16 @@ def dispatch(args: argparse.Namespace) -> bool:
 
     match args.image_cmd:
         case "build":
-            _cmd_build(
-                project_name=getattr(args, "project_name", None),
-                base=getattr(args, "base", None),
-                agents=getattr(args, "agents", None),
-                family=getattr(args, "family", None),
-                rebuild=getattr(args, "rebuild", False),
-                full_rebuild=getattr(args, "full_rebuild", False),
-                sidecar=getattr(args, "sidecar", False),
-            )
+            with tee_output("build", project=getattr(args, "project_name", None)):
+                _cmd_build(
+                    project_name=getattr(args, "project_name", None),
+                    base=getattr(args, "base", None),
+                    agents=getattr(args, "agents", None),
+                    family=getattr(args, "family", None),
+                    rebuild=getattr(args, "rebuild", False),
+                    full_rebuild=getattr(args, "full_rebuild", False),
+                    sidecar=getattr(args, "sidecar", False),
+                )
         case "list":
             _cmd_list(getattr(args, "project_name", None))
         case "cleanup":
