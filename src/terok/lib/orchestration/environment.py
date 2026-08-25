@@ -534,14 +534,14 @@ class TaskEnvironment:
     (already global-resolved) when ``None``."""
 
     def materialize(self) -> tuple[dict, list[VolumeSpec], EgressProjection]:
-        """Compose env + volumes + egress projection for the task container.
+        """Create the environment, volumes, and egress configuration for the task.
 
-        Delegates shared config mounts, base env vars, workspace volume,
-        git identity, and OpenCode provider env to
-        [`terok_executor.assemble_container_env`][terok_executor.assemble_container_env],
-        then layers terok-specific concerns: ``PROJECT_NAME``, gate
-        server URLs, and the full vault (OAuth, socket transport, SSH
-        agent).
+        [`terok_executor.assemble_container_env`][terok_executor.assemble_container_env]
+        adds shared config mounts, base environment variables, the workspace
+        volume, the Git identity, and the LLM provider variables. The method
+        adds Terok settings after the executor settings. The Terok settings
+        include ``PROJECT_NAME``, gate server URLs, and vault variables for
+        OAuth, socket transport, and the SSH agent.
         """
         project = self.project
         task_id = self.task_id
@@ -597,7 +597,7 @@ class TaskEnvironment:
             _check_project_credentials_present(project)
         vault_transport = vault_transport_for(project.services_mode)
 
-        roster = AgentRoster.shared()
+        roster = AgentRoster.load()
         enabled_patch_providers, disabled_patch_providers = _vault_patch_provider_sets(
             roster, vault_bypass=vault_bypass
         )

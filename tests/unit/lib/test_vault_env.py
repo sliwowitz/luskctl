@@ -128,6 +128,58 @@ class TestVaultPatchProviderSets:
         assert disabled == frozenset({"codex", "gh", "vibe"})
 
 
+def test_materialize_uses_one_fresh_roster_snapshot(tmp_path: Path) -> None:
+    """Fresh roster snapshot: one load supplies patch selection and assembly."""
+    from terok.lib.orchestration.environment import TaskEnvironment
+
+    project = SimpleNamespace(
+        name="example",
+        is_sealed=False,
+        tasks_root=tmp_path / "tasks",
+        services_mode="socket",
+        default_agent="opencode",
+        default_provider="example",
+        human_name="Example User",
+        human_email="user@example.com",
+        git_authorship="human",
+        credential_set="default",
+        credentials_scope="project",
+        project_mounts_dir=tmp_path / "mounts",
+        shared_dir=tmp_path / "shared",
+        timezone=None,
+    )
+    roster = object()
+    egress = object()
+    assembled = SimpleNamespace(env={}, volumes=(), egress=egress)
+
+    with (
+        patch("terok.lib.orchestration.environment.make_sandbox_config"),
+        patch(
+            "terok.lib.orchestration.environment._security_mode_env_and_volumes",
+            return_value=({}, []),
+        ),
+        patch("terok.lib.core.config.get_vault_bypass", return_value=True),
+        patch("terok.lib.integrations.executor.AgentRoster.load", return_value=roster) as load,
+        patch(
+            "terok.lib.orchestration.environment._vault_patch_provider_sets",
+            return_value=(frozenset(), frozenset()),
+        ) as patch_sets,
+        patch(
+            "terok.lib.integrations.executor.assemble_container_env", return_value=assembled
+        ) as assemble,
+        patch(
+            "terok.lib.orchestration.environment.exposed_credential_providers",
+            return_value=frozenset(),
+        ),
+    ):
+        _env, _volumes, actual_egress = TaskEnvironment(project, "1").materialize()
+
+    load.assert_called_once_with()
+    assert patch_sets.call_args.args[0] is roster
+    assert assemble.call_args.args[1] is roster
+    assert actual_egress is egress
+
+
 class TestLeakedCredentialsScan:
     """Verify _report_leaked_credentials with exposed-token filtering."""
 

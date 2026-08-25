@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""``auth`` top-level command — authenticate an agent or tool.
+"""``auth`` top-level command — authenticate an agent, tool, or endpoint.
 
 Three invocation shapes, in increasing specificity:
 
@@ -24,8 +24,7 @@ import argparse
 import sys
 
 from ...lib.api import auth_image_staleness_warning, authenticate
-from ...lib.core.images import require_agent_installed
-from ...lib.core.projects import load_project, require_project_exists
+from ...lib.core.projects import require_project_exists
 from ._completers import complete_project_names as _complete_project_names, set_completer
 
 # Display labels for the mode ids returned by ``available_auth_modes`` — the
@@ -46,31 +45,28 @@ def _provider_of() -> dict[str, str]:
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``auth`` top-level command."""
-    from terok.lib.api.agents import AUTH_PROVIDERS
+    from terok.lib.api.agents import load_auth_providers
 
     # Accept either an auth-entry name (codex) or the LLM provider it
     # authenticates (openai → codex), since the two can be confusing.
+    auth_providers = load_auth_providers()
     provider_of = _provider_of()
-    accepted = list(AUTH_PROVIDERS) + list(provider_of.values())
+    accepted = list(auth_providers) + list(provider_of.values())
     entries = []
-    for name, p in AUTH_PROVIDERS.items():
+    for name, p in auth_providers.items():
         suffix = f" → {provider_of[name]}" if name in provider_of else ""
         entries.append(f"{name} ({p.label}{suffix})")
     providers_help = ", ".join(entries)
     p_auth = subparsers.add_parser(
         "auth",
-        help="Authenticate an agent/tool (host-wide by default; --project scopes it)",
+        help="Authenticate a provider. Use --project for project scope.",
         description=(
             f"Available providers: {providers_help}\n\n"
-            "Without arguments, opens an interactive menu to authenticate one "
-            "or more providers in sequence.  ``terok auth <provider>`` "
-            "authenticates host-wide — credentials are shared across every "
-            "project that uses the same agent.  Pass ``--project <name>`` to "
-            "scope the auth to a specific project: the project's image is "
-            "reused, and if the project opted into per-project credentials "
-            "(``credentials.scope: project`` in project.yml) the captured "
-            "token lands in that project's private vault row instead of the "
-            "shared bucket."
+            "Run without arguments to open an interactive provider menu. "
+            "``terok auth <provider>`` stores credentials in the shared host scope. "
+            "Use ``--project <name>`` to select a project. OAuth uses the project image. "
+            "If ``credentials.scope`` is ``project``, Terok stores the token in the "
+            "project vault."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -86,7 +82,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
             "--project",
             dest="project_flag",
             default=None,
-            help="Scope auth to a project (image + project.yml credentials.scope)",
+            help="Scope authentication with the OAuth image and project.yml credentials.scope",
         ),
         _complete_project_names,
     )
@@ -120,29 +116,30 @@ def _run_one(provider: str, project_name: str | None, *, device_auth: bool = Fal
     """Authenticate a single provider, optionally scoped to a project.
 
     *provider* may be an auth-entry name or an LLM-provider alias of one;
-    ``authenticate`` resolves it, and the install check resolves it too so the
-    baked-agent lookup uses the agent name, not the provider alias.
+    ``authenticate`` resolves it. Project image validation is deferred until
+    an OAuth method launches a container, so API-key capture needs no image.
 
     With *device_auth* the method chooser is skipped and the provider's
     headless device-code login runs directly.
     """
-    from terok.lib.api.agents import authenticated_entries, resolve_auth_provider
+    from terok.lib.api.agents import (
+        authenticated_entries,
+        available_auth_modes,
+        resolve_auth_provider,
+    )
 
     resolved = resolve_auth_provider(provider)
-    if project_name is not None:
-        # Project-scoped: verify the agent is baked into the project's L1
-        # image (which the L2 auth container builds on) before launching.
-        # Host-wide auth resolves the image in the facade and does its own
-        # checks there.
-        require_agent_installed(load_project(project_name), resolved, noun="Provider")
     if resolved in (authenticated_entries(project_name) or ()):
         print(
             f"Note: {resolved} already has a stored credential — completing this flow replaces it.",
             file=sys.stderr,
         )
-    # Heads-up before launching: a stale project image bakes outdated login
-    # scripts (host-wide auth returns None here — not yet detectable).
-    if (warning := auth_image_staleness_warning(project_name)) is not None:
+    # Only OAuth uses an image. Do not show an image warning for API-key-only
+    # endpoints. Host-wide image staleness is not yet detectable.
+    if (
+        "oauth" in available_auth_modes(resolved)
+        and (warning := auth_image_staleness_warning(project_name)) is not None
+    ):
         print(warning, file=sys.stderr)
     authenticate(provider, project_name, device_auth=device_auth)
 
@@ -153,17 +150,22 @@ def _run_interactive(project_name: str | None, *, device_auth: bool = False) -> 
     *device_auth* forces the device-code login for every selected provider —
     the headless escape hatch when driving the menu on a remote host.
     """
-    from terok.lib.api.agents import AUTH_PROVIDERS, authenticated_entries, available_auth_modes
+    from terok.lib.api.agents import (
+        authenticated_entries,
+        available_auth_modes,
+        load_auth_providers,
+    )
 
     if project_name is not None:
         require_project_exists(project_name)
 
-    provider_names = list(AUTH_PROVIDERS)
+    auth_providers = load_auth_providers()
+    provider_names = list(auth_providers)
     provider_of = _provider_of()
     authed = authenticated_entries(project_name)
-    print("Authenticate agents — pick one or more by number or name (agent or provider):")
+    print("Authenticate providers — pick one or more by number or name:")
     for i, name in enumerate(provider_names, 1):
-        info = AUTH_PROVIDERS[name]
+        info = auth_providers[name]
         modes = f"[{', '.join(_MODE_LABELS[m] for m in available_auth_modes(name))}]"
         label = f"{info.label} → {provider_of[name]}" if name in provider_of else info.label
         mark = "  ✓ authenticated" if name in (authed or ()) else ""

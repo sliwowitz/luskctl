@@ -360,7 +360,7 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
         self.dismiss("init_ssh")
 
     def action_auth(self) -> None:
-        """Open the authenticate agents and tools modal."""
+        """Open the provider authentication modal."""
         self._open_auth_modal()
 
     def action_set_agents(self) -> None:
@@ -394,18 +394,18 @@ class ProjectDetailsScreen(screen.Screen[str | None]):
 
 
 class AuthActionsScreen(screen.ModalScreen[str | None]):
-    """Small modal for authenticating agents and tools.
+    """Modal that authenticates agents, tools, and endpoints.
 
-    Options are built dynamically from ``AUTH_PROVIDERS`` — every entry is
-    listed; navigate with the arrow keys and select with Enter.  Entries
-    that already hold a stored credential gain a ``✓ authenticated`` badge
-    once a background vault query lands — the lookup does keyring and
-    SQLCipher I/O, so it must never run on the UI thread.
+    The modal loads a current auth-provider snapshot and lists each entry.
+    Use the arrow keys to move through the list. Press Enter to select an
+    entry. After a background vault query completes, the modal marks entries
+    that have a stored credential. The query does keyring and SQLCipher I/O.
+    Thus, the query must not run on the UI thread.
 
-    *project_name* scopes the badge query the same way the auth flow it
-    fronts is scoped: ``None`` for the host-wide bucket, a project name for
-    that project's credential set (which only diverges from the host bucket
-    under ``credentials.scope: project``).
+    Use *project_name* to select the credential scope for the badge query.
+    Use ``None`` for the shared host scope. Specify a project name for the
+    project credential set. A project uses a separate set only when
+    ``credentials.scope`` is ``project``.
     """
 
     BINDINGS = [
@@ -437,20 +437,21 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
     def __init__(self, project_name: str | None = None) -> None:
         """Remember the credential scope the badge query should target."""
         super().__init__()
+        from terok.lib.api.agents import load_auth_providers
+
         self._project_name = project_name
+        self._auth_providers = load_auth_providers()
 
     def compose(self) -> ComposeResult:
         """Build the list of authentication providers."""
-        from terok.lib.api.agents import AUTH_PROVIDERS
-
         options: list[Option | None] = [
-            Option(p.label, id=f"auth_{p.name}") for p in AUTH_PROVIDERS.values()
+            Option(p.label, id=f"auth_{p.name}") for p in self._auth_providers.values()
         ]
         options.append(None)
         options.append(Option("Import OpenCode config", id="import_opencode_config"))
         with Vertical(id="auth-dialog") as dialog:
             yield OptionList(*options, id="auth-actions-list")
-        dialog.border_title = "Authenticate agents and tools"
+        dialog.border_title = "Authenticate providers"
         dialog.border_subtitle = "Esc to close"
 
     def on_mount(self) -> None:
@@ -477,16 +478,14 @@ class AuthActionsScreen(screen.ModalScreen[str | None]):
         sealed) — say so in the subtitle instead of presenting every entry
         as unauthenticated.
         """
-        from terok.lib.api.agents import AUTH_PROVIDERS
-
         if authed is None:
             dialog = self.query_one("#auth-dialog", Vertical)
             dialog.border_subtitle = "vault locked — auth state unknown · Esc to close"
             return
         option_list = self.query_one("#auth-actions-list", OptionList)
-        for name in authed:
+        for name in authed & self._auth_providers.keys():
             option_list.replace_option_prompt(
-                f"auth_{name}", f"{AUTH_PROVIDERS[name].label}  ✓ authenticated"
+                f"auth_{name}", f"{self._auth_providers[name].label}  ✓ authenticated"
             )
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
@@ -677,15 +676,15 @@ class ApiKeyEntryScreen(screen.ModalScreen[str | None]):
     """
 
     def __init__(self, provider_name: str) -> None:
-        """Build the screen for *provider_name*; provider must be in ``AUTH_PROVIDERS``."""
+        """Build the screen for *provider_name*; it must be an auth provider."""
         super().__init__()
         self._provider_name = provider_name
 
     def compose(self) -> ComposeResult:
         """Build the hint label, masked input, and Cancel/Save buttons."""
-        from terok.lib.api import AUTH_PROVIDERS
+        from terok.lib.api import load_auth_providers
 
-        info = AUTH_PROVIDERS.get(self._provider_name)
+        info = load_auth_providers().get(self._provider_name)
         label = info.label if info else self._provider_name
         hint = (info.api_key_hint if info else "").strip()
 
@@ -786,9 +785,9 @@ class AuthModeScreen(screen.ModalScreen["str | None"]):
 
     def compose(self) -> ComposeResult:
         """Build one numbered choice per method the provider offers."""
-        from terok.lib.api import AUTH_PROVIDERS
+        from terok.lib.api import load_auth_providers
 
-        info = AUTH_PROVIDERS.get(self._provider_name)
+        info = load_auth_providers().get(self._provider_name)
         label = info.label if info else self._provider_name
         options = [
             Option(f"\\[{i}] {_AUTH_MODE_LABELS[mode]}", id=mode)

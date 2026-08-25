@@ -63,9 +63,9 @@ Terok was started at the
   Intel) for projects whose base image supports it
 - **Sickbay + panic** — health checks with auto-remediation and an
   emergency kill-switch
-- **Multi-vendor agents** — Claude Code, Codex, Copilot, Vibe, plus
-  custom LLM endpoints via OpenCode (Helmholtz, university, or your
-  own endpoint — bundled defaults included)
+- **Multi-vendor agents:** Terok supports Claude Code, Codex, Copilot,
+  Vibe, OpenCode, and Pi. Terok includes LLM endpoints for research
+  institutions. OpenCode and Pi support custom LLM endpoints.
 
 ## Quick Start
 

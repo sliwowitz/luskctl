@@ -195,9 +195,9 @@ def cmd_setup(
     else:
         print(bold(yellow("Desktop entry install reported errors (see above).")))
 
-    from terok.lib.api.agents import AUTH_PROVIDERS
+    from terok.lib.api.agents import load_auth_providers
 
-    providers = ", ".join(AUTH_PROVIDERS)
+    providers = ", ".join(load_auth_providers())
     print(
         f"\nNext steps:\n"
         f"  terok auth <provider>                      Host-wide auth ({providers})\n"

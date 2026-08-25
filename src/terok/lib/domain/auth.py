@@ -9,8 +9,8 @@ API key never triggers an L1 build), applies the OAuth-vs-API-key gates
 from the user's config, and prompts the user when an L1 image needs
 building.
 
-The image-resolution logic lives in the module-private
-``_resolve_host_auth_image``.
+The image-resolution logic lives in the module-private host and project
+helpers.
 """
 
 from __future__ import annotations
@@ -20,10 +20,9 @@ from pathlib import Path
 
 from terok.lib.integrations.executor import (
     AGENTS,
-    AUTH_PROVIDERS,
     Authenticator,
-    credential_provider,
     list_authenticated_agents,
+    load_auth_providers,
 )
 
 from ..core.images import project_cli_image
@@ -41,13 +40,14 @@ def auth_provider_aliases() -> dict[str, str]:
     (``blablador``, …) aren't in ``AGENTS``, so they yield no alias — each is
     already reached under its own name.
     """
+    auth_providers = load_auth_providers()
     return {
         agent.provider_binding.default: name
         for name, agent in AGENTS.items()
         if agent.provider_binding
         and agent.provider_binding.default
         and agent.provider_binding.default != name
-        and name in AUTH_PROVIDERS
+        and name in auth_providers
     }
 
 
@@ -78,7 +78,7 @@ def available_auth_modes(provider: str) -> list[str]:
     from ..core.config import is_oauth_enabled_for
 
     provider = resolve_auth_provider(provider)
-    info = AUTH_PROVIDERS.get(provider)
+    info = load_auth_providers().get(provider)
     if info is None:
         return []
     modes: list[str] = []
@@ -139,7 +139,12 @@ def stored_credential_entries(credential_set: str) -> frozenset[str]:
     propagate — callers own the unreadable-vault policy.
     """
     stored = set(list_authenticated_agents(scope=credential_set))
-    return frozenset(entry for entry in AUTH_PROVIDERS if credential_provider(entry) in stored)
+    auth_providers = load_auth_providers()
+    return frozenset(
+        entry
+        for entry, info in auth_providers.items()
+        if (info.credential_provider or entry) in stored
+    )
 
 
 def authenticated_entries(project_name: str | None = None) -> frozenset[str] | None:
@@ -172,11 +177,10 @@ def authenticate(
 ) -> None:
     """Run the auth flow for *provider*, host-wide by default.
 
-    When *project_name* is given, the project's L2 CLI image is reused — the
-    escape hatch for users who want project-scoped credentials or happen to
-    have a project image handy.  When omitted, terok resolves an L1 image
-    (shared across projects that build on the same base) and offers to
-    build one if none exists — the "fresh install, no project yet" path.
+    When *project_name* is given, OAuth uses the project's L2 CLI image.
+    Credentials follow the project's configured scope. Without a project,
+    OAuth uses an L1 image that projects can share. Terok offers to build the
+    L1 image if it does not exist.
 
     Image resolution is **deferred**: the executor only invokes the
     resolver after the user has chosen the OAuth path from the
@@ -216,7 +220,9 @@ def authenticate(
     if project_name is None:
         image = lambda: _resolve_host_auth_image(provider)  # noqa: E731 — lazy by design
     else:
-        image = project_cli_image(project_name)
+        image = lambda: _resolve_project_auth_image(  # noqa: E731 — lazy by design
+            project_name, provider
+        )
 
     mounts_dir, credential_set = resolve_credential_routing(project_name)
 
@@ -236,6 +242,16 @@ def authenticate(
     )
 
 
+def _resolve_project_auth_image(project_name: str, provider: str) -> str:
+    """Validate project image support for container-based auth and return its tag."""
+    from ..core.images import require_agent_installed
+    from ..core.projects import load_project
+
+    project = load_project(project_name)
+    require_agent_installed(project, provider, noun="Provider")
+    return project_cli_image(project.name)
+
+
 def find_host_auth_image(provider: str) -> str | None:
     """Return an existing L1 image suitable for host-wide *provider* auth.
 
@@ -250,13 +266,12 @@ def find_host_auth_image(provider: str) -> str | None:
     default alias unconditionally.
     """
     from terok.lib.integrations.executor import (
-        AUTH_PROVIDERS,
         DEFAULT_BASE_IMAGE,
         ExecutorConfigView,
         ImageBuilder,
     )
 
-    info = AUTH_PROVIDERS.get(provider)
+    info = load_auth_providers().get(provider)
     needs_container = info is not None and info.supports_oauth
 
     base = ExecutorConfigView.image_base_image() or DEFAULT_BASE_IMAGE

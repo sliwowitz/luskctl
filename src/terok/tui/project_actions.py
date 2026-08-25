@@ -344,7 +344,7 @@ class ProjectActionsMixin(_MixinBase):
         """Run the auth flow for *provider* against the selected project.
 
         Reached from the project-details screen, where a project is
-        always selected.  The top-level "Authenticate agents and tools"
+        always selected. The top-level "Authenticate providers"
         entry uses ``_action_auth_host_wide`` instead — it bypasses
         ``current_project_name`` so a stray selection in the main pane
         doesn't silently scope a host-wide intent to one project.
@@ -385,10 +385,10 @@ class ProjectActionsMixin(_MixinBase):
         prompt always saw EOF.  The OAuth path reuses the same
         tmux/terminal/suspend cascade as project shell logins.
         """
-        from ..lib.api import AUTH_PROVIDERS, available_auth_modes
+        from ..lib.api import available_auth_modes, load_auth_providers
         from .screens import AuthModeScreen
 
-        if provider not in AUTH_PROVIDERS:
+        if provider not in load_auth_providers():
             self.notify(f"Unknown auth provider: {provider}", severity="error")
             return
 
