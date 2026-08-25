@@ -72,6 +72,7 @@ if TYPE_CHECKING:
         Sharing as Sharing,
         ShieldHooks as ShieldHooks,
         ShieldManager as ShieldManager,
+        ShieldSetupError as ShieldSetupError,
         SSHInitResult as SSHInitResult,
         SSHKeyRow as SSHKeyRow,
         SSHManager as SSHManager,
@@ -160,6 +161,7 @@ _LAZY: dict[str, str] = {
     "KrunRuntime": "terok_sandbox",
     "LifecycleHooks": "terok_sandbox",
     "NoPassphraseError": "terok_sandbox",
+    "ShieldSetupError": "terok_sandbox",
     "PassphraseChangeResult": "terok_sandbox",  # nosec: B105 — export-map path, not a secret
     "PassphraseTier": "terok_sandbox",  # nosec: B105 — export-map path, not a secret
     "ProvisioningPlan": "terok_sandbox",
@@ -264,6 +266,7 @@ __all__ = [
     "KrunRuntime",
     "LifecycleHooks",
     "NoPassphraseError",
+    "ShieldSetupError",
     "PassphraseChangeResult",
     "PassphraseTier",
     "ProvisioningPlan",

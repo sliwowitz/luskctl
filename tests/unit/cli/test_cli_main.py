@@ -298,3 +298,33 @@ class TestLockedVaultRendering:
         err = capsys.readouterr().err
         assert "no SQLCipher passphrase" in err
         assert "terok vault unlock" in err
+
+
+class TestShieldSetupFailureRendering:
+    """When a launch hits ``ShieldSetupError``, name the remedy here.
+
+    Sandbox's message says what failed and what it refused; the CLI is
+    the operator-facing surface, so the ``terok sickbay`` hint and the
+    firewall opt-out are rendered at the top-level dispatch loop.
+    """
+
+    def test_shield_setup_error_routes_to_actionable_hint(self, capsys) -> None:
+        """A raised ``ShieldSetupError`` exits non-zero with the sickbay hint."""
+        from terok_sandbox import ShieldSetupError
+
+        from terok.cli.main import main as cli_main
+
+        def _raise(_args: object) -> bool:
+            raise ShieldSetupError("proj-cli-1", FileNotFoundError("nft"))
+
+        with (
+            patch("terok.cli.commands.info.dispatch", _raise),
+            patch("sys.argv", ["terok", "config", "paths"]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            cli_main()
+        assert exc_info.value.code == 2
+        err = capsys.readouterr().err
+        assert "Shield setup failed for proj-cli-1" in err
+        assert "terok sickbay" in err
+        assert "shield.disable_firewall_no_protection" in err
