@@ -41,6 +41,7 @@ from ...lib.api import (
 )
 from ...lib.api.gate import summarize_gate_sync
 from ...lib.core.projects import require_project_exists
+from ...lib.util.output_capture import tee_output
 
 # ── CLI wiring ─────────────────────────────────────────────────────────
 
@@ -112,13 +113,14 @@ def dispatch(args: argparse.Namespace) -> bool:
     """Handle ``setup``.  Returns True if handled."""
     if args.cmd != "setup":
         return False
-    cmd_setup(
-        no_desktop_entry=getattr(args, "no_desktop_entry", False),
-        install_desktop_entry=getattr(args, "install_desktop_entry", False),
-        with_images=getattr(args, "with_images", None),
-        family=getattr(args, "family", None),
-        passphrase_tier=getattr(args, "passphrase_tier", None),
-    )
+    with tee_output("setup"):
+        cmd_setup(
+            no_desktop_entry=getattr(args, "no_desktop_entry", False),
+            install_desktop_entry=getattr(args, "install_desktop_entry", False),
+            with_images=getattr(args, "with_images", None),
+            family=getattr(args, "family", None),
+            passphrase_tier=getattr(args, "passphrase_tier", None),
+        )
     return True
 
 

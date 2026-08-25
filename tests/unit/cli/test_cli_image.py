@@ -472,3 +472,30 @@ class TestCmdBuild:
                     full_rebuild=False,
                     sidecar=False,
                 )
+
+
+class TestBuildOutputPersistence:
+    """``image build`` runs under the output-capture tee (terok#1188)."""
+
+    def test_build_dispatch_tees_its_output(self) -> None:
+        import argparse
+
+        from terok.cli.commands.image import dispatch
+
+        args = argparse.Namespace(
+            cmd="image",
+            image_cmd="build",
+            project_name="proj",
+            base=None,
+            agents=None,
+            family=None,
+            rebuild=False,
+            full_rebuild=False,
+            sidecar=False,
+        )
+        with (
+            patch("terok.cli.commands.image.tee_output") as tee,
+            patch("terok.cli.commands.image._cmd_build"),
+        ):
+            assert dispatch(args) is True
+        tee.assert_called_once_with("build", project="proj")

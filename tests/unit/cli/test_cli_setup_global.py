@@ -444,3 +444,20 @@ class TestCmdSetupStringExitCode:
         ):
             cmd_setup()
         assert "Sandbox aggregator reported failures (exit 2)." in capsys.readouterr().out
+
+
+class TestSetupOutputPersistence:
+    """``setup`` runs under the output-capture tee (terok#1188)."""
+
+    def test_setup_dispatch_tees_its_output(self) -> None:
+        import argparse
+
+        from terok.cli.commands.setup import dispatch
+
+        args = argparse.Namespace(cmd="setup")
+        with (
+            patch("terok.cli.commands.setup.tee_output") as tee,
+            patch("terok.cli.commands.setup.cmd_setup"),
+        ):
+            assert dispatch(args) is True
+        tee.assert_called_once_with("setup")
