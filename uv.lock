@@ -2458,8 +2458,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a27.dev483+g1b4a5d1f5"
-source = { git = "https://github.com/sliwowitz/terok-executor?rev=fix%2Fbridge-pid-identity#1b4a5d1f50ee4faa449864bab1e19f3e02e48aaa" }
+version = "0.4.0a27.dev484+gd05e4d696"
+source = { git = "https://github.com/sliwowitz/terok-executor?rev=fix%2Fbridge-pid-identity#d05e4d6962f4f1937af23c2efc682d868e0dfcda" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2474,8 +2474,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a28.dev479+g9a3316b30"
-source = { git = "https://github.com/sliwowitz/terok-sandbox?rev=fix%2Fbridge-pid-identity#9a3316b30a3c1e0037eb595ab99adc84c8ec67f6" }
+version = "0.5.0a28.dev480+g6d3c4cc85"
+source = { git = "https://github.com/sliwowitz/terok-sandbox?rev=fix%2Fbridge-pid-identity#6d3c4cc855722a812553044fff597b6f137f6909" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
