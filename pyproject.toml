@@ -44,11 +44,11 @@ dependencies = [
     "unique-namer~=1.6",
     "textual-serve~=1.1",
     "jinja2~=3.1",
-    "terok-executor @ https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a28/terok_executor-0.4.0a28-py3-none-any.whl",
-    "terok-sandbox @ https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a29/terok_sandbox-0.5.0a29-py3-none-any.whl",
-    "terok-shield @ https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a13/terok_shield-0.8.0a13-py3-none-any.whl",
-    "terok-clearance @ https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a9/terok_clearance-0.8.0a9-py3-none-any.whl",
-    "terok-util @ https://github.com/terok-ai/terok-util/releases/download/v0.3.1a6/terok_util-0.3.1a6-py3-none-any.whl",
+    "terok-executor @ https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a29/terok_executor-0.4.0a29-py3-none-any.whl",
+    "terok-sandbox @ https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl",
+    "terok-shield @ https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl",
+    "terok-clearance @ https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl",
+    "terok-util @ https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl",
 ]
 
 [project.urls]
@@ -124,7 +124,7 @@ default-groups = ["dev", "test"]
 
 [tool.hatch.version]
 source = "vcs"
-fallback-version = "0.9.0a1"
+fallback-version = "0.9.0a2"
 
 # The sibling terok-* release wheels are pinned by direct URL (see the
 # pinning policy in AGENTS.md); hatchling requires an explicit opt-in
