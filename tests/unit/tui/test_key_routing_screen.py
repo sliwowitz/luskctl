@@ -37,7 +37,7 @@ class _RoutingHost(App[None]):
         self.push_screen(KeyRoutingScreen())
 
 
-@pytest.fixture()
+@pytest.fixture
 def mint_calls(monkeypatch):
     """Serve one routed key and record every project passed to the minting API."""
     key = SimpleNamespace(

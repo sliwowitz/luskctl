@@ -22,6 +22,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from terok.lib.api.agents import AgentRoster
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -126,31 +130,7 @@ def _print_roster(*, show_all: bool) -> None:
         print("No agents registered.", file=sys.stderr)
         return
 
-    agents = roster.agents
-    providers = roster.providers
-    installs = roster.installs
-    auth_providers = roster.auth_providers
-    rows: list[tuple[str, str, str]] = []
-    for name in sorted(names):
-        agent = agents.get(name)
-        provider = providers.get(name)
-        auth = auth_providers.get(name)
-        if agent is not None:
-            label = agent.label
-        elif auth is not None:
-            label = auth.label
-        else:
-            label = name
-
-        if provider is not None and provider.serves:
-            entry_type = "harness" if name in installs else "endpoint"
-        elif agent is not None and agent.protocol and agent.provider_binding is None:
-            entry_type = "harness"
-        elif agent is not None:
-            entry_type = "agent"
-        else:
-            entry_type = "tool"
-        rows.append((name, entry_type, label))
+    rows = [_roster_row(name, roster) for name in sorted(names)]
 
     w_name = max(len("NAME"), max(len(r[0]) for r in rows))
     w_type = max(len("TYPE"), max(len(r[1]) for r in rows))
@@ -163,6 +143,35 @@ def _print_roster(*, show_all: bool) -> None:
             "\nSelect LLM endpoint providers with --provider. "
             "Do not add LLM endpoint providers to image.agents."
         )
+
+
+def _roster_row(name: str, roster: AgentRoster) -> tuple[str, str, str]:
+    """Classify one roster entry as a ``(name, type, label)`` table row.
+
+    The type names what the entry is to the operator: an installable
+    ``harness``, a selectable LLM ``endpoint``, a plain ``agent``, or an
+    auth-only ``tool``.
+    """
+    agent = roster.agents.get(name)
+    provider = roster.providers.get(name)
+    auth = roster.auth_providers.get(name)
+
+    if agent is not None:
+        label = agent.label
+    elif auth is not None:
+        label = auth.label
+    else:
+        label = name
+
+    if provider is not None and provider.serves:
+        entry_type = "harness" if name in roster.installs else "endpoint"
+    elif agent is not None and agent.protocol and agent.provider_binding is None:
+        entry_type = "harness"
+    elif agent is not None:
+        entry_type = "agent"
+    else:
+        entry_type = "tool"
+    return name, entry_type, label
 
 
 def _set_global_default(*, selection: str | None) -> None:

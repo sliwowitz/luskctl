@@ -433,10 +433,10 @@ class TestRenderHelpers:
         """A degraded DNS tier renders a DNS line naming the tier and its explanation."""
         from terok.lib.core.task_display import dns_tier_warning
 
-        warn = dns_tier_warning("dig")
+        warn = dns_tier_warning("lookup")
         assert_rendered_needles(
             render_task_details_text(task_id="99", shield_state="DOWN", dns_tier_warning=warn),
-            ["DNS:", "dig (degraded)", "resolved statically at launch"],
+            ["DNS:", "lookup (degraded)", "resolved statically at launch"],
             [],
         )
 
@@ -454,8 +454,8 @@ class TestRenderHelpers:
             "issues": [],
             "setup_hint": "",
         }
-        degraded = str(screens.render_shield_status(SimpleNamespace(dns_tier="dig", **base)))
-        assert "DNS:" in degraded and "dig (degraded)" in degraded
+        degraded = str(screens.render_shield_status(SimpleNamespace(dns_tier="lookup", **base)))
+        assert "DNS:" in degraded and "lookup (degraded)" in degraded
         healthy = str(screens.render_shield_status(SimpleNamespace(dns_tier="dnsmasq", **base)))
         assert "dnsmasq" in healthy and "degraded" not in healthy
 

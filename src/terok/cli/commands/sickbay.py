@@ -123,7 +123,7 @@ def _check_shield() -> _CheckResult:
         return ("warn", label, f"unexpected health: {ec.health}")
     dns = getattr(ec, "dns_tier", "unknown")
     detail = f"active ({ec.hooks}, {dns} DNS)"
-    # On a lower tier (dig/getent) surface shield's own reason: dnsmasq
+    # On a lower tier (lookup/getent) surface shield's own reason: dnsmasq
     # missing and dnsmasq AppArmor-confined need different fixes, and
     # shield reports the precise one (with any docs pointer) in ec.issues.
     if dns != "dnsmasq":

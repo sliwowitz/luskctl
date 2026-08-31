@@ -167,7 +167,7 @@ def render_task_details(
                     )
                 )
     if task.dns_tier_warning:
-        # Degraded DNS tier (dig/getent): the task's egress allowlist resolves
+        # Degraded DNS tier (lookup/getent): the task's egress allowlist resolves
         # statically at launch, without IP-rotation handling.  Shown red, next
         # to the shield posture.
         warn = task.dns_tier_warning

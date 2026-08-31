@@ -2338,7 +2338,7 @@ _SHIELD_HEALTH_STYLES: dict[str, str] = {
 def _shield_dns_line(dns_tier: str) -> Text:
     """The shield-status DNS line: the active tier, red when degraded.
 
-    A degraded tier (``dig``/``getent``) resolves the egress allowlist
+    A degraded tier (``lookup``/``getent``) resolves the egress allowlist
     statically, with no IP-rotation handling; its host-wide reason shows
     under Issues below.  The healthy tier is ``dnsmasq``.
     """

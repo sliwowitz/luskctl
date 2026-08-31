@@ -415,11 +415,11 @@ class TestCheckShieldDnsTier:
         assert sev == "ok"
         assert "install dnsmasq" not in detail
 
-    def test_dig_tier_carries_hint(self) -> None:
-        """dig tier works but loses IP rotation — hint surfaces."""
+    def test_lookup_tier_carries_hint(self) -> None:
+        """lookup tier works but loses IP rotation — hint surfaces."""
         from terok.cli.commands.sickbay import _check_shield
 
-        with self._patch("dig"):
+        with self._patch("lookup"):
             sev, _, detail = _check_shield()
         assert sev == "ok"
         assert "install dnsmasq" in detail

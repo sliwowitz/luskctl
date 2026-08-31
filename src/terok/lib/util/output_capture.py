@@ -88,7 +88,7 @@ def tee_output(
     file-fallback path lazily under the core state dir.
 
     Args:
-        kind: Operation label — ``"build"`` or ``"run"``.
+        kind: Operation label — ``"build"``, ``"run"``, or ``"setup"``.
         project: Owning project name, when known.
         task_id: Owning task id, when known.
     """
