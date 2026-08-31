@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         ExecError as ExecError,
     )
     from terok_shield.commands import (
+        is_container_arg as is_container_arg,
         needs_container as needs_container,
         standalone_only as standalone_only,
     )
@@ -39,6 +40,7 @@ _LAZY: dict[str, str] = {
     "COMMANDS": "terok_shield",
     "CommandDef": "terok_shield",
     "ExecError": "terok_shield",
+    "is_container_arg": "terok_shield.commands",
     "needs_container": "terok_shield.commands",
     "standalone_only": "terok_shield.commands",
 }
@@ -48,6 +50,7 @@ __all__ = [
     "COMMANDS",
     "CommandDef",
     "ExecError",
+    "is_container_arg",
     "needs_container",
     "standalone_only",
 ]

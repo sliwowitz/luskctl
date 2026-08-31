@@ -22,6 +22,7 @@ verdicts reach the right hub.
 from __future__ import annotations
 
 import subprocess  # noqa: S404 — wrapping ``podman inspect``; argv is built from fixed verbs + caller-vetted container name  # nosec B404
+import sys
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,7 @@ from terok.lib.integrations.sandbox import ShieldManager
 
 from ...core import runtime as _rt
 from ...core.config import SHIELD_SECURITY_HINT, get_shield_disable_firewall_no_protection
+from ...core.task_display import dns_tier_warning
 from ...util.logging_utils import timed_phase
 
 if TYPE_CHECKING:
@@ -228,6 +230,26 @@ def _apply_shield_policy(
             # container.  Tear it down before surfacing the original error.
             _stop_container_best_effort(project, cname)
             raise
+
+    _warn_on_degraded_dns_tier(task_dir)
+
+
+def _warn_on_degraded_dns_tier(task_dir: Path) -> None:
+    """Warn on stderr when the task launched on a degraded DNS tier.
+
+    The tier the OCI hook recorded at ``pre_start`` is already on disk by
+    the time any runner reports success, so this is a cheap file read —
+    the same signal the TUI shows in the task detail pane.  Advisory only:
+    a failure to read the tier is swallowed, because the launch already
+    succeeded and shield breakage loud enough to matter has already
+    warned on its own path.
+    """
+    tier: str | None = None
+    with suppress(Exception):
+        tier = ShieldManager(task_dir).dns_tier
+    warning = dns_tier_warning(tier)
+    if warning is not None:
+        print(f"Warning: DNS {warning.headline} — {warning.detail}", file=sys.stderr)
 
 
 __all__ = [

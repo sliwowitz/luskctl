@@ -2575,7 +2575,7 @@ dependencies = [
     { name = "terok-util" },
 ]
 wheels = [
-    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl", hash = "sha256:43a01b4ed23b877a71f60185d2cc3b416bb053c023e9602784d27e16fe6ca104" },
+    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl", hash = "sha256:20819260d22a6186f390c86c06ef7f0263f5c44e83df0d3a50dbfbe7ef3b319f" },
 ]
 
 [package.metadata]
@@ -2605,7 +2605,7 @@ dependencies = [
     { name = "terok-util" },
 ]
 wheels = [
-    { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl", hash = "sha256:ab34f3b35642547628269c782ab162998614596a03509013d5c4c22e0770cf15" },
+    { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl", hash = "sha256:304acb0bc9b3610be34384ad5b9d211b774f7c2879b5b5809030e21851e1f352" },
 ]
 
 [package.metadata]

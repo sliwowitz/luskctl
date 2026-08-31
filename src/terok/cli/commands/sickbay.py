@@ -35,8 +35,7 @@ from terok.lib.api.setup import (
     BUNDLE_VERSION,
     SERVICES_TCP_OPTOUT_YAML,
     check_environment,
-    resolve_container_shield_version,
-    resolve_container_state_dir,
+    resolve_container_annotations,
     systemd_creds_has_tpm2,
 )
 from terok.lib.api.vault import VaultState, load_vault_status
@@ -62,6 +61,51 @@ from ...lib.util.check_reporter import CheckReporter
 _CheckResult = tuple[str, str, str]
 
 _INSTALL_HOOKS_HINT = "run 'terok shield install-hooks'"
+
+
+#: Per-invocation memo of project batch queries: ``{project_name: batch}``.
+#: One sickbay run walks each project up to three times (hooks, shield
+#: annotations, stale passphrases); the shared cache keeps that at one
+#: batch query per project.
+_StatesCache = dict[str, "dict[str, str] | None"]
+
+
+def _project_container_states(project_name: str, project: ProjectConfig) -> dict[str, str] | None:
+    """One batch state query over the project's containers, or ``None``.
+
+    Feeds the per-task walks so each task costs a dict lookup instead of a
+    ``podman inspect``.  Served by the project's resolved runtime so every
+    backend answers for its own containers; a backend without batch support
+    (the null stub) and a failed query both return ``None`` — which must
+    stay distinguishable from ``{}`` (no containers): callers fall back to
+    per-container probes rather than reading every task as absent (#1134).
+    """
+    batch = getattr(_rt.resolve_runtime(project), "container_states", None)
+    return batch(project_name) if batch is not None else None
+
+
+def _cached_states(
+    pid: str, project: ProjectConfig, cache: _StatesCache | None
+) -> dict[str, str] | None:
+    """The project's state batch, fetched at most once per *cache*."""
+    if cache is None:
+        return _project_container_states(pid, project)
+    if pid not in cache:
+        cache[pid] = _project_container_states(pid, project)
+    return cache[pid]
+
+
+def _container_state(
+    project: ProjectConfig, cname: str, states: dict[str, str] | None
+) -> str | None:
+    """State of *cname* from the batch when one was fetched, else one probe.
+
+    Absence from a fetched batch means the container does not exist —
+    the same ``None`` the per-container probe reports for it.
+    """
+    if states is not None:
+        return states.get(cname)
+    return _rt.resolve_runtime(project).container(cname).state
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -219,7 +263,12 @@ def _task_meta_path(pid: str, tid: str) -> Path | None:
 
 
 def _check_task_hook(
-    pid: str, tid: str, project: ProjectConfig, *, fix: bool
+    pid: str,
+    tid: str,
+    project: ProjectConfig,
+    *,
+    fix: bool,
+    states: dict[str, str] | None = None,
 ) -> _CheckResult | None:
     """Check a single task for unfired post_stop hook.  Returns None if ok."""
     if not is_valid_project_name(pid) or not is_task_id(tid):
@@ -238,7 +287,7 @@ def _check_task_hook(
         return None
 
     cname = container_name(pid, mode, tid)
-    if _rt.resolve_runtime(project).container(cname).state == "running":
+    if _container_state(project, cname, states) == "running":
         return None
 
     fired = meta.get("hooks_fired") or []
@@ -279,7 +328,7 @@ def _reconcile_post_stop(
 
 
 def _check_task_shield_annotation(
-    pid: str, tid: str, project: ProjectConfig
+    pid: str, tid: str, project: ProjectConfig, states: dict[str, str] | None = None
 ) -> _CheckResult | None:
     """Check a task container's shield bundle version and ``terok.shield.state_dir``.
 
@@ -304,22 +353,22 @@ def _check_task_shield_annotation(
     if not mode:
         return None
     cname = container_name(pid, mode, tid)
-    state = _rt.resolve_runtime(project).container(cname).state
+    state = _container_state(project, cname, states)
     if state is None:
         return None  # container absent (or podman unreachable) — nothing to inspect
 
     label = f"Task {pid}/{tid} shield"
+    ann = resolve_container_annotations(cname)
     # The version check reads only the container annotation — like restart's
     # refusal gate — so it must not hide behind the shield-dir check: a task
     # whose state dir is gone is still refused on resume.
-    version = resolve_container_shield_version(cname)
-    if version is not None and version != BUNDLE_VERSION:
+    if ann.version is not None and ann.version != BUNDLE_VERSION:
         # Direction-neutral: a bundle *newer* than this terok (a downgrade)
         # has the opposite remedy of an older one, so name both.
         return (
             "warn",
             label,
-            f"{cname!r}: shield bundle v{version} does not match this terok's "
+            f"{cname!r}: shield bundle v{ann.version} does not match this terok's "
             f"v{BUNDLE_VERSION} — restart refuses; re-create the task under this terok, "
             "or run the terok version that created it",
         )
@@ -328,7 +377,7 @@ def _check_task_shield_annotation(
     expected = (project.tasks_root / tid / "shield").resolve()
     if not expected.is_dir():
         return None  # task isn't shielded — nothing to compare against
-    actual = resolve_container_state_dir(cname)
+    actual = ann.state_dir
     if actual is None:
         return (
             "warn",
@@ -347,7 +396,11 @@ def _check_task_shield_annotation(
 
 
 def _check_unfired_hooks(
-    project_name: str | None, task_id: str | None, *, fix: bool
+    project_name: str | None,
+    task_id: str | None,
+    *,
+    fix: bool,
+    states_cache: _StatesCache | None = None,
 ) -> list[_CheckResult]:
     """Check for stopped tasks with unfired post_stop hooks."""
     results: list[_CheckResult] = []
@@ -364,16 +417,21 @@ def _check_unfired_hooks(
         if not meta_dir.is_dir():
             continue
 
+        states = _cached_states(pid, project, states_cache)
         task_ids = list(iter_task_ids(meta_dir)) if task_id is None else [task_id]
         for tid in task_ids:
-            result = _check_task_hook(pid, tid, project, fix=fix)
+            result = _check_task_hook(pid, tid, project, fix=fix, states=states)
             if result:
                 results.append(result)
 
     return results
 
 
-def _check_shield_annotations(project_name: str | None, task_id: str | None) -> list[_CheckResult]:
+def _check_shield_annotations(
+    project_name: str | None,
+    task_id: str | None,
+    states_cache: _StatesCache | None = None,
+) -> list[_CheckResult]:
     """Check every task container's shield bundle version and state-dir annotation."""
     results: list[_CheckResult] = []
 
@@ -386,9 +444,10 @@ def _check_shield_annotations(project_name: str | None, task_id: str | None) -> 
         meta_dir = tasks_meta_dir(pid)
         if not meta_dir.is_dir():
             continue
+        states = _cached_states(pid, project, states_cache)
         task_ids = list(iter_task_ids(meta_dir)) if task_id is None else [task_id]
         for tid in task_ids:
-            result = _check_task_shield_annotation(pid, tid, project)
+            result = _check_task_shield_annotation(pid, tid, project, states)
             if result:
                 results.append(result)
 
@@ -396,7 +455,9 @@ def _check_shield_annotations(project_name: str | None, task_id: str | None) -> 
 
 
 def _check_stale_passphrase_tasks(
-    project_name: str | None, task_id: str | None
+    project_name: str | None,
+    task_id: str | None,
+    states_cache: _StatesCache | None = None,
 ) -> list[_CheckResult]:
     """Flag running tasks whose container predates the last vault passphrase change.
 
@@ -427,9 +488,12 @@ def _check_stale_passphrase_tasks(
         meta_dir = tasks_meta_dir(pid)
         if not meta_dir.is_dir():
             continue
+        states = _cached_states(pid, project, states_cache)
         task_ids = list(iter_task_ids(meta_dir)) if task_id is None else [task_id]
         for tid in task_ids:
-            result = _check_task_stale_passphrase(pid, tid, project, rekeyed_at=rekeyed_at)
+            result = _check_task_stale_passphrase(
+                pid, tid, project, rekeyed_at=rekeyed_at, states=states
+            )
             if result:
                 results.append(result)
 
@@ -437,7 +501,12 @@ def _check_stale_passphrase_tasks(
 
 
 def _check_task_stale_passphrase(
-    pid: str, tid: str, project: ProjectConfig, *, rekeyed_at: float
+    pid: str,
+    tid: str,
+    project: ProjectConfig,
+    *,
+    rekeyed_at: float,
+    states: dict[str, str] | None = None,
 ) -> _CheckResult | None:
     """Check one task's container start time against the rekey stamp."""
     if not is_valid_project_name(pid) or not is_task_id(tid):
@@ -451,10 +520,10 @@ def _check_task_stale_passphrase(
     mode = meta.get("mode")
     if not mode:
         return None
-    container = _rt.resolve_runtime(project).container(container_name(pid, mode, tid))
-    if container.state != "running":
+    cname = container_name(pid, mode, tid)
+    if _container_state(project, cname, states) != "running":
         return None
-    started = container.started_at
+    started = _rt.resolve_runtime(project).container(cname).started_at
     if started is None or started >= rekeyed_at:
         return None
     return (
@@ -783,11 +852,16 @@ def _cmd_sickbay(
     # part sickbay is known for.  ``--system`` runs only the host-wide checks
     # above and falls straight through to the exit-code summary.
     if not system_only:
-        for status, label, detail in _check_unfired_hooks(project_name, task_id, fix=fix):
+        states_cache: _StatesCache = {}
+        for status, label, detail in _check_unfired_hooks(
+            project_name, task_id, fix=fix, states_cache=states_cache
+        ):
             reporter.emit(status, label, detail)
-        for status, label, detail in _check_shield_annotations(project_name, task_id):
+        for status, label, detail in _check_shield_annotations(project_name, task_id, states_cache):
             reporter.emit(status, label, detail)
-        for status, label, detail in _check_stale_passphrase_tasks(project_name, task_id):
+        for status, label, detail in _check_stale_passphrase_tasks(
+            project_name, task_id, states_cache
+        ):
             reporter.emit(status, label, detail)
 
         _stream_containers(project_name, task_id, fix=fix, reporter=reporter)
