@@ -22,6 +22,7 @@ from terok.lib.api.shield import (
     ExecError,
     ShieldCommandDef as CommandDef,
     ShieldManager,
+    shield_is_container_arg,
     shield_needs_container,
     shield_standalone_only,
 )
@@ -66,30 +67,18 @@ def _resolve_task(project_name: str, task_id: str) -> tuple[str, Path]:
     return cname, task_dir
 
 
-def _is_container_arg(name: str) -> bool:
-    """True when *name* is a registry command's container-reference arg.
-
-    The registry spells it ``container`` (positional), ``--container``
-    (``logs``' optional filter in shield's standalone CLI), or
-    ``--container-id`` (the hub-socket routing key).  The bridge resolves
-    the container itself, so no spelling may surface as a CLI flag or be
-    forwarded to a handler from parsed args — a forwarded ``container``
-    kwarg collides with the positionally-passed resolved name.
-    """
-    return name.lstrip("-") in {"container", "container-id"}
-
-
 def _extract_handler_kwargs(args: argparse.Namespace, cmd_def: CommandDef) -> dict:
     """Extract keyword arguments for a registry handler from parsed args.
 
-    Skips the container-reference args, any spelling (the CLI resolves the
-    container from ``project_name`` + ``task_id``, and ``--container-id``
-    from the container's UUID — see
-    [`resolve_container_uuid`][terok.lib.orchestration.task_runners.shield.resolve_container_uuid]).
+    Skips the container-reference args, any spelling the registry uses
+    ([`is_container_arg`][terok_shield.commands.is_container_arg] names
+    them all): the CLI resolves the container from ``project_name`` +
+    ``task_id``, and ``--container-id`` from the container's UUID — see
+    [`resolve_container_uuid`][terok.lib.orchestration.task_runners.shield.resolve_container_uuid].
     """
     kwargs: dict = {}
     for arg in cmd_def.args:
-        if _is_container_arg(arg.name):
+        if shield_is_container_arg(arg):
             continue
         key = arg.dest or arg.name.lstrip("-").replace("-", "_")
         if hasattr(args, key):
@@ -215,7 +204,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         if shield_needs_container(cmd):
             add_project_name(sp, help="Project name")
             add_task_id(sp, help="Task ID")
-        elif any(_is_container_arg(a.name) for a in cmd.args):
+        elif any(shield_is_container_arg(a) for a in cmd.args):
             add_project_name(sp, nargs="?", help="Project name")
             add_task_id(sp, nargs="?", help="Task ID")
 
@@ -225,7 +214,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         # task runner), so we don't surface it as a CLI flag — the
         # dispatch function injects it from a ``podman inspect`` lookup.
         for arg in cmd.args:
-            if _is_container_arg(arg.name):
+            if shield_is_container_arg(arg):
                 continue
             _add_arg(sp, arg)
 

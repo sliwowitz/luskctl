@@ -22,6 +22,7 @@ from terok.cli.commands.sickbay import (
     _check_vault,
     _reconcile_post_stop,
 )
+from terok.lib.api.setup import ShieldAnnotations
 from terok.lib.util.yaml import dump as yaml_dump
 
 MOCK_BASE = Path("/tmp/terok-testing")
@@ -609,11 +610,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=None
-            ),
-            unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_state_dir",
-                return_value=tmp_path / "elsewhere",
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=None, state_dir=tmp_path / "elsewhere"),
             ),
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
@@ -628,7 +626,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=None
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=None, state_dir=None),
             ),
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
@@ -653,7 +652,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=1
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=1, state_dir=None),
             ),
             unittest.mock.patch("terok.cli.commands.sickbay.BUNDLE_VERSION", 15),
         ):
@@ -681,7 +681,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=1
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=1, state_dir=None),
             ),
             unittest.mock.patch("terok.cli.commands.sickbay.BUNDLE_VERSION", 15),
         ):
@@ -689,6 +690,31 @@ class TestCheckTaskShieldAnnotation:
         assert result is not None
         assert result[0] == "warn"
         assert "does not match" in result[2]
+
+    def test_batch_state_used_without_per_task_probe(self, tmp_path: Path, mock_runtime) -> None:
+        """With a fetched batch, the checker never touches the per-container probe."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+        from terok.lib.orchestration.tasks import container_name
+
+        tasks_root = tmp_path / "tasks"
+        (tasks_root / "g1abc" / "shield").mkdir(parents=True)
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        project = self._project(tasks_root)
+        cname = container_name("p", "cli", "g1abc")
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=1, state_dir=None),
+            ),
+            unittest.mock.patch("terok.cli.commands.sickbay.BUNDLE_VERSION", 15),
+        ):
+            result = _check_task_shield_annotation("p", "g1abc", project, {cname: "exited"})
+        assert result is not None
+        assert result[0] == "warn"
+        mock_runtime.container.assert_not_called()
 
     def test_missing_annotation_warns(self, tmp_path: Path, mock_runtime) -> None:
         """Shield dir present but container has no annotation → WARN."""
@@ -705,8 +731,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_state_dir",
-                return_value=None,
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=None, state_dir=None),
             ),
         ):
             result = _check_task_shield_annotation("p", "g1abc", project)
@@ -732,8 +758,8 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_state_dir",
-                return_value=actual_sd,
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=None, state_dir=actual_sd),
             ),
         ):
             result = _check_task_shield_annotation("p", "g1abc", project)
@@ -758,15 +784,95 @@ class TestCheckTaskShieldAnnotation:
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(
-                "terok.cli.commands.sickbay.resolve_container_state_dir",
-                return_value=sd,
+                "terok.cli.commands.sickbay.resolve_container_annotations",
+                return_value=ShieldAnnotations(version=None, state_dir=sd),
             ),
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
 
 
+class TestContainerStateBatch:
+    """``_container_state`` prefers the batch; probes per-container only without one."""
+
+    def test_batch_hit(self, mock_runtime) -> None:
+        from terok.cli.commands.sickbay import _container_state
+
+        project = unittest.mock.MagicMock()
+        assert _container_state(project, "p-cli-g1abc", {"p-cli-g1abc": "exited"}) == "exited"
+        mock_runtime.container.assert_not_called()
+
+    def test_batch_miss_reads_as_absent(self, mock_runtime) -> None:
+        from terok.cli.commands.sickbay import _container_state
+
+        project = unittest.mock.MagicMock()
+        assert _container_state(project, "p-cli-g1abc", {}) is None
+        mock_runtime.container.assert_not_called()
+
+    def test_no_batch_probes_the_container(self, mock_runtime) -> None:
+        """``None`` batch = the batch query failed — fall back, don't read as absent."""
+        from terok.cli.commands.sickbay import _container_state
+
+        project = unittest.mock.MagicMock()
+        mock_runtime.container.return_value.state = "running"
+        assert _container_state(project, "p-cli-g1abc", None) == "running"
+        mock_runtime.container.assert_called_once_with("p-cli-g1abc")
+
+
 class TestCheckShieldAnnotations:
     """``_check_shield_annotations`` iterates task metadata + single-task paths."""
+
+    def test_walk_fetches_batch_once_and_threads_it(self, tmp_path: Path) -> None:
+        """One batch query per project, handed to every per-task check."""
+        from terok.cli.commands.sickbay import _check_shield_annotations
+
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        _write_meta(meta_dir, "g2def", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        states = {"p-cli-g1abc": "running"}
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.load_project", return_value=project),
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._project_container_states", return_value=states
+            ) as batch,
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._check_task_shield_annotation", return_value=None
+            ) as check,
+        ):
+            _check_shield_annotations("p", None)
+        batch.assert_called_once_with("p", project)
+        assert check.call_count == 2
+        assert all(c.args[3] is states for c in check.call_args_list)
+
+    def test_states_cache_is_shared_across_walks(self, tmp_path: Path) -> None:
+        """A shared cache holds each project's batch to one fetch per sickbay run."""
+        from terok.cli.commands.sickbay import (
+            _check_shield_annotations,
+            _check_unfired_hooks,
+        )
+
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        project = unittest.mock.MagicMock()
+        project.hook_post_stop = "echo done"
+        cache: dict = {}
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.load_project", return_value=project),
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._project_container_states", return_value={}
+            ) as batch,
+            unittest.mock.patch("terok.cli.commands.sickbay._check_task_hook", return_value=None),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay._check_task_shield_annotation", return_value=None
+            ),
+        ):
+            _check_unfired_hooks("p", None, fix=False, states_cache=cache)
+            _check_shield_annotations("p", None, cache)
+        batch.assert_called_once_with("p", project)
 
     def test_single_project_no_meta_dir(self, tmp_path: Path) -> None:
         """Missing metadata dir → empty result, no iteration crash."""
@@ -1195,7 +1301,8 @@ class TestCheckUnfiredHooks:
         ):
             results = sb._check_unfired_hooks(None, None, fix=True)
         assert results == ["RESULT"]
-        check.assert_called_once_with("alpha", "t1", proj, fix=True)
+        # states={} rides along from the per-project batch (the fixture's fake).
+        check.assert_called_once_with("alpha", "t1", proj, fix=True, states={})
 
 
 class TestStreamContainers:
@@ -1313,6 +1420,7 @@ class TestStalePassphraseTasks:
                 sickbay, "iter_task_ids", return_value=iter(["n2mb3", "q4xyz"])
             ),
             unittest.mock.patch.object(sickbay, "read_task_meta", return_value={"mode": "cli"}),
+            unittest.mock.patch.object(sickbay, "_project_container_states", return_value=None),
             unittest.mock.patch.object(sickbay._rt, "resolve_runtime", return_value=runtime),
         ):
             results = sickbay._check_stale_passphrase_tasks(None, None)
@@ -1343,6 +1451,7 @@ class TestStalePassphraseTasks:
                 sickbay, "iter_task_ids", side_effect=AssertionError("must not iterate")
             ),
             unittest.mock.patch.object(sickbay, "read_task_meta", return_value={"mode": "cli"}),
+            unittest.mock.patch.object(sickbay, "_project_container_states", return_value=None),
             unittest.mock.patch.object(sickbay._rt, "resolve_runtime", return_value=runtime),
         ):
             results = sickbay._check_stale_passphrase_tasks("proj", "n2mb3")

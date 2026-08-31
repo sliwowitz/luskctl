@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         ArgDef as ArgDef,
         CommandDef as ShieldCommandDef,
         ExecError as ExecError,
+        is_container_arg as shield_is_container_arg,
         needs_container as shield_needs_container,
         standalone_only as shield_standalone_only,
     )
@@ -57,6 +58,7 @@ _LAZY: dict[str, str] = {
     "ShieldSetupError": "terok.lib.integrations.sandbox",
     "installed_versions": "terok.lib.integrations.sandbox",
     "read_stamp": "terok.lib.integrations.sandbox",
+    "shield_is_container_arg": "terok.lib.integrations.shield:is_container_arg",
     "shield_needs_container": "terok.lib.integrations.shield:needs_container",
     "shield_standalone_only": "terok.lib.integrations.shield:standalone_only",
     "stamp_path": "terok.lib.integrations.sandbox",
@@ -72,6 +74,7 @@ __all__ = [
     "ShieldSetupError",
     "installed_versions",
     "read_stamp",
+    "shield_is_container_arg",
     "shield_needs_container",
     "shield_standalone_only",
     "stamp_path",

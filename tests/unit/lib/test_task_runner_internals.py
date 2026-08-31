@@ -166,6 +166,58 @@ class TestApplyShieldPolicy:
         mock_down.return_value.down.assert_called_once_with("ctr", "cafef00d")
         assert (tmp_path / "shield_desired_state").read_text().strip() == "down"
 
+    @staticmethod
+    def _record_dns_tier(task_dir: Path, tier: str) -> None:
+        shield_dir = task_dir / "shield"
+        shield_dir.mkdir()
+        (shield_dir / "dns.tier").write_text(f"{tier}\n")
+
+    def test_warns_on_degraded_dns_tier(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A recorded degraded tier surfaces as a stderr warning after policy applies."""
+        from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
+
+        self._record_dns_tier(tmp_path, "lookup")
+        project = self._make_project(down=False)
+        with patch(
+            "terok.lib.orchestration.task_runners.shield.get_shield_disable_firewall_no_protection",
+            return_value=False,
+        ):
+            _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
+        err = capsys.readouterr().err
+        assert "lookup (degraded)" in err
+        assert "statically" in err
+
+    def test_silent_on_dnsmasq_tier(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The healthy tier prints nothing."""
+        from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
+
+        self._record_dns_tier(tmp_path, "dnsmasq")
+        project = self._make_project(down=False)
+        with patch(
+            "terok.lib.orchestration.task_runners.shield.get_shield_disable_firewall_no_protection",
+            return_value=False,
+        ):
+            _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
+        assert capsys.readouterr().err == ""
+
+    def test_silent_when_no_tier_recorded(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A task with no recorded tier (unshielded, or pre-recording) prints nothing."""
+        from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
+
+        project = self._make_project(down=False)
+        with patch(
+            "terok.lib.orchestration.task_runners.shield.get_shield_disable_firewall_no_protection",
+            return_value=False,
+        ):
+            _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
+        assert capsys.readouterr().err == ""
+
     def test_skips_when_firewall_disabled(self) -> None:
         """No-op when the shield kill-switch is set globally."""
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
