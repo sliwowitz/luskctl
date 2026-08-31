@@ -41,10 +41,9 @@ class TestComponentSubcommands:
         assert self._dispatch("selinux") == 3
         args, kwargs = self.handler.call_args
         assert args == ("selinux",)
-        assert kwargs["show_only"] is False
-        assert kwargs["cfg"] is not None, "terok's layered config must reach the selinux probe"
-        assert kwargs["state_root"] is not None, (
-            "terok's resolved sandbox-live root (override-aware) must reach the apparmor renderer"
+        assert kwargs == {"show_only": False}, (
+            "config and the sandbox-live root resolve inside sandbox, from the "
+            "same files and env this process reads — nothing to plumb"
         )
 
     def test_show_flag_is_forwarded(self) -> None:
@@ -76,17 +75,22 @@ class TestComponentSubcommands:
         for component in SETUP_COMPONENTS:
             assert parser.parse_args(["setup", component]).component == component
 
-    def test_show_without_component_is_rejected(self) -> None:
-        """``terok setup --show`` must not silently run the full host setup."""
+    def test_show_without_component_never_runs_the_full_setup(self) -> None:
+        """``terok setup --show`` routes to the flow, which answers it — not to a host install."""
         import argparse
 
         ns = argparse.Namespace(cmd="setup", component=None, show=True)
         with (
             patch("terok.cli.commands.setup.cmd_setup") as full_setup,
+            patch(
+                "terok.lib.api.setup.handle_setup_component",
+                side_effect=SystemExit("--show needs a component: terok setup <selinux|apparmor>"),
+            ) as handler,
             pytest.raises(SystemExit) as exc_info,
         ):
             dispatch(ns)
         full_setup.assert_not_called()
+        handler.assert_called_once_with(None, show_only=True)
         assert "needs a component" in str(exc_info.value.code)
 
     def test_full_setup_flags_are_rejected_with_a_component(self) -> None:
@@ -544,6 +548,51 @@ class TestCmdSetupManualStepExitCode:
         ):
             cmd_setup(with_images="fedora:44")
         build.assert_called_once()
+
+    def test_manual_step_reads_as_partial_success_not_failure(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Every service phase passed, so the summary must not say they failed."""
+        from terok.lib.api.setup import EXIT_MANUAL_STEP_NEEDED
+
+        with (
+            patch(
+                "terok.lib.api.agents.ensure_sandbox_ready",
+                side_effect=SystemExit(EXIT_MANUAL_STEP_NEEDED),
+            ),
+            patch("terok.cli.commands.setup._ensure_desktop_entry", return_value=True),
+            patch("terok.cli.commands.setup._ensure_shell_completions"),
+            pytest.raises(SystemExit),
+        ):
+            cmd_setup()
+        out = capsys.readouterr().out
+        assert "one manual host step" in out
+        assert "Setup failed" not in out
+
+    def test_failed_image_build_exits_one_even_with_a_manual_step(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An image failure is a failure — it must not be reported as the manual step.
+
+        Exit 5 is the TUI's cue to offer the SELinux remediation; letting
+        an unrelated image-build failure carry that code fired the wrong
+        remedy for the wrong problem.
+        """
+        from terok.lib.api.setup import EXIT_MANUAL_STEP_NEEDED
+
+        with (
+            patch(
+                "terok.lib.api.agents.ensure_sandbox_ready",
+                side_effect=SystemExit(EXIT_MANUAL_STEP_NEEDED),
+            ),
+            patch("terok.cli.commands.setup._run_image_build", return_value=False),
+            patch("terok.cli.commands.setup._ensure_desktop_entry", return_value=True),
+            patch("terok.cli.commands.setup._ensure_shell_completions"),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            cmd_setup(with_images="fedora:44")
+        assert exc_info.value.code == 1
+        assert "Image build failed" in capsys.readouterr().out
 
     def test_falsy_exit_code_still_fails_with_one(self) -> None:
         """A raised SystemExit(0) is a failure — the old nonzero invariant holds."""

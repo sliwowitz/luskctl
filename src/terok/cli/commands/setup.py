@@ -130,10 +130,9 @@ def dispatch(args: argparse.Namespace) -> bool:
     if args.cmd != "setup":
         return False
     component = getattr(args, "component", None)
-    if component is not None:
-        _run_component_setup(component, show=getattr(args, "show", False), args=args)
-    if getattr(args, "show", False):
-        sys.exit("terok setup --show needs a component: terok setup <selinux|apparmor> --show")
+    show = getattr(args, "show", False)
+    if component is not None or show:
+        _run_component_setup(component, show=show, args=args)
     with tee_output("setup"):
         cmd_setup(
             no_desktop_entry=getattr(args, "no_desktop_entry", False),
@@ -159,13 +158,16 @@ _FULL_SETUP_ONLY_FLAGS = {
 }
 
 
-def _run_component_setup(component: str, *, show: bool, args: argparse.Namespace) -> None:
+def _run_component_setup(component: str | None, *, show: bool, args: argparse.Namespace) -> None:
     """Route ``terok setup <component>`` to sandbox's interactive flow.
 
     Runs outside the output-persistence tee — the exchange (sudo asks
     for the password mid-stream) is the operator's own short interactive
     action, not a setup transcript.  Full-setup flags don't apply here
-    and are rejected rather than silently dropped.
+    and are rejected rather than silently dropped; a missing component
+    is answered by the flow itself, which spells this frontend's verb.
+    Config and the sandbox-live root resolve inside sandbox, from the
+    same files and env this process reads.
     """
     passed = [
         flag
@@ -179,16 +181,7 @@ def _run_component_setup(component: str, *, show: bool, args: argparse.Namespace
         )
     from terok.lib.api.setup import handle_setup_component
 
-    from ...lib.core.config import make_sandbox_config, sandbox_live_dir
-
-    sys.exit(
-        handle_setup_component(
-            component,
-            show_only=show,
-            cfg=make_sandbox_config(),
-            state_root=sandbox_live_dir(),
-        )
-    )
+    sys.exit(handle_setup_component(component, show_only=show))
 
 
 def cmd_setup(
@@ -226,33 +219,30 @@ def cmd_setup(
     from terok.lib.api.setup import EXIT_MANUAL_STEP_NEEDED
 
     sandbox_failed = False
-    sandbox_exit = 1
+    manual_step = False
     try:
         ensure_sandbox_ready(passphrase_tier=passphrase_tier)
     except SystemExit as exc:
-        sandbox_failed = True
-        if isinstance(exc.code, int) and exc.code != 0:
-            # Preserve the aggregator's structured code — the
-            # manual-step signal is what the TUI keys its remediation
-            # offer on; collapsing it to 1 hid that.  A falsy code still
-            # exits 1: a raised SystemExit is a failure regardless.
-            sandbox_exit = exc.code
-        if isinstance(exc.code, str):
-            # A refusal message, not a numeric code — print it verbatim
-            # on its own lines instead of inlining a whole multi-line
-            # operator hint into "(exit …)".
-            print(exc.code)
-            print(bold(red("Sandbox aggregator reported failures.")))
-        elif exc.code == EXIT_MANUAL_STEP_NEEDED:
-            # Partial success: every install phase passed, one manual
-            # host step (the hint above) remains.
+        if exc.code == EXIT_MANUAL_STEP_NEEDED:
+            # Not a failure: every install phase passed and one manual
+            # host step (named in the hint above) remains.  The code is
+            # forwarded as-is because the TUI keys its remediation offer
+            # on it.
+            manual_step = True
             print(bold(yellow("Sandbox setup finished; one manual host step remains (see above).")))
-        elif exc.code:
-            print(bold(red(f"Sandbox aggregator reported failures (exit {exc.code}).")))
+        else:
+            sandbox_failed = True
+            if isinstance(exc.code, str):
+                # A refusal message, not a numeric code — print it
+                # verbatim on its own lines instead of inlining a whole
+                # multi-line operator hint into "(exit …)".
+                print(exc.code)
+                print(bold(red("Sandbox aggregator reported failures.")))
+            else:
+                print(bold(red(f"Sandbox aggregator reported failures (exit {exc.code}).")))
 
-    manual_step_needed = sandbox_failed and sandbox_exit == EXIT_MANUAL_STEP_NEEDED
     images_failed = False
-    if with_images and (not sandbox_failed or manual_step_needed):
+    if with_images and not sandbox_failed:
         # Skip the (slow) image build when the service stack is already
         # broken — the user needs to fix setup before anything that
         # depends on images will be useful anyway.
@@ -266,10 +256,10 @@ def cmd_setup(
     _ensure_shell_completions()
 
     print()
-    if not sandbox_failed and not images_failed and desktop_ok:
-        print(bold("Setup complete."))
-    elif manual_step_needed and not images_failed and desktop_ok:
+    if not sandbox_failed and not images_failed and desktop_ok and manual_step:
         print(bold(yellow("Setup complete except one manual host step — see the hint above.")))
+    elif not sandbox_failed and not images_failed and desktop_ok:
+        print(bold("Setup complete."))
     elif sandbox_failed:
         print(bold(red("Setup failed — see service stage lines above.")))
     elif images_failed:
@@ -288,7 +278,9 @@ def cmd_setup(
     )
 
     if sandbox_failed or images_failed:
-        sys.exit(sandbox_exit if sandbox_failed else 1)
+        sys.exit(1)
+    if manual_step:
+        sys.exit(EXIT_MANUAL_STEP_NEEDED)
 
 
 # ── Image factory phase (delegates to terok-executor) ─────────────────
