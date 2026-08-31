@@ -23,7 +23,7 @@
 
 image-prefix: terok-test
 flavor: podman
-expect: [podman, nft, dnsmasq, dig, getent, git, ssh-keygen, internet]
+expect: [podman, nft, dnsmasq, lookup, getent, git, ssh-keygen, internet]
 groups: [test, stories]
 
 slots:
