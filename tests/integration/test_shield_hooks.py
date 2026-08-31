@@ -3,7 +3,7 @@
 
 """Integration tests for shield hook installation and detection.
 
-These tests verify that ``terok shield install-hooks --user`` correctly installs
+These tests verify that ``terok shield install-hooks`` correctly installs
 global OCI hooks and that ``has_global_hooks()`` detects them.  No podman
 or nft is required — the tests only exercise filesystem operations.
 
@@ -22,12 +22,12 @@ pytestmark = [pytest.mark.needs_host_features, pytest.mark.needs_hooks]
 
 @hooks_unavailable
 class TestHooksInstalled:
-    """Verify global hooks are present after ``terok shield install-hooks --user``."""
+    """Verify global hooks are present after ``terok shield install-hooks``."""
 
     def test_global_hooks_detected(self) -> None:
         """has_global_hooks() returns True after user-level setup."""
         assert has_global_hooks(), (
-            "Global hooks not detected — expected terok shield install-hooks --user "
+            "Global hooks not detected — expected terok shield install-hooks "
             "to install hooks before running needs_hooks tests.\n"
             f"Searched dirs: {find_hooks_dirs()}"
         )

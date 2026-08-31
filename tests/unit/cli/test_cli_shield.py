@@ -109,12 +109,24 @@ def _stub_resolve_task_id() -> object:
         ),
         pytest.param(
             ["shield", "logs", "proj", "task1"],
-            {"shield_cmd": "logs", "project_name": "proj", "task_id": "task1", "n": 50},
+            {
+                "shield_cmd": "logs",
+                "project_name": "proj",
+                "task_id": "task1",
+                "n": 50,
+                "container": MISSING,
+            },
             id="logs",
         ),
         pytest.param(
             ["shield", "logs", "proj", "task1", "-n", "10"],
-            {"shield_cmd": "logs", "project_name": "proj", "task_id": "task1", "n": 10},
+            {
+                "shield_cmd": "logs",
+                "project_name": "proj",
+                "task_id": "task1",
+                "n": 10,
+                "container": MISSING,
+            },
             id="logs-custom-n",
         ),
     ],
@@ -283,6 +295,39 @@ def test_dispatch_task_scoped_commands(
 
     getattr(mock_shield, shield_method).assert_called_once_with("proj-cli-1")
     assert expected_text in out.getvalue()
+
+
+@patch("terok.cli.commands.shield._resolve_task", return_value=("proj-cli-1", MOCK_TASK_DIR_1))
+@patch("terok.cli.commands.shield.ShieldManager")
+def test_dispatch_logs_resolves_container_and_tails(
+    mock_mgr_cls: MagicMock,
+    _resolve: MagicMock,
+) -> None:
+    """``logs`` forwards only ``n`` — the resolved container rides positionally.
+
+    The registry spells logs' container arg ``--container`` (the standalone
+    CLI's optional filter); forwarding it from parsed args used to hand the
+    real handler ``container`` twice (TypeError: multiple values).
+    """
+    mock_shield = MagicMock()
+    mock_shield.tail_log.return_value = [{"verdict": "allow"}]
+    mock_mgr_cls.return_value.shield = mock_shield
+
+    # ``container=None`` mirrors the pre-fix parser namespace; the kwarg
+    # extraction must ignore the attribute whether or not argparse sets it.
+    args = argparse.Namespace(
+        cmd="shield",
+        shield_cmd="logs",
+        project_name="proj",
+        task_id="1",
+        container=None,
+        n=5,
+    )
+    with patch("sys.stdout", new_callable=StringIO) as out:
+        assert dispatch(args)
+
+    mock_shield.tail_log.assert_called_once_with(5)
+    assert "allow" in out.getvalue()
 
 
 @patch("terok.cli.commands.shield.ShieldManager")
