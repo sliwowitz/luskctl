@@ -582,15 +582,39 @@ class TestCheckTaskShieldAnnotation:
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
 
-    def test_non_running_container_returns_none(self, tmp_path: Path, mock_runtime) -> None:
-        """Stopped container is post_stop's territory, not annotation-drift territory."""
+    def test_absent_container_returns_none(self, tmp_path: Path, mock_runtime) -> None:
+        """No container (or unreachable podman) → nothing to inspect."""
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
         _write_meta(tmp_path, "g1abc", {"mode": "cli"})
         project = self._project(tmp_path.parent)
-        mock_runtime.container.return_value.state = "exited"
+        mock_runtime.container.return_value.state = None
         with unittest.mock.patch(
             "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        ):
+            assert _check_task_shield_annotation("p", "g1abc", project) is None
+
+    def test_stopped_container_skips_drift_checks(self, tmp_path: Path, mock_runtime) -> None:
+        """State-dir drift on a stopped container is not reported — only a live
+        container dispatches verdicts, and post_stop owns the stopped-task story."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        tasks_root = tmp_path / "tasks"
+        (tasks_root / "g1abc" / "shield").mkdir(parents=True)
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        project = self._project(tasks_root)
+        mock_runtime.container.return_value.state = "exited"
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=None
+            ),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_state_dir",
+                return_value=tmp_path / "elsewhere",
+            ),
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
 
@@ -601,13 +625,22 @@ class TestCheckTaskShieldAnnotation:
         _write_meta(tmp_path, "g1abc", {"mode": "cli"})
         project = self._project(tmp_path.parent)
         mock_runtime.container.return_value.state = "running"
-        with unittest.mock.patch(
-            "terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=tmp_path),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=None
+            ),
         ):
             assert _check_task_shield_annotation("p", "g1abc", project) is None
 
-    def test_stale_bundle_version_warns(self, tmp_path: Path, mock_runtime) -> None:
-        """A container prepared with an older shield bundle → re-create warning."""
+    @pytest.mark.parametrize("state", ["running", "exited"])
+    def test_stale_bundle_version_warns(self, tmp_path: Path, mock_runtime, state: str) -> None:
+        """A container prepared with an older shield bundle → re-create warning.
+
+        Stopped containers warn too: restart would refuse them (the upgrade
+        contract), so the operator must see the full re-create list before
+        hitting the refusal.
+        """
         from terok.cli.commands.sickbay import _check_task_shield_annotation
 
         tasks_root = tmp_path / "tasks"
@@ -616,7 +649,35 @@ class TestCheckTaskShieldAnnotation:
         meta_dir.mkdir()
         _write_meta(meta_dir, "g1abc", {"mode": "cli"})
         project = self._project(tasks_root)
-        mock_runtime.container.return_value.state = "running"
+        mock_runtime.container.return_value.state = state
+        with (
+            unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
+            unittest.mock.patch(
+                "terok.cli.commands.sickbay.resolve_container_shield_version", return_value=1
+            ),
+            unittest.mock.patch("terok.cli.commands.sickbay.BUNDLE_VERSION", 15),
+        ):
+            result = _check_task_shield_annotation("p", "g1abc", project)
+        assert result is not None
+        assert result[0] == "warn"
+        assert "does not match" in result[2]
+        assert "re-create" in result[2]
+
+    def test_stale_bundle_version_warns_without_shield_dir(
+        self, tmp_path: Path, mock_runtime
+    ) -> None:
+        """Version drift is reported even when the shield state dir is gone —
+        restart's refusal gate reads only the container annotation, so the
+        missing dir must not hide the re-create diagnosis."""
+        from terok.cli.commands.sickbay import _check_task_shield_annotation
+
+        tasks_root = tmp_path / "tasks"
+        (tasks_root / "g1abc").mkdir(parents=True)  # task dir without shield/
+        meta_dir = tmp_path / "meta"
+        meta_dir.mkdir()
+        _write_meta(meta_dir, "g1abc", {"mode": "cli"})
+        project = self._project(tasks_root)
+        mock_runtime.container.return_value.state = "exited"
         with (
             unittest.mock.patch("terok.cli.commands.sickbay.tasks_meta_dir", return_value=meta_dir),
             unittest.mock.patch(

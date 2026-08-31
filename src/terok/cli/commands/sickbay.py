@@ -61,6 +61,8 @@ from ...lib.util.check_reporter import CheckReporter
 # Type alias for check results: (severity, label, detail)
 _CheckResult = tuple[str, str, str]
 
+_INSTALL_HOOKS_HINT = "run 'terok shield install-hooks'"
+
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Register the ``sickbay`` subcommand."""
@@ -111,13 +113,9 @@ def _check_shield() -> _CheckResult:
     if ec.health == "disabled":
         return ("warn", label, "disable_firewall_no_protection is active — egress disabled")
     if ec.health == "stale-hooks":
-        return ("warn", label, "hooks outdated — run 'terok shield install-hooks --user'")
+        return ("warn", label, f"hooks outdated — {_INSTALL_HOOKS_HINT}")
     if ec.health == "setup-needed":
-        hint = (
-            ec.setup_hint.splitlines()[0]
-            if ec.setup_hint
-            else "run 'terok shield install-hooks --user'"
-        )
+        hint = ec.setup_hint.splitlines()[0] if ec.setup_hint else _INSTALL_HOOKS_HINT
         return ("warn", label, f"{ec.issues[0] if ec.issues else 'setup needed'} — {hint}")
     if ec.health != "ok":
         return ("warn", label, f"unexpected health: {ec.health}")
@@ -283,11 +281,15 @@ def _reconcile_post_stop(
 def _check_task_shield_annotation(
     pid: str, tid: str, project: ProjectConfig
 ) -> _CheckResult | None:
-    """Check that task_dir agrees with the container's ``terok.shield.state_dir``.
+    """Check a task container's shield bundle version and ``terok.shield.state_dir``.
 
-    Drift between the two sides sends a verdict dispatched from the hub or
+    A bundle from a different shield generation makes restart refuse
+    (fail-fast), so version drift is reported for stopped containers too —
+    the operator sees every task needing re-creation before hitting the
+    refusal.  State-dir drift sends a verdict dispatched from the hub or
     TUI (which only know the container name) to the wrong state dir, or to
-    nothing at all.  Non-shielded containers and stopped ones are skipped.
+    nothing at all — that only matters while the container runs.
+    Non-shielded and absent containers are skipped.
     """
     if not is_valid_project_name(pid) or not is_task_id(tid):
         return None
@@ -302,14 +304,14 @@ def _check_task_shield_annotation(
     if not mode:
         return None
     cname = container_name(pid, mode, tid)
-    if _rt.resolve_runtime(project).container(cname).state != "running":
-        return None
-
-    expected = (project.tasks_root / tid / "shield").resolve()
-    if not expected.is_dir():
-        return None  # task isn't shielded — nothing to compare against
+    state = _rt.resolve_runtime(project).container(cname).state
+    if state is None:
+        return None  # container absent (or podman unreachable) — nothing to inspect
 
     label = f"Task {pid}/{tid} shield"
+    # The version check reads only the container annotation — like restart's
+    # refusal gate — so it must not hide behind the shield-dir check: a task
+    # whose state dir is gone is still refused on resume.
     version = resolve_container_shield_version(cname)
     if version is not None and version != BUNDLE_VERSION:
         # Direction-neutral: a bundle *newer* than this terok (a downgrade)
@@ -321,6 +323,11 @@ def _check_task_shield_annotation(
             f"v{BUNDLE_VERSION} — restart refuses; re-create the task under this terok, "
             "or run the terok version that created it",
         )
+    if state != "running":
+        return None  # state-dir drift matters only for a live container
+    expected = (project.tasks_root / tid / "shield").resolve()
+    if not expected.is_dir():
+        return None  # task isn't shielded — nothing to compare against
     actual = resolve_container_state_dir(cname)
     if actual is None:
         return (
@@ -367,7 +374,7 @@ def _check_unfired_hooks(
 
 
 def _check_shield_annotations(project_name: str | None, task_id: str | None) -> list[_CheckResult]:
-    """Check that every running task's container carries the expected shield annotation."""
+    """Check every task container's shield bundle version and state-dir annotation."""
     results: list[_CheckResult] = []
 
     if project_name:

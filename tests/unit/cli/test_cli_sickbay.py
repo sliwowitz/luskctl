@@ -58,12 +58,12 @@ def _make_vault_snapshot(
             [],
             None,
             "warn",
-            "hooks outdated",
+            "hooks outdated — run 'terok shield install-hooks'",
             id="stale-hooks",
         ),
         pytest.param(
             "setup-needed",
-            "run 'terok shield install-hooks --user'",
+            "run 'terok shield install-hooks'",
             ["nft not found"],
             None,
             "warn",
@@ -76,7 +76,7 @@ def _make_vault_snapshot(
             [],
             None,
             "warn",
-            "setup needed",
+            "setup needed — run 'terok shield install-hooks'",
             id="setup-needed-no-hint",
         ),
         pytest.param(
