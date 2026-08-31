@@ -2525,8 +2525,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a30.dev487+gec85a9510"
-source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fpin-sandbox-setup-subverbs#ec85a95100f2847a8b6f3bfea4319e80f9103292" }
+version = "0.4.0a30.dev488+ga8ca4ac24"
+source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fpin-sandbox-setup-subverbs#a8ca4ac2461a10e5bf573a7197673c910770f44b" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2541,8 +2541,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a31.dev482+g145d825be"
-source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Fsetup-hardening-subverbs#145d825be09d13ec97f6754b17c911dae749513e" }
+version = "0.5.0a31.dev483+ged7378675"
+source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Fsetup-hardening-subverbs#ed73786758fe3ad25b8609723aecdd23ba7b879e" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },

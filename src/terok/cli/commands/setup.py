@@ -169,11 +169,17 @@ def _run_component_setup(component: str | None, *, show: bool, args: argparse.Na
     Config and the sandbox-live root resolve inside sandbox, from the
     same files and env this process reads.
     """
-    passed = [
-        flag
-        for dest, flag in _FULL_SETUP_ONLY_FLAGS.items()
-        if getattr(args, dest, None) not in (None, False)
-    ]
+    # Only meaningful against a named component; without one, the flow
+    # answers the real problem ("--show needs a component").
+    passed = (
+        []
+        if component is None
+        else [
+            flag
+            for dest, flag in _FULL_SETUP_ONLY_FLAGS.items()
+            if getattr(args, dest, None) not in (None, False)
+        ]
+    )
     if passed:
         sys.exit(
             f"{', '.join(passed)} belongs to the full 'terok setup', "
