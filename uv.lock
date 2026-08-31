@@ -2459,8 +2459,8 @@ requires-dist = [
     { name = "rich", specifier = "~=15.0" },
     { name = "ruamel-yaml", specifier = "==0.19.1" },
     { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl" },
-    { name = "terok-executor", url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a29/terok_executor-0.4.0a29-py3-none-any.whl" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl" },
+    { name = "terok-executor", git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fpin-sandbox-setup-subverbs" },
+    { name = "terok-sandbox", git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Fsetup-hardening-subverbs" },
     { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" },
     { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
     { name = "textual", extras = ["syntax"], specifier = "~=8.2.8" },
@@ -2525,8 +2525,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a29"
-source = { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a29/terok_executor-0.4.0a29-py3-none-any.whl" }
+version = "0.4.0a30.dev486+g0aa6f1de0"
+source = { git = "https://github.com/sliwowitz/terok-executor.git?rev=chore%2Fpin-sandbox-setup-subverbs#0aa6f1de08a4974eb12af6513b467626216ecce1" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2538,27 +2538,11 @@ dependencies = [
     { name = "terok-util" },
     { name = "tomli-w" },
 ]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a29/terok_executor-0.4.0a29-py3-none-any.whl", hash = "sha256:927eaed56ff7f491259d86eccc6c32ccd6001b24b90f092aff12724f9f233e68" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agent-client-protocol", specifier = "==0.12.1" },
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "prompt-toolkit", specifier = "~=3.0" },
-    { name = "pydantic", specifier = "~=2.13" },
-    { name = "rich", specifier = "~=15.0" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
-    { name = "tomli-w", specifier = "~=1.2" },
-]
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a30"
-source = { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl" }
+version = "0.5.0a31.dev481+g20b9f2c97"
+source = { git = "https://github.com/sliwowitz/terok-sandbox.git?rev=feat%2Fsetup-hardening-subverbs#20b9f2c97cb397c5cce76261a81df95f564d3f19" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2573,26 +2557,6 @@ dependencies = [
     { name = "terok-clearance" },
     { name = "terok-shield" },
     { name = "terok-util" },
-]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a30/terok_sandbox-0.5.0a30-py3-none-any.whl", hash = "sha256:20819260d22a6186f390c86c06ef7f0263f5c44e83df0d3a50dbfbe7ef3b319f" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "~=3.14.3" },
-    { name = "cryptography", specifier = "~=50.0" },
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "keyring", specifier = "~=25.7" },
-    { name = "packaging", specifier = "~=26.3" },
-    { name = "platformdirs", specifier = "~=4.11" },
-    { name = "prompt-toolkit", specifier = "~=3.0" },
-    { name = "pydantic", specifier = "~=2.13" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "sqlcipher3", specifier = "==0.6.2" },
-    { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl" },
-    { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
 ]
 
 [[package]]

@@ -32,12 +32,16 @@ socket type) that carves out this single exception.  Installing it is a one-time
 
 `terok setup` on an enforcing host reports the policy stage as MISSING
 and ends with an "SELinux policy required" hint that gives both fixes:
-install the policy (`sudo bash …/install_policy.sh`) or opt out by
-adding `services: {mode: tcp}` to `~/.config/terok/config.yml`.
-`terok sickbay` reports the same condition as a warning.
+install the policy with `terok setup selinux` — it shows the exact
+`sudo` command and, on request, the policy rules before anything runs —
+or opt out by adding `services: {mode: tcp}` to
+`~/.config/terok/config.yml`.  `terok sickbay` reports the same
+condition as a warning.
 
 The installer script is short, auditable, and sits next to the `.te`
-policy source in the terok-sandbox package.  `cat` it before running.
+policy source in the terok-sandbox package.  `terok setup selinux`
+prints its exact path in the `sudo` command before anything runs (and
+`--show` prints the compiled rules), so you can `cat` it first.
 It compiles `terok_socket.te` with `checkmodule` / `semodule_package`
 and loads it with `semodule -i`.
 

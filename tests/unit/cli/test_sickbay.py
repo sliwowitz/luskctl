@@ -497,8 +497,8 @@ class TestCheckSelinuxPolicy:
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.POLICY_MISSING))
         assert sev == "warn"
         assert "terok_socket_t NOT installed" in detail
-        assert "sudo bash" in detail
-        assert "install_policy.sh" in detail
+        assert "terok setup selinux" in detail
+        assert "sudo bash" not in detail
         # Opt-out must be surfaced — the user may not have root.
         assert "services: {mode: tcp}" in detail
 
@@ -523,8 +523,7 @@ class TestCheckSelinuxPolicy:
         sev, _, detail = self._run(SelinuxCheckResult(SelinuxStatus.POLICY_OUTDATED))
         assert sev == "warn"
         assert "outdated" in detail
-        assert "Rebuild:" in detail
-        assert "install_policy.sh" in detail
+        assert "Rebuild: terok setup selinux" in detail
 
     def test_warn_when_libselinux_unloadable(self) -> None:
         """Libselinux-missing renders as warn naming the silent-fail vector."""
