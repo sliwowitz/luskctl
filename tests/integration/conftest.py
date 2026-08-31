@@ -145,7 +145,9 @@ _CAPABILITY_PROBES = {
     "podman": lambda: _has("podman"),
     "nft": lambda: bool(_find_nft()),
     "dnsmasq": lambda: binary_on_path("dnsmasq"),
-    "dig": lambda: _has("dig"),
+    # A lookup tool, not one particular binary: terok-shield's resolver takes
+    # dig or drill, and the Arch/Manjaro images ship the latter.
+    "lookup": lambda: _has("dig") or _has("drill"),
     "getent": lambda: _has("getent"),
     "git": lambda: _has("git"),
     "ssh-keygen": lambda: _has("ssh-keygen"),
@@ -213,7 +215,7 @@ class MockRunner:
                     "version": {"Version": "5.6.0"},
                 }
             )
-        if cmd[0] == "dig":
+        if cmd[0] in ("dig", "drill"):
             return f"{TEST_IP}\n"
         if cmd[0] == "nft" or cmd[:2] == ["podman", "inspect"]:
             return ""
