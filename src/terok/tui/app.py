@@ -55,7 +55,13 @@ if _HAS_TEXTUAL:
     from textual.worker import Worker, WorkerState
 
     from terok.lib.api.gate import GateStalenessInfo
+
+    # The ``terok setup`` partial-success signal — every install phase
+    # succeeded but a manual step (currently: SELinux policy install on
+    # socket-mode hosts) is still required.  Sandbox owns the value; the
+    # re-export keeps the post-run dispatch keyed on the real constant.
     from terok.lib.api.setup import (
+        EXIT_MANUAL_STEP_NEEDED as _EXIT_MANUAL_STEP_NEEDED,
         EnvironmentCheck,
         SetupVerdict,
         check_environment as _shield_check_environment,
@@ -93,13 +99,6 @@ if _HAS_TEXTUAL:
     )
     from ..lib.util.yaml import YAMLError
     from . import tmux_session
-
-    # Exit code 5 is the ``terok setup`` partial-success signal — every
-    # install phase succeeded but a manual step (currently: SELinux
-    # policy install on socket-mode hosts) is still required.  The
-    # value is owned by the sandbox setup CLI; the TUI mirrors it here
-    # so the post-run dispatch can branch into ``_offer_selinux_fix``.
-    _EXIT_MANUAL_STEP_NEEDED = 5
 
     # ``App.run()`` result asking ``_run_tui`` to re-exec the process in
     # place — used when the operator accepts the restart offer after a

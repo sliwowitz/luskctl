@@ -191,16 +191,17 @@ terok completions install               # Re-install shell completions
 
 ## Notes
 
-- **SELinux hosts**: install the policy module before `terok setup`,
+- **SELinux hosts**: install the policy module with `terok setup selinux`,
   otherwise the shield + clearance services bind sockets as
-  `unconfined_t` and podman will refuse to talk to them.  The exact
-  install command (a `sudo bash` over the script terok-sandbox
-  ships) is printed by `terok setup` when the policy is missing —
-  run it once, then re-run `terok setup`.
-- **AppArmor hosts**: install the policy otherwise the shield's dnsmasq won't 
-  be able to read its confguration.  The exact install command (a `sudo bash` over 
-  the script terok-sandbox ships) is printed by `terok setup` when the policy is 
-  missing — run it once, then re-run `terok setup`.
+  `unconfined_t` and podman will refuse to talk to them.  `terok setup`
+  points at the same command when the policy is missing; the subcommand
+  shows the exact `sudo` invocation and, on request, the policy rules
+  before anything runs.
+- **AppArmor hosts**: install the dnsmasq profile addendum with
+  `terok setup apparmor`, otherwise the shield's dnsmasq cannot read its
+  configuration and DNS falls back to a degraded tier.  Same flow: the
+  exact `sudo` command and the added rules are shown before anything
+  runs.
 - **Clipboard**: If mouse selection doesn't copy to your clipboard,
   hold **Shift** while selecting, then **Shift+Ctrl+C** to copy.
   See [Tips](docs/usage.md#tips) for details.

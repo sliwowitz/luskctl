@@ -959,6 +959,7 @@ expose = [
     "get_public_host",
     "make_sandbox_config",
     "declare_setup_invocation",
+    "SETUP_INVOCATION",
     "SHIELD_SECURITY_HINT",
 ]
 from = ["terok.lib.core.config"]

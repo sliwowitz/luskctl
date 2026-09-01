@@ -278,9 +278,11 @@ def selinux_install_policy() -> None:
     """Run the bundled SELinux installer with ``sudo bash`` and stream the output.
 
     Delegates to the ``install_policy.sh`` script terok-sandbox ships
-    in its resources — same one ``terok setup`` prints when the policy
-    is missing.  Output (including any sudo prompt) lands in the
-    captured-log view so the operator can authenticate inline.
+    in its resources — the same script ``terok setup selinux`` runs
+    after its command-and-rules preview; this TUI path skips the
+    preview because the modal that invokes it already asked.  Output
+    (including any sudo prompt) lands in the captured-log view so the
+    operator can authenticate inline.
 
     ``sudo`` and ``bash`` are looked up via [`shutil.which`][shutil.which]
     so the subprocess gets an absolute executable path — keeps

@@ -631,9 +631,10 @@ def _check_selinux_policy() -> _CheckResult:
     from terok.lib.api.setup import (
         SelinuxStatus,
         check_selinux_status,
-        selinux_install_command,
         selinux_install_script,
     )
+
+    from ...lib.core.config import SETUP_INVOCATION
 
     label = "SELinux policy"
     # ``services.mode`` is overridable per project, so the host needs the
@@ -648,7 +649,7 @@ def _check_selinux_policy() -> _CheckResult:
         case SelinuxStatus.NOT_APPLICABLE_PERMISSIVE:
             return ("ok", label, "not needed (SELinux not enforcing)")
         case SelinuxStatus.POLICY_MISSING:
-            install_cmd = selinux_install_command()
+            install_cmd = f"{SETUP_INVOCATION} selinux"
             opt_out = f"or opt out: {SERVICES_TCP_OPTOUT_YAML} in {global_config_path()}"
             if result.missing_policy_tools:
                 tools = ", ".join(result.missing_policy_tools)
@@ -671,7 +672,7 @@ def _check_selinux_policy() -> _CheckResult:
                 label,
                 "terok_socket_t policy is outdated — it predates the per-container "
                 "supervisor and lacks the rule it binds its sockets with. "
-                f"Rebuild: {selinux_install_command()}",
+                f"Rebuild: {SETUP_INVOCATION} selinux",
             )
         case SelinuxStatus.LIBSELINUX_MISSING:
             return (
