@@ -508,7 +508,46 @@ class TestRunContainerDoctor:
             ssh_signer_port=None,
         )
         with pytest.raises(SystemExit, match="ports could not be resolved"):
-            _collect_all_checks("proj", tmp_path, services_mode="tcp", cname="proj-cli-42")
+            _collect_all_checks(
+                "proj", tmp_path, services_mode="tcp", cname="proj-cli-42", cid="cid123"
+            )
+
+    @patch("terok.lib.orchestration.container_doctor._terok_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.AgentRoster")
+    @patch("terok.lib.orchestration.container_doctor.sandbox_doctor_checks", return_value=[])
+    @patch("terok.lib.orchestration.container_doctor.make_sandbox_config")
+    def test_collect_all_checks_hands_sandbox_the_container_identity(
+        self,
+        mock_sandbox_cfg: MagicMock,
+        mock_sandbox_checks: MagicMock,
+        mock_roster: MagicMock,
+        mock_terok_checks: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Sandbox needs both halves to check the supervisor's children.
+
+        The children are found by container ID; the services they are
+        compared against come from the sidecar, which is keyed by name.
+        Without the pair the check drops out, and a container whose
+        supervisor outlived its children reads as healthy.
+        """
+        from terok.lib.orchestration.container_doctor import _collect_all_checks
+
+        mock_sandbox_cfg.return_value = MagicMock(
+            state_dir=tmp_path / "state",
+            gate_port=None,
+            token_broker_port=None,
+            ssh_signer_port=None,
+        )
+        mock_roster.shared.return_value.doctor_checks.return_value = []
+
+        _collect_all_checks(
+            "proj", tmp_path, services_mode="socket", cname="proj-cli-42", cid="cid123"
+        )
+
+        kwargs = mock_sandbox_checks.call_args.kwargs
+        assert kwargs["container_id"] == "cid123"
+        assert kwargs["container_name"] == "proj-cli-42"
 
     @patch("terok.lib.orchestration.container_doctor._terok_doctor_checks", return_value=[])
     @patch("terok.lib.orchestration.container_doctor.AgentRoster")
@@ -550,7 +589,9 @@ class TestRunContainerDoctor:
         )
         mock_roster.shared.return_value.doctor_checks.return_value = []
 
-        checks = _collect_all_checks("proj", tmp_path, services_mode="tcp", cname=cname)
+        checks = _collect_all_checks(
+            "proj", tmp_path, services_mode="tcp", cname=cname, cid="cid123"
+        )
 
         assert checks == []
         mock_sandbox_checks.assert_called_once()
@@ -593,7 +634,9 @@ class TestRunContainerDoctor:
         )
         mock_roster.shared.return_value.doctor_checks.return_value = []
 
-        checks = _collect_all_checks("proj", tmp_path, services_mode="tcp", cname=cname)
+        checks = _collect_all_checks(
+            "proj", tmp_path, services_mode="tcp", cname=cname, cid="cid123"
+        )
 
         assert checks == []
         assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] is None
@@ -632,7 +675,9 @@ class TestRunContainerDoctor:
         )
         mock_roster.shared.return_value.doctor_checks.return_value = []
 
-        checks = _collect_all_checks("proj", tmp_path, services_mode="socket", cname=cname)
+        checks = _collect_all_checks(
+            "proj", tmp_path, services_mode="socket", cname=cname, cid="cid123"
+        )
 
         assert checks == []
         assert mock_sandbox_checks.call_args.kwargs["token_broker_port"] == 18800

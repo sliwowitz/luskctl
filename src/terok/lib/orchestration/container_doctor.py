@@ -397,7 +397,16 @@ def _check_supervisor_alive(
     which owns the wrapper-spawn contract, then dresses the verdict as a
     sickbay result.  Reported *before* the socket/bridge checks so a dead
     supervisor is named as the one root cause instead of surfacing three
-    ways as missing sockets.  A dead supervisor points the operator at the
+    ways as missing sockets.
+
+    The parent only, deliberately.  It outlives its children, so this row
+    says the bundle was started, never that it is whole — a container can
+    answer ``alive`` here with no vault and no SSH agent.  The service
+    children are sandbox's ``Supervisor children`` check, one row below;
+    what this row adds is their names, so an operator reading a green line
+    can see which of them are behind it.  The split matters for ``fix``:
+    a respawn re-fires the OCI hook, which is the remedy for a parent that
+    never spawned and no remedy at all for a child that exited.  A dead supervisor points the operator at the
     hook diary (empty ⇒ the hook never fired) and the supervisor log.
 
     With *fix*, a dead supervisor is re-fired via
@@ -610,6 +619,7 @@ def _collect_all_checks(
     *,
     services_mode: str,
     cname: str,
+    cid: str,
 ) -> list[DoctorCheck]:
     """Gather health checks from sandbox, agent, and terok layers.
 
@@ -660,6 +670,8 @@ def _collect_all_checks(
             token_broker_port=token_broker_port,
             ssh_signer_port=ssh_signer_port,
             desired_shield_state=desired_shield,
+            container_id=cid,
+            container_name=cname,
         )
     )
     checks.extend(AgentRoster.shared().doctor_checks(token_broker_port=token_broker_port))
@@ -834,6 +846,7 @@ class ContainerDoctor:
                 self.task_id,
                 services_mode=project.services_mode,
                 cname=cname,
+                cid=cid,
             )
         )
 

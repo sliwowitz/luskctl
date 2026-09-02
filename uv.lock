@@ -2459,8 +2459,8 @@ requires-dist = [
     { name = "rich", specifier = "~=15.0" },
     { name = "ruamel-yaml", specifier = "==0.19.1" },
     { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl" },
-    { name = "terok-executor", url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a30/terok_executor-0.4.0a30-py3-none-any.whl" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a31/terok_sandbox-0.5.0a31-py3-none-any.whl" },
+    { name = "terok-executor", url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl" },
+    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" },
     { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" },
     { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
     { name = "textual", extras = ["syntax"], specifier = "~=8.2.8" },
@@ -2525,8 +2525,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a30"
-source = { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a30/terok_executor-0.4.0a30-py3-none-any.whl" }
+version = "0.4.0a31"
+source = { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2539,7 +2539,7 @@ dependencies = [
     { name = "tomli-w" },
 ]
 wheels = [
-    { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a30/terok_executor-0.4.0a30-py3-none-any.whl", hash = "sha256:f4d8ef27e193d62d038c5f2bffcbf08250d9789f31c6e5d3728a9e5ee7913c21" },
+    { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl", hash = "sha256:e9fcbd76358c18c223e938aa37a5fd7357534976210a9787fd703604e58152ea" },
 ]
 
 [package.metadata]
@@ -2550,15 +2550,15 @@ requires-dist = [
     { name = "pydantic", specifier = "~=2.13" },
     { name = "rich", specifier = "~=15.0" },
     { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a31/terok_sandbox-0.5.0a31-py3-none-any.whl" },
+    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" },
     { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
     { name = "tomli-w", specifier = "~=1.2" },
 ]
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a31"
-source = { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a31/terok_sandbox-0.5.0a31-py3-none-any.whl" }
+version = "0.5.0a32"
+source = { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2575,7 +2575,7 @@ dependencies = [
     { name = "terok-util" },
 ]
 wheels = [
-    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a31/terok_sandbox-0.5.0a31-py3-none-any.whl", hash = "sha256:b350fa93832b089995dc367fa6e7f742cf2abe8922e5d38c3045a263fe32fee7" },
+    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl", hash = "sha256:5fd1a072e896a6314f4fec7bcd49897691668dfa27dc48234c5a8f33fb969e72" },
 ]
 
 [package.metadata]
