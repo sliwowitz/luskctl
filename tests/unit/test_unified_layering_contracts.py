@@ -420,7 +420,7 @@ def test_sickbay_collects_checks_in_socket_mode(tmp_path: Path) -> None:
             security_class="gatekeeping",
         )
         checks = container_doctor._collect_all_checks(
-            "any-project", tmp_path, services_mode="socket", cname="any-cli-1"
+            "any-project", tmp_path, services_mode="socket", cname="any-cli-1", cid="cid123"
         )
 
     assert isinstance(checks, list)
