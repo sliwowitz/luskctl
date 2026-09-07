@@ -571,7 +571,7 @@ def test_make_sandbox_config_dnsmasq_path(monkeypatch: pytest.MonkeyPatch, tmp_p
     )
     assert cfg.make_sandbox_config().shield_dnsmasq_path == binary
 
-    cfg._validated_config_cache = None
+    monkeypatch.setattr(cfg, "_validated_config_cache", None)
     monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
     assert cfg.make_sandbox_config().shield_dnsmasq_path is None
 
