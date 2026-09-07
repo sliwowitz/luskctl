@@ -30,7 +30,7 @@ from terok.lib.integrations.sandbox import ShieldManager
 
 from ...core import runtime as _rt
 from ...core.config import SHIELD_SECURITY_HINT, get_shield_disable_firewall_no_protection
-from ...core.task_display import dns_tier_warning
+from ...core.task_display import dns_tier_label
 from ...util.logging_utils import timed_phase
 
 if TYPE_CHECKING:
@@ -244,12 +244,11 @@ def _warn_on_degraded_dns_tier(task_dir: Path) -> None:
     succeeded and shield breakage loud enough to matter has already
     warned on its own path.
     """
-    tier: str | None = None
+    tier = None
     with suppress(Exception):
         tier = ShieldManager(task_dir).dns_tier
-    warning = dns_tier_warning(tier)
-    if warning is not None:
-        print(f"Warning: DNS {warning.headline} — {warning.detail}", file=sys.stderr)
+    if tier is not None and not tier.live:
+        print(f"Warning: DNS {dns_tier_label(tier)} — {tier.hint}", file=sys.stderr)
 
 
 __all__ = [

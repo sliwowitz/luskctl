@@ -16,6 +16,10 @@ Domain logic (``TaskState``, ``effective_status``, ``container_name``,
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from terok.lib.integrations.sandbox import DnsTier
 
 # ── Display value objects ──────────────────────────────────────────────
 
@@ -97,44 +101,9 @@ def mode_info(mode: str | None) -> ModeInfo:
     return info if info else MODE_DISPLAY[None]
 
 
-# ── DNS tier degradation ───────────────────────────────────────────────
-
-#: DNS tiers that resolve the egress allowlist statically at launch, with no
-#: live IP-rotation handling.  A task on one of these gets an operator warning
-#: next to its shield posture.  The healthy tier is ``dnsmasq``.
-DEGRADED_DNS_TIERS = ("lookup", "getent")
+# ── DNS tier ───────────────────────────────────────────────────────────
 
 
-@dataclass(frozen=True)
-class DnsTierWarning:
-    """A degraded-DNS-tier warning for one task.
-
-    This task's egress allowlist resolved statically at launch (``lookup``
-    or ``getent``), so there is no live IP-rotation handling.  ``detail`` is
-    the operator-facing explanation.
-    """
-
-    tier: str
-    detail: str
-
-    @property
-    def headline(self) -> str:
-        """Compact one-line summary: the degraded tier."""
-        return f"{self.tier} (degraded)"
-
-
-def dns_tier_warning(task_tier: str | None) -> DnsTierWarning | None:
-    """Flag a task on a degraded DNS tier, or ``None`` when it is healthy.
-
-    A degraded *task_tier* (``lookup``/``getent``) means this task's egress
-    allowlist resolved statically at launch, with no live IP-rotation
-    handling.  The healthy tier is ``dnsmasq``.  The warning is scoped to
-    the task; why its tier degraded (e.g. AppArmor-confined dnsmasq) is in
-    the task log and shield status, not asserted here.
-    """
-    if task_tier not in DEGRADED_DNS_TIERS:
-        return None
-    return DnsTierWarning(
-        tier=task_tier,
-        detail="egress allowlist resolved statically at launch (no live IP-rotation)",
-    )
+def dns_tier_label(tier: DnsTier) -> str:
+    """The tier as the operator sees it: its name, marked when it resolves once."""
+    return tier.value if tier.live else f"{tier.value} (degraded)"

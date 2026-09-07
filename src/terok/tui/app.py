@@ -67,8 +67,7 @@ if _HAS_TEXTUAL:
         check_environment as _shield_check_environment,
         needs_setup,
     )
-    from terok.lib.api.shield import RecoveryStatus, ShieldManager
-    from terok.lib.api.task import dns_tier_warning
+    from terok.lib.api.shield import DnsTier, RecoveryStatus, ShieldManager
     from terok.lib.api.vault import PassphraseChangeResult, RunningTask, VaultStatus
 
     from ..lib.api import (
@@ -1641,7 +1640,7 @@ if _HAS_TEXTUAL:
         @staticmethod
         def _load_shield_state(
             project_name: str, task: TaskMeta
-        ) -> tuple[str, str, str | None, str | None]:
+        ) -> tuple[str, str, str | None, DnsTier | None]:
             """Query shield state and recorded DNS tier for a task (runs in thread)."""
             try:
                 project = load_project(project_name)
@@ -1910,7 +1909,7 @@ if _HAS_TEXTUAL:
                 if not self.current_task or self.current_task.task_id != task_id:
                     return
                 self.current_task.shield_state = shield_st
-                self.current_task.dns_tier_warning = dns_tier_warning(dns_tier)
+                self.current_task.dns_tier = dns_tier
                 details = self.query_one("#task-details", TaskDetails)
                 details.set_task(self.current_task, image_old=self._last_image_old)
                 return

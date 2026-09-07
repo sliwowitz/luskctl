@@ -11,7 +11,14 @@ from textual import events
 from textual.app import ComposeResult
 from textual.widgets import Static
 
-from ...lib.api import DEBUG_BADGE, STATUS_DISPLAY, TaskMeta, get_config, mode_info
+from ...lib.api import (
+    DEBUG_BADGE,
+    STATUS_DISPLAY,
+    TaskMeta,
+    dns_tier_label,
+    get_config,
+    mode_info,
+)
 from ...lib.util.emoji import render_emoji
 from ...lib.util.net import url_host
 from ...ui_utils.terminal import wrap_with_hanging_indent
@@ -166,19 +173,15 @@ def render_task_details(
                         style=Style(color=error_color),
                     )
                 )
-    if task.dns_tier_warning:
-        # Degraded DNS tier (lookup/getent): the task's egress allowlist resolves
-        # statically at launch, without IP-rotation handling.  Shown red, next
-        # to the shield posture.
-        warn = task.dns_tier_warning
+    if task.dns_tier is not None and not task.dns_tier.live:
         dns_error_color = variables.get("error", "red")
         lines.append(
             Text.assemble(
                 "DNS:       ",
-                Text(warn.headline, style=Style(color=dns_error_color, bold=True)),
+                Text(dns_tier_label(task.dns_tier), style=Style(color=dns_error_color, bold=True)),
             )
         )
-        lines.append(Text(f"           {warn.detail}", style=Style(color=dns_error_color)))
+        lines.append(Text(f"           {task.dns_tier.hint}", style=Style(color=dns_error_color)))
     if task.mode == "run":
         if task.exit_code is not None:
             lines.append(Text(f"Exit code: {task.exit_code}"))

@@ -176,9 +176,10 @@ class TestApplyShieldPolicy:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """A recorded degraded tier surfaces as a stderr warning after policy applies."""
+        from terok.lib.api import DnsTier
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
 
-        self._record_dns_tier(tmp_path, "lookup")
+        self._record_dns_tier(tmp_path, DnsTier.LOOKUP.value)
         project = self._make_project(down=False)
         with patch(
             "terok.lib.orchestration.task_runners.shield.get_shield_disable_firewall_no_protection",
@@ -187,15 +188,16 @@ class TestApplyShieldPolicy:
             _apply_shield_policy(project, "ctr", tmp_path, is_restart=False)
         err = capsys.readouterr().err
         assert "lookup (degraded)" in err
-        assert "statically" in err
+        assert DnsTier.LOOKUP.hint in err
 
     def test_silent_on_dnsmasq_tier(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """The healthy tier prints nothing."""
+        from terok.lib.api import DnsTier
         from terok.lib.orchestration.task_runners.shield import _apply_shield_policy
 
-        self._record_dns_tier(tmp_path, "dnsmasq")
+        self._record_dns_tier(tmp_path, DnsTier.DNSMASQ_LIVE.value)
         project = self._make_project(down=False)
         with patch(
             "terok.lib.orchestration.task_runners.shield.get_shield_disable_firewall_no_protection",

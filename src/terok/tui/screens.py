@@ -2352,17 +2352,16 @@ _SHIELD_HEALTH_STYLES: dict[str, str] = {
 def _shield_dns_line(dns_tier: str) -> Text:
     """The shield-status DNS line: the active tier, red when degraded.
 
-    A degraded tier (``lookup``/``getent``) resolves the egress allowlist
-    statically, with no IP-rotation handling; its host-wide reason shows
-    under Issues below.  The healthy tier is ``dnsmasq``.
+    A degraded tier resolves the egress allowlist once at launch; its
+    host-wide reason shows under Issues below.
     """
-    from ..lib.api import DEGRADED_DNS_TIERS
+    from ..lib.api import DnsTier, dns_tier_label
 
-    label = dns_tier or "unknown"
-    degraded = dns_tier in DEGRADED_DNS_TIERS
-    style = Style(color="red", bold=True) if degraded else Style()
-    suffix = " (degraded)" if degraded else ""
-    return Text.assemble("DNS:       ", Text(f"{label}{suffix}", style=style))
+    tier = DnsTier.parse(dns_tier)
+    if tier is None:
+        return Text.assemble("DNS:       ", Text("unknown"))
+    style = Style() if tier.live else Style(color="red", bold=True)
+    return Text.assemble("DNS:       ", Text(dns_tier_label(tier), style=style))
 
 
 def render_shield_status(
