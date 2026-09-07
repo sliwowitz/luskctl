@@ -2503,8 +2503,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a32.dev486+gd8a6f1336"
-source = { git = "https://github.com/sliwowitz/terok-executor?rev=chore%2Fsandbox-dns-tier-pin#d8a6f1336047e357d2cac02c809cc246e232825b" }
+version = "0.4.0a32.dev487+g838ae2130"
+source = { git = "https://github.com/sliwowitz/terok-executor?rev=chore%2Fsandbox-dns-tier-pin#838ae213016348182dbcc2e67569da125c1ff15a" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2519,8 +2519,8 @@ dependencies = [
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a33.dev486+gb65be148a"
-source = { git = "https://github.com/sliwowitz/terok-sandbox?rev=feat%2Fdns-tier-and-dnsmasq-path#b65be148a390267c5f74d15b48cfdaf6050e5160" }
+version = "0.5.0a33.dev487+g5d900047a"
+source = { git = "https://github.com/sliwowitz/terok-sandbox?rev=feat%2Fdns-tier-and-dnsmasq-path#5d900047aa63bd1f6bc77a23ec7bddba2f130db3" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2539,8 +2539,8 @@ dependencies = [
 
 [[package]]
 name = "terok-shield"
-version = "0.8.0a15.dev371+g63e14edcb"
-source = { git = "https://github.com/sliwowitz/terok-shield?rev=fix%2Fstatic-tiers-and-dnsmasq-path#63e14edcb4324dae15e8ef349b527e03307cf36f" }
+version = "0.8.0a15.dev372+g532d79a15"
+source = { git = "https://github.com/sliwowitz/terok-shield?rev=fix%2Fstatic-tiers-and-dnsmasq-path#532d79a15152afa311d1642f4959d8db75538758" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },

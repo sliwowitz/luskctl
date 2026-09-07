@@ -562,6 +562,20 @@ def test_make_sandbox_config_from_config_file(
     assert sc.vault_dir == target.resolve()
 
 
+def test_make_sandbox_config_dnsmasq_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Factory propagates ``shield.dnsmasq_path`` from global config; unset stays ``None``."""
+    binary = tmp_path / "dnsmasq-nftset"
+    monkeypatch.setenv(
+        "TEROK_CONFIG_FILE",
+        str(write_config(tmp_path, f"shield:\n  dnsmasq_path: {binary}\n")),
+    )
+    assert cfg.make_sandbox_config().shield_dnsmasq_path == binary
+
+    cfg._validated_config_cache = None
+    monkeypatch.setenv("TEROK_CONFIG_FILE", str(write_config(tmp_path, "")))
+    assert cfg.make_sandbox_config().shield_dnsmasq_path is None
+
+
 def test_make_sandbox_config_gate_port(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Factory propagates explicit gate_server.port from global config."""
     monkeypatch.setenv(
