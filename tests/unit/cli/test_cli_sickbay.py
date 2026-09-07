@@ -141,18 +141,20 @@ def test_check_shield_surfaces_apparmor_advisory_on_lower_tier() -> None:
     assert status == "ok"
     assert "AppArmor" in detail
     assert "docs/apparmor.md" in detail
-    assert "install dnsmasq for live IP rotation" not in detail
+    assert "dnsmasq with nftset" not in detail
 
 
-def test_check_shield_generic_dnsmasq_hint_without_reported_reason() -> None:
-    """With no shield-reported reason, the generic dnsmasq hint is still shown."""
+def test_check_shield_tier_hint_without_reported_reason() -> None:
+    """With no shield-reported reason, the tier's own hint is shown."""
+    from terok.lib.api import DnsTier
+
     mock_ec = MagicMock(
         health="ok", hooks="per-container", dns_tier="dig", setup_hint="", issues=[]
     )
     with patch("terok.cli.commands.sickbay.check_environment", return_value=mock_ec):
         status, _label, detail = _check_shield()
     assert status == "ok"
-    assert "install dnsmasq" in detail
+    assert DnsTier.LOOKUP.hint in detail
 
 
 @pytest.mark.parametrize(

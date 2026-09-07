@@ -430,19 +430,23 @@ class TestRenderHelpers:
         assert "ready" not in text
 
     def test_render_task_details_shows_degraded_dns_warning(self) -> None:
-        """A degraded DNS tier renders a DNS line naming the tier and its explanation."""
-        from terok.lib.core.task_display import dns_tier_warning
+        """A degraded DNS tier renders a DNS line naming the tier and its hint."""
+        from terok.lib.api import DnsTier
 
-        warn = dns_tier_warning("lookup")
         assert_rendered_needles(
-            render_task_details_text(task_id="99", shield_state="DOWN", dns_tier_warning=warn),
-            ["DNS:", "lookup (degraded)", "resolved statically at launch"],
+            render_task_details_text(task_id="99", shield_state="DOWN", dns_tier=DnsTier.LOOKUP),
+            ["DNS:", "lookup (degraded)", DnsTier.LOOKUP.hint],
             [],
         )
 
     def test_render_task_details_no_dns_line_when_healthy(self) -> None:
-        """A task with no degraded-tier warning renders no DNS line."""
-        assert "DNS:" not in render_task_details_text(task_id="99", shield_state="UP")
+        """A task on the live tier renders no DNS line."""
+        from terok.lib.api import DnsTier
+
+        rendered = render_task_details_text(
+            task_id="99", shield_state="UP", dns_tier=DnsTier.DNSMASQ_LIVE
+        )
+        assert "DNS:" not in rendered
 
     def test_render_shield_status_marks_degraded_dns_tier(self) -> None:
         """The host shield screen shows the DNS tier, flagged when degraded."""

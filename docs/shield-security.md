@@ -138,13 +138,31 @@ shield:
 Two caveats worth knowing:
 
 - Set entries are ordinary t40 allows — a security-deny always wins over
-  them, and on the dnsmasq DNS tier a listed domain admits its
+  them, and on the `dnsmasq-live` DNS tier a listed domain admits its
   subdomains by suffix match.
 - Hostname allowlists cannot cover community *mirror pools* (Fedora's
   metalink hands dnf arbitrary mirror hosts).  The `os-packages` set
   covers the distros' own hosts (metalink + primary download); a blocked
   community mirror surfaces in the audit log and dnf falls back through
   its mirror list.
+
+## DNS Tiers
+
+Shield needs a resolver on the host to turn allowlisted domains into
+addresses.  The one it finds decides what the firewall can do:
+
+| | `dnsmasq-live` | `dnsmasq-static` | `lookup` | `getent` |
+|---|---|---|---|---|
+| Allow sets follow IP rotation; `*.example.com` entries accepted | yes | no | no | no |
+| Blocked connections show the domain, not only the address | yes | yes | no | no |
+| Host needs | dnsmasq built with nftset support | any dnsmasq | `dig` or `drill` | glibc only |
+
+Install dnsmasq (`dnsmasq-base` on Debian and Ubuntu) for the live tier.
+A degraded tier is named at launch, in the task's details, and in
+`terok sickbay`.  The full table, and how to point terok at a self-built
+dnsmasq with `shield.dnsmasq_path` in `config.yml`, are in the
+[terok-shield DNS tiers](https://github.com/terok-ai/terok-shield/blob/master/docs/guide/modes.md#dns-tiers)
+page.
 
 ## Per-Project Allow and Break-Glass Override
 

@@ -38,6 +38,7 @@ from terok.lib.api.setup import (
     resolve_container_annotations,
     systemd_creds_has_tpm2,
 )
+from terok.lib.api.shield import DnsTier
 from terok.lib.api.vault import VaultState, load_vault_status
 
 from ...lib.core import runtime as _rt
@@ -165,14 +166,12 @@ def _check_shield() -> _CheckResult:
         return ("warn", label, f"unexpected health: {ec.health}")
     dns = getattr(ec, "dns_tier", "unknown")
     detail = f"active ({ec.hooks}, {dns} DNS)"
-    # On a lower tier (lookup/getent) surface shield's own reason: dnsmasq
-    # missing and dnsmasq AppArmor-confined need different fixes, and
-    # shield reports the precise one (with any docs pointer) in ec.issues.
-    if dns != "dnsmasq":
-        hint = (
-            ec.issues[0] if ec.issues else "install dnsmasq for live IP rotation + domain updates"
-        )
-        detail += f" — {hint}"
+    # On a degraded tier surface shield's own reason: dnsmasq missing and
+    # dnsmasq AppArmor-confined need different fixes, and shield reports
+    # the precise one (with any docs pointer) in ec.issues.
+    tier = DnsTier.parse(dns)
+    if tier is not None and not tier.live:
+        detail += f" — {ec.issues[0] if ec.issues else tier.hint}"
     return ("ok", label, detail)
 
 

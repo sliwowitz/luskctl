@@ -76,7 +76,8 @@ Terok was started at the
 - **Python 3.12+**
 - **OpenSSH client** — for private git repos
 - Optional but recommended: **systemd** user session, **`dnsmasq`**
-  and **`dig`** or **`drill`** (DNS plumbing for the egress firewall), a desktop
+  and **`dig`** or **`drill`** (DNS plumbing for the egress firewall, see
+  [DNS tiers](shield-security.md#dns-tiers)), a desktop
   **notification daemon**
 
 ### Installation

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from terok.lib.integrations.sandbox import (
+        DnsTier as DnsTier,
         RecoveryStatus as RecoveryStatus,
         SandboxConfig as SandboxConfig,
         ShieldHooks as ShieldHooks,
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 #: Public name -> defining module (PEP 562 lazy resolution).
 _LAZY: dict[str, str] = {
     "ArgDef": "terok.lib.integrations.shield",
+    "DnsTier": "terok.lib.integrations.sandbox",
     "ExecError": "terok.lib.integrations.shield",
     "RecoveryStatus": "terok.lib.integrations.sandbox",
     "SHIELD_COMMANDS": "terok.lib.integrations.shield:COMMANDS",
@@ -66,6 +68,7 @@ _LAZY: dict[str, str] = {
 
 __all__ = [
     "ArgDef",
+    "DnsTier",
     "ExecError",
     "RecoveryStatus",
     "SHIELD_COMMANDS",

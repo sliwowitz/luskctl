@@ -9,16 +9,18 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from ...core.project_model import is_valid_project_name
 from ...core.projects import load_project
-from ...core.task_display import DnsTierWarning
 from ...core.task_state import TaskState, container_name, effective_status
 from ...core.work_status import read_work_status
 from ..container_exec import container_git_diff
 from .identity import is_task_id
 from .meta import _is_safe_id_segment, iter_task_ids, read_task_meta, tasks_meta_dir
+
+if TYPE_CHECKING:
+    from terok.lib.integrations.sandbox import DnsTier
 
 
 def get_task_container_state(project_name: str, task_id: str, mode: str | None) -> str | None:
@@ -99,10 +101,9 @@ class TaskMeta(TaskState):
     work_status: str | None = None
     work_message: str | None = None
     shield_state: str | None = None
-    dns_tier_warning: DnsTierWarning | None = None
-    """Degraded-DNS-tier warning for this task, or ``None`` when the task runs
-    on the healthy ``dnsmasq`` tier (or its tier is not yet known).  Populated
-    at runtime by the TUI's shield-state worker, never persisted — like
+    dns_tier: DnsTier | None = None
+    """The DNS tier this task launched with, or ``None`` when not yet known.
+    Populated at runtime by the TUI's shield-state worker, never persisted — like
     [`shield_state`][terok.lib.orchestration.tasks.query.TaskMeta.shield_state]."""
     created_at: str | None = None
 

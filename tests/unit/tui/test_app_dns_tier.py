@@ -1,13 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Jiri Vyskocil
 # SPDX-License-Identifier: Apache-2.0
 
-"""TerokTUI's threaded shield-state loader that feeds the degraded-DNS warning.
+"""TerokTUI's threaded shield-state loader that feeds the task's DNS tier.
 
-The warning itself lives in
-[`dns_tier_warning`][terok.lib.core.task_display.dns_tier_warning] and is
-covered by its own unit tests; here we exercise the App-side loader that reads
-a task's shield state and recorded DNS tier off disk, without booting a Textual
-app.
+Exercises the App-side loader that reads a task's shield state and recorded
+DNS tier off disk, without booting a Textual app.
 """
 
 from __future__ import annotations
@@ -16,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from terok.lib.api import DnsTier
 from terok.tui.app import TerokTUI
 from tests.testfs import MOCK_BASE
 
@@ -24,7 +22,9 @@ def test_load_shield_state_threads_state_name_and_recorded_tier() -> None:
     """The happy path returns the shield state's ``.name`` and the launch tier."""
     task = SimpleNamespace(mode="cli", task_id="t1")
     project = SimpleNamespace(tasks_root=Path(MOCK_BASE))
-    manager = SimpleNamespace(state=lambda _cname: SimpleNamespace(name="UP"), dns_tier="dnsmasq")
+    manager = SimpleNamespace(
+        state=lambda _cname: SimpleNamespace(name="UP"), dns_tier=DnsTier.DNSMASQ_LIVE
+    )
 
     with (
         mock.patch("terok.tui.app.load_project", return_value=project),
@@ -33,7 +33,7 @@ def test_load_shield_state_threads_state_name_and_recorded_tier() -> None:
     ):
         result = TerokTUI._load_shield_state("proj", task)
 
-    assert result == ("proj", "t1", "UP", "dnsmasq")
+    assert result == ("proj", "t1", "UP", DnsTier.DNSMASQ_LIVE)
 
 
 def test_load_shield_state_swallows_errors_into_a_null_result() -> None:

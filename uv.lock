@@ -2437,9 +2437,9 @@ requires-dist = [
     { name = "rich", specifier = "~=15.0" },
     { name = "ruamel-yaml", specifier = "==0.19.1" },
     { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl" },
-    { name = "terok-executor", url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" },
-    { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" },
+    { name = "terok-executor", git = "https://github.com/sliwowitz/terok-executor?rev=chore%2Fsandbox-dns-tier-pin" },
+    { name = "terok-sandbox", git = "https://github.com/sliwowitz/terok-sandbox?rev=feat%2Fdns-tier-and-dnsmasq-path" },
+    { name = "terok-shield", git = "https://github.com/sliwowitz/terok-shield?rev=fix%2Fstatic-tiers-and-dnsmasq-path" },
     { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
     { name = "textual", extras = ["syntax"], specifier = "~=8.2.8" },
     { name = "textual-serve", specifier = "~=1.1" },
@@ -2503,8 +2503,8 @@ requires-dist = [
 
 [[package]]
 name = "terok-executor"
-version = "0.4.0a31"
-source = { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl" }
+version = "0.4.0a32.dev487+g838ae2130"
+source = { git = "https://github.com/sliwowitz/terok-executor?rev=chore%2Fsandbox-dns-tier-pin#838ae213016348182dbcc2e67569da125c1ff15a" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "jinja2" },
@@ -2516,27 +2516,11 @@ dependencies = [
     { name = "terok-util" },
     { name = "tomli-w" },
 ]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-executor/releases/download/v0.4.0a31/terok_executor-0.4.0a31-py3-none-any.whl", hash = "sha256:e9fcbd76358c18c223e938aa37a5fd7357534976210a9787fd703604e58152ea" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agent-client-protocol", specifier = "==0.12.1" },
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "prompt-toolkit", specifier = "~=3.0" },
-    { name = "pydantic", specifier = "~=2.13" },
-    { name = "rich", specifier = "~=15.0" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "terok-sandbox", url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
-    { name = "tomli-w", specifier = "~=1.2" },
-]
 
 [[package]]
 name = "terok-sandbox"
-version = "0.5.0a32"
-source = { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl" }
+version = "0.5.0a33.dev487+g5d900047a"
+source = { git = "https://github.com/sliwowitz/terok-sandbox?rev=feat%2Fdns-tier-and-dnsmasq-path#5d900047aa63bd1f6bc77a23ec7bddba2f130db3" }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
@@ -2552,45 +2536,15 @@ dependencies = [
     { name = "terok-shield" },
     { name = "terok-util" },
 ]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-sandbox/releases/download/v0.5.0a32/terok_sandbox-0.5.0a32-py3-none-any.whl", hash = "sha256:5fd1a072e896a6314f4fec7bcd49897691668dfa27dc48234c5a8f33fb969e72" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiohttp", specifier = "~=3.14.3" },
-    { name = "cryptography", specifier = "~=50.0" },
-    { name = "jinja2", specifier = "~=3.1" },
-    { name = "keyring", specifier = "~=25.7" },
-    { name = "packaging", specifier = "~=26.3" },
-    { name = "platformdirs", specifier = "~=4.11" },
-    { name = "prompt-toolkit", specifier = "~=3.0" },
-    { name = "pydantic", specifier = "~=2.13" },
-    { name = "ruamel-yaml", specifier = "==0.19.1" },
-    { name = "sqlcipher3", specifier = "==0.6.2" },
-    { name = "terok-clearance", url = "https://github.com/terok-ai/terok-clearance/releases/download/v0.8.0a10/terok_clearance-0.8.0a10-py3-none-any.whl" },
-    { name = "terok-shield", url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
-]
 
 [[package]]
 name = "terok-shield"
-version = "0.8.0a14"
-source = { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl" }
+version = "0.8.0a15.dev372+g532d79a15"
+source = { git = "https://github.com/sliwowitz/terok-shield?rev=fix%2Fstatic-tiers-and-dnsmasq-path#532d79a15152afa311d1642f4959d8db75538758" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "terok-util" },
-]
-wheels = [
-    { url = "https://github.com/terok-ai/terok-shield/releases/download/v0.8.0a14/terok_shield-0.8.0a14-py3-none-any.whl", hash = "sha256:304acb0bc9b3610be34384ad5b9d211b774f7c2879b5b5809030e21851e1f352" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = "~=2.13" },
-    { name = "pyyaml", specifier = "~=6.0" },
-    { name = "terok-util", url = "https://github.com/terok-ai/terok-util/releases/download/v0.3.1a7/terok_util-0.3.1a7-py3-none-any.whl" },
 ]
 
 [[package]]

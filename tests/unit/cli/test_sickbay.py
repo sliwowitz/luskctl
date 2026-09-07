@@ -407,32 +407,35 @@ class TestCheckShieldDnsTier:
         )
         return unittest.mock.patch("terok.cli.commands.sickbay.check_environment", return_value=ec)
 
-    def test_dnsmasq_tier_no_hint(self) -> None:
+    def test_live_tier_no_hint(self) -> None:
         """Top tier → clean ok line, no install hint."""
         from terok.cli.commands.sickbay import _check_shield
+        from terok.lib.api import DnsTier
 
-        with self._patch("dnsmasq"):
+        with self._patch(DnsTier.DNSMASQ_LIVE.value):
             sev, _, detail = _check_shield()
         assert sev == "ok"
-        assert "install dnsmasq" not in detail
+        assert "dnsmasq with nftset" not in detail
 
     def test_lookup_tier_carries_hint(self) -> None:
-        """lookup tier works but loses IP rotation — hint surfaces."""
+        """lookup tier works but loses IP rotation — the tier's hint surfaces."""
         from terok.cli.commands.sickbay import _check_shield
+        from terok.lib.api import DnsTier
 
-        with self._patch("lookup"):
+        with self._patch(DnsTier.LOOKUP.value):
             sev, _, detail = _check_shield()
         assert sev == "ok"
-        assert "install dnsmasq" in detail
+        assert DnsTier.LOOKUP.hint in detail
 
     def test_getent_tier_carries_hint(self) -> None:
-        """getent tier (last resort) also gets the hint."""
+        """getent tier (last resort) also gets its hint."""
         from terok.cli.commands.sickbay import _check_shield
+        from terok.lib.api import DnsTier
 
-        with self._patch("getent"):
+        with self._patch(DnsTier.GETENT.value):
             sev, _, detail = _check_shield()
         assert sev == "ok"
-        assert "install dnsmasq" in detail
+        assert DnsTier.GETENT.hint in detail
 
 
 class TestCheckSelinuxPolicy:

@@ -408,6 +408,7 @@ def make_sandbox_config(project: ProjectConfig | None = None) -> SandboxConfig:
         ssh_signer_port=get_vault_ssh_signer_port(),
         shield_disabled=get_shield_disable_firewall_no_protection(),
         shield_audit=get_shield_audit(),
+        shield_dnsmasq_path=get_shield_dnsmasq_path(),
         services_mode=project.services_mode if project is not None else get_services_mode(),
     )
 
@@ -641,6 +642,11 @@ def get_shield_on_task_restart() -> str:
 def get_shield_audit() -> bool:
     """Return the global default for ``shield.audit``."""
     return _load_validated().shield.audit
+
+
+def get_shield_dnsmasq_path() -> Path | None:
+    """Return the dnsmasq binary configured as ``shield.dnsmasq_path``, if any."""
+    return _load_validated().shield.dnsmasq_path
 
 
 def get_public_host() -> str:
